@@ -1,5 +1,5 @@
 LIB     = libH2Pack.a
-OBJS    = utils.o
+OBJS    = H2Pack_partition.o H2Pack_typedef.o H2Pack_utils.o
 
 HOSTCC  = icc
 AR      = xiar rcs
@@ -11,8 +11,14 @@ LDFLAGS = -O3 -xHost -qopenmp
 $(LIB): $(OBJS) 
 	${AR} $@ $^
     
-utils.o: $(INC)/config.h $(INC)/utils.h utils.c
-	$(HOSTCC) $(CFLAGS) utils.c -c 
-    
+H2Pack_partition.o: $(INC)/*.h H2Pack_partition.c
+	$(HOSTCC) $(CFLAGS) H2Pack_partition.c -c 
+
+H2Pack_typedef.o: $(INC)/*.h H2Pack_typedef.c
+	$(HOSTCC) $(CFLAGS) H2Pack_typedef.c -c 
+
+H2Pack_utils.o: $(INC)/*.h H2Pack_utils.c
+	$(HOSTCC) $(CFLAGS) H2Pack_utils.c -c 
+
 clean:
 	rm $(OBJS) $(LIB)

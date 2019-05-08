@@ -24,7 +24,7 @@ void H2P_init(H2Pack_t *h2pack_, const int dim, const DTYPE reltol)
     h2pack->node_level   = NULL;
     h2pack->level_n_node = NULL;
     h2pack->level_nodes  = NULL;
-    h2pack->coord_idx0   = NULL;
+    h2pack->leaf_nodes   = NULL;
     h2pack->coord        = NULL;
     h2pack->enbox        = NULL;
     
@@ -34,7 +34,6 @@ void H2P_init(H2Pack_t *h2pack_, const int dim, const DTYPE reltol)
 // Destroy a H2Pack structure
 void H2P_destroy(H2Pack_t h2pack)
 {
-    free(h2pack->enbox);
     free(h2pack->parent);
     free(h2pack->children);
     free(h2pack->cluster);
@@ -42,7 +41,7 @@ void H2P_destroy(H2Pack_t h2pack)
     free(h2pack->node_level);
     free(h2pack->level_n_node);
     free(h2pack->level_nodes);
-    free(h2pack->coord_idx0);
+    free(h2pack->leaf_nodes);
     free(h2pack->coord);
     free(h2pack->enbox);
 }

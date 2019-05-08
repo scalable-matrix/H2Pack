@@ -41,7 +41,7 @@ struct H2Pack
     int   *node_level;      // Size n_node, level of each node
     int   *level_n_node;    // Size max_level, number of nodes in each level
     int   *level_nodes;     // Size max_level * n_leaf_node, indices of nodes on each level
-    int   *coord_idx0;      // Size n_point, index of each point before sorting
+    int   *leaf_nodes;      // Size n_leaf_node, leaf node indices
     DTYPE *coord;           // Size n_point * dim, sorted point coordinates
     DTYPE *enbox;           // Size n_node * (2*dim), enclosing box data of each node
     

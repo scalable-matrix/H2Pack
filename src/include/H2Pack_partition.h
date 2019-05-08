@@ -16,7 +16,7 @@ extern "C" {
 //   h2pack          : H2Pack structure initialized using H2P_init()
 // Output parameters:
 //   h2pack  : H2Pack structure with point partitioning info
-void H2P_partitionPoints(
+void H2P_partition_points(
     H2Pack_t h2pack, const int n_point, const DTYPE *coord,
     const int max_leaf_points, const DTYPE max_leaf_size
 );

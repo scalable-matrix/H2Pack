@@ -4,13 +4,25 @@
 #include <assert.h>
 #include <math.h>
 
-#include "H2Pack_config.h"
 #include "H2Pack_utils.h"
+#include "H2Pack_config.h"
 #include "H2Pack_typedef.h"
+#include "H2Pack_int_vec.h"
+#include "H2Pack_tree_node.h"
 #include "H2Pack_partition.h"
 
-// Global variables used in functions in this file
-struct H2P_partition_global_vars partition_vars;
+// Use this structure as a namespace for global variables in this file
+struct H2P_partition_vars
+{
+    int curr_po_idx;    // Post-order traversal index
+    int max_level;      // Maximum level of the H2 tree
+    int n_leaf_node;    // Number of leaf nodes
+    int curr_leaf_idx;  // Index of this leaf node
+    int min_adm_level;  // Minimum level of reduced admissible pair
+    H2P_int_vector_t r_inadm_pairs;  // Reduced inadmissible pairs
+    H2P_int_vector_t r_adm_pairs;    // Reduced admissible pairs
+};
+struct H2P_partition_vars partition_vars;
 
 // Hierarchical partitioning of the given points.
 // Tree nodes are indexed in post order.
@@ -30,7 +42,7 @@ struct H2P_partition_global_vars partition_vars;
 // Output parameters:
 //   coord           : Sorted coordinates
 //   <return>        : Information of current node
-H2TreeNode_t H2P_bisection_partition_points(
+H2P_tree_node_t H2P_bisection_partition_points(
     int level, int coord_s, int coord_e, const int dim, 
     const DTYPE max_leaf_size, const int max_leaf_points, 
     DTYPE *enbox, DTYPE *coord, DTYPE *coord_tmp
@@ -81,8 +93,8 @@ H2TreeNode_t H2P_bisection_partition_points(
     //    is smaller than the threshold, set current box as a leaf node
     if ((n_point <= max_leaf_points) || (box_size <= max_leaf_size))
     {
-        H2TreeNode_t node;
-        H2P_TreeNode_init(&node, dim);
+        H2P_tree_node_t node;
+        H2P_tree_node_init(&node, dim);
         node->cluster[0]  = coord_s;
         node->cluster[1]  = coord_e;
         node->n_child     = 0;
@@ -164,8 +176,8 @@ H2TreeNode_t H2P_bisection_partition_points(
     }
     
     // 6. Recursively partition each sub-box
-    H2TreeNode_t node;
-    H2P_TreeNode_init(&node, dim);
+    H2P_tree_node_t node;
+    H2P_tree_node_init(&node, dim);
     int n_node = 1;
     for (int i = 0; i < n_child; i++)
     {
@@ -177,7 +189,7 @@ H2TreeNode_t H2P_bisection_partition_points(
             max_leaf_size, max_leaf_points, 
             sub_box_i, coord, coord_tmp
         );
-        H2TreeNode_t child_node_i = (H2TreeNode_t) node->children[i];
+        H2P_tree_node_t child_node_i = (H2P_tree_node_t) node->children[i];
         n_node += child_node_i->n_node;
     }
     
@@ -209,7 +221,7 @@ H2TreeNode_t H2P_bisection_partition_points(
 //   node   : Current node of linked list H2 tree
 // Output parameters:
 //   h2pack : H2Pack structure with H2 tree partitioning in arrays
-void H2P_tree_to_array(H2TreeNode_t node, H2Pack_t h2pack)
+void H2P_tree_to_array(H2P_tree_node_t node, H2Pack_t h2pack)
 {
     int dim       = h2pack->dim;
     int dimx2     = dim * 2;
@@ -221,7 +233,7 @@ void H2P_tree_to_array(H2TreeNode_t node, H2Pack_t h2pack)
     // 1. Recursively convert sub-trees to arrays
     for (int i = 0; i < node->n_child; i++)
     {
-        H2TreeNode_t child_i = (H2TreeNode_t) node->children[i];
+        H2P_tree_node_t child_i = (H2P_tree_node_t) node->children[i];
         H2P_tree_to_array(child_i, h2pack);
     }
     
@@ -234,7 +246,7 @@ void H2P_tree_to_array(H2TreeNode_t node, H2Pack_t h2pack)
     int *node_children = h2pack->children + node_idx * max_child;
     for (int i = 0; i < n_child; i++)
     {
-        H2TreeNode_t child_i = (H2TreeNode_t) node->children[i];
+        H2P_tree_node_t child_i = (H2P_tree_node_t) node->children[i];
         int child_idx = child_i->po_idx;
         node_children[i] = child_idx;
         h2pack->parent[child_idx] = node_idx;
@@ -273,7 +285,7 @@ void H2P_partition_points(
     partition_vars.curr_po_idx = 0;
     partition_vars.max_level   = 0;
     partition_vars.n_leaf_node = 0;
-    H2TreeNode_t root = H2P_bisection_partition_points(
+    H2P_tree_node_t root = H2P_bisection_partition_points(
         0, 0, n_point-1, dim, 
         max_leaf_size, max_leaf_points, 
         NULL, h2pack->coord, coord_tmp
@@ -309,7 +321,7 @@ void H2P_partition_points(
     memset(h2pack->level_n_node, 0, sizeof(int) * max_level);
     H2P_tree_to_array(root, h2pack);
     h2pack->parent[n_node - 1] = -1;  // Root node doesn't have parent
-    H2P_TreeNode_destroy(root);  // We don't need the linked list H2 tree anymore
+    H2P_tree_node_destroy(root);  // We don't need the linked list H2 tree anymore
     
     double et = H2P_get_wtime_sec();
     h2pack->timers[0] = et - st;

@@ -24,10 +24,8 @@ int main()
     H2Pack_t h2pack;
     H2P_init(&h2pack, dim, rel_tol);
     
-    double st = H2P_get_wtime_sec();
     H2P_partition_points(h2pack, npts, coord, max_leaf_points, max_leaf_size);
-    double et = H2P_get_wtime_sec();
-    printf("H2Pack partition points done, used time = %e (s)\n", et - st);
+    printf("H2Pack partition points done, used time = %e (s)\n", h2pack->timers[0]);
     printf("n_node, n_leaf_node, max_child, max_level = %d %d %d %d\n", h2pack->n_node, h2pack->n_leaf_node, h2pack->max_child, h2pack->max_level);
     
     FILE *ouf;

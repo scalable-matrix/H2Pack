@@ -47,8 +47,21 @@ struct H2Pack
     
     // Statistic data
     size_t mem_bytes;       // Memory usage in bytes
+    double timers[4];       // Partition, get admissible pairs, construct H2, matvec
 };
 typedef struct H2Pack* H2Pack_t;
+
+// Initialize a H2TreeNode structure
+// Input parameters:
+//   dim : Dimension of point coordinate
+// Output parameters:
+//   <return> : Pointer to an empty H2TreeNode structure
+void H2P_TreeNode_init(H2TreeNode_t *node_, const int dim);
+
+// Recursively destroy a H2TreeNode node and its children nodes
+// Input parameter:
+//   node : H2 matrix tree node
+void H2P_TreeNode_destroy(H2TreeNode_t node);
 
 // Initialize a H2Pack structure
 // Input parameters:

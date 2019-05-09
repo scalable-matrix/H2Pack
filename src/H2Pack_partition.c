@@ -9,35 +9,6 @@
 #include "H2Pack_typedef.h"
 #include "H2Pack_partition.h"
 
-// Create an empty H2TreeNode structure
-// Input parameters:
-//   max_child : Maximum number of children per node, == 2^dim
-//   dim       : Dimension of point coordinate
-// Output parameters:
-//   <return>  : Pointer to an empty H2TreeNode structure
-H2TreeNode_t H2P_new_H2TreeNode(const int max_child, const int dim)
-{
-    H2TreeNode_t node = (H2TreeNode_t) malloc(sizeof(struct H2TreeNode));
-    node->children = (void**) malloc(sizeof(H2TreeNode_t) * max_child);
-    node->enbox = (DTYPE*) malloc(sizeof(DTYPE) * dim * 2);
-    for (int i = 0; i < max_child; i++) 
-        node->children[i] = NULL;
-    return node;
-}
-
-// Perform exclusive scan for an integer array
-// Input parameters:
-//   n : Length of the input array
-//   x : Input array
-// Output parameters:
-//   res : Output array, length n+1
-void H2P_exclusive_scan(const int n, int *x, int *res)
-{
-    res[0] = 0;
-    for (int i = 1; i <= n; i++) 
-        res[i] = res[i - 1] + x[i - 1];
-}
-
 // Hierarchical partitioning of the given points.
 // Tree nodes are indexed in post order.
 // Input parameters:
@@ -110,7 +81,8 @@ H2TreeNode_t H2P_bisection_partition_points(
     //    is smaller than the threshold, set current box as a leaf node
     if ((n_point <= max_leaf_points) || (box_size <= max_leaf_size))
     {
-        H2TreeNode_t node = H2P_new_H2TreeNode(max_child, dim);
+        H2TreeNode_t node;
+        H2P_TreeNode_init(&node, dim);
         node->cluster[0]  = coord_s;
         node->cluster[1]  = coord_e;
         node->n_child     = 0;
@@ -192,7 +164,8 @@ H2TreeNode_t H2P_bisection_partition_points(
     }
     
     // 6. Recursively partition each sub-box
-    H2TreeNode_t node = H2P_new_H2TreeNode(max_child, dim);
+    H2TreeNode_t node;
+    H2P_TreeNode_init(&node, dim);
     int n_node = 1;
     for (int i = 0; i < n_child; i++)
     {
@@ -279,21 +252,6 @@ void H2P_tree_to_array(H2TreeNode_t node, H2Pack_t h2pack)
     h2pack->level_n_node[level]++;
 }
 
-// Destroy a H2 matrix tree
-// Input parameter:
-//   node : H2 matrix tree node
-void H2P_destroy_tree(H2TreeNode_t node)
-{
-    for (int i = 0; i < node->n_child; i++)
-    {
-        H2TreeNode_t child_i = (H2TreeNode_t) node->children[i];
-        if (child_i != NULL) H2P_destroy_tree(child_i);
-        free(child_i);
-    }
-    free(node->children);
-    free(node->enbox);
-}
-
 // Partition points for a H2 tree
 void H2P_partition_points(
     H2Pack_t h2pack, const int n_point, const DTYPE *coord,
@@ -301,6 +259,7 @@ void H2P_partition_points(
 )
 {
     const int dim = h2pack->dim;
+    double st = H2P_get_wtime_sec();
     
     // 1. Copy input point coordinates
     h2pack->n_point = n_point;
@@ -350,5 +309,8 @@ void H2P_partition_points(
     memset(h2pack->level_n_node, 0, sizeof(int) * max_level);
     H2P_tree_to_array(root, h2pack);
     h2pack->parent[n_node - 1] = -1;  // Root node doesn't have parent
-    H2P_destroy_tree(root);  // We don't need the linked list H2 tree anymore
+    H2P_TreeNode_destroy(root);  // We don't need the linked list H2 tree anymore
+    
+    double et = H2P_get_wtime_sec();
+    h2pack->timers[0] = et - st;
 }

@@ -11,8 +11,10 @@ void H2P_TreeNode_init(H2TreeNode_t *node_, const int dim)
 {
     const int max_child = 1 << dim;
     H2TreeNode_t node = (H2TreeNode_t) malloc(sizeof(struct H2TreeNode));
+    assert(node != NULL);
     node->children = (void**) malloc(sizeof(H2TreeNode_t) * max_child);
     node->enbox = (DTYPE*) malloc(sizeof(DTYPE) * dim * 2);
+    assert(node->children != NULL && node->enbox != NULL);
     for (int i = 0; i < max_child; i++) 
         node->children[i] = NULL;
     *node_ = node;
@@ -51,6 +53,8 @@ void H2P_init(H2Pack_t *h2pack_, const int dim, const DTYPE reltol)
     h2pack->level_n_node = NULL;
     h2pack->level_nodes  = NULL;
     h2pack->leaf_nodes   = NULL;
+    h2pack->r_nf_pairs   = NULL;
+    h2pack->r_ff_pairs   = NULL;
     h2pack->coord        = NULL;
     h2pack->enbox        = NULL;
     
@@ -68,6 +72,45 @@ void H2P_destroy(H2Pack_t h2pack)
     free(h2pack->level_n_node);
     free(h2pack->level_nodes);
     free(h2pack->leaf_nodes);
+    free(h2pack->r_nf_pairs);
+    free(h2pack->r_ff_pairs);
     free(h2pack->coord);
     free(h2pack->enbox);
+}
+
+// Initialize a H2P_int_vector structure
+void H2P_int_vector_init(H2P_int_vector_t *int_vec_, int capacity)
+{
+    if (capacity < 0 || capacity > 65536) capacity = 128;
+    H2P_int_vector_t int_vec = (H2P_int_vector_t) malloc(sizeof(struct H2P_int_vector));
+    assert(int_vec != NULL);
+    int_vec->capacity = capacity;
+    int_vec->length = 0;
+    int_vec->data = (int*) malloc(sizeof(int) * capacity);
+    assert(int_vec->data != NULL);
+    *int_vec_ = int_vec;
+}
+
+// Destroy a H2P_int_vector structure
+void H2P_int_vector_destroy(H2P_int_vector_t int_vec)
+{
+    free(int_vec->data);
+    int_vec->capacity = 0;
+    int_vec->length = 0;
+}
+
+// Push an integer to the tail of a H2P_int_vector
+void H2P_int_vector_push_back(H2P_int_vector_t int_vec, int value)
+{
+    if (int_vec->capacity == int_vec->length)
+    {
+        int_vec->capacity *= 2;
+        int *new_data = (int*) malloc(sizeof(int) * int_vec->capacity);
+        assert(new_data != NULL);
+        memcpy(new_data, int_vec->data, sizeof(int) * int_vec->length);
+        free(int_vec->data);
+        int_vec->data = new_data;
+    }
+    int_vec->data[int_vec->length] = value;
+    int_vec->length++;
 }

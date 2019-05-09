@@ -9,6 +9,9 @@
 #include "H2Pack_typedef.h"
 #include "H2Pack_partition.h"
 
+// Global variables used in functions in this file
+struct H2P_partition_global_vars partition_vars;
+
 // Hierarchical partitioning of the given points.
 // Tree nodes are indexed in post order.
 // Input parameters:
@@ -27,9 +30,6 @@
 // Output parameters:
 //   coord           : Sorted coordinates
 //   <return>        : Information of current node
-int curr_po_idx;  // Post-order traversal index
-int max_level;    // Maximum level of the H2 tree
-int n_leaf_node;  // Number of leaf nodes
 H2TreeNode_t H2P_bisection_partition_points(
     int level, int coord_s, int coord_e, const int dim, 
     const DTYPE max_leaf_size, const int max_leaf_points, 
@@ -38,7 +38,7 @@ H2TreeNode_t H2P_bisection_partition_points(
 {
     int n_point   = coord_e - coord_s + 1;
     int max_child = 1 << dim;
-    if (level > max_level) max_level = level;
+    if (level > partition_vars.max_level) partition_vars.max_level = level;
     
     // 1. Check the enclosing box
     int alloc_enbox = 0;
@@ -87,11 +87,11 @@ H2TreeNode_t H2P_bisection_partition_points(
         node->cluster[1]  = coord_e;
         node->n_child     = 0;
         node->n_node      = 1;
-        node->po_idx      = curr_po_idx;
+        node->po_idx      = partition_vars.curr_po_idx;
         node->level       = level;
         memcpy(node->enbox, enbox, sizeof(DTYPE) * dim * 2);
-        curr_po_idx++;
-        n_leaf_node++;
+        partition_vars.curr_po_idx++;
+        partition_vars.n_leaf_node++;
         if (alloc_enbox) free(enbox);
         return node;
     }
@@ -186,10 +186,10 @@ H2TreeNode_t H2P_bisection_partition_points(
     node->cluster[1]  = coord_e;
     node->n_child     = n_child;
     node->n_node      = n_node;
-    node->po_idx      = curr_po_idx;
+    node->po_idx      = partition_vars.curr_po_idx;
     node->level       = level;
     memcpy(node->enbox, enbox, sizeof(DTYPE) * dim * 2);
-    curr_po_idx++;
+    partition_vars.curr_po_idx++;
     
     // 8. Free temporary arrays
     free(sub_coord_se);
@@ -209,7 +209,6 @@ H2TreeNode_t H2P_bisection_partition_points(
 //   node   : Current node of linked list H2 tree
 // Output parameters:
 //   h2pack : H2Pack structure
-int curr_leaf_idx = 0;  // Index of leaf node
 void H2P_tree_to_array(H2TreeNode_t node, H2Pack_t h2pack)
 {
     int dim       = h2pack->dim;
@@ -229,8 +228,8 @@ void H2P_tree_to_array(H2TreeNode_t node, H2Pack_t h2pack)
     // 2. Copy information of current node to arrays
     if (n_child == 0)
     {
-        h2pack->leaf_nodes[curr_leaf_idx] = node_idx;
-        curr_leaf_idx++;
+        h2pack->leaf_nodes[partition_vars.curr_leaf_idx] = node_idx;
+        partition_vars.curr_leaf_idx++;
     }
     int *node_children = h2pack->children + node_idx * max_child;
     for (int i = 0; i < n_child; i++)
@@ -271,9 +270,9 @@ void H2P_partition_points(
     // 2. Partition points for H2 tree using linked list 
     DTYPE *coord_tmp = (DTYPE*) malloc(sizeof(DTYPE) * n_point * dim);
     assert(coord_tmp != NULL);
-    curr_po_idx = 0;
-    max_level   = 0;
-    n_leaf_node = 0;
+    partition_vars.curr_po_idx = 0;
+    partition_vars.max_level   = 0;
+    partition_vars.n_leaf_node = 0;
     H2TreeNode_t root = H2P_bisection_partition_points(
         0, 0, n_point-1, dim, 
         max_leaf_size, max_leaf_points, 
@@ -284,8 +283,9 @@ void H2P_partition_points(
     // 3. Convert linked list H2 tree partition to arrays
     int n_node    = root->n_node;
     int max_child = 1 << dim;
+    int max_level = partition_vars.max_level;
     h2pack->n_node       = n_node;
-    h2pack->n_leaf_node  = n_leaf_node;
+    h2pack->n_leaf_node  = partition_vars.n_leaf_node;
     h2pack->max_child    = max_child;
     h2pack->max_level    = max_level++;
     h2pack->parent       = malloc(sizeof(int)   * n_node);
@@ -294,18 +294,18 @@ void H2P_partition_points(
     h2pack->n_child      = malloc(sizeof(int)   * n_node);
     h2pack->node_level   = malloc(sizeof(int)   * n_node);
     h2pack->level_n_node = malloc(sizeof(int)   * max_level);
-    h2pack->level_nodes  = malloc(sizeof(int)   * max_level * n_leaf_node);
-    h2pack->leaf_nodes   = malloc(sizeof(int)   * n_leaf_node);
+    h2pack->level_nodes  = malloc(sizeof(int)   * max_level * h2pack->n_leaf_node);
+    h2pack->leaf_nodes   = malloc(sizeof(int)   * h2pack->n_leaf_node);
     h2pack->enbox        = malloc(sizeof(DTYPE) * n_node * 2 * dim);
     assert(h2pack->parent      != NULL && h2pack->children     != NULL);
     assert(h2pack->cluster     != NULL && h2pack->n_child      != NULL);
     assert(h2pack->node_level  != NULL && h2pack->level_n_node != NULL);
     assert(h2pack->level_nodes != NULL && h2pack->leaf_nodes   != NULL);
     assert(h2pack->enbox       != NULL);
-    h2pack->mem_bytes += sizeof(int)   * n_node    * (max_child   + 5);
-    h2pack->mem_bytes += sizeof(int)   * max_level * (2 * n_leaf_node + 1);
+    h2pack->mem_bytes += sizeof(int)   * n_node    * (max_child + 5);
+    h2pack->mem_bytes += sizeof(int)   * max_level * (2 * h2pack->n_leaf_node + 1);
     h2pack->mem_bytes += sizeof(DTYPE) * n_node    * (dim * 2);
-    curr_leaf_idx = 0;
+    partition_vars.curr_leaf_idx = 0;
     memset(h2pack->level_n_node, 0, sizeof(int) * max_level);
     H2P_tree_to_array(root, h2pack);
     h2pack->parent[n_node - 1] = -1;  // Root node doesn't have parent

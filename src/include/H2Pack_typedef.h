@@ -33,6 +33,8 @@ struct H2Pack
     int   max_child;        // Maximum number of children per node, == 2^dim
     int   max_level;        // Maximum level of this H2 tree
     int   min_far_level;    // Minimum level of reduced far-field box pair
+    int   n_r_nf_pair;      // Number of reduced near-field pairs 
+    int   n_r_ff_pair;      // Number of reduced far-field pairs 
     DTYPE reltol;           // Relative 2-norm tolerance of H2 approximation
     int   *parent;          // Size n_node, parent index of each node
     int   *children;        // Size n_node * max_child, indices of a node's children nodes
@@ -42,6 +44,8 @@ struct H2Pack
     int   *level_n_node;    // Size max_level, number of nodes in each level
     int   *level_nodes;     // Size max_level * n_leaf_node, indices of nodes on each level
     int   *leaf_nodes;      // Size n_leaf_node, leaf node indices
+    int   *r_nf_pairs;      // Reduced near-field pairs 
+    int   *r_ff_pairs;      // Reduced far-field pairs 
     DTYPE *coord;           // Size n_point * dim, sorted point coordinates
     DTYPE *enbox;           // Size n_node * (2*dim), enclosing box data of each node
     
@@ -51,11 +55,32 @@ struct H2Pack
 };
 typedef struct H2Pack* H2Pack_t;
 
+// Integer vector, similar to std::vector in C++
+struct H2P_int_vector
+{
+    int capacity;    // Capacity of this vector
+    int length;      // Current length of this vector
+    int *data;       // Data in this vector
+};
+typedef struct H2P_int_vector* H2P_int_vector_t;
+
+// Global variables used in functions in H2Pack_partition.c
+// Use this structure as a namespace in H2Pack_partition.c 
+struct H2P_partition_global_vars
+{
+    int curr_po_idx;              // Post-order traversal index
+    int max_level;                // Maximum level of the H2 tree
+    int n_leaf_node;              // Number of leaf nodes
+    int curr_leaf_idx;            // Index of leaf node
+    H2P_int_vector_t r_nf_pairs;  // Reduced near-field pairs
+    H2P_int_vector_t r_ff_pairs;  // Reduced far-field pairs
+};
+
 // Initialize a H2TreeNode structure
-// Input parameters:
+// Input parameter:
 //   dim : Dimension of point coordinate
-// Output parameters:
-//   <return> : Pointer to an empty H2TreeNode structure
+// Output parameter:
+//   node_ : Initialized H2TreeNode structure
 void H2P_TreeNode_init(H2TreeNode_t *node_, const int dim);
 
 // Recursively destroy a H2TreeNode node and its children nodes
@@ -65,9 +90,9 @@ void H2P_TreeNode_destroy(H2TreeNode_t node);
 
 // Initialize a H2Pack structure
 // Input parameters:
-//   dim    : Dimension of point coordinate
-//   reltol : Relative 2-norm tolerance of H2 approximation
-// Output parameters:
+//   dim     : Dimension of point coordinate
+//   rel_tol : Relative 2-norm tolerance of H2 approximation
+// Output parameter:
 //   h2pack_ : Initialized H2Pack structure
 void H2P_init(H2Pack_t *h2pack_, const int dim, const DTYPE rel_tol);
 
@@ -75,6 +100,27 @@ void H2P_init(H2Pack_t *h2pack_, const int dim, const DTYPE rel_tol);
 // Input parameter:
 //   h2pack : H2Pack structure to be destroyed
 void H2P_destroy(H2Pack_t h2pack);
+
+// Initialize a H2P_int_vector structure
+// Input parameter:
+//   capacity : Initial capacity of the vector. If (capacity <= 0 || capacity >= 65536),
+//              capacity will be set as 128.
+// Output parameter:
+//   int_vec_ : Initialized H2P_int_vector structure
+void H2P_int_vector_init(H2P_int_vector_t *int_vec_, int capacity);
+
+// Destroy a H2P_int_vector structure
+// Input parameter:
+//   int_vec : H2P_int_vector structure
+void H2P_int_vector_destroy(H2P_int_vector_t int_vec);
+
+// Push an integer to the tail of a H2P_int_vector
+// Input parameters:
+//   int_vec : H2P_int_vector structure
+//   value   : Value to be pushed 
+// Output parameter:
+//   int_vec : H2P_int_vector structure with the pushed value
+void H2P_int_vector_push_back(H2P_int_vector_t int_vec, int value);
 
 #ifdef __cplusplus
 }

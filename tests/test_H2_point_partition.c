@@ -13,7 +13,7 @@ int main()
     const int   max_child       = 1 << dim;
     const int   max_leaf_points = 100;
     const DTYPE max_leaf_size   = 0.0;
-    FILE *inf;
+    FILE *inf, *ouf;
     
     DTYPE *coord = (DTYPE*) malloc(sizeof(DTYPE) * npts * dim);
     inf = fopen("coord.txt", "r");
@@ -28,24 +28,21 @@ int main()
     printf("H2Pack partition points done, used time = %e (s)\n", h2pack->timers[0]);
     printf("n_node, n_leaf_node, max_child, max_level = %d %d %d %d\n", h2pack->n_node, h2pack->n_leaf_node, h2pack->max_child, h2pack->max_level);
     
-    FILE *ouf;
-    ouf = fopen("coord1.txt", "w");
-    for (int i = 0; i < npts; i++)
+    H2P_calc_admissible_pairs(h2pack);
+    printf("H2Pack calc (in)adm pairs done, used time = %e (s)\n", h2pack->timers[1]);
+    
+    ouf = fopen("admcnt.txt", "w");
+    for (int i = 0; i < h2pack->n_node; i++) fprintf(ouf, "%d\n", h2pack->node_adm_cnt[i]);
+    fclose(ouf);
+    
+    ouf = fopen("admnode.txt", "w");
+    for (int i = 0; i < h2pack->n_node; i++)
     {
-        DTYPE *coord_i = h2pack->coord + i * dim;
-        for (int j = 0; j < dim - 1; j++) fprintf(ouf, "%.15lf, ", coord_i[j]);
-        fprintf(ouf, "%.15lf\n", coord_i[dim - 1]);
+        int *adm_list_i = h2pack->node_adm_list + i * h2pack->n_node;
+        for (int j = 0; j < h2pack->node_adm_cnt[i]; j++) fprintf(ouf, "%d, ", adm_list_i[j] + 1);
+        for (int j = h2pack->node_adm_cnt[i]; j < h2pack->n_node; j++) fprintf(ouf, "0, ");
+        fprintf(ouf, "\n");
     }
-    fclose(ouf);
-    
-    ouf = fopen("cluster.txt", "w");
-    for (int i = 0; i < h2pack->n_node; i++)
-        fprintf(ouf, "%d, %d\n", h2pack->cluster[2*i]+1, h2pack->cluster[2*i+1]+1);
-    fclose(ouf);
-    
-    ouf = fopen("parent.txt", "w");
-    for (int i = 0; i < h2pack->n_node; i++)
-        fprintf(ouf, "%d\n", h2pack->parent[i]+1);
     fclose(ouf);
     
     H2P_destroy(h2pack);

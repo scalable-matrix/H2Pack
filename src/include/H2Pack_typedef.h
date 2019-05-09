@@ -32,9 +32,9 @@ struct H2Pack
     int   n_leaf_node;      // Number of leaf nodes in this H2 tree
     int   max_child;        // Maximum number of children per node, == 2^dim
     int   max_level;        // Maximum level of this H2 tree
-    int   min_far_level;    // Minimum level of reduced far-field box pair
-    int   n_r_nf_pair;      // Number of reduced near-field pairs 
-    int   n_r_ff_pair;      // Number of reduced far-field pairs 
+    int   min_adm_level;    // Minimum level of reduced admissible pair
+    int   n_r_inadm_pair;   // Number of reduced inadmissible pairs 
+    int   n_r_adm_pair;     // Number of reduced admissible pairs 
     DTYPE reltol;           // Relative 2-norm tolerance of H2 approximation
     int   *parent;          // Size n_node, parent index of each node
     int   *children;        // Size n_node * max_child, indices of a node's children nodes
@@ -44,8 +44,10 @@ struct H2Pack
     int   *level_n_node;    // Size max_level, number of nodes in each level
     int   *level_nodes;     // Size max_level * n_leaf_node, indices of nodes on each level
     int   *leaf_nodes;      // Size n_leaf_node, leaf node indices
-    int   *r_nf_pairs;      // Reduced near-field pairs 
-    int   *r_ff_pairs;      // Reduced far-field pairs 
+    int   *r_inadm_pairs;   // Size unknown, Reduced inadmissible pairs 
+    int   *r_adm_pairs;     // Size unknown, Reduced admissible pairs 
+    int   *node_adm_list;   // Size n_node * n_node, full admissible node list for each node
+    int   *node_adm_cnt;    // Size n_node, number of admissible nodes for each node
     DTYPE *coord;           // Size n_point * dim, sorted point coordinates
     DTYPE *enbox;           // Size n_node * (2*dim), enclosing box data of each node
     
@@ -68,12 +70,13 @@ typedef struct H2P_int_vector* H2P_int_vector_t;
 // Use this structure as a namespace in H2Pack_partition.c 
 struct H2P_partition_global_vars
 {
-    int curr_po_idx;              // Post-order traversal index
-    int max_level;                // Maximum level of the H2 tree
-    int n_leaf_node;              // Number of leaf nodes
-    int curr_leaf_idx;            // Index of leaf node
-    H2P_int_vector_t r_nf_pairs;  // Reduced near-field pairs
-    H2P_int_vector_t r_ff_pairs;  // Reduced far-field pairs
+    int curr_po_idx;    // Post-order traversal index
+    int max_level;      // Maximum level of the H2 tree
+    int n_leaf_node;    // Number of leaf nodes
+    int curr_leaf_idx;  // Index of this leaf node
+    int min_adm_level;  // Minimum level of reduced admissible pair
+    H2P_int_vector_t r_inadm_pairs;  // Reduced inadmissible pairs
+    H2P_int_vector_t r_adm_pairs;    // Reduced admissible pairs
 };
 
 // Initialize a H2TreeNode structure

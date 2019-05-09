@@ -208,7 +208,7 @@ H2TreeNode_t H2P_bisection_partition_points(
 // Input parameters:
 //   node   : Current node of linked list H2 tree
 // Output parameters:
-//   h2pack : H2Pack structure
+//   h2pack : H2Pack structure with H2 tree partitioning in arrays
 void H2P_tree_to_array(H2TreeNode_t node, H2Pack_t h2pack)
 {
     int dim       = h2pack->dim;
@@ -313,4 +313,281 @@ void H2P_partition_points(
     
     double et = H2P_get_wtime_sec();
     h2pack->timers[0] = et - st;
+}
+
+// Check if two boxes are admissible 
+// Input parameters:
+//   box0, box1 : Box data
+//   dim        : Dimension of point coordinate
+//   alpha      : Admissible pair coefficient
+// Output parameter:
+//   <return>   : If two boxes are admissible 
+int H2P_check_box_admissible(
+    const DTYPE *box0, const DTYPE *box1, 
+    const int dim, const DTYPE alpha
+)
+{
+    for (int i = 0; i < dim; i++)
+    {
+        // Radius of each box's i-th dimension
+        DTYPE r0 = box0[dim + i];
+        DTYPE r1 = box1[dim + i];
+        // Center of each box's i-th dimension
+        DTYPE c0 = box0[i] + 0.5 * r0;
+        DTYPE c1 = box1[i] + 0.5 * r1;
+        DTYPE min_r = MIN(r0, r1);
+        DTYPE dist  = DABS(c0 - c1);
+        if (dist >= alpha * min_r + 0.5 * (r0 + r1)) return 1;
+    }
+    return 0;
+}
+
+// Calculate reduced (in)admissible pairs of a H2 tree
+// Input parameter:
+//   h2pack : H2Pack structure with H2 tree partitioning in arrays
+//   alpha  : Admissible pair coefficient
+//   n0, n1 : Node pair
+// Output parameter:
+//   h2pack : H2Pack structure reduced (in)admissible pairs
+void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0, const int n1)
+{
+    int   dim           = h2pack->dim;
+    int   max_child     = h2pack->max_child;
+    int   min_adm_level = h2pack->min_adm_level;
+    int   *children     = h2pack->children;
+    int   *n_child      = h2pack->n_child;
+    int   *node_level   = h2pack->node_level;
+    DTYPE *enbox        = h2pack->enbox;
+    
+    if (n0 == n1)
+    {
+        // Self box interaction
+        
+        // 1. Leaf node, nothing to do
+        int n_child_n0 = n_child[n0];
+        if (n_child_n0 == 0) return;
+        
+        // 2. Non-leaf node, check each children node
+        int *child_node = children + n0 * max_child;
+        // (1) Children node self box interaction
+        for (int i = 0; i < n_child_n0; i++)
+        {
+            int child_idx = child_node[i];
+            H2P_calc_reduced_adm_pairs(h2pack, alpha, child_idx, child_idx);
+        }
+        // (2) Interaction between different children nodes
+        for (int i = 0; i < n_child_n0; i++)
+        {
+            int child_idx_i = child_node[i];
+            for (int j = i + 1; j < n_child_n0; j++)
+            {
+                int child_idx_j = child_node[j];
+                H2P_calc_reduced_adm_pairs(h2pack, alpha, child_idx_i, child_idx_j);
+            }
+        }
+    } else {
+        // Interaction between two different nodes
+        int n_child_n0 = n_child[n0];
+        int n_child_n1 = n_child[n1];
+        int level_n0   = node_level[n0];
+        int level_n1   = node_level[n1];
+        
+        // 1. Admissible pair and the level of both node is larger than 
+        //    the minimum level of reduced admissible box pair 
+        DTYPE *enbox_n0 = enbox + n0 * dim * 2;
+        DTYPE *enbox_n1 = enbox + n1 * dim * 2;
+        if (H2P_check_box_admissible(enbox_n0, enbox_n1, dim, alpha) &&
+            (level_n0 >= min_adm_level) && (level_n1 >= min_adm_level))
+        {
+            H2P_int_vector_push_back(partition_vars.r_adm_pairs, n0);
+            H2P_int_vector_push_back(partition_vars.r_adm_pairs, n1);
+            partition_vars.min_adm_level = MIN(partition_vars.min_adm_level, level_n0);
+            partition_vars.min_adm_level = MIN(partition_vars.min_adm_level, level_n1);
+            return;
+        }
+        
+        // 2. Two inadmissible leaf node
+        if ((n_child_n0 == 0) && (n_child_n1 == 0))
+        {
+            H2P_int_vector_push_back(partition_vars.r_inadm_pairs, n0);
+            H2P_int_vector_push_back(partition_vars.r_inadm_pairs, n1);
+            return;
+        }
+        
+        // 3. n0 is leaf node, n1 is non-leaf node: check n0 with n1's children
+        if ((n_child_n0 == 0) && (n_child_n1 > 0))
+        {
+            int *child_n1 = children + n1 * max_child;
+            for (int j = 0; j < n_child_n1; j++)
+            {
+                int n1_child_j = child_n1[j];
+                H2P_calc_reduced_adm_pairs(h2pack, alpha, n0, n1_child_j);
+            }
+            return;
+        }
+        
+        // 4. n0 is non-leaf node, n1 is leaf node: check n1 with n0's children
+        if ((n_child_n0 > 0) && (n_child_n1 == 0))
+        {
+            int *child_n0 = children + n0 * max_child;
+            for (int i = 0; i < n_child_n0; i++)
+            {
+                int n0_child_i = child_n0[i];
+                H2P_calc_reduced_adm_pairs(h2pack, alpha, n0_child_i, n1);
+            }
+            return;
+        }
+        
+        // 5. Neither n0 nor n1 is leaf node, check their children
+        if ((n_child_n0 > 0) && (n_child_n1 > 0))
+        {
+            int *child_n0 = children + n0 * max_child;
+            int *child_n1 = children + n1 * max_child;
+            for (int i = 0; i < n_child_n0; i++)
+            {
+                int n0_child_i = child_n0[i];
+                for (int j = 0; j < n_child_n1; j++)
+                {
+                    int n1_child_j = child_n1[j];
+                    H2P_calc_reduced_adm_pairs(h2pack, alpha, n0_child_i, n1_child_j);
+                }
+            }
+        }
+    }
+}
+
+// Calculate full admissible pair list for each node
+// For each box i at k-th level, find all admissible nodes j if it satisfies 
+// either of the following conditions: 
+// 1. j is at k-th level and (i, j) is an admissible pair, which requires that 
+//    at least one pair of ancestors of i and j is a far-field pair.
+// 2. j is a leaf node, (i, j) is an admissible pair, and j's level is 
+//    higher than i.
+// 3. i is a leaf node and j's level is lower than i. In this case, (i, j) 
+//    is already in the reduced far-field pair list.
+// Input parameter:
+//   h2pack : H2Pack structure with reduced (in)admissible pairs of a H2 tree
+// Output parameter:
+//   h2pack : H2Pack structure with full admissible pair list for each node
+void H2P_calc_full_adm_lists(H2Pack_t h2pack)
+{
+    int n_node        = h2pack->n_node;
+    int max_child     = h2pack->max_child;
+    int *parent       = h2pack->parent;
+    int *children     = h2pack->children;
+    int *n_child      = h2pack->n_child;
+    int n_r_adm_pair  = h2pack->n_r_adm_pair;
+    int *r_adm_pairs  = h2pack->r_adm_pairs;
+    int *level_n_node = h2pack->level_n_node;
+    int *level_nodes  = h2pack->level_nodes;
+    
+    // 1. Allocate node_adm_list and node_adm_cnt
+    h2pack->node_adm_list = (int*) malloc(sizeof(int) * n_node * n_node);
+    h2pack->node_adm_cnt  = (int*) malloc(sizeof(int) * n_node);
+    assert(h2pack->node_adm_list != NULL && h2pack->node_adm_cnt != NULL);
+    memset(h2pack->node_adm_cnt, 0, sizeof(int) * n_node);
+    int *node_adm_list = h2pack->node_adm_list;
+    int *node_adm_cnt  = h2pack->node_adm_cnt;
+    
+    // 2. Prepare reduce admissible list for each node
+    int *node_r_adm_list = (int*) malloc(sizeof(int) * n_node * n_node);
+    int *node_r_adm_cnt  = (int*) malloc(sizeof(int) * n_node);
+    assert(node_r_adm_list != NULL && node_r_adm_cnt != NULL);
+    memset(node_r_adm_cnt, 0, sizeof(int) * n_node);
+    for (int i = 0; i < n_r_adm_pair; i++)
+    {
+        int n0 = r_adm_pairs[2 * i + 0];
+        int n1 = r_adm_pairs[2 * i + 1];
+        int idx0 = node_r_adm_cnt[n0];
+        int idx1 = node_r_adm_cnt[n1];
+        node_r_adm_list[n0 * n_node + idx0] = n1;
+        node_r_adm_list[n1 * n_node + idx1] = n0;
+        node_r_adm_cnt[n0] = idx0 + 1;
+        node_r_adm_cnt[n1] = idx1 + 1;
+    }
+    
+    // 3. Generate admissible lists level by level
+    for (int i = 1; i <= h2pack->max_level; i++)
+    {
+        int *level_i_nodes = level_nodes + i * h2pack->n_leaf_node;
+        for (int j = 0; j < level_n_node[i]; j++)
+        {
+            int node = level_i_nodes[j];
+            int *adm_list = node_adm_list + node * n_node;
+            
+            // (1) Admissible nodes inherent from parent
+            int parent_idx = parent[node];
+            int *parent_adm_list = node_adm_list + parent_idx * n_node;
+            for (int k = 0; k < node_adm_cnt[parent_idx]; k++)
+            {
+                int parent_adm_k = parent_adm_list[k];
+                int n_child_k    = n_child[parent_adm_k];
+                int *children_k  = children + parent_adm_k * max_child;
+                if (n_child_k > 0)
+                {
+                    // Condition 1
+                    int cnt = node_adm_cnt[node];
+                    for (int kk = 0; kk < n_child_k; kk++)
+                    {
+                        adm_list[cnt] = children_k[kk];
+                        cnt++;
+                    }
+                    node_adm_cnt[node] += n_child_k;
+                } else {
+                    // Condition 2
+                    int cnt = node_adm_cnt[node];
+                    adm_list[cnt] = parent_adm_k;
+                    node_adm_cnt[node]++;
+                }
+            }
+            
+            // (2) Condition 3 (?)
+            int r_adm_cnt = node_r_adm_cnt[node];
+            int *r_adm_list = node_r_adm_list + node * n_node;
+            int cnt = node_adm_cnt[node];
+            memcpy(adm_list + cnt, r_adm_list, sizeof(int) * r_adm_cnt);
+            node_adm_cnt[node] += r_adm_cnt;
+        }
+    }
+    
+    free(node_r_adm_cnt);
+    free(node_r_adm_list);
+}
+
+// Calculate reduced (in)admissible pairs and full admissible pairs of a H2 tree
+void H2P_calc_admissible_pairs(H2Pack_t h2pack)
+{
+    double st = H2P_get_wtime_sec();
+    
+    // 1. Calculate reduced (in)admissible pairs
+    int estimated_n_pair = h2pack->n_node * h2pack->max_child;
+    H2P_int_vector_init(&partition_vars.r_inadm_pairs, estimated_n_pair);
+    H2P_int_vector_init(&partition_vars.r_adm_pairs,   estimated_n_pair);
+    // TODO: Change min_adm_level according to the tree structure
+    // If h2pack->min_adm_level != 0, partition_vars.min_adm_level is useless
+    h2pack->min_adm_level = 0;
+    partition_vars.min_adm_level = h2pack->max_level;
+    int root_idx = h2pack->n_node - 1;
+    H2P_calc_reduced_adm_pairs(h2pack, ALPHA_H2, root_idx, root_idx);
+    if (h2pack->min_adm_level == 0)
+        h2pack->min_adm_level = partition_vars.min_adm_level;
+    
+    // 2. Copy reduced (in)admissible pairs from H2P_int_vector to h2pack arrays
+    h2pack->n_r_inadm_pair = partition_vars.r_inadm_pairs->length / 2;
+    h2pack->n_r_adm_pair   = partition_vars.r_adm_pairs->length   / 2;
+    size_t r_inadm_pair_msize = sizeof(int) * h2pack->n_r_inadm_pair * 2;
+    size_t r_adm_pair_msize   = sizeof(int) * h2pack->n_r_adm_pair   * 2;
+    h2pack->r_inadm_pairs = (int*) malloc(r_inadm_pair_msize);
+    h2pack->r_adm_pairs   = (int*) malloc(r_adm_pair_msize);
+    assert(h2pack->r_inadm_pairs != NULL && h2pack->r_adm_pairs != NULL);
+    memcpy(h2pack->r_inadm_pairs, partition_vars.r_inadm_pairs->data, r_inadm_pair_msize);
+    memcpy(h2pack->r_adm_pairs,   partition_vars.r_adm_pairs->data,   r_adm_pair_msize);
+    H2P_int_vector_destroy(partition_vars.r_inadm_pairs);
+    H2P_int_vector_destroy(partition_vars.r_adm_pairs);
+    
+    // 3. Calculate full admissible pair list for each node
+    H2P_calc_full_adm_lists(h2pack);
+    
+    double et = H2P_get_wtime_sec();
+    h2pack->timers[1] = et - st;
 }

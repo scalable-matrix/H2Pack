@@ -21,6 +21,14 @@ void H2P_partition_points(
     const int max_leaf_points, const DTYPE max_leaf_size
 );
 
+// Calculate reduced (in)admissible pairs and full admissible pairs of a H2 tree
+// Input parameter:
+//   h2pack : H2Pack structure with H2 tree partitioning in arrays
+// Output parameter:
+//   h2pack : H2Pack structure reduced (in)admissible pairs and full 
+//            admissible pairs for a H2 tree
+void H2P_calc_admissible_pairs(H2Pack_t h2pack);
+
 #ifdef __cplusplus
 }
 #endif

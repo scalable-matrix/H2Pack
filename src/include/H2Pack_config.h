@@ -4,5 +4,6 @@
 #define DTYPE       double        // Data type
 #define DABS        fabs          // abs function for DTYPE
 #define ALIGN_SIZE  64            // Memory allocation alignment
+#define ALPHA_H2    0.999999      // Admissible coefficient, == 1 here
 
 #endif

@@ -26,7 +26,7 @@ void H2P_int_vector_init(H2P_int_vector_t *int_vec_, int capacity);
 
 // Destroy a H2P_int_vector structure
 // Input parameter:
-//   int_vec : H2P_int_vector structure
+//   int_vec : H2P_int_vector structure to be destroyed
 void H2P_int_vector_destroy(H2P_int_vector_t int_vec);
 
 // Push an integer to the tail of a H2P_int_vector

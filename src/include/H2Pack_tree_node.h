@@ -31,7 +31,7 @@ void H2P_tree_node_init(H2P_tree_node_t *node_, const int dim);
 
 // Recursively destroy a H2P_tree_node node and its children nodes
 // Input parameter:
-//   node : H2 matrix tree node
+//   node : H2P_tree_node structure to be destroyed
 void H2P_tree_node_destroy(H2P_tree_node_t node);
 
 #ifdef __cplusplus

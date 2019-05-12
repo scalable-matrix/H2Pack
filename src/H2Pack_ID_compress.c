@@ -14,9 +14,22 @@
 #include "H2Pack_dense_mat.h"
 
 // Partial pivoting QR decomposition, simplified output version
+// The partial pivoting QR decomposition is of form:
+//     A * P = Q * [R11, R12; 0, R22]
+// where R11 is an upper-triangular matrix, R12 and R22 are dense matrices,
+// P is a permutation matrix. 
+// Input parameters:
+//   A        : Target matrix, stored in column major
+//   tol_rank : QR stopping parameter, maximum column rank, 
+//   tol_norm : QR stopping parameter, maximum column 2-norm
+//   rel_norm : If tol_norm is relative to the largest column 2-norm in A
+// Output parameters:
+//   A : Matrix R: [R11, R12; 0, R22]
+//   p : Matrix A column permutation array, A(:, p) = A * P
+//   r : Dimension of upper-triangular matrix R11
 void H2P_partial_pivot_QR(
     H2P_dense_mat_t A, const int tol_rank, const DTYPE tol_norm, 
-    int **p_, int *r_
+    const int rel_norm, int *p, int *r
 )
 {
     DTYPE *R = A->data;
@@ -29,20 +42,22 @@ void H2P_partial_pivot_QR(
     DTYPE *col_tmp  = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * nrow);
     DTYPE *h_vec    = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * nrow);
     DTYPE *h_R_mv   = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * ncol);
-    int *p = (int*) malloc(sizeof(int) * ncol);
     assert(col_norm != NULL && col_tmp != NULL);
-    assert(h_vec != NULL && h_R_mv != NULL && p != NULL);
+    assert(h_vec    != NULL && h_R_mv  != NULL);
+    DTYPE max_col_norm = 0.0;
     for (int icol = 0; icol < ncol; icol++)
     {
         p[icol] = icol;
-        col_norm[icol] = BLAS_NRM2(nrow, R + icol * ldR, 1);
+        col_norm[icol] = CBLAS_NRM2(nrow, R + icol * ldR, 1);
+        max_col_norm = MAX(col_norm[icol], max_col_norm);
     }
     
     int stop_rank = MIN(max_iter, tol_rank);
     DTYPE norm_eps = DSQRT((DTYPE) nrow) * 1e-15;
     DTYPE stop_norm = MAX(norm_eps, tol_norm);
+    if (rel_norm) stop_norm *= max_col_norm;
     
-    int r = -1;
+    int rank = -1;
     size_t col_msize = sizeof(DTYPE) * nrow;
     // Main iteration of Household QR
     for (int iter = 0; iter < max_iter; iter++)
@@ -60,9 +75,9 @@ void H2P_partial_pivot_QR(
         }
         
         // 2. Check the stop criteria
-        if ((norm_p < stop_norm) || (iter > stop_rank))
+        if ((norm_p < stop_norm) || (iter >= stop_rank))
         {
-            r = iter;
+            rank = iter;
             break;
         }
         
@@ -82,10 +97,10 @@ void H2P_partial_pivot_QR(
         int h_len = nrow - iter;
         memcpy(h_vec, R + iter * ldR + iter, sizeof(DTYPE) * h_len);
         DTYPE sign = (h_vec[0] > 0.0) ? 1.0 : -1.0;
-        DTYPE h_norm = BLAS_NRM2(h_len, h_vec, 1);
+        DTYPE h_norm = CBLAS_NRM2(h_len, h_vec, 1);
         h_vec[0] = h_vec[0] + sign * h_norm;
-        DTYPE inv_h_norm = 1.0 / BLAS_NRM2(h_len, h_vec, 1);
-        BLAS_SCAL(h_len, inv_h_norm, h_vec, 1);
+        DTYPE inv_h_norm = 1.0 / CBLAS_NRM2(h_len, h_vec, 1);
+        CBLAS_SCAL(h_len, inv_h_norm, h_vec, 1);
         
         // 5. Eliminate the iter-th sub-column and orthogonalize columns 
         //    right to the iter-th column
@@ -94,11 +109,11 @@ void H2P_partial_pivot_QR(
         DTYPE *R_block = R + (iter + 1) * ldR + iter;
         int R_block_nrow = h_len;
         int R_block_ncol = ncol - iter - 1;
-        BLAS_GEMV(
+        CBLAS_GEMV(
             CblasColMajor, CblasTrans, R_block_nrow, R_block_ncol,
             1.0, R_block, ldR, h_vec, 1, 0.0, h_R_mv, 1
         );
-        BLAS_GER(
+        CBLAS_GER(
             CblasColMajor, R_block_nrow, R_block_ncol, -2.0,
             h_vec, 1, h_R_mv, 1, R_block, ldR
         );
@@ -122,18 +137,175 @@ void H2P_partial_pivot_QR(
             if (tmp <= 1e-10)  // TODO: Find a better threshold?
             {
                 DTYPE *R_col_j = R + j * ldR + (iter + 1);
-                col_norm[j] = BLAS_NRM2(h_len_m1, R_col_j, 1);
+                col_norm[j] = CBLAS_NRM2(h_len_m1, R_col_j, 1);
             } else {
                 col_norm[j] = DSQRT(tmp);
             }
         }
     }
-    if (r == -1) r = max_iter;
+    if (rank == -1) rank = max_iter;
     
-    *r_ = r;
-    *p_ = p;
+    *r = rank;
     H2P_free_aligned(h_vec);
     H2P_free_aligned(h_R_mv);
     H2P_free_aligned(col_tmp);
     H2P_free_aligned(col_norm);
 }
+
+// Partial pivoting QR for ID, may need to be upgraded to Strong Rank 
+// Revealing QR later.
+// Input parameters:
+//   A          : Target matrix, stored in column major
+//   stop_type  : Partial QR stop criteria: QR_RANK, QR_REL_NRM, or QR_ABS_NRM
+//   stop_param : Pointer to partial QR stop parameter
+// Output parameters:
+//   A : Matrix R: [R11, R12]
+//   p : Matrix A column permutation array, A(:, p) = A * P
+void H2P_ID_QR(H2P_dense_mat_t A, const int stop_type, void *stop_param, int *p)
+{
+    // Parse partial QR stop criteria and perform partial QR
+    int r, tol_rank, rel_norm;
+    DTYPE tol_norm;
+    if (stop_type == QR_RANK)
+    {
+        int *param = (int*) stop_param;
+        tol_rank = param[0];
+        tol_norm = 1e-15;
+        rel_norm = 0;
+    }
+    if (stop_type == QR_REL_NRM)
+    {
+        DTYPE *param = (DTYPE*) stop_param;
+        tol_rank = MIN(A->nrow, A->ncol);
+        tol_norm = param[0];
+        rel_norm = 1;
+    }
+    if (stop_type == QR_ABS_NRM)
+    {
+        DTYPE *param = (DTYPE*) stop_param;
+        tol_rank = MIN(A->nrow, A->ncol);
+        tol_norm = param[0];
+        rel_norm = 0;
+    }
+    H2P_partial_pivot_QR(A, tol_rank, tol_norm, rel_norm, p, &r);
+    
+    // Special case: each column's 2-norm is smaller than the threshold
+    if (r == 0)
+    {
+        for (int i = 0; i < A->ncol; i++) p[i] = i;
+        A->nrow = 0;
+        return;
+    }
+    
+    // Truncate R to be [R11, R12] and return
+    A->nrow = r;
+}
+
+
+// Quick sort an array in ascending order
+// Input parameters:
+//  x    : Array to be sorted
+//  idx  : idx[i] is the original index of x[i]
+//  l, r : Sort x[l : r]
+// Output parameters:
+//  x    : Sorted array
+//  idx  : idx[i] is the original index of x[i]
+static void H2P_qsortAscend(int *x, int *idx, const int l, const int r)
+{
+    int i = l, j = r, tmp;
+    int mid = x[(i + j) / 2];
+    while (i <= j)
+    {
+        while (x[i] < mid) i++;
+        while (x[j] > mid) j--;
+        if (i <= j)
+        {
+            tmp =   x[i];   x[i] =   x[j];   x[j] = tmp;
+            tmp = idx[i]; idx[i] = idx[j]; idx[j] = tmp;
+            i++; j--;
+        }
+    }
+    if (i < r) H2P_qsortAscend(x, idx, i, r);
+    if (j > l) H2P_qsortAscend(x, idx, l, j);
+}
+
+// Interpolative Decomposition (ID) using partial QR over rows of a target 
+// matrix. Partial pivoting QR may need to be upgraded to SRRQR later. 
+void H2P_ID_compress(
+    H2P_dense_mat_t A, const int stop_type, void *stop_param,
+    H2P_dense_mat_t *U_, int *J
+)
+{
+    // 1. Partial pivoting QR for A^T
+    // Note: A is stored in row major style but H2P_ID_QR needs A stored in column
+    // major style. We manipulate the size information of A to save some time
+    const int nrow = A->nrow;
+    const int ncol = A->ncol;
+    A->nrow = ncol;
+    A->ncol = nrow;
+    H2P_ID_QR(A, stop_type, stop_param, J);
+    H2P_dense_mat_t R = A; // Note: the output R stored in A is still stored in column major style
+    int r = A->nrow;  // Obtained rank
+    
+    // 2. Set permutation indices p0, sort the index subset J[0:r-1]
+    int *p0 = (int*) malloc(sizeof(int) * nrow);
+    int *p1 = (int*) malloc(sizeof(int) * nrow);
+    int *i0 = (int*) malloc(sizeof(int) * nrow);
+    int *i1 = (int*) malloc(sizeof(int) * nrow);
+    assert(p0 != NULL && p1 != NULL && i0 != NULL && i1 != NULL);
+    for (int i = 0; i < nrow; i++) 
+    {
+        p0[J[i]] = i;
+        i0[i]    = i;
+    }
+    H2P_qsortAscend(J, i0, 0, r - 1);
+    for (int i = 0; i < nrow; i++) i1[i0[i]] = i;
+    for (int i = 0; i < nrow; i++) p1[i] = i1[p0[i]];
+    
+    // 3. Form the output U
+    H2P_dense_mat_t U;
+    if (r == 0)
+    {
+        // Special case: rank = 0, set U and J as empty
+        U->nrow = nrow;
+        U->ncol = 0;
+        U->ld   = 0;
+        U->data = NULL;
+    } else {
+        // (1) Before permutation, the upper part of U is a diagonal
+        H2P_dense_mat_init(&U, nrow, r);
+        for (int i = 0; i < r; i++)
+        {
+            memset(U->data + i * r, 0, sizeof(DTYPE) * r);
+            U->data[i * r + i] = 1.0;
+        }
+        DTYPE *R11 = R->data;
+        DTYPE *R12 = R->data + r * R->ld;
+        int nrow_R12 = r;
+        int ncol_R12 = nrow - r;
+        // (2) Solve E = inv(R11) * R12, stored in R12 in column major style
+        //     --> equals to what we need: E^T stored in row major style
+        CBLAS_TRSM(
+            CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit,
+            nrow_R12, ncol_R12, 1.0, R11, R->ld, R12, R->ld
+        );
+        // (3) Reorder E^T's columns according to the sorted J
+        DTYPE *UL = U->data + r * r;
+        for (int icol = 0; icol < r; icol++)
+        {
+            DTYPE *R12_icol = R12 + i0[icol];
+            DTYPE *UL_icol = UL + icol;
+            for (int irow = 0; irow < ncol_R12; irow++)
+                UL_icol[irow * r] = R12_icol[irow * R->ld];
+        }
+        // (4) Permute U's rows 
+        H2P_dense_mat_permute_rows(U, p1);
+    }
+    
+    free(p0);
+    free(p1);
+    free(i0);
+    free(i1);
+    *U_ = U;
+}
+

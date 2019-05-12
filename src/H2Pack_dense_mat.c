@@ -113,7 +113,7 @@ void H2P_dense_mat_print(H2P_dense_mat_t mat)
     for (int irow = 0; irow < mat->nrow; irow++)
     {
         DTYPE *mat_row = mat->data + irow * mat->ld;
-        for (int icol = 0; icol < mat->ncol; icol++) printf("%e ", mat_row[icol]);
+        for (int icol = 0; icol < mat->ncol; icol++) printf("% .4lf  ", mat_row[icol]);
         printf("\n");
     }
 }

@@ -8,22 +8,23 @@
 extern "C" {
 #endif
 
-// Partial pivoting QR decomposition, simplified output version
-// The partial pivoting QR decomposition is of form:
-//     A * P = Q * [R11, R12; 0, R22]
-// where R11 is an upper-triangular matrix, R12 and R22 are dense matrices,
-// P is a permutation matrix. 
+// Interpolative Decomposition (ID) using partial QR over rows of a target 
+// matrix. Partial pivoting QR may need to be upgraded to SRRQR later. 
+// Given an m*n matrix A, an rank-k ID approximation of A is of form
+//         A = U * A(J, :)
+// where J is a row index subset of size k, and U is a m*k matrix (if 
+// SRRQR is used, entries of U are bounded by a parameter 'f'). A(J,:) 
+// and U are usually called the skeleton and projection matrix. 
 // Input parameters:
-//   A        : Target matrix, stored in column major
-//   tol_rank : QR stopping parameter, maximum column rank, 
-//   tol_norm : QR stopping parameter, maximum column 2-norm
+//   A          : Target matrix, stored in column major
+//   stop_type  : Partial QR stop criteria: QR_RANK, QR_REL_NRM, or QR_ABS_NRM
+//   stop_param : Pointer to partial QR stop parameter
 // Output parameters:
-//   A  : Matrix R: [R11, R12; 0, R22]
-//   p_ : Matrix A column permutation array, A(:, p) = A * P, memory allocated in this function
-//   r_ : Dimension of upper-triangular matrix R11
-void H2P_partial_pivot_QR(
-    H2P_dense_mat_t A, const int tol_rank, const DTYPE tol_norm, 
-    int **p_, int *r
+//   U_ : Projection matrix, will be initialized in this function
+//   J  : Row indices of the skeleton A
+void H2P_ID_compress(
+    H2P_dense_mat_t A, const int stop_type, void *stop_param,
+    H2P_dense_mat_t *U_, int *J
 );
 
 #ifdef __cplusplus

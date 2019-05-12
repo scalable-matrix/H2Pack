@@ -21,7 +21,7 @@ int main()
     for (int icol = 0; icol < ncol; icol++)
     {
         DTYPE *A_icol = A->data + icol * nrow;
-        DTYPE x_icol = 2.0 + delta_x * icol;
+        DTYPE x_icol = 0.5 + delta_x * icol;
         for (int irow = 0; irow < nrow; irow++)
         {
             DTYPE y_irow = delta_y * irow;
@@ -38,13 +38,14 @@ int main()
     fclose(ouf);
 
     int *p, r, tol_rank;
+    p = (int*) malloc(sizeof(int) * ncol);
     DTYPE tol_norm;
     printf("Stop param:");
     scanf("%d", &tol_rank);
     scanf("%lf", &tol_norm);
     mkl_set_num_threads(1);
     double st = H2P_get_wtime_sec();
-    H2P_partial_pivot_QR(A, tol_rank, tol_norm, &p, &r);
+    H2P_partial_pivot_QR(A, tol_rank, tol_norm, 0, p, &r);
     double et = H2P_get_wtime_sec();
     printf("Partial pivot QR rank = %d, used time = %.4lf (s)\n", r, et - st);
     ouf = fopen("RT.csv", "w");

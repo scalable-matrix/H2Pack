@@ -19,4 +19,7 @@
 // H2Pack ID compression
 #include "H2Pack_ID_compress.h"
 
+// H2Pack build H2 representation
+#include "H2Pack_build.h"
+
 #endif

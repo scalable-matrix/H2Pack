@@ -60,6 +60,16 @@ void H2P_int_vec_init(H2P_int_vec_t *int_vec_, int capacity);
 //   int_vec : H2P_int_vec structure to be destroyed
 void H2P_int_vec_destroy(H2P_int_vec_t int_vec);
 
+// Set the capacity of an initialized H2P_int_vec structure. 
+// If new capacity > original capacity, allocate a new data buffer and 
+// copy values to the new buffer. Otherwise, do nothing.
+// Input parameters:
+//   int_vec  : Initialized H2P_int_vec structure
+//   capacity : New capacity
+// Output parameter:
+//   int_vec  : H2P_int_vec structure with adjusted capacity
+void H2P_int_vec_set_capacity(H2P_int_vec_t int_vec, const int capacity);
+
 // Push an integer to the tail of a H2P_int_vec
 // Input parameters:
 //   int_vec : H2P_int_vec structure
@@ -67,6 +77,14 @@ void H2P_int_vec_destroy(H2P_int_vec_t int_vec);
 // Output parameter:
 //   int_vec : H2P_int_vec structure with the pushed value
 void H2P_int_vec_push_back(H2P_int_vec_t int_vec, int value);
+
+// Concatenate values in a H2P_int_vec to another H2P_int_vec
+// Input parameters:
+//   dst_vec : Destination H2P_int_vec structure
+//   src_vec : Source H2P_int_vec structure
+// Output parameter:
+//   dst_vec : Destination H2P_int_vec structure
+void H2P_int_vec_concatenate(H2P_int_vec_t dst_vec, H2P_int_vec_t src_vec);
 
 // ------------------------------------------------------------------------------ // 
 
@@ -96,31 +114,14 @@ void H2P_dense_mat_init(H2P_dense_mat_t *mat_, const int nrow, const int ncol);
 //   mat : H2P_dense_mat structure to be destroyed 
 void H2P_dense_mat_destroy(H2P_dense_mat_t mat);
 
-// Copy a block of a dense matrix to another dense matrix
-// WARNING: This function DOES NOT perform sanity check!
+// Resize an initialized H2P_dense_mat structure, original data in 
+// the dense matrix will be unavailable after this operation
 // Input parameters:
-//   src_mat  : Source matrix
-//   src_srow : Starting row in the source matrix 
-//   src_scol : Starting column in the source matrix 
-//   dst_srow : Starting row in the destination matrix 
-//   dst_scol : Starting column in the destination matrix 
-//   nrow     : Number of rows to be copied
-//   ncol     : Number of columns to be copied
+//   nrow : Number of rows of the new dense matrix
+//   ncol : Number of columns of the new dense matrix
 // Output parameter:
-//   dst_mat : Destination matrix
-void H2P_dense_mat_copy_block(
-    H2P_dense_mat_t src_mat, H2P_dense_mat_t dst_mat,
-    const int src_srow, const int src_scol, 
-    const int dst_srow, const int dst_scol, 
-    const int nrow, const int ncol
-);
-
-// Transpose a dense matrix
-// Input parameter:
-//   mat : H2P_dense_mat structure to be transposed
-// Output parameter:
-//   mat : Transposed H2P_dense_mat structure
-void H2P_dense_mat_transpose(H2P_dense_mat_t mat);
+//   mat  : Resized H2P_dense_mat structure
+void H2P_dense_mat_resize(H2P_dense_mat_t mat, const int nrow, const int ncol);
 
 // Permute rows in a H2P_dense_mat structure
 // WARNING: This function DOES NOT perform sanity check!

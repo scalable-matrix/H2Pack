@@ -4,7 +4,6 @@
 #include <sys/time.h>
 
 #include "H2Pack_config.h"
-#include "H2Pack_utils.h"
 
 // Get wall-clock time, similar to omp_get_wtime()
 double H2P_get_wtime_sec()

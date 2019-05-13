@@ -22,12 +22,12 @@ struct H2Pack
     int   n_r_inadm_pair;   // Number of reduced inadmissible pairs 
     int   n_r_adm_pair;     // Number of reduced admissible pairs 
     int   n_UJ;             // Number of projection matrices & skeleton row sets
-    int   n_D;              // Number of dense blocks
     int   n_B;              // Number of generator matrices
+    int   n_D;              // Number of dense blocks
     DTYPE reltol;           // Relative 2-norm tolerance of H2 approximation
     int   *parent;          // Size n_node, parent index of each node
     int   *children;        // Size n_node * max_child, indices of a node's children nodes
-    int   *cluster;         // Size n_node * 2, start and end indices of points belong to each node
+    int   *cluster;         // Size n_node * 2, start and end (included) indices of points belong to each node
     int   *n_child;         // Size n_node, number of children nodes of each node
     int   *node_level;      // Size n_node, level of each node
     int   *level_n_node;    // Size max_level, number of nodes in each level
@@ -40,13 +40,14 @@ struct H2Pack
     DTYPE *coord;           // Size n_point * dim, sorted point coordinates
     DTYPE *enbox;           // Size n_node * (2*dim), enclosing box data of each node
     H2P_dense_mat_t  *U;    // Projection matrices
-    H2P_dense_mat_t  *D;    // Dense blocks in the original matrix (from leaf node self interaction & inadmissible pairs)
-    H2P_dense_mat_t  *B;    // Generator matrices
     H2P_int_vec_t    *J;    // Skeleton row sets
+    H2P_dense_mat_t  *B;    // Generator matrices
+    H2P_dense_mat_t  *D;    // Dense blocks in the original matrix (from leaf node self interaction & inadmissible pairs)
     
     // Statistic data
     size_t mem_bytes;       // Memory usage in bytes
-    double timers[4];       // Partition, get admissible pairs, construct H2, matvec
+    double timers[5];       // Partition, construct U, B, D, matvec
+    int    n_matvec;
     int    mat_size[3];     // Total size of U, D, B
 };
 typedef struct H2Pack* H2Pack_t;

@@ -5,7 +5,83 @@
 
 #include "H2Pack_config.h"
 #include "H2Pack_utils.h"
-#include "H2Pack_dense_mat.h"
+#include "H2Pack_aux_structs.h"
+
+// ========================== H2P_tree_node ========================== //
+
+// Initialize a H2P_tree_node structure
+void H2P_tree_node_init(H2P_tree_node_t *node_, const int dim)
+{
+    const int max_child = 1 << dim;
+    H2P_tree_node_t node = (H2P_tree_node_t) malloc(sizeof(struct H2P_tree_node));
+    assert(node != NULL);
+    node->children = (void**) malloc(sizeof(H2P_tree_node_t) * max_child);
+    node->enbox = (DTYPE*) malloc(sizeof(DTYPE) * dim * 2);
+    assert(node->children != NULL && node->enbox != NULL);
+    for (int i = 0; i < max_child; i++) 
+        node->children[i] = NULL;
+    *node_ = node;
+}
+
+// Recursively destroy a H2P_tree_node node and its children nodes
+void H2P_tree_node_destroy(H2P_tree_node_t node)
+{
+    for (int i = 0; i < node->n_child; i++)
+    {
+        H2P_tree_node_t child_i = (H2P_tree_node_t) node->children[i];
+        if (child_i != NULL) H2P_tree_node_destroy(child_i);
+        free(child_i);
+    }
+    free(node->children);
+    free(node->enbox);
+}
+
+// ------------------------------------------------------------------- // 
+
+
+// =========================== H2P_int_vec =========================== //
+
+// Initialize a H2P_int_vec structure
+void H2P_int_vec_init(H2P_int_vec_t *int_vec_, int capacity)
+{
+    if (capacity < 0 || capacity > 65536) capacity = 128;
+    H2P_int_vec_t int_vec = (H2P_int_vec_t) malloc(sizeof(struct H2P_int_vec));
+    assert(int_vec != NULL);
+    int_vec->capacity = capacity;
+    int_vec->length = 0;
+    int_vec->data = (int*) malloc(sizeof(int) * capacity);
+    assert(int_vec->data != NULL);
+    *int_vec_ = int_vec;
+}
+
+// Destroy a H2P_int_vec structure
+void H2P_int_vec_destroy(H2P_int_vec_t int_vec)
+{
+    free(int_vec->data);
+    int_vec->capacity = 0;
+    int_vec->length = 0;
+}
+
+// Push an integer to the tail of a H2P_int_vec
+void H2P_int_vec_push_back(H2P_int_vec_t int_vec, int value)
+{
+    if (int_vec->capacity == int_vec->length)
+    {
+        int_vec->capacity *= 2;
+        int *new_data = (int*) malloc(sizeof(int) * int_vec->capacity);
+        assert(new_data != NULL);
+        memcpy(new_data, int_vec->data, sizeof(int) * int_vec->length);
+        free(int_vec->data);
+        int_vec->data = new_data;
+    }
+    int_vec->data[int_vec->length] = value;
+    int_vec->length++;
+}
+
+// ------------------------------------------------------------------- // 
+
+
+// ========================== H2P_dense_mat ========================== //
 
 // Initialize a H2P_dense_mat structure
 void H2P_dense_mat_init(H2P_dense_mat_t *mat_, const int nrow, const int ncol)
@@ -117,3 +193,5 @@ void H2P_dense_mat_print(H2P_dense_mat_t mat)
         printf("\n");
     }
 }
+
+// ------------------------------------------------------------------- // 

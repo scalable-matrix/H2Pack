@@ -6,7 +6,7 @@
 #include <time.h>
 
 #include "H2Pack_utils.h"
-#include "H2Pack_dense_mat.h"
+#include "H2Pack_aux_structs.h"
 #include "H2Pack_ID_compress.h"
 
 int main()

@@ -2,6 +2,7 @@
 #define __H2PACK_TYPEDEF_H__
 
 #include "H2Pack_config.h"
+#include "H2Pack_aux_structs.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -20,6 +21,9 @@ struct H2Pack
     int   min_adm_level;    // Minimum level of reduced admissible pair
     int   n_r_inadm_pair;   // Number of reduced inadmissible pairs 
     int   n_r_adm_pair;     // Number of reduced admissible pairs 
+    int   n_UJ;             // Number of projection matrices & skeleton row sets
+    int   n_D;              // Number of dense blocks
+    int   n_B;              // Number of generator matrices
     DTYPE reltol;           // Relative 2-norm tolerance of H2 approximation
     int   *parent;          // Size n_node, parent index of each node
     int   *children;        // Size n_node * max_child, indices of a node's children nodes
@@ -35,10 +39,15 @@ struct H2Pack
     int   *node_adm_cnt;    // Size n_node, number of admissible nodes for each node
     DTYPE *coord;           // Size n_point * dim, sorted point coordinates
     DTYPE *enbox;           // Size n_node * (2*dim), enclosing box data of each node
+    H2P_dense_mat_t  *U;    // Projection matrices
+    H2P_dense_mat_t  *D;    // Dense blocks in the original matrix (from leaf node self interaction & inadmissible pairs)
+    H2P_dense_mat_t  *B;    // Generator matrices
+    H2P_int_vec_t    *J;    // Skeleton row sets
     
     // Statistic data
     size_t mem_bytes;       // Memory usage in bytes
     double timers[4];       // Partition, get admissible pairs, construct H2, matvec
+    int    mat_size[3];     // Total size of U, D, B
 };
 typedef struct H2Pack* H2Pack_t;
 

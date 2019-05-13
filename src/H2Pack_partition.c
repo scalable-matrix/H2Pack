@@ -7,8 +7,7 @@
 #include "H2Pack_utils.h"
 #include "H2Pack_config.h"
 #include "H2Pack_typedef.h"
-#include "H2Pack_int_vec.h"
-#include "H2Pack_tree_node.h"
+#include "H2Pack_aux_structs.h"
 #include "H2Pack_partition.h"
 
 // Use this structure as a namespace for global variables in this file
@@ -19,10 +18,23 @@ struct H2P_partition_vars
     int n_leaf_node;    // Number of leaf nodes
     int curr_leaf_idx;  // Index of this leaf node
     int min_adm_level;  // Minimum level of reduced admissible pair
-    H2P_int_vector_t r_inadm_pairs;  // Reduced inadmissible pairs
-    H2P_int_vector_t r_adm_pairs;    // Reduced admissible pairs
+    H2P_int_vec_t r_inadm_pairs;  // Reduced inadmissible pairs
+    H2P_int_vec_t r_adm_pairs;    // Reduced admissible pairs
 };
 struct H2P_partition_vars partition_vars;
+
+// Perform exclusive scan for an integer array
+// Input parameters:
+//   n : Length of the input array
+//   x : Input array
+// Output parameters:
+//   res : Output array, length n+1
+void H2P_exclusive_scan(const int n, int *x, int *res)
+{
+    res[0] = 0;
+    for (int i = 1; i <= n; i++) 
+        res[i] = res[i - 1] + x[i - 1];
+}
 
 // Hierarchical partitioning of the given points.
 // Tree nodes are indexed in post order.
@@ -411,8 +423,8 @@ void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0
         if (H2P_check_box_admissible(enbox_n0, enbox_n1, dim, alpha) &&
             (level_n0 >= min_adm_level) && (level_n1 >= min_adm_level))
         {
-            H2P_int_vector_push_back(partition_vars.r_adm_pairs, n0);
-            H2P_int_vector_push_back(partition_vars.r_adm_pairs, n1);
+            H2P_int_vec_push_back(partition_vars.r_adm_pairs, n0);
+            H2P_int_vec_push_back(partition_vars.r_adm_pairs, n1);
             partition_vars.min_adm_level = MIN(partition_vars.min_adm_level, level_n0);
             partition_vars.min_adm_level = MIN(partition_vars.min_adm_level, level_n1);
             return;
@@ -421,8 +433,8 @@ void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0
         // 2. Two inadmissible leaf node
         if ((n_child_n0 == 0) && (n_child_n1 == 0))
         {
-            H2P_int_vector_push_back(partition_vars.r_inadm_pairs, n0);
-            H2P_int_vector_push_back(partition_vars.r_inadm_pairs, n1);
+            H2P_int_vec_push_back(partition_vars.r_inadm_pairs, n0);
+            H2P_int_vec_push_back(partition_vars.r_inadm_pairs, n1);
             return;
         }
         
@@ -573,8 +585,8 @@ void H2P_calc_admissible_pairs(H2Pack_t h2pack)
     
     // 1. Calculate reduced (in)admissible pairs
     int estimated_n_pair = h2pack->n_node * h2pack->max_child;
-    H2P_int_vector_init(&partition_vars.r_inadm_pairs, estimated_n_pair);
-    H2P_int_vector_init(&partition_vars.r_adm_pairs,   estimated_n_pair);
+    H2P_int_vec_init(&partition_vars.r_inadm_pairs, estimated_n_pair);
+    H2P_int_vec_init(&partition_vars.r_adm_pairs,   estimated_n_pair);
     // TODO: Change min_adm_level according to the tree structure
     // If h2pack->min_adm_level != 0, partition_vars.min_adm_level is useless
     h2pack->min_adm_level = 0;
@@ -584,7 +596,7 @@ void H2P_calc_admissible_pairs(H2Pack_t h2pack)
     if (h2pack->min_adm_level == 0)
         h2pack->min_adm_level = partition_vars.min_adm_level;
     
-    // 2. Copy reduced (in)admissible pairs from H2P_int_vector to h2pack arrays
+    // 2. Copy reduced (in)admissible pairs from H2P_int_vec to h2pack arrays
     h2pack->n_r_inadm_pair = partition_vars.r_inadm_pairs->length / 2;
     h2pack->n_r_adm_pair   = partition_vars.r_adm_pairs->length   / 2;
     size_t r_inadm_pair_msize = sizeof(int) * h2pack->n_r_inadm_pair * 2;
@@ -594,8 +606,8 @@ void H2P_calc_admissible_pairs(H2Pack_t h2pack)
     assert(h2pack->r_inadm_pairs != NULL && h2pack->r_adm_pairs != NULL);
     memcpy(h2pack->r_inadm_pairs, partition_vars.r_inadm_pairs->data, r_inadm_pair_msize);
     memcpy(h2pack->r_adm_pairs,   partition_vars.r_adm_pairs->data,   r_adm_pair_msize);
-    H2P_int_vector_destroy(partition_vars.r_inadm_pairs);
-    H2P_int_vector_destroy(partition_vars.r_adm_pairs);
+    H2P_int_vec_destroy(partition_vars.r_inadm_pairs);
+    H2P_int_vec_destroy(partition_vars.r_adm_pairs);
     
     // 3. Calculate full admissible pair list for each node
     H2P_calc_full_adm_lists(h2pack);

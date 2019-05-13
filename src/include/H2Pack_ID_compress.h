@@ -2,7 +2,7 @@
 #define __H2PACK_ID_COMPRESS_H__
 
 #include "H2Pack_config.h"
-#include "H2Pack_dense_mat.h"
+#include "H2Pack_aux_structs.h"
 
 #ifdef __cplusplus
 extern "C" {

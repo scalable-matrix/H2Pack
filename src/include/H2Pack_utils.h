@@ -31,13 +31,6 @@ void *H2P_malloc_aligned(size_t mem_size);
 //   ptr : Pointer to the memory block
 void H2P_free_aligned(void *ptr);
 
-// Perform exclusive scan for an integer array
-// Input parameters:
-//   n : Length of the input array
-//   x : Input array
-// Output parameters:
-//   res : Output array, length n+1
-void H2P_exclusive_scan(const int n, int *x, int *res);
 
 #ifdef __cplusplus
 }

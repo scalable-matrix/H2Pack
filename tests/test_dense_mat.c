@@ -3,7 +3,7 @@
 #include <string.h>
 #include <math.h>
 
-#include "H2Pack_dense_mat.h"
+#include "H2Pack_aux_structs.h"
 
 int main()
 {

@@ -11,7 +11,7 @@
 
 #include "H2Pack_config.h"
 #include "H2Pack_utils.h"
-#include "H2Pack_dense_mat.h"
+#include "H2Pack_aux_structs.h"
 
 // Partial pivoting QR decomposition, simplified output version
 // The partial pivoting QR decomposition is of form:

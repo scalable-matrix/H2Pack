@@ -30,10 +30,3 @@ void H2P_free_aligned(void *ptr)
     _mm_free(ptr);
 }
 
-// Perform exclusive scan for an integer array
-void H2P_exclusive_scan(const int n, int *x, int *res)
-{
-    res[0] = 0;
-    for (int i = 1; i <= n; i++) 
-        res[i] = res[i - 1] + x[i - 1];
-}

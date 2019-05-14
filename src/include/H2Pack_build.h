@@ -1,9 +1,7 @@
 #ifndef __H2PACK_BUILD_H__
 #define __H2PACK_BUILD_H__
 
-#include "H2Pack_config.h"
 #include "H2Pack_typedef.h"
-#include "H2Pack_aux_structs.h"
 
 #ifdef __cplusplus
 extern "C" {

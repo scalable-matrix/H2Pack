@@ -25,6 +25,7 @@ DTYPE kernel_func(const DTYPE *x, const DTYPE *y, const int dim)
         DTYPE delta = x[i] - y[i];
         res += delta * delta;
     }
+    if (res < 1e-20) res = 1.0;
     res = 1.0 / DSQRT(res);
     return res;
 }

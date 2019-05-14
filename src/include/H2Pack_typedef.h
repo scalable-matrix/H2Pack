@@ -41,14 +41,16 @@ struct H2Pack
     int   *node_adm_cnt;    // Size n_node, number of admissible nodes for each node
     DTYPE *coord;           // Size n_point * dim, sorted point coordinates
     DTYPE *enbox;           // Size n_node * (2*dim), enclosing box data of each node
-    H2P_dense_mat_t  *U;    // Projection matrices
-    H2P_int_vec_t    *J;    // Skeleton row sets
-    H2P_dense_mat_t  *B;    // Generator matrices
-    H2P_dense_mat_t  *D;    // Dense blocks in the original matrix (from leaf node self interaction & inadmissible pairs)
+    H2P_dense_mat_t *U;     // Projection matrices
+    H2P_int_vec_t   *J;     // Skeleton row sets
+    H2P_dense_mat_t *B;     // Generator matrices
+    H2P_dense_mat_t *D;     // Dense blocks in the original matrix (from leaf node self interaction & inadmissible pairs)
+    H2P_dense_mat_t *y0;    // Temporary arrays used in matvec
+    H2P_dense_mat_t *y1;    // Temporary arrays used in matvec
     
     // Statistic data
     size_t mem_bytes;       // Memory usage in bytes
-    double timers[5];       // Partition, construct U, B, D, matvec
+    double timers[8];       // Partition, construct U, B, D, matvec up, down, B, D
     int    n_matvec;
     int    mat_size[3];     // Total size of U, D, B
 };

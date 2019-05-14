@@ -22,4 +22,7 @@
 // H2Pack build H2 representation
 #include "H2Pack_build.h"
 
+// H2Pack H2 representation matrix-vector multiplication
+#include "H2Pack_matvec.h"
+
 #endif

@@ -13,6 +13,8 @@ struct H2Pack
 {
     // H2 matrix tree flatten representation
     int   dim;              // Dimension of point coordinate
+    int   QR_stop_type;     // Partial QR stop criteria
+    int   QR_stop_rank;     // Partial QR maximum rank
     int   n_point;          // Number of points for the kernel matrix
     int   n_node;           // Number of nodes in this H2 tree
     int   n_leaf_node;      // Number of leaf nodes in this H2 tree
@@ -24,7 +26,7 @@ struct H2Pack
     int   n_UJ;             // Number of projection matrices & skeleton row sets
     int   n_B;              // Number of generator matrices
     int   n_D;              // Number of dense blocks
-    DTYPE reltol;           // Relative 2-norm tolerance of H2 approximation
+    DTYPE QR_stop_tol;      // Partial QR stop column norm tolerance
     int   *parent;          // Size n_node, parent index of each node
     int   *children;        // Size n_node * max_child, indices of a node's children nodes
     int   *cluster;         // Size n_node * 2, start and end (included) indices of points belong to each node
@@ -54,11 +56,15 @@ typedef struct H2Pack* H2Pack_t;
 
 // Initialize a H2Pack structure
 // Input parameters:
-//   dim     : Dimension of point coordinate
-//   rel_tol : Relative 2-norm tolerance of H2 approximation
+//   dim           : Dimension of point coordinate
+//   QR_stop_rank  : Partial QR stop criteria: QR_RANK, QR_REL_NRM, or QR_ABS_NRM
+//   QR_stop_param : Pointer to partial QR stop parameter
 // Output parameter:
 //   h2pack_ : Initialized H2Pack structure
-void H2P_init(H2Pack_t *h2pack_, const int dim, const DTYPE rel_tol);
+void H2P_init(
+    H2Pack_t *h2pack_, const int dim, 
+    const int QR_stop_type, void *QR_stop_param
+);
 
 // Destroy a H2Pack structure
 // Input parameter:

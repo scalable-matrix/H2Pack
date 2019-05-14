@@ -8,18 +8,26 @@
 #include "H2Pack_aux_structs.h"
 
 // Initialize a H2Pack structure
-void H2P_init(H2Pack_t *h2pack_, const int dim, const DTYPE reltol)
+void H2P_init(
+    H2Pack_t *h2pack_, const int dim, 
+    const int QR_stop_type, void *QR_stop_param
+)
 {
     H2Pack_t h2pack = (H2Pack_t) malloc(sizeof(struct H2Pack));
     assert(h2pack != NULL);
     
     h2pack->dim       = dim;
-    h2pack->reltol    = reltol;
     h2pack->mem_bytes = 0;
     h2pack->max_child = 1 << dim;
     h2pack->n_matvec  = 0;
     memset(h2pack->timers,   0, sizeof(double) * 5);
     memset(h2pack->mat_size, 0, sizeof(int)    * 3);
+    
+    h2pack->QR_stop_type = QR_stop_type;
+    if (QR_stop_type == QR_RANK) 
+        memcpy(&h2pack->QR_stop_rank, QR_stop_param, sizeof(int));
+    if ((QR_stop_type == QR_REL_NRM) || (QR_stop_type == QR_ABS_NRM))
+        memcpy(&h2pack->QR_stop_tol,  QR_stop_param, sizeof(DTYPE));
     
     h2pack->parent        = NULL;
     h2pack->children      = NULL;

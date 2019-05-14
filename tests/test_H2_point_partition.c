@@ -9,10 +9,10 @@ int main()
 {
     const int   dim     = 2;
     const int   npts    = 8000;
-    const DTYPE rel_tol = 1e-6;
     const int   max_child       = 1 << dim;
     const int   max_leaf_points = 100;
     const DTYPE max_leaf_size   = 0.0;
+    DTYPE rel_tol = 1e-6;
     FILE *inf, *ouf;
     
     DTYPE *coord = (DTYPE*) malloc(sizeof(DTYPE) * npts * dim);
@@ -22,7 +22,7 @@ int main()
     fclose(inf);
     
     H2Pack_t h2pack;
-    H2P_init(&h2pack, dim, rel_tol);
+    H2P_init(&h2pack, dim, QR_REL_NRM, &rel_tol);
     
     H2P_partition_points(h2pack, npts, coord, max_leaf_points, max_leaf_size);
     printf("H2Pack partition points done, used time = %e (s)\n", h2pack->timers[0]);
@@ -32,9 +32,18 @@ int main()
     );
 
     H2P_build(h2pack);
+    double storage_k = 0.0;
+    storage_k += (double) h2pack->mat_size[0];
+    storage_k += (double) h2pack->mat_size[1];
+    storage_k += (double) h2pack->mat_size[2];
+    storage_k /= (double) npts;
     printf(
         "H2P_build done, build U, B, D time = %.3lf, %.3lf, %.3lf (s)\n",
         h2pack->timers[1], h2pack->timers[2], h2pack->timers[3]
+    );
+    printf(
+        "H2Pack U, B, D size = %d, %d, %d, size(U + B + D) / npts = %.2lf\n", 
+        h2pack->mat_size[0], h2pack->mat_size[1], h2pack->mat_size[2], storage_k
     );
     fflush(stdout);
     

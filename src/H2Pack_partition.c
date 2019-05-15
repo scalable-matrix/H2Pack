@@ -91,6 +91,7 @@ H2P_tree_node_t H2P_bisection_partition_points(
                 semi_box_size = MAX(semi_box_size, tmp);
             }
         }
+        semi_box_size = semi_box_size + 1e-10;
         for (int j = 0; j < dim; j++)
         {
             enbox[j] = center[j] - semi_box_size;

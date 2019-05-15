@@ -108,6 +108,7 @@ void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
     {
         h2pack->y1 = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
         assert(h2pack->y1 != NULL);
+        for (int i = 0; i < n_node; i++) h2pack->y1[i] = NULL;
     }
     H2P_dense_mat_t *y0 = h2pack->y0;
     H2P_dense_mat_t *y1 = h2pack->y1;
@@ -117,7 +118,7 @@ void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
     // Use ld to mark if y1[i] is visited in this intermediate sweep
     for (int i = 0; i < n_node; i++) 
         if (y1[i] != NULL) y1[i]->ld = 1;
-    
+
     // 2. Intermediate sweep
     for (int i = 0; i < n_r_adm_pair; i++)
     {

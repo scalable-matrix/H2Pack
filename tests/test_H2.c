@@ -28,10 +28,10 @@ int main()
     int dim  = 2;
     int npts = 8000;
     DTYPE rel_tol = 1e-6;
-    //printf("dim: ");
-    //scanf("%d", &dim);
-    //printf("npts: ");
-    //scanf("%d", &npts);
+    printf("dim: ");
+    scanf("%d", &dim);
+    printf("npts: ");
+    scanf("%d", &npts);
     printf("rel_tol: ");
     scanf("%lf", &rel_tol);
     
@@ -46,13 +46,34 @@ int main()
     mkl_set_num_threads(1);
     
     DTYPE *coord = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts * dim);
-    DTYPE k = pow((DTYPE) npts, 1.0 / (DTYPE) dim);
+    
+    DTYPE k = 1.0;//pow((DTYPE) npts, 1.0 / (DTYPE) dim);
     for (int i = 0; i < npts; i++)
     {
         DTYPE *coord_i = coord + i * dim;
-        for (int j = 0; j < dim; j++) 
+        for (int j = 0; j < dim; j++)
             coord_i[j] = k * (DTYPE) rand() / (DTYPE) RAND_MAX;
     }
+    ouf = fopen("coord.txt", "w");
+    for (int i = 0; i < npts; i++)
+    {
+        DTYPE *coord_i = coord + i * dim;
+        for (int j = 0; j < dim-1; j++) 
+            fprintf(ouf, "% .15lf, ", coord_i[j]);
+        fprintf(ouf, "% .15lf\n", coord_i[dim-1]);
+    }
+    fclose(ouf);
+    /*
+    inf = fopen("coord.txt", "r");
+    for (int i = 0; i < npts; i++)
+    {
+        DTYPE *coord_i = coord + i * dim;
+        for (int j = 0; j < dim-1; j++) 
+            fscanf(inf, "%lf, ", &coord_i[j]);
+        fscanf(inf, "%lf\n", &coord_i[dim-1]);
+    }
+    fclose(inf);
+    */
     
     H2Pack_t h2pack;
     H2P_init(&h2pack, dim, QR_REL_NRM, &rel_tol);
@@ -61,8 +82,23 @@ int main()
     printf("H2Pack partition points done, used time = %e (s)\n", h2pack->timers[0]);
     printf(
         "n_node, n_leaf_node, max_child, max_level = %d %d %d %d\n", 
-        h2pack->n_node, h2pack->n_leaf_node, h2pack->max_child, h2pack->max_level
+        h2pack->n_node, h2pack->n_leaf_node, h2pack->max_child, h2pack->max_level+1
     );
+    printf(
+        "n_r_adm_pair, n_r_inadm_pair, n_leaf_node = %d, %d, %d\n", 
+        h2pack->n_r_adm_pair, h2pack->n_r_inadm_pair, h2pack->n_leaf_node
+    );
+    /*
+    ouf = fopen("cluster.txt", "w");
+    for (int i = 0; i < h2pack->n_node; i++)
+        fprintf(ouf, "%d, %d\n", h2pack->cluster[2*i], h2pack->cluster[2*i+1]);
+    fclose(ouf);
+
+    ouf = fopen("admpair.txt", "w");
+    for (int i = 0; i < h2pack->n_r_adm_pair; i++)
+        fprintf(ouf, "%d, %d\n", h2pack->r_adm_pairs[2*i], h2pack->r_adm_pairs[2*i+1]);
+    fclose(ouf);
+    */
 
     H2P_build(h2pack);
     double storage_k = 0.0;
@@ -79,6 +115,17 @@ int main()
         "H2Pack U, B, D size = %d, %d, %d, size(U + B + D) / npts = %.2lf\n", 
         h2pack->mat_size[0], h2pack->mat_size[1], h2pack->mat_size[2], storage_k
     );
+    /*
+    ouf = fopen("Usize.txt", "w");
+    for (int i = 0; i < h2pack->n_UJ; i++)
+        fprintf(ouf, "%d, %d\n", h2pack->U[i]->nrow, h2pack->U[i]->ncol);
+    fclose(ouf);
+    
+    ouf = fopen("Bsize.txt", "w");
+    for (int i = 0; i < h2pack->n_B; i++)
+        fprintf(ouf, "%d, %d\n", h2pack->B[i]->nrow, h2pack->B[i]->ncol);
+    fclose(ouf);
+    */
 
     DTYPE *x, *y0, *y1, *A;
     x  = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts);
@@ -87,7 +134,7 @@ int main()
     A  = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts * npts);
     assert(x != NULL && y0 != NULL && y1 != NULL && A != NULL);
     for (int i = 0; i < npts; i++) 
-        x[i] = (DTYPE) rand() / (DTYPE) RAND_MAX;
+        x[i] = 1.0; //(DTYPE) rand() / (DTYPE) RAND_MAX;
     
     st = H2P_get_wtime_sec();
     for (int i = 0; i < npts; i++)

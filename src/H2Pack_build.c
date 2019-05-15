@@ -230,9 +230,9 @@ void H2P_build_B(H2Pack_t h2pack)
         int node1  = r_adm_pairs[2 * i + 1];
         int level0 = node_level[node0];
         int level1 = node_level[node1];
-        
+
         // (1) Two nodes are of the same level, compress on both sides
-        if (level0 = level1)
+        if (level0 == level1)
         {
             int n_point0 = J[node0]->length;
             int n_point1 = J[node1]->length;

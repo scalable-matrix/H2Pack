@@ -1,6 +1,6 @@
 LIB   = libH2Pack.a
 OBJS  = H2Pack_typedef.o H2Pack_utils.o H2Pack_aux_structs.o H2Pack_ID_compress.o \
-        H2Pack_partition.o H2Pack_build.o
+        H2Pack_partition.o H2Pack_build.o H2Pack_matvec.o
 
 HOSTCC  = icc
 AR      = xiar rcs
@@ -29,6 +29,9 @@ H2Pack_partition.o: $(INC)/*.h H2Pack_partition.c
 
 H2Pack_build.o: $(INC)/*.h H2Pack_build.c
 	$(HOSTCC) $(CFLAGS) H2Pack_build.c -c 
+
+H2Pack_matvec.o: $(INC)/*.h H2Pack_matvec.c
+	$(HOSTCC) $(CFLAGS) H2Pack_matvec.c -c 
 
 clean:
 	rm $(OBJS) $(LIB)

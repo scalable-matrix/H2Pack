@@ -175,16 +175,16 @@ H2P_tree_node_t H2P_bisection_partition_points(
     for (int i = 0; i < max_child; i++)
     {
         if (sub_n_point[i] == 0) continue;
-        n_child++;
-        DTYPE *sub_box_i = sub_box + i * dim * 2;
+        DTYPE *sub_box_child = sub_box + n_child * dim * 2;
         int *sub_rel_idx_i = sub_rel_idx + i * dim;
         for (int j = 0; j < dim; j++)
         {
-            sub_box_i[j]       = enbox[j] + 0.5 * enbox[dim + j] * sub_rel_idx_i[j];
-            sub_box_i[dim + j] = 0.5 * enbox[dim + j];
+            sub_box_child[j]       = enbox[j] + 0.5 * enbox[dim + j] * sub_rel_idx_i[j];
+            sub_box_child[dim + j] = 0.5 * enbox[dim + j];
         }
-        sub_coord_se[2 * i + 0] = coord_s + sub_displs[i];
-        sub_coord_se[2 * i + 1] = coord_s + sub_displs[i + 1] - 1;
+        sub_coord_se[2 * n_child + 0] = coord_s + sub_displs[i];
+        sub_coord_se[2 * n_child + 1] = coord_s + sub_displs[i + 1] - 1;
+        n_child++;
     }
     
     // 6. Recursively partition each sub-box
@@ -214,7 +214,7 @@ H2P_tree_node_t H2P_bisection_partition_points(
     node->level       = level;
     memcpy(node->enbox, enbox, sizeof(DTYPE) * dim * 2);
     partition_vars.curr_po_idx++;
-    
+
     // 8. Free temporary arrays
     free(sub_coord_se);
     free(sub_box);

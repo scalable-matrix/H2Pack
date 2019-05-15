@@ -53,6 +53,16 @@ int main()
         DTYPE *coord_i = coord + i * dim;
         for (int j = 0; j < dim; j++)
             coord_i[j] = k * (DTYPE) rand() / (DTYPE) RAND_MAX;
+        /*
+        DTYPE tmp = 0.0;
+        tmp += coord_i[0] * coord_i[0];
+        tmp += coord_i[1] * coord_i[1];
+        tmp += coord_i[2] * coord_i[2];
+        tmp = DSQRT(tmp);
+        coord_i[0] /= tmp;
+        coord_i[1] /= tmp;
+        coord_i[2] /= tmp;
+        */
     }
     ouf = fopen("coord.txt", "w");
     for (int i = 0; i < npts; i++)
@@ -74,6 +84,7 @@ int main()
     }
     fclose(inf);
     */
+    
     
     H2Pack_t h2pack;
     H2P_init(&h2pack, dim, QR_REL_NRM, &rel_tol);
@@ -134,7 +145,7 @@ int main()
     A  = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts * npts);
     assert(x != NULL && y0 != NULL && y1 != NULL && A != NULL);
     for (int i = 0; i < npts; i++) 
-        x[i] = 1.0; //(DTYPE) rand() / (DTYPE) RAND_MAX;
+        x[i] = (DTYPE) rand() / (DTYPE) RAND_MAX;
     
     st = H2P_get_wtime_sec();
     for (int i = 0; i < npts; i++)

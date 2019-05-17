@@ -64,10 +64,11 @@ void H2P_eval_kernel_matrix(
 //   y_coord : Y point set coordinates, size ny-by-dim
 // Output parameter:
 //   kernel_mat : Obtained kernel matrix, nx-by-ny
-void H2P_eval_kernel_matrix_2(
+void H2P_eval_kernel_matrix_direct(
     const int dim, H2P_dense_mat_t x_coord, 
     H2P_dense_mat_t y_coord, H2P_dense_mat_t kernel_mat
 )
+
 {
     H2P_dense_mat_resize(kernel_mat, x_coord->nrow, y_coord->nrow);
     for (int i = 0; i < x_coord->nrow; i++)
@@ -78,6 +79,37 @@ void H2P_eval_kernel_matrix_2(
         {
             const DTYPE *y_j = y_coord->data + j * dim;
             kernel_mat_row[j] = kernel_func(x_i, y_j, dim);
+        }
+    }
+}
+
+// Evaluate a kernel matrix
+// Input parameters:
+//   dim        : Dimension of point coordinate
+//   coord      : X point coordinates (not all used)
+//   idx_x      : Indices of points in the x point set, length nx
+//   box_center : X point box center coordinate, for shifting x points
+//   pp_coord   : Proxy point set coordinates, size ny-by-dim
+// Output parameter:
+//   kernel_mat : Obtained kernel matrix, nx-by-ny
+void H2P_eval_kernel_matrix_UJ_proxy(
+    const int dim, DTYPE *coord, H2P_int_vec_t idx_x, 
+    H2P_dense_mat_t box_center, H2P_dense_mat_t pp_coord, H2P_dense_mat_t kernel_mat
+)
+{
+    H2P_dense_mat_t shift_x_i;
+    H2P_dense_mat_init(&shift_x_i, dim, 1);
+    H2P_dense_mat_resize(kernel_mat, idx_x->length, pp_coord->nrow);
+    for (int i = 0; i < idx_x->length; i++)
+    {
+        DTYPE *kernel_mat_row = kernel_mat->data + i * kernel_mat->ld;
+        const DTYPE *x_i = coord + idx_x->data[i] * dim;
+        for (int j = 0; j < dim; j++)
+            shift_x_i->data[j] = x_i[j] - box_center->data[j];
+        for (int j = 0; j < pp_coord->nrow; j++)
+        {
+            const DTYPE *y_j = pp_coord->data + j * dim;
+            kernel_mat_row[j] = kernel_func(shift_x_i->data, y_j, dim);
         }
     }
 }
@@ -223,7 +255,6 @@ void H2P_build_UJ_direct(H2Pack_t h2pack)
     H2P_int_vec_destroy(col_idx);
     H2P_int_vec_destroy(sub_idx);
     H2P_dense_mat_destroy(A_block);
-    
 }
 
 // Check if a coordinate is in box [-L/2, L/2]^dim
@@ -281,7 +312,7 @@ void H2P_generate_proxy_point_ID(H2Pack_t h2pack)
     H2P_dense_mat_init(&min_dist, Nx_size, 1);
     H2P_int_vec_init(&skel_idx, Nx_size);
     srand48(time(NULL));
-    
+
     // 2. Construct proxy points on each level
     for (int level = 2; level <= max_level; level++)
     {
@@ -315,18 +346,18 @@ void H2P_generate_proxy_point_ID(H2Pack_t h2pack)
         {
             DTYPE *Ny_i = Ny_points->data + i * dim;
             int flag = 1;
-            while (flag)
+            while (flag == 1)
             {
                 for (int j = 0; j < dim; j++)
                 {
                     DTYPE val = drand48();
                     Ny_i[j] = L3 * val - semi_L3;
                 }
-                flag = 1 - point_in_box(dim, Ny_i, L2);
+                flag = point_in_box(dim, Ny_i, L2);
             }
         }
-        H2P_eval_kernel_matrix_2(dim, Nx_points, Ny_points, tmpA);
-        
+        H2P_eval_kernel_matrix_direct(dim, Nx_points, Ny_points, tmpA);
+
         // (3) Use ID to select skeleton points in Nx first, then use the
         //     skeleton Nx points to select skeleton Ny points
         DTYPE rel_tol = 1e-15;
@@ -359,13 +390,14 @@ void H2P_generate_proxy_point_ID(H2Pack_t h2pack)
         }
         H2P_dense_mat_init(&pp[level], 2 * ny, dim);
         H2P_dense_mat_t pp_level = pp[level];
+
         for (int i = 0; i < ny; i++)
         {
             DTYPE *coord_0 = pp_level->data + dim * (2 * i);
             DTYPE *coord_1 = pp_level->data + dim * (2 * i + 1);
             memcpy(coord_0, Ny_points->data + dim * i, sizeof(DTYPE) * dim);
             int flag = 1;
-            while (flag)
+            while (flag == 1)
             {
                 DTYPE radius = 0.0;
                 for (int j = 0; j < dim; j++)
@@ -392,6 +424,135 @@ void H2P_generate_proxy_point_ID(H2Pack_t h2pack)
     H2P_dense_mat_destroy(Nx_points);
     H2P_dense_mat_destroy(Ny_points);
     H2P_dense_mat_destroy(min_dist);
+}
+
+// Build H2 projection matrices using the direct approach
+// Input parameter:
+//   h2pack : H2Pack structure with point partitioning info
+// Output parameter:
+//   h2pack : H2Pack structure with H2 projection matrices
+void H2P_build_UJ_proxy(H2Pack_t h2pack)
+{
+    int   dim            = h2pack->dim;
+    int   n_node         = h2pack->n_node;
+    int   n_leaf_node    = h2pack->n_leaf_node;
+    int   max_child      = h2pack->max_child;
+    int   max_level      = h2pack->max_level;
+    int   min_adm_level  = h2pack->min_adm_level;
+    int   stop_type      = h2pack->QR_stop_type;
+    int   *children      = h2pack->children;
+    int   *n_child       = h2pack->n_child;
+    int   *level_n_node  = h2pack->level_n_node;
+    int   *level_nodes   = h2pack->level_nodes;
+    int   *leaf_nodes    = h2pack->leaf_nodes;
+    int   *cluster       = h2pack->cluster;
+    int   *node_adm_list = h2pack->node_adm_list;
+    int   *node_adm_cnt  = h2pack->node_adm_cnt;
+    DTYPE *coord         = h2pack->coord;
+    DTYPE *enbox         = h2pack->enbox;
+    H2P_dense_mat_t *pp  = h2pack->pp;
+    void  *stop_param;
+    if (stop_type == QR_RANK) 
+        stop_param = &h2pack->QR_stop_rank;
+    if ((stop_type == QR_REL_NRM) || (stop_type == QR_ABS_NRM))
+        stop_param = &h2pack->QR_stop_tol;
+    
+    // 1. Allocate U and J
+    h2pack->n_UJ = n_node;
+    h2pack->U = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
+    h2pack->J = (H2P_int_vec_t*)   malloc(sizeof(H2P_int_vec_t)   * n_node);
+    assert(h2pack->U != NULL && h2pack->J != NULL);
+    for (int i = 0; i < h2pack->n_UJ; i++)
+    {
+        h2pack->U[i] = NULL;
+        h2pack->J[i] = NULL;
+    }
+    H2P_dense_mat_t *U = h2pack->U;
+    H2P_int_vec_t   *J = h2pack->J;
+    
+    // 2. Skeleton row sets for leaf nodes: all points in that box
+    for (int i = 0; i < n_leaf_node; i++)
+    {
+        int node = leaf_nodes[i];
+        int s_index = cluster[node * 2];
+        int e_index = cluster[node * 2 + 1];
+        int n_point = e_index - s_index + 1;
+        H2P_int_vec_init(&J[node], n_point);
+        for (int j = 0; j < n_point; j++)
+            J[node]->data[j] = s_index + j;
+        J[node]->length = n_point;
+    }
+    
+    // 3. Hierarchical construction level by level. min_adm_level is the 
+    //    highest level that still has admissible blocks, so we only need 
+    //    to compress matrix blocks to that level since higher level blocks 
+    //    are inadmissible and cannot be compressed.
+    int flag = 0;
+    H2P_int_vec_t   col_idx, sub_idx;
+    H2P_dense_mat_t A_block, box_center;
+    H2P_int_vec_init(&col_idx, 0);
+    H2P_int_vec_init(&sub_idx, 0);
+    H2P_dense_mat_init(&A_block, 64, 64);
+    H2P_dense_mat_init(&box_center, dim, 1);
+    for (int i = max_level; i >= min_adm_level; i--)
+    {
+        int *level_i_nodes = level_nodes + i * n_leaf_node;
+        
+        // (1) Update row indices associated with clusters at i-th level
+        for (int j = 0; j < level_n_node[i]; j++)
+        {
+            int node = level_i_nodes[j];
+            int n_child_node = n_child[node];
+            int *child_nodes = children + node * max_child;
+            int J_child_size = 0;
+            for (int i_child = 0; i_child < n_child_node; i_child++)
+            {
+                int i_child_node = child_nodes[i_child];
+                J_child_size += J[i_child_node]->length;
+            }
+            if (J[node] == NULL) H2P_int_vec_init(&J[node], J_child_size);
+            else H2P_int_vec_set_capacity(J[node], J[node]->length + J_child_size);
+            for (int i_child = 0; i_child < n_child_node; i_child++)
+            {
+                int i_child_node = child_nodes[i_child];
+                H2P_int_vec_concatenate(J[node], J[i_child_node]);
+            }
+        }
+
+        // (2) Compression at the i-th level
+        for (int j = 0; j < level_n_node[i]; j++)
+        {
+            int node = level_i_nodes[j];
+            DTYPE *node_box = enbox + node * 2 * dim;
+            for (int k = 0; k < dim; k++)
+                box_center->data[i] = node_box[k] + 0.5 * node_box[dim + k];
+            H2P_eval_kernel_matrix_UJ_proxy(dim, coord, J[node], box_center, pp[i], A_block);
+            H2P_ID_compress(A_block, stop_type, stop_param, &U[node], sub_idx);
+            for (int k = 0; k < U[node]->ncol; k++)
+                J[node]->data[k] = J[node]->data[sub_idx->data[k]];
+            J[node]->length = U[node]->ncol;
+        }
+    }
+
+    // 4. Initialize other not touched U J
+    for (int i = 0; i < h2pack->n_UJ; i++)
+    {
+        if (h2pack->U[i] == NULL)
+        {
+            H2P_dense_mat_init(&U[i], 1, 1);
+            U[i]->nrow = 0;
+            U[i]->ncol = 0;
+            U[i]->ld   = 0;
+        } else {
+            h2pack->mat_size[0] += U[i]->nrow * U[i]->ncol;
+        }
+        if (h2pack->J[i] == NULL) H2P_int_vec_init(&J[i], 1);
+    }
+
+    H2P_int_vec_destroy(col_idx);
+    H2P_int_vec_destroy(sub_idx);
+    H2P_dense_mat_destroy(A_block);
+    H2P_dense_mat_destroy(box_center);
 }
 
 
@@ -552,22 +713,28 @@ void H2P_build(H2Pack_t h2pack)
 {
     double st, et;
 
-    // 1. Build projection matrices and skeleton row sets
+    // 1. Generate proxy points for building U and J
     st = H2P_get_wtime_sec();
-    H2P_build_UJ_direct(h2pack);
+    H2P_generate_proxy_point_ID(h2pack);
     et = H2P_get_wtime_sec();
     h2pack->timers[1] = et - st;
 
-    // 2. Build generator matrices
+    // 2. Build projection matrices and skeleton row sets
+    st = H2P_get_wtime_sec();
+    H2P_build_UJ_proxy(h2pack);
+    et = H2P_get_wtime_sec();
+    h2pack->timers[2] = et - st;
+
+    // 3. Build generator matrices
     st = H2P_get_wtime_sec();
     H2P_build_B(h2pack);
     et = H2P_get_wtime_sec();
-    h2pack->timers[2] = et - st;
+    h2pack->timers[3] = et - st;
     
-    // 3. Build dense blocks
+    // 4. Build dense blocks
     st = H2P_get_wtime_sec();
     H2P_build_D(h2pack);
     et = H2P_get_wtime_sec();
-    h2pack->timers[3] = et - st;
+    h2pack->timers[4] = et - st;
 }
 

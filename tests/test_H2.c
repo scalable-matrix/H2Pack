@@ -117,10 +117,10 @@ int main()
     storage_k += (double) h2pack->mat_size[1];
     storage_k += (double) h2pack->mat_size[2];
     storage_k /= (double) npts;
-    total_t = h2pack->timers[1] + h2pack->timers[2] + h2pack->timers[3];
+    total_t = h2pack->timers[1] + h2pack->timers[2] + h2pack->timers[3] + h2pack->timers[4];
     printf(
-        "H2P_build done, U, B, D, total time = %.3lf, %.3lf, %.3lf, %.3lf (s)\n",
-        h2pack->timers[1], h2pack->timers[2], h2pack->timers[3], total_t
+        "H2P_build done, PP, U, B, D, total time = %.3lf, %.3lf, %.3lf, %.3lf, %.3lf (s)\n",
+        h2pack->timers[1], h2pack->timers[2], h2pack->timers[3], h2pack->timers[4], total_t
     );
     printf(
         "H2Pack U, B, D size = %d, %d, %d, size(U + B + D) / npts = %.2lf\n", 

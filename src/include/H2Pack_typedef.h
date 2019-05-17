@@ -52,7 +52,7 @@ struct H2Pack
     
     // Statistic data
     size_t mem_bytes;       // Memory usage in bytes
-    double timers[8];       // Partition, construct U, B, D, matvec up, down, B, D
+    double timers[9];       // Partition; construct pp, U, B, D; matvec up, down, B, D
     int    n_matvec;
     int    mat_size[3];     // Total size of U, D, B
 };

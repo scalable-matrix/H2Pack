@@ -19,7 +19,7 @@ struct H2Pack
     int   n_node;           // Number of nodes in this H2 tree
     int   n_leaf_node;      // Number of leaf nodes in this H2 tree
     int   max_child;        // Maximum number of children per node, == 2^dim
-    int   max_level;        // Maximum level of this H2 tree
+    int   max_level;        // Maximum level of this H2 tree, (root = 0, total max_level + 1 levels)
     int   min_adm_level;    // Minimum level of reduced admissible pair
     int   n_r_inadm_pair;   // Number of reduced inadmissible pairs 
     int   n_r_adm_pair;     // Number of reduced admissible pairs 
@@ -41,12 +41,14 @@ struct H2Pack
     int   *node_adm_cnt;    // Size n_node, number of admissible nodes for each node
     DTYPE *coord;           // Size n_point * dim, sorted point coordinates
     DTYPE *enbox;           // Size n_node * (2*dim), enclosing box data of each node
+    H2P_dense_mat_t *pp;    // Proxy points on each level for generating U and J
     H2P_dense_mat_t *U;     // Projection matrices
     H2P_int_vec_t   *J;     // Skeleton row sets
     H2P_dense_mat_t *B;     // Generator matrices
     H2P_dense_mat_t *D;     // Dense blocks in the original matrix (from leaf node self interaction & inadmissible pairs)
     H2P_dense_mat_t *y0;    // Temporary arrays used in matvec
     H2P_dense_mat_t *y1;    // Temporary arrays used in matvec
+    
     
     // Statistic data
     size_t mem_bytes;       // Memory usage in bytes

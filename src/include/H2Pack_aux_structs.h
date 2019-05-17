@@ -133,6 +133,23 @@ void H2P_dense_mat_resize(H2P_dense_mat_t mat, const int nrow, const int ncol);
 //   mat : H2P_dense_mat structure with permuted row
 void H2P_dense_mat_permute_rows(H2P_dense_mat_t mat, const int *p);
 
+// Select rows in a H2P_dense_mat structure
+// WARNING: This function DOES NOT perform sanity check!
+// Input parameter:
+//   mat     : H2P_dense_mat structure to be selected
+//   row_idx : Row index array, sorted in ascending order. The i-th row in the
+//             new matrix is the row_idx->data[i]-th row in the original matrix
+// Output parameter:
+//   mat : H2P_dense_mat structure with selected row
+void H2P_dense_mat_select_rows(H2P_dense_mat_t mat, H2P_int_vec_t row_idx);
+
+// Transpose a dense matrix
+// Input parameter:
+//   mat : H2P_dense_mat structure to be transposed
+// Output parameter:
+//   mat : Transposed H2P_dense_mat structure
+void H2P_dense_mat_transpose(H2P_dense_mat_t mat);
+
 // Print a H2P_dense_mat structure, for debugging
 // Input parameter:
 //   mat : H2P_dense_mat structure to be printed

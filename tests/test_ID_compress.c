@@ -65,7 +65,8 @@ int main()
     }
     fclose(ouf);
 
-    int *J = (int*) malloc(sizeof(int) * nrow);
+    H2P_int_vec_t J;
+    H2P_int_vec_init(&J, nrow);
     DTYPE tol_norm;
     printf("norm_rel_tol: ");
     scanf("%lf", &tol_norm);
@@ -105,7 +106,7 @@ int main()
     
     DTYPE *AJ = (DTYPE*) malloc(sizeof(DTYPE) * ncol * U->ncol);
     for (int i = 0; i < U->ncol; i++)
-        memcpy(AJ + i * ncol, A0->data + J[i] * ncol, sizeof(DTYPE) * ncol);
+        memcpy(AJ + i * ncol, A0->data + J->data[i] * ncol, sizeof(DTYPE) * ncol);
     cblas_dgemm(
         CblasRowMajor, CblasNoTrans, CblasNoTrans, nrow, ncol, U->ncol,
         1.0, U->data, U->ncol, AJ, ncol, -1.0, A0->data, A0->ncol
@@ -116,11 +117,11 @@ int main()
     res_fnorm = sqrt(res_fnorm);
     printf("||A - A_{H2}||_fro / ||A||_fro = %e\n", res_fnorm / A0_fnorm);
     
-    free(J);
     free(x1);
     free(y1);
     free(x2);
     free(y2);
+    H2P_int_vec_destroy(J);
     H2P_dense_mat_destroy(U);
     H2P_dense_mat_destroy(A);
     H2P_dense_mat_destroy(A0);

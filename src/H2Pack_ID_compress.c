@@ -235,7 +235,7 @@ static void H2P_qsortAscend(int *x, int *idx, const int l, const int r)
 // matrix. Partial pivoting QR may need to be upgraded to SRRQR later. 
 void H2P_ID_compress(
     H2P_dense_mat_t A, const int stop_type, void *stop_param,
-    H2P_dense_mat_t *U_, int *J
+    H2P_dense_mat_t *U_, H2P_int_vec_t J
 )
 {
     // 1. Partial pivoting QR for A^T
@@ -245,9 +245,12 @@ void H2P_ID_compress(
     const int ncol = A->ncol;
     A->nrow = ncol;
     A->ncol = nrow;
-    H2P_ID_QR(A, stop_type, stop_param, J);
+    int min_nm = MIN(ncol, nrow);
+    H2P_int_vec_set_capacity(J, min_nm);
+    H2P_ID_QR(A, stop_type, stop_param, J->data);
     H2P_dense_mat_t R = A; // Note: the output R stored in A is still stored in column major style
     int r = A->nrow;  // Obtained rank
+    J->length = r;
     
     // 2. Set permutation indices p0, sort the index subset J[0:r-1]
     int *p0 = (int*) malloc(sizeof(int) * nrow);
@@ -257,10 +260,10 @@ void H2P_ID_compress(
     assert(p0 != NULL && p1 != NULL && i0 != NULL && i1 != NULL);
     for (int i = 0; i < nrow; i++) 
     {
-        p0[J[i]] = i;
+        p0[J->data[i]] = i;
         i0[i]    = i;
     }
-    H2P_qsortAscend(J, i0, 0, r - 1);
+    H2P_qsortAscend(J->data, i0, 0, r - 1);
     for (int i = 0; i < nrow; i++) i1[i0[i]] = i;
     for (int i = 0; i < nrow; i++) p1[i] = i1[p0[i]];
     
@@ -274,40 +277,43 @@ void H2P_ID_compress(
         U->ld   = 0;
         U->data = NULL;
     } else {
-        // (1) Before permutation, the upper part of U is a diagonal
-        H2P_dense_mat_init(&U, nrow, r);
-        for (int i = 0; i < r; i++)
+        if (U_ != NULL)
         {
-            memset(U->data + i * r, 0, sizeof(DTYPE) * r);
-            U->data[i * r + i] = 1.0;
+            // (1) Before permutation, the upper part of U is a diagonal
+            H2P_dense_mat_init(&U, nrow, r);
+            for (int i = 0; i < r; i++)
+            {
+                memset(U->data + i * r, 0, sizeof(DTYPE) * r);
+                U->data[i * r + i] = 1.0;
+            }
+            DTYPE *R11 = R->data;
+            DTYPE *R12 = R->data + r * R->ld;
+            int nrow_R12 = r;
+            int ncol_R12 = nrow - r;
+            // (2) Solve E = inv(R11) * R12, stored in R12 in column major style
+            //     --> equals to what we need: E^T stored in row major style
+            CBLAS_TRSM(
+                CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit,
+                nrow_R12, ncol_R12, 1.0, R11, R->ld, R12, R->ld
+            );
+            // (3) Reorder E^T's columns according to the sorted J
+            DTYPE *UL = U->data + r * r;
+            for (int icol = 0; icol < r; icol++)
+            {
+                DTYPE *R12_icol = R12 + i0[icol];
+                DTYPE *UL_icol = UL + icol;
+                for (int irow = 0; irow < ncol_R12; irow++)
+                    UL_icol[irow * r] = R12_icol[irow * R->ld];
+            }
+            // (4) Permute U's rows 
+            H2P_dense_mat_permute_rows(U, p1);
         }
-        DTYPE *R11 = R->data;
-        DTYPE *R12 = R->data + r * R->ld;
-        int nrow_R12 = r;
-        int ncol_R12 = nrow - r;
-        // (2) Solve E = inv(R11) * R12, stored in R12 in column major style
-        //     --> equals to what we need: E^T stored in row major style
-        CBLAS_TRSM(
-            CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit,
-            nrow_R12, ncol_R12, 1.0, R11, R->ld, R12, R->ld
-        );
-        // (3) Reorder E^T's columns according to the sorted J
-        DTYPE *UL = U->data + r * r;
-        for (int icol = 0; icol < r; icol++)
-        {
-            DTYPE *R12_icol = R12 + i0[icol];
-            DTYPE *UL_icol = UL + icol;
-            for (int irow = 0; irow < ncol_R12; irow++)
-                UL_icol[irow * r] = R12_icol[irow * R->ld];
-        }
-        // (4) Permute U's rows 
-        H2P_dense_mat_permute_rows(U, p1);
     }
     
     free(p0);
     free(p1);
     free(i0);
     free(i1);
-    *U_ = U;
+    if (U_ != NULL) *U_ = U;
 }
 

@@ -47,7 +47,7 @@ int main()
     
     DTYPE *coord = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts * dim);
     
-    DTYPE k = 1.0;//pow((DTYPE) npts, 1.0 / (DTYPE) dim);
+    DTYPE k = pow((DTYPE) npts, 1.0 / (DTYPE) dim);
     for (int i = 0; i < npts; i++)
     {
         DTYPE *coord_i = coord + i * dim;

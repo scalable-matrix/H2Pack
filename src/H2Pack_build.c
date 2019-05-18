@@ -145,12 +145,12 @@ int point_in_box(const int dim, DTYPE *coord, DTYPE L)
 void H2P_generate_proxy_point_ID(H2Pack_t h2pack)
 {
     int   dim          = h2pack->dim;
-    int   root         = h2pack->n_node - 1;
+    int   root_idx     = h2pack->root_idx;
     int   max_level    = h2pack->max_level;
     int   n_leaf_node  = h2pack->n_leaf_node;
     int   *level_nodes = h2pack->level_nodes;
     DTYPE *enbox       = h2pack->enbox;
-    DTYPE  max_L       = enbox[root * dim * 2 + dim];
+    DTYPE  max_L       = enbox[root_idx * dim * 2 + dim];
     
     // 1. Initialize proxy point arrays
     h2pack->pp = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * (max_level + 1));
@@ -298,8 +298,6 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     int   *level_nodes   = h2pack->level_nodes;
     int   *leaf_nodes    = h2pack->leaf_nodes;
     int   *cluster       = h2pack->cluster;
-    int   *node_adm_list = h2pack->node_adm_list;
-    int   *node_adm_cnt  = h2pack->node_adm_cnt;
     DTYPE *coord         = h2pack->coord;
     DTYPE *enbox         = h2pack->enbox;
     H2P_dense_mat_t *pp  = h2pack->pp;

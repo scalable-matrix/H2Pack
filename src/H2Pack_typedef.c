@@ -39,8 +39,6 @@ void H2P_init(
     h2pack->leaf_nodes    = NULL;
     h2pack->r_inadm_pairs = NULL;
     h2pack->r_adm_pairs   = NULL;
-    h2pack->node_adm_list = NULL;
-    h2pack->node_adm_cnt  = NULL;
     h2pack->coord         = NULL;
     h2pack->enbox         = NULL;
     h2pack->U             = NULL;
@@ -66,8 +64,6 @@ void H2P_destroy(H2Pack_t h2pack)
     free(h2pack->leaf_nodes);
     free(h2pack->r_inadm_pairs);
     free(h2pack->r_adm_pairs);
-    free(h2pack->node_adm_list);
-    free(h2pack->node_adm_cnt);
     free(h2pack->coord);
     free(h2pack->enbox);
     

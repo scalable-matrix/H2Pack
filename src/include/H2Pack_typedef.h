@@ -16,7 +16,9 @@ struct H2Pack
     int   QR_stop_type;     // Partial QR stop criteria
     int   QR_stop_rank;     // Partial QR maximum rank
     int   n_point;          // Number of points for the kernel matrix
+    int   max_leaf_points;  // Maximum point in a leaf node's box
     int   n_node;           // Number of nodes in this H2 tree
+    int   root_idx;         // Index of the root node (== n_node - 1, save it for convenience)
     int   n_leaf_node;      // Number of leaf nodes in this H2 tree
     int   max_child;        // Maximum number of children per node, == 2^dim
     int   max_level;        // Maximum level of this H2 tree, (root = 0, total max_level + 1 levels)
@@ -26,7 +28,6 @@ struct H2Pack
     int   n_UJ;             // Number of projection matrices & skeleton row sets
     int   n_B;              // Number of generator matrices
     int   n_D;              // Number of dense blocks
-    DTYPE QR_stop_tol;      // Partial QR stop column norm tolerance
     int   *parent;          // Size n_node, parent index of each node
     int   *children;        // Size n_node * max_child, indices of a node's children nodes
     int   *cluster;         // Size n_node * 2, start and end (included) indices of points belong to each node
@@ -37,8 +38,8 @@ struct H2Pack
     int   *leaf_nodes;      // Size n_leaf_node, leaf node indices
     int   *r_inadm_pairs;   // Size unknown, Reduced inadmissible pairs 
     int   *r_adm_pairs;     // Size unknown, Reduced admissible pairs 
-    int   *node_adm_list;   // Size n_node * n_node, full admissible node list for each node
-    int   *node_adm_cnt;    // Size n_node, number of admissible nodes for each node
+    DTYPE max_leaf_size;    // Maximum size of a leaf node's box
+    DTYPE QR_stop_tol;      // Partial QR stop column norm tolerance
     DTYPE *coord;           // Size n_point * dim, sorted point coordinates
     DTYPE *enbox;           // Size n_node * (2*dim), enclosing box data of each node
     H2P_dense_mat_t *pp;    // Proxy points on each level for generating U and J

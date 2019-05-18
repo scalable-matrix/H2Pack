@@ -9,9 +9,14 @@
 
 #include "H2Pack.h"
 
-static DTYPE kernel_func(const DTYPE *x, const DTYPE *y, const int dim)
+// Symmetry kernel function: reciprocal
+// Input parameters:
+//   dim  : Dimension of point coordinate
+//   x, y : Coordinate of two points
+// Output parameter:
+//   <return> : Output of kernel function
+DTYPE reciprocal_kernel(const int dim, const DTYPE *x, const DTYPE *y)
 {
-    // Use the reciprocal kernel for testing
     DTYPE res = 0.0;
     for (int i = 0; i < dim; i++)
     {
@@ -111,7 +116,8 @@ int main()
     fclose(ouf);
     */
 
-    H2P_build(h2pack);
+    kernel_func_ptr kernel = reciprocal_kernel;
+    H2P_build(h2pack, kernel);
     double storage_k = 0.0;
     storage_k += (double) h2pack->mat_size[0];
     storage_k += (double) h2pack->mat_size[1];
@@ -155,7 +161,7 @@ int main()
         for (int j = 0; j <= i; j++)
         {
             DTYPE *coord_j = h2pack->coord + j * dim;
-            DTYPE res = kernel_func(coord_i, coord_j, dim);
+            DTYPE res = reciprocal_kernel(dim, coord_i, coord_j);
             A[i * npts + j] = res;
             A[j * npts + i] = res;
         }

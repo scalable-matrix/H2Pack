@@ -11,6 +11,7 @@
 #include "H2Pack_aux_structs.h"
 #include "H2Pack_ID_compress.h"
 
+/*
 // Symmetry kernel function, should be an input parameter of H2P_build later
 // Input parameters:
 //   x, y : Coordinate of two points
@@ -30,6 +31,7 @@ DTYPE kernel_func(const DTYPE *x, const DTYPE *y, const int dim)
     res = 1.0 / DSQRT(res);
     return res;
 }
+*/
 
 // Evaluate a kernel matrix
 // Input parameters:
@@ -40,8 +42,8 @@ DTYPE kernel_func(const DTYPE *x, const DTYPE *y, const int dim)
 // Output parameter:
 //   kernel_mat : Obtained kernel matrix, nx-by-ny
 void H2P_eval_kernel_matrix_index(
-    DTYPE *coord, const int dim, H2P_int_vec_t idx_x, 
-    H2P_int_vec_t idx_y, H2P_dense_mat_t kernel_mat
+    kernel_func_ptr kernel, DTYPE *coord, const int dim, 
+    H2P_int_vec_t idx_x, H2P_int_vec_t idx_y, H2P_dense_mat_t kernel_mat
 )
 {
     H2P_dense_mat_resize(kernel_mat, idx_x->length, idx_y->length);
@@ -52,7 +54,7 @@ void H2P_eval_kernel_matrix_index(
         for (int j = 0; j < idx_y->length; j++)
         {
             const DTYPE *y_j = coord + idx_y->data[j] * dim;
-            kernel_mat_row[j] = kernel_func(x_i, y_j, dim);
+            kernel_mat_row[j] = kernel(dim, x_i, y_j);
         }
     }
 }
@@ -65,7 +67,7 @@ void H2P_eval_kernel_matrix_index(
 // Output parameter:
 //   kernel_mat : Obtained kernel matrix, nx-by-ny
 void H2P_eval_kernel_matrix_direct(
-    const int dim, H2P_dense_mat_t x_coord, 
+    kernel_func_ptr kernel, const int dim, H2P_dense_mat_t x_coord, 
     H2P_dense_mat_t y_coord, H2P_dense_mat_t kernel_mat
 )
 
@@ -78,7 +80,7 @@ void H2P_eval_kernel_matrix_direct(
         for (int j = 0; j < y_coord->nrow; j++)
         {
             const DTYPE *y_j = y_coord->data + j * dim;
-            kernel_mat_row[j] = kernel_func(x_i, y_j, dim);
+            kernel_mat_row[j] = kernel(dim, x_i, y_j);
         }
     }
 }
@@ -93,7 +95,7 @@ void H2P_eval_kernel_matrix_direct(
 // Output parameter:
 //   kernel_mat : Obtained kernel matrix, nx-by-ny
 void H2P_eval_kernel_matrix_UJ_proxy(
-    const int dim, DTYPE *coord, H2P_int_vec_t idx_x, 
+    kernel_func_ptr kernel, const int dim, DTYPE *coord, H2P_int_vec_t idx_x, 
     H2P_dense_mat_t box_center, H2P_dense_mat_t pp_coord, H2P_dense_mat_t kernel_mat
 )
 {
@@ -109,7 +111,7 @@ void H2P_eval_kernel_matrix_UJ_proxy(
         for (int j = 0; j < pp_coord->nrow; j++)
         {
             const DTYPE *y_j = pp_coord->data + j * dim;
-            kernel_mat_row[j] = kernel_func(shift_x_i->data, y_j, dim);
+            kernel_mat_row[j] = kernel(dim, shift_x_i->data, y_j);
         }
     }
 }
@@ -151,6 +153,7 @@ void H2P_generate_proxy_point_ID(H2Pack_t h2pack)
     int   *level_nodes = h2pack->level_nodes;
     DTYPE *enbox       = h2pack->enbox;
     DTYPE  max_L       = enbox[root_idx * dim * 2 + dim];
+    kernel_func_ptr kernel = h2pack->kernel;
     
     // 1. Initialize proxy point arrays
     h2pack->pp = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * (max_level + 1));
@@ -207,14 +210,14 @@ void H2P_generate_proxy_point_ID(H2Pack_t h2pack)
                 flag = point_in_box(dim, Ny_i, L2);
             }
         }
-        H2P_eval_kernel_matrix_direct(dim, Nx_points, Ny_points, tmpA);
+        H2P_eval_kernel_matrix_direct(kernel, dim, Nx_points, Ny_points, tmpA);
 
         // (3) Use ID to select skeleton points in Nx first, then use the
         //     skeleton Nx points to select skeleton Ny points
         DTYPE rel_tol = 1e-15;
         H2P_ID_compress(tmpA, QR_REL_NRM, &rel_tol, NULL, skel_idx);
         H2P_dense_mat_select_rows(Nx_points, skel_idx);
-        H2P_eval_kernel_matrix_direct(dim, Ny_points, Nx_points, tmpA);
+        H2P_eval_kernel_matrix_direct(kernel, dim, Ny_points, Nx_points, tmpA);
         H2P_ID_compress(tmpA, QR_REL_NRM, &rel_tol, NULL, skel_idx);
         H2P_dense_mat_select_rows(Ny_points, skel_idx);
         
@@ -301,6 +304,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     DTYPE *coord         = h2pack->coord;
     DTYPE *enbox         = h2pack->enbox;
     H2P_dense_mat_t *pp  = h2pack->pp;
+    kernel_func_ptr kernel = h2pack->kernel;
     void  *stop_param;
     if (stop_type == QR_RANK) 
         stop_param = &h2pack->QR_stop_rank;
@@ -376,7 +380,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
             DTYPE *node_box = enbox + node * 2 * dim;
             for (int k = 0; k < dim; k++)
                 box_center->data[k] = node_box[k] + 0.5 * node_box[dim + k];
-            H2P_eval_kernel_matrix_UJ_proxy(dim, coord, J[node], box_center, pp[i], A_block);
+            H2P_eval_kernel_matrix_UJ_proxy(kernel, dim, coord, J[node], box_center, pp[i], A_block);
             H2P_ID_compress(A_block, stop_type, stop_param, &U[node], sub_idx);
             for (int k = 0; k < U[node]->ncol; k++)
                 J[node]->data[k] = J[node]->data[sub_idx->data[k]];
@@ -419,6 +423,7 @@ void H2P_build_B(H2Pack_t h2pack)
     int   *node_level  = h2pack->node_level;
     int   *cluster     = h2pack->cluster;
     DTYPE *coord       = h2pack->coord;
+    kernel_func_ptr kernel = h2pack->kernel;
 
     h2pack->n_B = n_r_adm_pair;
     h2pack->B = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * h2pack->n_B);
@@ -442,7 +447,7 @@ void H2P_build_B(H2Pack_t h2pack)
             int n_point0 = J[node0]->length;
             int n_point1 = J[node1]->length;
             H2P_dense_mat_init(&B[B_idx], n_point0, n_point1);
-            H2P_eval_kernel_matrix_index(coord, dim, J[node0], J[node1], B[B_idx]);
+            H2P_eval_kernel_matrix_index(kernel, coord, dim, J[node0], J[node1], B[B_idx]);
             B_idx++;
             h2pack->mat_size[1] += n_point0 * n_point1;
         }
@@ -460,7 +465,7 @@ void H2P_build_B(H2Pack_t h2pack)
             for (int j = 0; j < n_point1; j++)
                 idx->data[j] = s_index1 + j;
             H2P_dense_mat_init(&B[B_idx], n_point0, n_point1);
-            H2P_eval_kernel_matrix_index(coord, dim, J[node0], idx, B[B_idx]);
+            H2P_eval_kernel_matrix_index(kernel, coord, dim, J[node0], idx, B[B_idx]);
             B_idx++;
             h2pack->mat_size[1] += n_point0 * n_point1;
         }
@@ -478,7 +483,7 @@ void H2P_build_B(H2Pack_t h2pack)
             for (int j = 0; j < n_point0; j++)
                 idx->data[j] = s_index0 + j;
             H2P_dense_mat_init(&B[B_idx], n_point0, n_point1);
-            H2P_eval_kernel_matrix_index(coord, dim, idx, J[node1], B[B_idx]);
+            H2P_eval_kernel_matrix_index(kernel, coord, dim, idx, J[node1], B[B_idx]);
             B_idx++;
             h2pack->mat_size[1] += n_point0 * n_point1;
         }
@@ -501,6 +506,7 @@ void H2P_build_D(H2Pack_t h2pack)
     int   *cluster       = h2pack->cluster;
     int   *r_inadm_pairs = h2pack->r_inadm_pairs;
     DTYPE *coord         = h2pack->coord;
+    kernel_func_ptr kernel = h2pack->kernel;
     
     // 1. Allocate D
     h2pack->n_D = n_leaf_node + n_r_inadm_pair;
@@ -524,7 +530,7 @@ void H2P_build_D(H2Pack_t h2pack)
         for (int j = 0; j < n_point; j++)
             idx0->data[j] = s_index + j;
         H2P_dense_mat_init(&D[D_idx], n_point, n_point);
-        H2P_eval_kernel_matrix_index(coord, dim, idx0, idx0, D[D_idx]);
+        H2P_eval_kernel_matrix_index(kernel, coord, dim, idx0, idx0, D[D_idx]);
         D_idx++;
         h2pack->mat_size[2] += n_point * n_point;
     }
@@ -549,7 +555,7 @@ void H2P_build_D(H2Pack_t h2pack)
         for (int j = 0; j < n_point1; j++)
             idx1->data[j] = s_index1 + j;
         H2P_dense_mat_init(&D[D_idx], n_point0, n_point1);
-        H2P_eval_kernel_matrix_index(coord, dim, idx0, idx1, D[D_idx]);
+        H2P_eval_kernel_matrix_index(kernel, coord, dim, idx0, idx1, D[D_idx]);
         D_idx++;
         h2pack->mat_size[2] += n_point0 * n_point1;
     }
@@ -559,9 +565,11 @@ void H2P_build_D(H2Pack_t h2pack)
 }
 
 // Build H2 representation with a kernel function
-void H2P_build(H2Pack_t h2pack)
+void H2P_build(H2Pack_t h2pack, kernel_func_ptr kernel)
 {
     double st, et;
+
+    h2pack->kernel = kernel;
 
     // 1. Generate proxy points for building U and J
     st = H2P_get_wtime_sec();

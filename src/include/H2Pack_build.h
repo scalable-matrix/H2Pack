@@ -12,7 +12,7 @@ extern "C" {
 //   h2pack : H2Pack structure with point partitioning info
 // Output parameter:
 //   h2pack : H2Pack structure with H2 representation matrices
-void H2P_build(H2Pack_t h2pack);
+void H2P_build(H2Pack_t h2pack, kernel_func_ptr kernel);
 
 #ifdef __cplusplus
 }

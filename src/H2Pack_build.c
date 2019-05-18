@@ -327,12 +327,6 @@ void H2P_generate_proxy_point_ID(H2Pack_t h2pack)
         DTYPE semi_L3_1 = (1.0 + 8.0 * ALPHA_H2) * L1;
         DTYPE semi_L3   = MIN(semi_L3_0, semi_L3_1);
         DTYPE L3 = 2.0 * semi_L3;
-        DTYPE vol2 = 1.0, vol3 = 1.0;
-        for (int i = 0; i < dim; i++)
-        {
-            vol2 *= L2;
-            vol3 *= L3;
-        }
         
         // (2) Generate Nx and Ny points
         H2P_dense_mat_resize(Nx_points, Nx_size, dim);
@@ -525,7 +519,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
             int node = level_i_nodes[j];
             DTYPE *node_box = enbox + node * 2 * dim;
             for (int k = 0; k < dim; k++)
-                box_center->data[i] = node_box[k] + 0.5 * node_box[dim + k];
+                box_center->data[k] = node_box[k] + 0.5 * node_box[dim + k];
             H2P_eval_kernel_matrix_UJ_proxy(dim, coord, J[node], box_center, pp[i], A_block);
             H2P_ID_compress(A_block, stop_type, stop_param, &U[node], sub_idx);
             for (int k = 0; k < U[node]->ncol; k++)

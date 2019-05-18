@@ -245,8 +245,7 @@ void H2P_ID_compress(
     const int ncol = A->ncol;
     A->nrow = ncol;
     A->ncol = nrow;
-    int min_nm = MIN(ncol, nrow);
-    H2P_int_vec_set_capacity(J, min_nm);
+    H2P_int_vec_set_capacity(J, nrow);
     H2P_ID_QR(A, stop_type, stop_param, J->data);
     H2P_dense_mat_t R = A; // Note: the output R stored in A is still stored in column major style
     int r = A->nrow;  // Obtained rank

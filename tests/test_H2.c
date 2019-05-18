@@ -193,7 +193,7 @@ int main()
     }
     printf(
         "H2P_matvec: up, mid, down, dense, total time = %e, %e, %e, %e, %e (s)\n", 
-        h2pack->timers[4], h2pack->timers[5], h2pack->timers[6], h2pack->timers[7], total_t
+        h2pack->timers[5], h2pack->timers[6], h2pack->timers[7], h2pack->timers[8], total_t
     );
     printf("cblas_dgemv time = %e (s)\n", ut / 10.0);
     

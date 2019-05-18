@@ -356,8 +356,8 @@ void H2P_generate_proxy_point_ID(H2Pack_t h2pack)
         //     skeleton Nx points to select skeleton Ny points
         DTYPE rel_tol = 1e-15;
         H2P_ID_compress(tmpA, QR_REL_NRM, &rel_tol, NULL, skel_idx);
-        H2P_dense_mat_select_rows(tmpA, skel_idx);
-        H2P_dense_mat_transpose(tmpA);
+        H2P_dense_mat_select_rows(Nx_points, skel_idx);
+        H2P_eval_kernel_matrix_direct(dim, Ny_points, Nx_points, tmpA);
         H2P_ID_compress(tmpA, QR_REL_NRM, &rel_tol, NULL, skel_idx);
         H2P_dense_mat_select_rows(Ny_points, skel_idx);
         

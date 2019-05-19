@@ -41,8 +41,8 @@ struct H2Pack
     int   *cluster;         // Size n_node * 2, start and end (included) indices of points belong to each node
     int   *n_child;         // Size n_node, number of children nodes of each node
     int   *node_level;      // Size n_node, level of each node
-    int   *level_n_node;    // Size max_level, number of nodes in each level
-    int   *level_nodes;     // Size max_level * n_leaf_node, indices of nodes on each level
+    int   *level_n_node;    // Size max_level+1, number of nodes in each level
+    int   *level_nodes;     // Size (max_level+1) * n_leaf_node, indices of nodes on each level
     int   *leaf_nodes;      // Size n_leaf_node, leaf node indices
     int   *r_inadm_pairs;   // Size unknown, Reduced inadmissible pairs 
     int   *r_adm_pairs;     // Size unknown, Reduced admissible pairs 
@@ -84,6 +84,10 @@ void H2P_init(
 //   h2pack : H2Pack structure to be destroyed
 void H2P_destroy(H2Pack_t h2pack);
 
+// Print statistic info of a H2Pack structure
+// Input parameter:
+//   h2pack : H2Pack structure to be destroyed
+void H2P_print_statistic(H2Pack_t h2pack);
 
 #ifdef __cplusplus
 }

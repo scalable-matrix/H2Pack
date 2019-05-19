@@ -89,3 +89,66 @@ void H2P_destroy(H2Pack_t h2pack)
     free(h2pack->y0);
     free(h2pack->y1);
 }
+
+// Print statistic info of a H2Pack structure
+void H2P_print_statistic(H2Pack_t h2pack)
+{
+    printf("==================== H2Pack H2 tree info ====================\n");
+    printf("  * Number of points              : %d\n", h2pack->n_point);
+    printf("  * Height of H2 tree             : %d\n", h2pack->max_level+1);
+    printf("  * Number of nodes               : %d\n", h2pack->n_node);
+    printf("  * Number of nodes on each level : ");
+    for (int i = 0; i < h2pack->max_level; i++) 
+        printf("%d, ", h2pack->level_n_node[i]);
+    printf("%d\n", h2pack->level_n_node[h2pack->max_level]);
+    printf("  * Number of leaf nodes          : %d\n", h2pack->n_leaf_node);
+    printf("  * Number of reduced far pairs   : %d\n", h2pack->n_r_adm_pair);
+    printf("  * Number of reduced near pairs  : %d\n", h2pack->n_r_inadm_pair);
+    
+    printf("==================== H2Pack storage info ====================\n");
+    printf("  * Total size of projection matrices   (U) : %d\n", h2pack->mat_size[0]);
+    printf("  * Total size of generator matrices    (B) : %d\n", h2pack->mat_size[1]);
+    printf("  * Total size of original dense blocks (D) : %d\n", h2pack->mat_size[2]);
+    double storage_k = 0.0;
+    storage_k += (double) h2pack->mat_size[0];
+    storage_k += (double) h2pack->mat_size[1];
+    storage_k += (double) h2pack->mat_size[2];
+    storage_k /= (double) h2pack->n_point;
+    storage_k /= (double) h2pack->n_point;
+    printf("  * Compression ratio                       : %.3lf \n", 1.0 / storage_k);
+    
+    printf("==================== H2Pack timing info =====================\n");
+    double build_t = 0.0, matvec_t = 0.0;
+    int n_matvec = h2pack->n_matvec;
+    double d_n_matvec = (double) h2pack->n_matvec;
+    for (int i = 0; i < 4; i++) build_t  += h2pack->timers[i];
+    for (int i = 4; i < 8; i++) matvec_t += h2pack->timers[i];
+    printf("  * H2 construction time = %.4lf (s)\n", build_t);
+    printf("      |----> Point partition = %.4lf (s)\n", h2pack->timers[0]);
+    printf("      |----> U construction  = %.4lf (s)\n", h2pack->timers[1]);
+    printf("      |----> B construction  = %.4lf (s)\n", h2pack->timers[2]);
+    printf("      |----> D construction  = %.4lf (s)\n", h2pack->timers[3]);
+    printf(
+        "  * H2 matvec total (average) time   = %.4lf (%.4lf) (s)\n", 
+        matvec_t, matvec_t / d_n_matvec
+    );
+    printf(
+        "      |----> Upward sweep time       = %.4lf (%.4lf) (s)\n", 
+        h2pack->timers[4], h2pack->timers[4] / d_n_matvec
+    );
+    printf(
+        "      |----> Intermediate sweep time = %.4lf (%.4lf) (s)\n", 
+        h2pack->timers[5], h2pack->timers[5] / d_n_matvec
+    );
+    printf(
+        "      |----> Downward sweep time     = %.4lf (%.4lf) (s)\n", 
+        h2pack->timers[6], h2pack->timers[6] / d_n_matvec
+    );
+    printf(
+        "      |----> Dense block sweep time  = %.4lf (%.4lf) (s)\n", 
+        h2pack->timers[7], h2pack->timers[7] / d_n_matvec
+    );
+    
+    printf("=============================================================\n");
+}
+

@@ -117,7 +117,13 @@ int main()
     */
 
     kernel_func_ptr kernel = reciprocal_kernel;
-    H2P_build(h2pack, kernel);
+    H2P_dense_mat_t *pp;
+    DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * dim + dim];
+    st = H2P_get_wtime_sec();
+    H2P_generate_proxy_point(dim, h2pack->max_level, 2, max_L, kernel, &pp);
+    et = H2P_get_wtime_sec();
+    printf("H2Pack generate proxy point used %.3lf (s)\n", et - st);
+    H2P_build(h2pack, kernel, pp);
     double storage_k = 0.0;
     storage_k += (double) h2pack->mat_size[0];
     storage_k += (double) h2pack->mat_size[1];
@@ -125,8 +131,8 @@ int main()
     storage_k /= (double) npts;
     total_t = h2pack->timers[1] + h2pack->timers[2] + h2pack->timers[3] + h2pack->timers[4];
     printf(
-        "H2P_build done, PP, U, B, D, total time = %.3lf, %.3lf, %.3lf, %.3lf, %.3lf (s)\n",
-        h2pack->timers[1], h2pack->timers[2], h2pack->timers[3], h2pack->timers[4], total_t
+        "H2P_build done, U, B, D, total time = %.3lf, %.3lf, %.3lf, %.3lf (s)\n",
+        h2pack->timers[1], h2pack->timers[2], h2pack->timers[3], total_t
     );
     printf(
         "H2Pack U, B, D size = %d, %d, %d, size(U + B + D) / npts = %.2lf\n", 
@@ -198,8 +204,8 @@ int main()
         total_t += h2pack->timers[i];
     }
     printf(
-        "H2P_matvec: up, mid, down, dense, total time = %e, %e, %e, %e, %e (s)\n", 
-        h2pack->timers[5], h2pack->timers[6], h2pack->timers[7], h2pack->timers[8], total_t
+        "H2P_matvec: up, mid, down, dense, total time = %.4lf, %.4lf, %.4lf, %.4lf, %.4lf (s)\n", 
+        h2pack->timers[4], h2pack->timers[5], h2pack->timers[6], h2pack->timers[7], total_t
     );
     printf("cblas_dgemv time = %e (s)\n", ut / 10.0);
     

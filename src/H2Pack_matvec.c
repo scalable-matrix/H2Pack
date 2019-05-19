@@ -341,25 +341,25 @@ void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
     st = H2P_get_wtime_sec();
     H2P_matvec_upward_sweep(h2pack, x, y);
     et = H2P_get_wtime_sec();
-    h2pack->timers[5] += et - st;
+    h2pack->timers[4] += et - st;
     
     // 2. Intermediate sweep, calculate B_{ij} * (U_j^T * x_j)
     st = H2P_get_wtime_sec();
     H2P_matvec_intermediate_sweep(h2pack, x, y);
     et = H2P_get_wtime_sec();
-    h2pack->timers[6] += et - st;
+    h2pack->timers[5] += et - st;
     
     // 3. Downward sweep, calculate U_i * (B_{ij} * (U_j^T * x_j))
     st = H2P_get_wtime_sec();
     H2P_matvec_downward_sweep(h2pack, x, y);
     et = H2P_get_wtime_sec();
-    h2pack->timers[7] += et - st;
+    h2pack->timers[6] += et - st;
     
     // 4. Dense blocks, calculate D_i * x_i
     st = H2P_get_wtime_sec();
     H2P_matvec_dense_blocks(h2pack, x, y);
     et = H2P_get_wtime_sec();
-    h2pack->timers[8] += et - st;
+    h2pack->timers[7] += et - st;
     
     h2pack->n_matvec++;
 }

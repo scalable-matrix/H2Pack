@@ -20,7 +20,7 @@ void H2P_init(
     h2pack->mem_bytes = 0;
     h2pack->max_child = 1 << dim;
     h2pack->n_matvec  = 0;
-    memset(h2pack->timers,   0, sizeof(double) * 9);
+    memset(h2pack->timers,   0, sizeof(double) * 8);
     memset(h2pack->mat_size, 0, sizeof(int)    * 3);
     
     h2pack->QR_stop_type = QR_stop_type;

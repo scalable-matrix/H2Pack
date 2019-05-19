@@ -11,28 +11,6 @@
 #include "H2Pack_aux_structs.h"
 #include "H2Pack_ID_compress.h"
 
-/*
-// Symmetry kernel function, should be an input parameter of H2P_build later
-// Input parameters:
-//   x, y : Coordinate of two points
-//   dim  : Dimension of point coordinate
-// Output parameter:
-//   <return> : Output of kernel function
-DTYPE kernel_func(const DTYPE *x, const DTYPE *y, const int dim)
-{
-    // Use the reciprocal kernel for testing
-    DTYPE res = 0.0;
-    for (int i = 0; i < dim; i++)
-    {
-        DTYPE delta = x[i] - y[i];
-        res += delta * delta;
-    }
-    if (res < 1e-20) res = 1.0;
-    res = 1.0 / DSQRT(res);
-    return res;
-}
-*/
-
 // Evaluate a kernel matrix
 // Input parameters:
 //   coord  : Point coordinates
@@ -139,29 +117,18 @@ int point_in_box(const int dim, DTYPE *coord, DTYPE L)
     return res;
 }
 
-// Build H2 generator matrices
-// Input parameter:
-//   h2pack : H2Pack structure with point partitioning info
-// Output parameter:
-//   h2pack : H2Pack structure with proxy points for building UJ
-void H2P_generate_proxy_point_ID(H2Pack_t h2pack)
-{
-    int   dim          = h2pack->dim;
-    int   root_idx     = h2pack->root_idx;
-    int   max_level    = h2pack->max_level;
-    int   n_leaf_node  = h2pack->n_leaf_node;
-    int   *level_nodes = h2pack->level_nodes;
-    DTYPE *enbox       = h2pack->enbox;
-    DTYPE  max_L       = enbox[root_idx * dim * 2 + dim];
-    kernel_func_ptr kernel = h2pack->kernel;
-    
+// Generate proxy points for constructing H2 projection and skeleton matrices
+void H2P_generate_proxy_point(
+    const int dim, const int max_level, const int start_level,
+    DTYPE max_L, kernel_func_ptr kernel, H2P_dense_mat_t **pp_
+)
+{   
     // 1. Initialize proxy point arrays
-    h2pack->pp = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * (max_level + 1));
-    assert(h2pack->pp != NULL);
-    for (int i = 0; i < max_level; i++) h2pack->pp[i] = NULL;
-    H2P_dense_mat_t *pp = h2pack->pp;
+    H2P_dense_mat_t *pp = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * (max_level + 1));
+    assert(pp != NULL);
+    for (int i = 0; i < max_level; i++) pp[i] = NULL;
     
-    // The numbers of Nx and Ny points are empirical values
+    // 2. Initialize temporary arrays. The numbers of Nx and Ny points are empirical values
     int Nx_size = 1500;
     int Ny_size = 10000;
     H2P_dense_mat_t tmpA, Nx_points, Ny_points, min_dist;
@@ -173,14 +140,15 @@ void H2P_generate_proxy_point_ID(H2Pack_t h2pack)
     H2P_int_vec_init(&skel_idx, Nx_size);
     srand48(time(NULL));
 
-    // 2. Construct proxy points on each level
-    for (int level = 2; level <= max_level; level++)
+    // 3. Construct proxy points on each level
+    DTYPE pow_2_level = 1.0;
+    for (int level = 0; level < start_level; level++) pow_2_level *= 2.0;
+    for (int level = start_level; level <= max_level; level++)
     {
-        int node = level_nodes[level * n_leaf_node];
-        
         // (1) Decide box sizes: Nx points are in box1, Ny points are in box3
         //     but not in box2 (points in box2 are inadmissible to Nx points)
-        DTYPE L1 = enbox[node * 2 * dim + dim];
+        pow_2_level *= 2.0;
+        DTYPE L1 = max_L / pow_2_level;
         DTYPE L2 = (1.0 + 2.0 * ALPHA_H2) * L1;
         DTYPE semi_L1   = L1 * 0.5;
         DTYPE semi_L3_0 = max_L - L1;
@@ -274,6 +242,7 @@ void H2P_generate_proxy_point_ID(H2Pack_t h2pack)
         }
     }
     
+    *pp_ = pp;
     H2P_int_vec_destroy(skel_idx);
     H2P_dense_mat_destroy(tmpA);
     H2P_dense_mat_destroy(Nx_points);
@@ -565,34 +534,29 @@ void H2P_build_D(H2Pack_t h2pack)
 }
 
 // Build H2 representation with a kernel function
-void H2P_build(H2Pack_t h2pack, kernel_func_ptr kernel)
+void H2P_build(H2Pack_t h2pack, kernel_func_ptr kernel, H2P_dense_mat_t *pp)
 {
     double st, et;
 
     h2pack->kernel = kernel;
+    h2pack->pp     = pp;
 
-    // 1. Generate proxy points for building U and J
-    st = H2P_get_wtime_sec();
-    H2P_generate_proxy_point_ID(h2pack);
-    et = H2P_get_wtime_sec();
-    h2pack->timers[1] = et - st;
-
-    // 2. Build projection matrices and skeleton row sets
+    // 1. Build projection matrices and skeleton row sets
     st = H2P_get_wtime_sec();
     H2P_build_UJ_proxy(h2pack);
     et = H2P_get_wtime_sec();
-    h2pack->timers[2] = et - st;
+    h2pack->timers[1] = et - st;
 
-    // 3. Build generator matrices
+    // 2. Build generator matrices
     st = H2P_get_wtime_sec();
     H2P_build_B(h2pack);
     et = H2P_get_wtime_sec();
-    h2pack->timers[3] = et - st;
+    h2pack->timers[2] = et - st;
     
-    // 4. Build dense blocks
+    // 3. Build dense blocks
     st = H2P_get_wtime_sec();
     H2P_build_D(h2pack);
     et = H2P_get_wtime_sec();
-    h2pack->timers[4] = et - st;
+    h2pack->timers[3] = et - st;
 }
 

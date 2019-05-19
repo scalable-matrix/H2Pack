@@ -141,7 +141,7 @@ void H2P_generate_proxy_point(
     srand48(time(NULL));
 
     // 3. Construct proxy points on each level
-    DTYPE pow_2_level = 1.0;
+    DTYPE pow_2_level = 0.5;
     for (int level = 0; level < start_level; level++) pow_2_level *= 2.0;
     for (int level = start_level; level <= max_level; level++)
     {

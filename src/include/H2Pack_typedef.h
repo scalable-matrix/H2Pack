@@ -31,6 +31,7 @@ struct H2Pack
     int   max_child;        // Maximum number of children per node, == 2^dim
     int   max_level;        // Maximum level of this H2 tree, (root = 0, total max_level + 1 levels)
     int   min_adm_level;    // Minimum level of reduced admissible pair
+    int   max_adm_height;   // Maximum height of reduced admissible pair
     int   n_r_inadm_pair;   // Number of reduced inadmissible pairs 
     int   n_r_adm_pair;     // Number of reduced admissible pairs 
     int   n_UJ;             // Number of projection matrices & skeleton row sets
@@ -41,9 +42,11 @@ struct H2Pack
     int   *cluster;         // Size n_node * 2, start and end (included) indices of points belong to each node
     int   *n_child;         // Size n_node, number of children nodes of each node
     int   *node_level;      // Size n_node, level of each node
+    int   *node_height;     // Size n_node, height of each node
     int   *level_n_node;    // Size max_level+1, number of nodes in each level
     int   *level_nodes;     // Size (max_level+1) * n_leaf_node, indices of nodes on each level
-    int   *leaf_nodes;      // Size n_leaf_node, leaf node indices
+    int   *height_n_node;   // Size max_level+1, number of nodes of each height
+    int   *height_nodes;    // Size (max_level+1) * n_leaf_node, indices of nodes of each height
     int   *r_inadm_pairs;   // Size unknown, Reduced inadmissible pairs 
     int   *r_adm_pairs;     // Size unknown, Reduced admissible pairs 
     DTYPE max_leaf_size;    // Maximum size of a leaf node's box

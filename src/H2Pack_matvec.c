@@ -287,7 +287,7 @@ void H2P_matvec_dense_blocks(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
     int n_leaf_node    = h2pack->n_leaf_node;
     int n_r_inadm_pair = h2pack->n_r_inadm_pair;
     int *r_inadm_pairs = h2pack->r_inadm_pairs;
-    int *leaf_nodes    = h2pack->leaf_nodes;
+    int *leaf_nodes    = h2pack->height_nodes;
     int *cluster       = h2pack->cluster;
     H2P_dense_mat_t *D = h2pack->D;
     

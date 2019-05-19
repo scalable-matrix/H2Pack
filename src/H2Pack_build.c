@@ -268,7 +268,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     int   *n_child       = h2pack->n_child;
     int   *level_n_node  = h2pack->level_n_node;
     int   *level_nodes   = h2pack->level_nodes;
-    int   *leaf_nodes    = h2pack->leaf_nodes;
+    int   *leaf_nodes    = h2pack->height_nodes;
     int   *cluster       = h2pack->cluster;
     DTYPE *coord         = h2pack->coord;
     DTYPE *enbox         = h2pack->enbox;
@@ -471,7 +471,7 @@ void H2P_build_D(H2Pack_t h2pack)
     int   dim            = h2pack->dim;
     int   n_leaf_node    = h2pack->n_leaf_node;
     int   n_r_inadm_pair = h2pack->n_r_inadm_pair;
-    int   *leaf_nodes    = h2pack->leaf_nodes;
+    int   *leaf_nodes    = h2pack->height_nodes;
     int   *cluster       = h2pack->cluster;
     int   *r_inadm_pairs = h2pack->r_inadm_pairs;
     DTYPE *coord         = h2pack->coord;

@@ -34,9 +34,11 @@ void H2P_init(
     h2pack->cluster       = NULL;
     h2pack->n_child       = NULL;
     h2pack->node_level    = NULL;
+    h2pack->node_height   = NULL;
     h2pack->level_n_node  = NULL;
     h2pack->level_nodes   = NULL;
-    h2pack->leaf_nodes    = NULL;
+    h2pack->height_n_node = NULL;
+    h2pack->height_nodes  = NULL;
     h2pack->r_inadm_pairs = NULL;
     h2pack->r_adm_pairs   = NULL;
     h2pack->coord         = NULL;
@@ -59,9 +61,11 @@ void H2P_destroy(H2Pack_t h2pack)
     free(h2pack->cluster);
     free(h2pack->n_child);
     free(h2pack->node_level);
+    free(h2pack->node_height);
     free(h2pack->level_n_node);
     free(h2pack->level_nodes);
-    free(h2pack->leaf_nodes);
+    free(h2pack->height_n_node);
+    free(h2pack->height_nodes);
     free(h2pack->r_inadm_pairs);
     free(h2pack->r_adm_pairs);
     free(h2pack->coord);
@@ -94,16 +98,19 @@ void H2P_destroy(H2Pack_t h2pack)
 void H2P_print_statistic(H2Pack_t h2pack)
 {
     printf("==================== H2Pack H2 tree info ====================\n");
-    printf("  * Number of points              : %d\n", h2pack->n_point);
-    printf("  * Height of H2 tree             : %d\n", h2pack->max_level+1);
-    printf("  * Number of nodes               : %d\n", h2pack->n_node);
-    printf("  * Number of nodes on each level : ");
+    printf("  * Number of points               : %d\n", h2pack->n_point);
+    printf("  * Height of H2 tree              : %d\n", h2pack->max_level+1);
+    printf("  * Number of nodes                : %d\n", h2pack->n_node);
+    printf("  * Number of nodes on each level  : ");
     for (int i = 0; i < h2pack->max_level; i++) 
         printf("%d, ", h2pack->level_n_node[i]);
     printf("%d\n", h2pack->level_n_node[h2pack->max_level]);
-    printf("  * Number of leaf nodes          : %d\n", h2pack->n_leaf_node);
-    printf("  * Number of reduced far pairs   : %d\n", h2pack->n_r_adm_pair);
-    printf("  * Number of reduced near pairs  : %d\n", h2pack->n_r_inadm_pair);
+    printf("  * Number of nodes on each height : ");
+    for (int i = 0; i < h2pack->max_level; i++) 
+        printf("%d, ", h2pack->height_n_node[i]);
+    printf("%d\n", h2pack->height_n_node[h2pack->max_level]);
+    printf("  * Number of reduced far pairs    : %d\n", h2pack->n_r_adm_pair);
+    printf("  * Number of reduced near pairs   : %d\n", h2pack->n_r_inadm_pair);
     
     printf("==================== H2Pack storage info ====================\n");
     printf("  * Total size of projection matrices   (U) : %d\n", h2pack->mat_size[0]);

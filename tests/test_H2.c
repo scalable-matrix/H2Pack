@@ -136,7 +136,7 @@ int main()
     );
     H2P_matvec(h2pack, x, y1); 
     h2pack->n_matvec = 0;
-    memset(h2pack->timers + 4, 0, sizeof(double) * 4);
+    memset(h2pack->timers + 4, 0, sizeof(double) * 5);
     
     ut = 0.0;
     for (int i = 0; i < 10; i++) 

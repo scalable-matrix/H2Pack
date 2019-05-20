@@ -22,7 +22,7 @@ void H2P_init(
     h2pack->mem_bytes = 0;
     h2pack->max_child = 1 << dim;
     h2pack->n_matvec  = 0;
-    memset(h2pack->timers,   0, sizeof(double) * 8);
+    memset(h2pack->timers,   0, sizeof(double) * 9);
     memset(h2pack->mat_size, 0, sizeof(int)    * 3);
     
     h2pack->QR_stop_type = QR_stop_type;
@@ -136,7 +136,7 @@ void H2P_print_statistic(H2Pack_t h2pack)
     int n_matvec = h2pack->n_matvec;
     double d_n_matvec = (double) h2pack->n_matvec;
     for (int i = 0; i < 4; i++) build_t  += h2pack->timers[i];
-    for (int i = 4; i < 8; i++) matvec_t += h2pack->timers[i];
+    for (int i = 4; i < 9; i++) matvec_t += h2pack->timers[i];
     printf("  * H2 construction time = %.4lf (s)\n", build_t);
     printf("      |----> Point partition = %.4lf (s)\n", h2pack->timers[0]);
     printf("      |----> U construction  = %.4lf (s)\n", h2pack->timers[1]);
@@ -161,6 +161,10 @@ void H2P_print_statistic(H2Pack_t h2pack)
     printf(
         "      |----> Dense block sweep time  = %.4lf (%.4lf) (s)\n", 
         h2pack->timers[7], h2pack->timers[7] / d_n_matvec
+    );
+    printf(
+        "      |----> OpenMP reduction time   = %.4lf (%.4lf) (s)\n", 
+        h2pack->timers[8], h2pack->timers[8] / d_n_matvec
     );
     
     printf("=============================================================\n");

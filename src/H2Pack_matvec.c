@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <math.h>
+#include <omp.h>
 
 #ifdef USE_MKL
 #include <mkl.h>
@@ -17,7 +18,7 @@
 //       to reduce the overhead of calling external library.
 
 // H2 representation matvec upward sweep, calculate U_j^T * x_j
-void H2P_matvec_upward_sweep(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
+void H2P_matvec_upward_sweep(H2Pack_t h2pack, const DTYPE *x)
 {
     int max_child      = h2pack->max_child;
     int n_node         = h2pack->n_node;
@@ -60,7 +61,11 @@ void H2P_matvec_upward_sweep(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
     for (int i = 0; i <= max_adm_height; i++)
     {
         int *height_i_nodes = height_nodes + i * n_leaf_node;
-        for (int j = 0; j < height_n_node[i]; j++)
+        int height_i_n_node = height_n_node[i];
+        int nthreads = MIN(height_i_n_node, h2pack->n_thread);
+        
+        #pragma omp parallel for schedule(dynamic) num_threads(nthreads)
+        for (int j = 0; j < height_i_n_node; j++)
         {
             int node  = height_i_nodes[j];
             int level = node_level[node];
@@ -99,7 +104,7 @@ void H2P_matvec_upward_sweep(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
 }
 
 // H2 representation matvec intermediate sweep, calculate B_{ij} * (U_j^T * x_j)
-void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
+void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x)
 {
     int n_node       = h2pack->n_node;
     int n_r_adm_pair = h2pack->n_r_adm_pair;
@@ -118,12 +123,9 @@ void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
     H2P_dense_mat_t *y1 = h2pack->y1;
     H2P_dense_mat_t *U  = h2pack->U;
     H2P_dense_mat_t *B  = h2pack->B;
-    
     // Use ld to mark if y1[i] is visited in this intermediate sweep
     for (int i = 0; i < n_node; i++) 
         if (y1[i] != NULL) y1[i]->ld = 1;
-
-    // 2. Intermediate sweep
     for (int i = 0; i < n_r_adm_pair; i++)
     {
         int node0  = r_adm_pairs[2 * i];
@@ -146,8 +148,19 @@ void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
             memset(y1[node1]->data, 0, sizeof(DTYPE) * y1[node1]->nrow);
             y1[node1]->ld = 2;
         }
+    }
+
+    // 2. Intermediate sweep
+    DTYPE *y = h2pack->tb[0]->y;
+    for (int i = 0; i < n_r_adm_pair; i++)
+    {
+        int node0  = r_adm_pairs[2 * i];
+        int node1  = r_adm_pairs[2 * i + 1];
+        int level0 = node_level[node0];
+        int level1 = node_level[node1];
+        H2P_dense_mat_t Bi = B[i];
         
-        // (2) Two nodes are of the same level, compress on both sides
+        // (1) Two nodes are of the same level, compress on both sides
         if (level0 == level1)
         {
             CBLAS_GEMV(
@@ -162,7 +175,7 @@ void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
             );
         }
         
-        // (3) node1 is a leaf node and its level is higher than node0's level, 
+        // (2) node1 is a leaf node and its level is higher than node0's level, 
         //     only compressed on node0's side, node1's side don't need the 
         //     downward sweep and can directly accumulate result to output vector
         if (level0 > level1)
@@ -182,7 +195,7 @@ void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
             );
         }
         
-        // (4) node0 is a leaf node and its level is higher than node1's level, 
+        // (3) node0 is a leaf node and its level is higher than node1's level, 
         //     only compressed on node1's side, node0's side don't need the 
         //     downward sweep and can directly accumulate result to output vector
         if (level0 < level1)
@@ -217,7 +230,7 @@ void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
 }
 
 // H2 representation matvec downward sweep, calculate U_i * (B_{ij} * (U_j^T * x_j))
-void H2P_matvec_downward_sweep(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
+void H2P_matvec_downward_sweep(H2Pack_t h2pack, const DTYPE *x)
 {
     int max_child       = h2pack->max_child;
     int n_leaf_node     = h2pack->n_leaf_node;
@@ -231,62 +244,70 @@ void H2P_matvec_downward_sweep(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
     H2P_dense_mat_t *U  = h2pack->U;
     H2P_dense_mat_t *y1 = h2pack->y1;
     
-    H2P_dense_mat_t y1_tmp;
-    H2P_dense_mat_init(&y1_tmp, h2pack->n_point, 1);
     for (int i = min_adm_level; i <= max_level; i++)
     {
         int *level_i_nodes = level_nodes + i * n_leaf_node;
-        for (int j = 0; j < level_n_node[i]; j++)
+        int level_i_n_node = level_n_node[i];
+        int nthreads = MIN(level_i_n_node, h2pack->n_thread);
+        
+        #pragma omp parallel num_threads(nthreads) 
         {
-            int node = level_i_nodes[j];
-            int n_child_node = n_child[node];
-            int *child_nodes = children + node * max_child;
+            int tid = omp_get_thread_num();
+            DTYPE *y = h2pack->tb[tid]->y;
+            H2P_dense_mat_t y1_tmp = h2pack->tb[tid]->mat0;
             
-            if (y1[node]->nrow == 0) continue;
-            
-            CBLAS_GEMV(
-                CblasRowMajor, CblasNoTrans, U[node]->nrow, U[node]->ncol,
-                1.0, U[node]->data, U[node]->ld, 
-                y1[node]->data, 1, 0.0, y1_tmp->data, 1
-            );
-            
-            if (n_child_node == 0)
+            #pragma omp for schedule(dynamic)
+            for (int j = 0; j < level_i_n_node; j++)
             {
-                // Leaf node, accumulate final results to output vector
-                int s_index = cluster[2 * node];
-                int e_index = cluster[2 * node + 1];
-                int n_point = e_index - s_index + 1;
-                DTYPE *y_spos = y + s_index;
-                #pragma omp simd
-                for (int k = 0; k < n_point; k++)
-                    y_spos[k] += y1_tmp->data[k];
-            } else {
-                // Non-leaf node, push down y1 values
-                int y1_tmp_idx = 0;
-                for (int k = 0; k < n_child_node; k++)
+                int node = level_i_nodes[j];
+                int n_child_node = n_child[node];
+                int *child_nodes = children + node * max_child;
+                
+                if (y1[node]->nrow == 0) continue;
+                
+                CBLAS_GEMV(
+                    CblasRowMajor, CblasNoTrans, U[node]->nrow, U[node]->ncol,
+                    1.0, U[node]->data, U[node]->ld, 
+                    y1[node]->data, 1, 0.0, y1_tmp->data, 1
+                );
+                
+                if (n_child_node == 0)
                 {
-                    int child_k = child_nodes[k];
-                    int child_k_len = U[child_k]->ncol;
-                    DTYPE *y1_tmp_spos = y1_tmp->data + y1_tmp_idx;
-                    if (y1[child_k]->nrow == 0)
+                    // Leaf node, accumulate final results to output vector
+                    int s_index = cluster[2 * node];
+                    int e_index = cluster[2 * node + 1];
+                    int n_point = e_index - s_index + 1;
+                    DTYPE *y_spos = y + s_index;
+                    #pragma omp simd
+                    for (int k = 0; k < n_point; k++)
+                        y_spos[k] += y1_tmp->data[k];
+                } else {
+                    // Non-leaf node, push down y1 values
+                    int y1_tmp_idx = 0;
+                    for (int k = 0; k < n_child_node; k++)
                     {
-                        H2P_dense_mat_resize(y1[child_k], child_k_len, 1);
-                        memcpy(y1[child_k]->data, y1_tmp_spos, sizeof(DTYPE) * child_k_len);
-                    } else {
-                        #pragma omp simd
-                        for (int l = 0; l < child_k_len; l++)
-                            y1[child_k]->data[l] += y1_tmp_spos[l];
+                        int child_k = child_nodes[k];
+                        int child_k_len = U[child_k]->ncol;
+                        DTYPE *y1_tmp_spos = y1_tmp->data + y1_tmp_idx;
+                        if (y1[child_k]->nrow == 0)
+                        {
+                            H2P_dense_mat_resize(y1[child_k], child_k_len, 1);
+                            memcpy(y1[child_k]->data, y1_tmp_spos, sizeof(DTYPE) * child_k_len);
+                        } else {
+                            #pragma omp simd
+                            for (int l = 0; l < child_k_len; l++)
+                                y1[child_k]->data[l] += y1_tmp_spos[l];
+                        }
+                        y1_tmp_idx += child_k_len;
                     }
-                    y1_tmp_idx += child_k_len;
                 }
             }
         }
     }
-    H2P_dense_mat_destroy(y1_tmp);
 }
 
 // H2 representation matvec dense blocks matvec, calculate D_i * x_i
-void H2P_matvec_dense_blocks(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
+void H2P_matvec_dense_blocks(H2Pack_t h2pack, const DTYPE *x)
 {
     int n_leaf_node    = h2pack->n_leaf_node;
     int n_r_inadm_pair = h2pack->n_r_inadm_pair;
@@ -295,43 +316,51 @@ void H2P_matvec_dense_blocks(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
     int *cluster       = h2pack->cluster;
     H2P_dense_mat_t *D = h2pack->D;
     
-    // 1. Diagonal blocks matvec
-    for (int i = 0; i < n_leaf_node; i++)
+    #pragma omp parallel num_threads(h2pack->n_thread)
     {
-        int node = leaf_nodes[i];
-        int s_index = cluster[node * 2];
-        const DTYPE *x_spos = x + s_index;
-        DTYPE *y_spos = y + s_index;
-        H2P_dense_mat_t Di = D[i];
-        CBLAS_GEMV(
-            CblasRowMajor, CblasNoTrans, Di->nrow, Di->ncol,
-            1.0, Di->data, Di->ld, 
-            x_spos, 1, 1.0, y_spos, 1
-        );
-    }
-    
-    // 2. Off-diagonal blocks from inadmissible pairs matvec
-    for (int i = 0; i < n_r_inadm_pair; i++)
-    {
-        int node0 = r_inadm_pairs[2 * i];
-        int node1 = r_inadm_pairs[2 * i + 1];
-        int s_index0 = cluster[2 * node0];
-        int s_index1 = cluster[2 * node1];
-        const DTYPE *x_spos0 = x + s_index0;
-        const DTYPE *x_spos1 = x + s_index1;
-        DTYPE *y_spos0 = y + s_index0;
-        DTYPE *y_spos1 = y + s_index1;
-        H2P_dense_mat_t Di = D[n_leaf_node + i];
-        CBLAS_GEMV(
-            CblasRowMajor, CblasNoTrans, Di->nrow, Di->ncol,
-            1.0, Di->data, Di->ld, 
-            x_spos1, 1, 1.0, y_spos0, 1
-        );
-        CBLAS_GEMV(
-            CblasRowMajor, CblasTrans, Di->nrow, Di->ncol,
-            1.0, Di->data, Di->ld, 
-            x_spos0, 1, 1.0, y_spos1, 1
-        );
+        int tid = omp_get_thread_num();
+        DTYPE *y = h2pack->tb[tid]->y;
+        
+        // 1. Diagonal blocks matvec
+        #pragma omp for schedule(dynamic) nowait
+        for (int i = 0; i < n_leaf_node; i++)
+        {
+            int node = leaf_nodes[i];
+            int s_index = cluster[node * 2];
+            const DTYPE *x_spos = x + s_index;
+            DTYPE *y_spos = y + s_index;
+            H2P_dense_mat_t Di = D[i];
+            CBLAS_GEMV(
+                CblasRowMajor, CblasNoTrans, Di->nrow, Di->ncol,
+                1.0, Di->data, Di->ld, 
+                x_spos, 1, 1.0, y_spos, 1
+            );
+        }
+        
+        // 2. Off-diagonal blocks from inadmissible pairs matvec
+        #pragma omp for schedule(dynamic) 
+        for (int i = 0; i < n_r_inadm_pair; i++)
+        {
+            int node0 = r_inadm_pairs[2 * i];
+            int node1 = r_inadm_pairs[2 * i + 1];
+            int s_index0 = cluster[2 * node0];
+            int s_index1 = cluster[2 * node1];
+            const DTYPE *x_spos0 = x + s_index0;
+            const DTYPE *x_spos1 = x + s_index1;
+            DTYPE *y_spos0 = y + s_index0;
+            DTYPE *y_spos1 = y + s_index1;
+            H2P_dense_mat_t Di = D[n_leaf_node + i];
+            CBLAS_GEMV(
+                CblasRowMajor, CblasNoTrans, Di->nrow, Di->ncol,
+                1.0, Di->data, Di->ld, 
+                x_spos1, 1, 1.0, y_spos0, 1
+            );
+            CBLAS_GEMV(
+                CblasRowMajor, CblasTrans, Di->nrow, Di->ncol,
+                1.0, Di->data, Di->ld, 
+                x_spos0, 1, 1.0, y_spos1, 1
+            );
+        }
     }
 }
 
@@ -339,31 +368,73 @@ void H2P_matvec_dense_blocks(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
 void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
 {
     double st, et;
-    memset(y, 0, sizeof(DTYPE) * h2pack->n_point);
+    int n_point  = h2pack->n_point;
+    int n_thread = h2pack->n_thread;
     
-    // 1. Upward sweep, calculate U_j^T * x_j
+    // 1. Reset partial y result in each thread-local buffer to 0
     st = H2P_get_wtime_sec();
-    H2P_matvec_upward_sweep(h2pack, x, y);
+    #pragma omp parallel num_threads(n_thread)
+    {
+        int tid = omp_get_thread_num();
+        DTYPE *tid_y = h2pack->tb[tid]->y;
+        memset(tid_y, 0, sizeof(DTYPE) * n_point);
+    }
+    et = H2P_get_wtime_sec();
+    h2pack->timers[8] += et - st;
+    
+    // 2. Upward sweep, calculate U_j^T * x_j
+    st = H2P_get_wtime_sec();
+    H2P_matvec_upward_sweep(h2pack, x);
     et = H2P_get_wtime_sec();
     h2pack->timers[4] += et - st;
     
-    // 2. Intermediate sweep, calculate B_{ij} * (U_j^T * x_j)
+    // 3. Intermediate sweep, calculate B_{ij} * (U_j^T * x_j)
     st = H2P_get_wtime_sec();
-    H2P_matvec_intermediate_sweep(h2pack, x, y);
+    H2P_matvec_intermediate_sweep(h2pack, x);
     et = H2P_get_wtime_sec();
     h2pack->timers[5] += et - st;
     
-    // 3. Downward sweep, calculate U_i * (B_{ij} * (U_j^T * x_j))
+    // 4. Downward sweep, calculate U_i * (B_{ij} * (U_j^T * x_j))
     st = H2P_get_wtime_sec();
-    H2P_matvec_downward_sweep(h2pack, x, y);
+    H2P_matvec_downward_sweep(h2pack, x);
     et = H2P_get_wtime_sec();
     h2pack->timers[6] += et - st;
     
-    // 4. Dense blocks, calculate D_i * x_i
+    // 5. Dense blocks, calculate D_i * x_i
     st = H2P_get_wtime_sec();
-    H2P_matvec_dense_blocks(h2pack, x, y);
+    H2P_matvec_dense_blocks(h2pack, x);
     et = H2P_get_wtime_sec();
     h2pack->timers[7] += et - st;
+    
+    // 6. Reduce sum partial y results
+    st = H2P_get_wtime_sec();
+    #pragma omp parallel num_threads(n_thread)
+    {
+        int tid = omp_get_thread_num();
+        int rem = n_point % n_thread;
+        int bs0 = n_point / n_thread;
+        int bs1 = bs0 + 1;
+        int spos, epos;
+        if (tid < rem)
+        {
+            spos = bs1 * tid;
+            epos = spos + bs1;
+        } else {
+            spos = tid * bs0 + rem;
+            epos = spos + bs0;
+        }
+        
+        DTYPE *y_src = h2pack->tb[0]->y;
+        memcpy(y + spos, y_src + spos, sizeof(DTYPE) * (epos - spos));
+        for (int tid = 1; tid < n_thread; tid++)
+        {
+            y_src = h2pack->tb[tid]->y;
+            #pragma omp simd
+            for (int i = spos; i < epos; i++) y[i] += y_src[i];
+        }
+    }
+    et = H2P_get_wtime_sec();
+    h2pack->timers[8] += et - st;
     
     h2pack->n_matvec++;
 }

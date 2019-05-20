@@ -126,7 +126,7 @@ void H2P_generate_proxy_point(
     // 1. Initialize proxy point arrays
     H2P_dense_mat_t *pp = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * (max_level + 1));
     assert(pp != NULL);
-    for (int i = 0; i < max_level; i++) pp[i] = NULL;
+    for (int i = 0; i <= max_level; i++) pp[i] = NULL;
     
     // 2. Initialize temporary arrays. The numbers of Nx and Ny points are empirical values
     int Nx_size = 1500;
@@ -262,13 +262,14 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     int   n_leaf_node    = h2pack->n_leaf_node;
     int   max_child      = h2pack->max_child;
     int   max_level      = h2pack->max_level;
+    int   max_adm_height = h2pack->max_adm_height;
     int   min_adm_level  = h2pack->min_adm_level;
     int   stop_type      = h2pack->QR_stop_type;
     int   *children      = h2pack->children;
     int   *n_child       = h2pack->n_child;
-    int   *level_n_node  = h2pack->level_n_node;
-    int   *level_nodes   = h2pack->level_nodes;
-    int   *leaf_nodes    = h2pack->height_nodes;
+    int   *height_n_node = h2pack->height_n_node;
+    int   *height_nodes  = h2pack->height_nodes;
+    int   *node_level    = h2pack->node_level;
     int   *cluster       = h2pack->cluster;
     DTYPE *coord         = h2pack->coord;
     DTYPE *enbox         = h2pack->enbox;
@@ -293,63 +294,72 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     H2P_dense_mat_t *U = h2pack->U;
     H2P_int_vec_t   *J = h2pack->J;
     
-    // 2. Skeleton row sets for leaf nodes: all points in that box
-    for (int i = 0; i < n_leaf_node; i++)
-    {
-        int node = leaf_nodes[i];
-        int s_index = cluster[node * 2];
-        int e_index = cluster[node * 2 + 1];
-        int n_point = e_index - s_index + 1;
-        H2P_int_vec_init(&J[node], n_point);
-        for (int j = 0; j < n_point; j++)
-            J[node]->data[j] = s_index + j;
-        J[node]->length = n_point;
-    }
-    
-    // 3. Hierarchical construction level by level. min_adm_level is the 
-    //    highest level that still has admissible blocks, so we only need 
-    //    to compress matrix blocks to that level since higher level blocks 
+    // 2. Hierarchical construction height by height. max_adm_height is the 
+    //    highest position that still has admissible blocks, so we only need 
+    //    to compress matrix blocks to that height since higher blocks 
     //    are inadmissible and cannot be compressed.
-    int flag = 0;
+    int flag = 0, max_n_pp = 0;
+    for (int i = 2; i <= max_level; i++) 
+        max_n_pp = MAX(max_n_pp, pp[i]->nrow);
     H2P_int_vec_t   col_idx, sub_idx;
     H2P_dense_mat_t A_block, box_center;
     H2P_int_vec_init(&col_idx, 0);
     H2P_int_vec_init(&sub_idx, 0);
-    H2P_dense_mat_init(&A_block, 64, 64);
+    H2P_dense_mat_init(&A_block, h2pack->max_leaf_points, max_n_pp);
     H2P_dense_mat_init(&box_center, dim, 1);
-    for (int i = max_level; i >= min_adm_level; i--)
+    for (int i = 0; i <= max_adm_height; i++)
     {
-        int *level_i_nodes = level_nodes + i * n_leaf_node;
+        int *height_i_nodes = height_nodes + i * n_leaf_node;
         
-        // (1) Update row indices associated with clusters at i-th level
-        for (int j = 0; j < level_n_node[i]; j++)
+        // (1) Update row indices associated with clusters at height i
+        if (i == 0)
         {
-            int node = level_i_nodes[j];
-            int n_child_node = n_child[node];
-            int *child_nodes = children + node * max_child;
-            int J_child_size = 0;
-            for (int i_child = 0; i_child < n_child_node; i_child++)
+            // Leaf nodes, use all points
+            for (int j = 0; j < height_n_node[i]; j++)
             {
-                int i_child_node = child_nodes[i_child];
-                J_child_size += J[i_child_node]->length;
+                int node = height_i_nodes[j];
+                int s_index = cluster[node * 2];
+                int e_index = cluster[node * 2 + 1];
+                int n_point = e_index - s_index + 1;
+                H2P_int_vec_init(&J[node], n_point);
+                for (int j = 0; j < n_point; j++)
+                    J[node]->data[j] = s_index + j;
+                J[node]->length = n_point;
             }
-            if (J[node] == NULL) H2P_int_vec_init(&J[node], J_child_size);
-            else H2P_int_vec_set_capacity(J[node], J[node]->length + J_child_size);
-            for (int i_child = 0; i_child < n_child_node; i_child++)
+        } else {
+            // Non-leaf nodes, gather row indices from children nodes
+            for (int j = 0; j < height_n_node[i]; j++)
             {
-                int i_child_node = child_nodes[i_child];
-                H2P_int_vec_concatenate(J[node], J[i_child_node]);
+                int node = height_i_nodes[j];
+                int level = node_level[node];
+                if (level < min_adm_level) continue;
+                int n_child_node = n_child[node];
+                int *child_nodes = children + node * max_child;
+                int J_child_size = 0;
+                for (int i_child = 0; i_child < n_child_node; i_child++)
+                {
+                    int i_child_node = child_nodes[i_child];
+                    J_child_size += J[i_child_node]->length;
+                }
+                H2P_int_vec_init(&J[node], J_child_size);
+                for (int i_child = 0; i_child < n_child_node; i_child++)
+                {
+                    int i_child_node = child_nodes[i_child];
+                    H2P_int_vec_concatenate(J[node], J[i_child_node]);
+                }
             }
         }
-
-        // (2) Compression at the i-th level
-        for (int j = 0; j < level_n_node[i]; j++)
+        
+        // (2) Compression at height i
+        for (int j = 0; j < height_n_node[i]; j++)
         {
-            int node = level_i_nodes[j];
+            int node  = height_i_nodes[j];
+            int level = node_level[node];
+            if (level < min_adm_level) continue;
             DTYPE *node_box = enbox + node * 2 * dim;
             for (int k = 0; k < dim; k++)
                 box_center->data[k] = node_box[k] + 0.5 * node_box[dim + k];
-            H2P_eval_kernel_matrix_UJ_proxy(kernel, dim, coord, J[node], box_center, pp[i], A_block);
+            H2P_eval_kernel_matrix_UJ_proxy(kernel, dim, coord, J[node], box_center, pp[level], A_block);
             H2P_ID_compress(A_block, stop_type, stop_param, &U[node], sub_idx);
             for (int k = 0; k < U[node]->ncol; k++)
                 J[node]->data[k] = J[node]->data[sub_idx->data[k]];
@@ -357,7 +367,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
         }
     }
 
-    // 4. Initialize other not touched U J
+    // 3. Initialize other not touched U J
     for (int i = 0; i < h2pack->n_UJ; i++)
     {
         if (h2pack->U[i] == NULL)
@@ -377,7 +387,6 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     H2P_dense_mat_destroy(A_block);
     H2P_dense_mat_destroy(box_center);
 }
-
 
 // Build H2 generator matrices
 // Input parameter:

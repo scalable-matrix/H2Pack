@@ -17,6 +17,7 @@ struct H2P_partition_vars
     int n_leaf_node;    // Number of leaf nodes
     int curr_leaf_idx;  // Index of this leaf node
     int min_adm_level;  // Minimum level of reduced admissible pair
+    int max_adm_height; // Maximum height of reduced admissible pair
     H2P_int_vec_t r_inadm_pairs;  // Reduced inadmissible pairs
     H2P_int_vec_t r_adm_pairs;    // Reduced admissible pairs
 };
@@ -320,6 +321,7 @@ void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0
     int   *children     = h2pack->children;
     int   *n_child      = h2pack->n_child;
     int   *node_level   = h2pack->node_level;
+    int   *node_height  = h2pack->node_height;
     DTYPE *enbox        = h2pack->enbox;
     
     if (n0 == n1)
@@ -354,6 +356,8 @@ void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0
         int n_child_n1 = n_child[n1];
         int level_n0   = node_level[n0];
         int level_n1   = node_level[n1];
+        int height_n0  = node_height[n0];
+        int height_n1  = node_height[n1];
         
         // 1. Admissible pair and the level of both node is larger than 
         //    the minimum level of reduced admissible box pair 
@@ -364,8 +368,10 @@ void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0
         {
             H2P_int_vec_push_back(partition_vars.r_adm_pairs, n0);
             H2P_int_vec_push_back(partition_vars.r_adm_pairs, n1);
-            partition_vars.min_adm_level = MIN(partition_vars.min_adm_level, level_n0);
-            partition_vars.min_adm_level = MIN(partition_vars.min_adm_level, level_n1);
+            partition_vars.min_adm_level  = MIN(partition_vars.min_adm_level,  level_n0);
+            partition_vars.min_adm_level  = MIN(partition_vars.min_adm_level,  level_n1);
+            partition_vars.max_adm_height = MAX(partition_vars.max_adm_height, height_n0);
+            partition_vars.max_adm_height = MAX(partition_vars.max_adm_height, height_n1);
             return;
         }
         
@@ -495,10 +501,12 @@ void H2P_partition_points(
     // TODO: Change min_adm_level according to the tree structure
     // If h2pack->min_adm_level != 0, partition_vars.min_adm_level is useless
     h2pack->min_adm_level = 0;
-    partition_vars.min_adm_level = h2pack->max_level;
+    partition_vars.min_adm_level  = h2pack->max_level;
+    partition_vars.max_adm_height = 0;
     H2P_calc_reduced_adm_pairs(h2pack, ALPHA_H2, h2pack->root_idx, h2pack->root_idx);
     if (h2pack->min_adm_level == 0)
         h2pack->min_adm_level = partition_vars.min_adm_level;
+    h2pack->max_adm_height = partition_vars.max_adm_height;
     
     // 5. Copy reduced (in)admissible pairs from H2P_int_vec to h2pack arrays
     h2pack->n_r_inadm_pair = partition_vars.r_inadm_pairs->length / 2;

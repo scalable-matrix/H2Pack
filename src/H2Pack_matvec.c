@@ -19,16 +19,18 @@
 // H2 representation matvec upward sweep, calculate U_j^T * x_j
 void H2P_matvec_upward_sweep(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
 {
-    int max_child     = h2pack->max_child;
-    int n_node        = h2pack->n_node;
-    int n_leaf_node   = h2pack->n_leaf_node;
-    int max_level     = h2pack->max_level;
-    int min_adm_level = h2pack->min_adm_level;
-    int *children     = h2pack->children;
-    int *n_child      = h2pack->n_child;
-    int *level_n_node = h2pack->level_n_node;
-    int *level_nodes  = h2pack->level_nodes;
-    int *cluster      = h2pack->cluster;
+    int max_child      = h2pack->max_child;
+    int n_node         = h2pack->n_node;
+    int n_leaf_node    = h2pack->n_leaf_node;
+    int max_level      = h2pack->max_level;
+    int min_adm_level  = h2pack->min_adm_level;
+    int max_adm_height = h2pack->max_adm_height;
+    int *children      = h2pack->children;
+    int *n_child       = h2pack->n_child;
+    int *height_n_node = h2pack->height_n_node;
+    int *node_level    = h2pack->node_level;
+    int *height_nodes  = h2pack->height_nodes;
+    int *cluster       = h2pack->cluster;
     
     // 1. Initialize y0 on the first run
     if (h2pack->y0 == NULL)
@@ -55,12 +57,14 @@ void H2P_matvec_upward_sweep(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
     // 2. Upward sweep
     H2P_dense_mat_t *y0 = h2pack->y0;
     H2P_dense_mat_t *U  = h2pack->U;
-    for (int i = max_level; i >= min_adm_level; i--)
+    for (int i = 0; i <= max_adm_height; i++)
     {
-        int *level_i_nodes = level_nodes + i * n_leaf_node;
-        for (int j = 0; j < level_n_node[i]; j++)
+        int *height_i_nodes = height_nodes + i * n_leaf_node;
+        for (int j = 0; j < height_n_node[i]; j++)
         {
-            int node = level_i_nodes[j];
+            int node  = height_i_nodes[j];
+            int level = node_level[node];
+            if (level < min_adm_level) continue;
             int n_child_node = n_child[node];
             int *child_nodes = children + node * max_child;
             if (n_child_node == 0)

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <math.h>
+#include <omp.h>
 
 #include "H2Pack_utils.h"
 #include "H2Pack_config.h"
@@ -520,6 +521,12 @@ void H2P_partition_points(
     memcpy(h2pack->r_adm_pairs,   partition_vars.r_adm_pairs->data,   r_adm_pair_msize);
     H2P_int_vec_destroy(partition_vars.r_inadm_pairs);
     H2P_int_vec_destroy(partition_vars.r_adm_pairs);
+    
+    // 6. Initialize thread-local buffer
+    h2pack->tb = (H2P_thread_buf_t*) malloc(sizeof(H2P_thread_buf_t) * h2pack->n_thread);
+    assert(h2pack->tb != NULL);
+    for (int i = 0; i < h2pack->n_thread; i++)
+        H2P_thread_buf_init(&h2pack->tb[i], n_point);
     
     et = H2P_get_wtime_sec();
     h2pack->timers[0] = et - st;

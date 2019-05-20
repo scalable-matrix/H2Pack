@@ -20,6 +20,7 @@ typedef DTYPE (*kernel_func_ptr) (const int dim, const DTYPE *x, const DTYPE *y)
 struct H2Pack
 {
     // H2 matrix tree flatten representation
+    int   n_thread;         // Number of threads
     int   dim;              // Dimension of point coordinate
     int   QR_stop_type;     // Partial QR stop criteria
     int   QR_stop_rank;     // Partial QR maximum rank
@@ -61,6 +62,7 @@ struct H2Pack
     H2P_dense_mat_t *y0;    // Temporary arrays used in matvec
     H2P_dense_mat_t *y1;    // Temporary arrays used in matvec
     kernel_func_ptr kernel; // Pointer to the kernel function
+    H2P_thread_buf_t *tb;   // Thread-local buffer
     
     // Statistic data
     size_t mem_bytes;       // Memory usage in bytes

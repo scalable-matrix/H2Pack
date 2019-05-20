@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <omp.h>
 
 #include "H2Pack_config.h"
 #include "H2Pack_typedef.h"
@@ -16,6 +17,7 @@ void H2P_init(
     H2Pack_t h2pack = (H2Pack_t) malloc(sizeof(struct H2Pack));
     assert(h2pack != NULL);
     
+    h2pack->n_thread  = omp_get_max_threads();
     h2pack->dim       = dim;
     h2pack->mem_bytes = 0;
     h2pack->max_child = 1 << dim;
@@ -49,6 +51,7 @@ void H2P_init(
     h2pack->D             = NULL;
     h2pack->y0            = NULL;
     h2pack->y1            = NULL;
+    h2pack->tb            = NULL;
     
     *h2pack_ = h2pack;
 }
@@ -92,6 +95,10 @@ void H2P_destroy(H2Pack_t h2pack)
     }
     free(h2pack->y0);
     free(h2pack->y1);
+    
+    for (int i = 0; i < h2pack->n_thread; i++)
+        H2P_thread_buf_destroy(h2pack->tb[i]);
+    free(h2pack->tb);
 }
 
 // Print statistic info of a H2Pack structure

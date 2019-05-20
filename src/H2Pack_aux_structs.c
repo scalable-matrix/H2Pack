@@ -26,6 +26,7 @@ void H2P_tree_node_init(H2P_tree_node_t *node_, const int dim)
 // Recursively destroy a H2P_tree_node node and its children nodes
 void H2P_tree_node_destroy(H2P_tree_node_t node)
 {
+    if (node == NULL) return;
     for (int i = 0; i < node->n_child; i++)
     {
         H2P_tree_node_t child_i = (H2P_tree_node_t) node->children[i];
@@ -222,6 +223,34 @@ void H2P_dense_mat_print(H2P_dense_mat_t mat)
         for (int icol = 0; icol < mat->ncol; icol++) printf("% .10lf  ", mat_row[icol]);
         printf("\n");
     }
+}
+
+// ------------------------------------------------------------------- // 
+
+
+// ========================== H2P_thread_buf ========================= //
+
+void H2P_thread_buf_init(H2P_thread_buf_t *thread_buf_, const int n_point)
+{
+    H2P_thread_buf_t thread_buf = (H2P_thread_buf_t) malloc(sizeof(struct H2P_thread_buf));
+    assert(thread_buf != NULL);
+    H2P_dense_mat_init(&thread_buf->mat0, 1024, 1);
+    H2P_dense_mat_init(&thread_buf->mat1, 1024, 1);
+    H2P_int_vec_init(&thread_buf->idx0, 1024);
+    H2P_int_vec_init(&thread_buf->idx1, 1024);
+    thread_buf->y = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * n_point);
+    assert(thread_buf->y != NULL);
+    *thread_buf_ = thread_buf;
+}
+
+void H2P_thread_buf_destroy(H2P_thread_buf_t thread_buf)
+{
+    if (thread_buf == NULL) return;
+    H2P_dense_mat_destroy(thread_buf->mat0);
+    H2P_dense_mat_destroy(thread_buf->mat1);
+    H2P_int_vec_destroy(thread_buf->idx0);
+    H2P_int_vec_destroy(thread_buf->idx1);
+    H2P_free_aligned(thread_buf->y);
 }
 
 // ------------------------------------------------------------------- // 

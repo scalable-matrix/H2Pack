@@ -159,6 +159,32 @@ void H2P_dense_mat_print(H2P_dense_mat_t mat);
 // ------------------------------------------------------------------------------ // 
 
 
+// ================ Thread-local buffer used in build and matvec ================ //
+
+struct H2P_thread_buf
+{
+    H2P_int_vec_t   idx0;   // Used in H2P_build_B, H2P_build_D
+    H2P_int_vec_t   idx1;   // Used in H2P_build_D
+    H2P_dense_mat_t mat0;   // Used in H2P_build_UJ_proxy
+    H2P_dense_mat_t mat1;   // Used in H2P_build_UJ_proxy, H2P_matvec_downward_sweep
+    DTYPE *y;               // Used in H2P_matvec
+};
+typedef struct H2P_thread_buf* H2P_thread_buf_t;
+
+// Initialize a H2P_thread_buf structure
+// Input parameter:
+//   n_point : Number of points for the kernel matrix
+// Output parameter:
+//   thread_buf_ : Initialized H2P_thread_buf structure
+void H2P_thread_buf_init(H2P_thread_buf_t *thread_buf_, const int n_point);
+
+// Destroy a H2P_thread_buf structure
+// Input parameter:
+//   thread_buf : H2P_thread_buf structure to be destroyed 
+void H2P_thread_buf_destroy(H2P_thread_buf_t thread_buf);
+
+// ------------------------------------------------------------------------------ // 
+
 #ifdef __cplusplus
 }
 #endif

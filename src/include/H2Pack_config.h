@@ -13,8 +13,6 @@
 #define DABS        fabs          // Abs function
 #define DFLOOR      floor         // Floor function
 #define DSQRT       sqrt          // Sqrt function
-#define CBLAS_NRM2  cblas_dnrm2   // CBLAS 2-norm function
-#define CBLAS_SCAL  cblas_dscal   // CBLAS vector scaling function
 #define CBLAS_GEMV  cblas_dgemv   // CBLAS matrix-vector multiplication
 #define CBLAS_GER   cblas_dger    // CBLAS matrix rank-1 update
 #define CBLAS_TRSM  cblas_dtrsm   // CBLAS triangle solve
@@ -25,8 +23,6 @@
 #define DABS        fabsf
 #define DFLOOR      floorf
 #define DSQRT       sqrtf    
-#define CBLAS_NRM2  cblas_snrm2
-#define CBLAS_SCAL  cblas_sscal
 #define CBLAS_GEMV  cblas_sgemv
 #define CBLAS_GER   cblas_sger
 #define CBLAS_TRSM  cblas_strsm

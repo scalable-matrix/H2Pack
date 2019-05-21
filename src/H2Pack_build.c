@@ -140,6 +140,7 @@ void H2P_generate_proxy_point(
     H2P_dense_mat_init(&min_dist, Nx_size, 1);
     H2P_int_vec_init(&skel_idx, Nx_size);
     srand48(time(NULL));
+    int nthreads = omp_get_max_threads();
 
     // 3. Construct proxy points on each level
     DTYPE pow_2_level = 0.5;
@@ -183,11 +184,11 @@ void H2P_generate_proxy_point(
 
         // (3) Use ID to select skeleton points in Nx first, then use the
         //     skeleton Nx points to select skeleton Ny points
-        DTYPE rel_tol = 1e-15;
-        H2P_ID_compress(tmpA, QR_REL_NRM, &rel_tol, NULL, skel_idx);
+        DTYPE rel_tol = 1e-14;
+        H2P_ID_compress(tmpA, QR_REL_NRM, &rel_tol, NULL, skel_idx, nthreads);
         H2P_dense_mat_select_rows(Nx_points, skel_idx);
         H2P_eval_kernel_matrix_direct(kernel, dim, Ny_points, Nx_points, tmpA);
-        H2P_ID_compress(tmpA, QR_REL_NRM, &rel_tol, NULL, skel_idx);
+        H2P_ID_compress(tmpA, QR_REL_NRM, &rel_tol, NULL, skel_idx, nthreads);
         H2P_dense_mat_select_rows(Ny_points, skel_idx);
         
         // (4) Make the skeleton Ny points dense and then use them as proxy points
@@ -363,7 +364,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                 for (int k = 0; k < dim; k++)
                     box_center->data[k] = node_box[k] + 0.5 * node_box[dim + k];
                 H2P_eval_kernel_matrix_UJ_proxy(kernel, dim, coord, J[node], box_center, pp[level], A_block);
-                H2P_ID_compress(A_block, stop_type, stop_param, &U[node], sub_idx);
+                H2P_ID_compress(A_block, stop_type, stop_param, &U[node], sub_idx, 1);
                 for (int k = 0; k < U[node]->ncol; k++)
                     J[node]->data[k] = J[node]->data[sub_idx->data[k]];
                 J[node]->length = U[node]->ncol;

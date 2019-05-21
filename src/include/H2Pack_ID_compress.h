@@ -19,13 +19,14 @@ extern "C" {
 //   A          : Target matrix, stored in column major
 //   stop_type  : Partial QR stop criteria: QR_RANK, QR_REL_NRM, or QR_ABS_NRM
 //   stop_param : Pointer to partial QR stop parameter
+//   nthreads   : Number of threads used in this function
 // Output parameters:
 //   U_ : Projection matrix, will be initialized in this function. If U_ == NULL,
 //        the projection matrix will not be calculated.
 //   J  : Row indices of the skeleton A
 void H2P_ID_compress(
     H2P_dense_mat_t A, const int stop_type, void *stop_param,
-    H2P_dense_mat_t *U_, H2P_int_vec_t J
+    H2P_dense_mat_t *U_, H2P_int_vec_t J, const int nthreads
 );
 
 #ifdef __cplusplus

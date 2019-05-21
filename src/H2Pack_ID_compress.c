@@ -7,11 +7,20 @@
 
 #ifdef USE_MKL
 #include <mkl.h>
+#define BLAS_SET_NUM_THREADS mkl_set_num_threads
 #endif
 
 #include "H2Pack_config.h"
 #include "H2Pack_utils.h"
 #include "H2Pack_aux_structs.h"
+
+static inline DTYPE CBLAS_NRM2(const int n, const DTYPE *x)
+{
+    DTYPE res = 0.0;
+    #pragma omp simd
+    for (int i = 0; i < n; i++) res += x[i] * x[i];
+    return DSQRT(res);
+}
 
 // Partial pivoting QR decomposition, simplified output version
 // The partial pivoting QR decomposition is of form:
@@ -23,13 +32,14 @@
 //   tol_rank : QR stopping parameter, maximum column rank, 
 //   tol_norm : QR stopping parameter, maximum column 2-norm
 //   rel_norm : If tol_norm is relative to the largest column 2-norm in A
+//   nthreads : Number of threads used in this function
 // Output parameters:
 //   A : Matrix R: [R11, R12; 0, R22]
 //   p : Matrix A column permutation array, A(:, p) = A * P
 //   r : Dimension of upper-triangular matrix R11
 void H2P_partial_pivot_QR(
     H2P_dense_mat_t A, const int tol_rank, const DTYPE tol_norm, 
-    const int rel_norm, int *p, int *r
+    const int rel_norm, int *p, int *r, const int nthreads
 )
 {
     DTYPE *R = A->data;
@@ -38,16 +48,23 @@ void H2P_partial_pivot_QR(
     int ldR  = A->ld;
     int max_iter = MIN(nrow, ncol);
     
+    BLAS_SET_NUM_THREADS(nthreads);
+    
     DTYPE *col_norm = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * ncol);
     DTYPE *h_R_mv   = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * ncol);
     assert(col_norm != NULL && h_R_mv != NULL);
+    
+    // 1. Find a column with largest 2-norm
+    #pragma omp parallel for num_threads(nthreads) schedule(dynamic)
+    for (int j = 0; j < ncol; j++)
+    {
+        p[j] = j;
+        col_norm[j] = CBLAS_NRM2(nrow, R + j * ldR);
+    }
     DTYPE norm_p = 0.0;
     int pivot = 0;
     for (int j = 0; j < ncol; j++)
     {
-        p[j] = j;
-        col_norm[j] = CBLAS_NRM2(nrow, R + j * ldR, 1);
-        // 1. Find a column with largest 2-norm
         if (col_norm[j] > norm_p)
         {
             norm_p = col_norm[j];
@@ -92,10 +109,11 @@ void H2P_partial_pivot_QR(
         int h_len    = nrow - iter;
         DTYPE *h_vec = R + iter * ldR + iter;
         DTYPE sign   = (h_vec[0] > 0.0) ? 1.0 : -1.0;
-        DTYPE h_norm = CBLAS_NRM2(h_len, h_vec, 1);
+        DTYPE h_norm = CBLAS_NRM2(h_len, h_vec);
         h_vec[0] = h_vec[0] + sign * h_norm;
-        DTYPE inv_h_norm = 1.0 / CBLAS_NRM2(h_len, h_vec, 1);
-        CBLAS_SCAL(h_len, inv_h_norm, h_vec, 1);
+        DTYPE inv_h_norm = 1.0 / CBLAS_NRM2(h_len, h_vec);
+        #pragma omp simd
+        for (int j = 0; j < h_len; j++) h_vec[j] *= inv_h_norm;
         
         // 4. Eliminate the iter-th sub-column and orthogonalize columns 
         //    right to the iter-th column
@@ -118,6 +136,7 @@ void H2P_partial_pivot_QR(
         int h_len_m1 = h_len - 1;
         pivot  = iter + 1;
         norm_p = 0.0;
+        #pragma omp parallel for num_threads(nthreads) schedule(dynamic)
         for (int j = iter + 1; j < ncol; j++)
         {
             // Skip small columns
@@ -135,11 +154,13 @@ void H2P_partial_pivot_QR(
             if (tmp <= 1e-10)  // TODO: Find a better threshold?
             {
                 DTYPE *R_col_j = R + j * ldR + (iter + 1);
-                col_norm[j] = CBLAS_NRM2(h_len_m1, R_col_j, 1);
+                col_norm[j] = CBLAS_NRM2(h_len_m1, R_col_j);
             } else {
                 col_norm[j] = DSQRT(tmp);
             }
-            
+        }
+        for (int j = iter + 1; j < ncol; j++)
+        {
             if (col_norm[j] > norm_p)
             {
                 norm_p = col_norm[j];
@@ -160,10 +181,11 @@ void H2P_partial_pivot_QR(
 //   A          : Target matrix, stored in column major
 //   stop_type  : Partial QR stop criteria: QR_RANK, QR_REL_NRM, or QR_ABS_NRM
 //   stop_param : Pointer to partial QR stop parameter
+//   nthreads   : Number of threads used in this function
 // Output parameters:
 //   A : Matrix R: [R11, R12]
 //   p : Matrix A column permutation array, A(:, p) = A * P
-void H2P_ID_QR(H2P_dense_mat_t A, const int stop_type, void *stop_param, int *p)
+void H2P_ID_QR(H2P_dense_mat_t A, const int stop_type, void *stop_param, int *p, const int nthreads)
 {
     // Parse partial QR stop criteria and perform partial QR
     int r, tol_rank, rel_norm;
@@ -189,7 +211,7 @@ void H2P_ID_QR(H2P_dense_mat_t A, const int stop_type, void *stop_param, int *p)
         tol_norm = param[0];
         rel_norm = 0;
     }
-    H2P_partial_pivot_QR(A, tol_rank, tol_norm, rel_norm, p, &r);
+    H2P_partial_pivot_QR(A, tol_rank, tol_norm, rel_norm, p, &r, nthreads);
     
     // Special case: each column's 2-norm is smaller than the threshold
     if (r == 0)
@@ -204,38 +226,38 @@ void H2P_ID_QR(H2P_dense_mat_t A, const int stop_type, void *stop_param, int *p)
 }
 
 
-// Quick sort an array in ascending order
+// Quick sort two array in ascending order 
 // Input parameters:
-//  x    : Array to be sorted
-//  idx  : idx[i] is the original index of x[i]
-//  l, r : Sort x[l : r]
+//  key  : Key array
+//  val  : Value array
+//  l, r : Sort range [l : r]
 // Output parameters:
-//  x    : Sorted array
-//  idx  : idx[i] is the original index of x[i]
-static void H2P_qsortAscend(int *x, int *idx, const int l, const int r)
+//  key  : Sorted key array
+//  val  : Sorted value array
+static void H2P_qsort_key_value(int *key, int *val, const int l, const int r)
 {
     int i = l, j = r, tmp;
-    int mid = x[(i + j) / 2];
+    int mid = key[(i + j) / 2];
     while (i <= j)
     {
-        while (x[i] < mid) i++;
-        while (x[j] > mid) j--;
+        while (key[i] < mid) i++;
+        while (key[j] > mid) j--;
         if (i <= j)
         {
-            tmp =   x[i];   x[i] =   x[j];   x[j] = tmp;
-            tmp = idx[i]; idx[i] = idx[j]; idx[j] = tmp;
+            tmp = key[i]; key[i] = key[j]; key[j] = tmp;
+            tmp = val[i]; val[i] = val[j]; val[j] = tmp;
             i++; j--;
         }
     }
-    if (i < r) H2P_qsortAscend(x, idx, i, r);
-    if (j > l) H2P_qsortAscend(x, idx, l, j);
+    if (i < r) H2P_qsort_key_value(key, val, i, r);
+    if (j > l) H2P_qsort_key_value(key, val, l, j);
 }
 
 // Interpolative Decomposition (ID) using partial QR over rows of a target 
 // matrix. Partial pivoting QR may need to be upgraded to SRRQR later. 
 void H2P_ID_compress(
     H2P_dense_mat_t A, const int stop_type, void *stop_param,
-    H2P_dense_mat_t *U_, H2P_int_vec_t J
+    H2P_dense_mat_t *U_, H2P_int_vec_t J, const int nthreads
 )
 {
     // 1. Partial pivoting QR for A^T
@@ -246,7 +268,7 @@ void H2P_ID_compress(
     A->nrow = ncol;
     A->ncol = nrow;
     H2P_int_vec_set_capacity(J, nrow);
-    H2P_ID_QR(A, stop_type, stop_param, J->data);
+    H2P_ID_QR(A, stop_type, stop_param, J->data, nthreads);
     H2P_dense_mat_t R = A; // Note: the output R stored in A is still stored in column major style
     int r = A->nrow;  // Obtained rank
     J->length = r;
@@ -262,7 +284,7 @@ void H2P_ID_compress(
         p0[J->data[i]] = i;
         i0[i]    = i;
     }
-    H2P_qsortAscend(J->data, i0, 0, r - 1);
+    H2P_qsort_key_value(J->data, i0, 0, r - 1);
     for (int i = 0; i < nrow; i++) i1[i0[i]] = i;
     for (int i = 0; i < nrow; i++) p1[i] = i1[p0[i]];
     
@@ -291,6 +313,7 @@ void H2P_ID_compress(
             int ncol_R12 = nrow - r;
             // (2) Solve E = inv(R11) * R12, stored in R12 in column major style
             //     --> equals to what we need: E^T stored in row major style
+            BLAS_SET_NUM_THREADS(nthreads);
             CBLAS_TRSM(
                 CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit,
                 nrow_R12, ncol_R12, 1.0, R11, R->ld, R12, R->ld

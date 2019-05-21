@@ -4,6 +4,7 @@
 #include <math.h>
 #include <mkl.h>
 #include <time.h>
+#include <omp.h>
 
 #include "H2Pack_utils.h"
 #include "H2Pack_aux_structs.h"
@@ -49,7 +50,6 @@ int main()
         }
     }
     A0_fnorm = sqrt(A0_fnorm);
-    mkl_set_num_threads(1);
     
     FILE *ouf = fopen("A.csv", "w");
     for (int irow = 0; irow < nrow; irow++)
@@ -70,7 +70,8 @@ int main()
     DTYPE tol_norm;
     printf("norm_rel_tol: ");
     scanf("%lf", &tol_norm);
-    H2P_ID_compress(A, QR_REL_NRM, &tol_norm, &U, J);  // Warm up
+    int nthreads = omp_get_max_threads();
+    H2P_ID_compress(A, QR_REL_NRM, &tol_norm, &U, J, nthreads);  // Warm up
     double ut = 0.0;
     for (int i = 0; i < 10; i++)
     {
@@ -79,7 +80,7 @@ int main()
         A->ncol = ncol;
         A->ld = ncol;
         double st = H2P_get_wtime_sec();
-        H2P_ID_compress(A, QR_REL_NRM, &tol_norm, &U, J);
+        H2P_ID_compress(A, QR_REL_NRM, &tol_norm, &U, J, nthreads);
         double et = H2P_get_wtime_sec();
         ut += et - st;
     }

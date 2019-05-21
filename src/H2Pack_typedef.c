@@ -105,7 +105,7 @@ void H2P_destroy(H2Pack_t h2pack)
 void H2P_print_statistic(H2Pack_t h2pack)
 {
     printf("==================== H2Pack H2 tree info ====================\n");
-    printf("  * Number of points               : %d\n", h2pack->n_point);
+    printf("  * Number of points (npts)        : %d\n", h2pack->n_point);
     printf("  * Height of H2 tree              : %d\n", h2pack->max_level+1);
     printf("  * Number of nodes                : %d\n", h2pack->n_node);
     printf("  * Number of nodes on each level  : ");
@@ -120,16 +120,35 @@ void H2P_print_statistic(H2Pack_t h2pack)
     printf("  * Number of reduced near pairs   : %d\n", h2pack->n_r_inadm_pair);
     
     printf("==================== H2Pack storage info ====================\n");
-    printf("  * Total size of projection matrices   (U) : %d\n", h2pack->mat_size[0]);
-    printf("  * Total size of generator matrices    (B) : %d\n", h2pack->mat_size[1]);
-    printf("  * Total size of original dense blocks (D) : %d\n", h2pack->mat_size[2]);
-    double storage_k = 0.0;
-    storage_k += (double) h2pack->mat_size[0];
-    storage_k += (double) h2pack->mat_size[1];
-    storage_k += (double) h2pack->mat_size[2];
-    storage_k /= (double) h2pack->n_point;
-    storage_k /= (double) h2pack->n_point;
-    printf("  * Compression ratio                       : %.3lf \n", 1.0 / storage_k);
+    double y0y1_MB = 0.0, tb_MB = 0.0, UBD_k = 0.0;
+    double U_MB = (double) h2pack->mat_size[0] / 1048576.0;
+    double B_MB = (double) h2pack->mat_size[1] / 1048576.0;
+    double D_MB = (double) h2pack->mat_size[2] / 1048576.0;
+    UBD_k += (double) h2pack->mat_size[0];
+    UBD_k += (double) h2pack->mat_size[1];
+    UBD_k += (double) h2pack->mat_size[2];
+    UBD_k /= (double) h2pack->n_point;
+    for (int i = 0; i < h2pack->n_thread; i++)
+    {
+        H2P_thread_buf_t tbi = h2pack->tb[i];
+        double msize0 = (double) tbi->mat0->size     + (double) tbi->mat1->size;
+        double msize1 = (double) tbi->idx0->capacity + (double) tbi->idx1->capacity;
+        tb_MB += (double) sizeof(DTYPE) * msize0 + (double) sizeof(int) * msize1;
+        tb_MB += (double) sizeof(DTYPE) * (double) h2pack->n_point;
+    }
+    for (int i = 0; i < h2pack->n_node; i++)
+    {
+        H2P_dense_mat_t y0i = h2pack->y0[i];
+        H2P_dense_mat_t y1i = h2pack->y1[i];
+        y0y1_MB += (double) sizeof(DTYPE) * (double) (y0i->size + y1i->ncol - 1);
+        tb_MB   += (double) sizeof(DTYPE) * (double) (y1i->size - y1i->ncol + 1);
+    }
+    y0y1_MB /= 1048576.0;
+    tb_MB   /= 1048576.0;
+    printf("  * H2 representation U, B, D : %.2lf, %.2lf, %.2lf (MB) \n", U_MB, B_MB, D_MB);
+    printf("  * Matvec auxiliary arrays   : %.2lf (MB) \n", y0y1_MB);
+    printf("  * Thread-local buffers      : %.2lf (MB) \n", tb_MB);
+    printf("  * sizeof(U + B + D) / npts  : %.3lf \n", UBD_k);
     
     printf("==================== H2Pack timing info =====================\n");
     double build_t = 0.0, matvec_t = 0.0;

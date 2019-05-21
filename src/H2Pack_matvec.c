@@ -107,12 +107,13 @@ void H2P_matvec_upward_sweep(H2Pack_t h2pack, const DTYPE *x)
 void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x)
 {
     int n_node       = h2pack->n_node;
+    int n_thread     = h2pack->n_thread;
     int n_r_adm_pair = h2pack->n_r_adm_pair;
     int *r_adm_pairs = h2pack->r_adm_pairs;
     int *node_level  = h2pack->node_level;
     int *cluster     = h2pack->cluster;
     
-    // 1. Initialize y1 on the first run
+    // 1. Initialize y1 
     if (h2pack->y1 == NULL)
     {
         h2pack->y1 = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
@@ -125,7 +126,7 @@ void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x)
     H2P_dense_mat_t *B  = h2pack->B;
     // Use ld to mark if y1[i] is visited in this intermediate sweep
     for (int i = 0; i < n_node; i++) 
-        if (y1[i] != NULL) y1[i]->ld = 1;
+        if (y1[i] != NULL) y1[i]->ld = 0;
     for (int i = 0; i < n_r_adm_pair; i++)
     {
         int node0  = r_adm_pairs[2 * i];
@@ -134,89 +135,128 @@ void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x)
         int level1 = node_level[node1];
         H2P_dense_mat_t Bi = B[i];
         
-        // (1) Initialize y1[node0] and y1[node1] if necessary
-        if (y1[node0] == NULL) H2P_dense_mat_init(&y1[node0], U[node0]->ncol, 1);
-        if (y1[node1] == NULL) H2P_dense_mat_init(&y1[node1], U[node1]->ncol, 1);
-        // Reset y1[node0] and y1[node1] to 0 to remove results from previous matvec
-        if (y1[node0]->ld == 1)
-        {
-            memset(y1[node0]->data, 0, sizeof(DTYPE) * y1[node0]->nrow);
-            y1[node0]->ld = 2;
-        }
-        if (y1[node1]->ld == 1)
-        {
-            memset(y1[node1]->data, 0, sizeof(DTYPE) * y1[node1]->nrow);
-            y1[node1]->ld = 2;
-        }
+        // The first U[node{0, 1}]->ncol elements in y1[node{0, 1}] will be used in downward
+        // sweep, store the final results in this part and use the positions behind this as
+        // thread buffers. The last position of each row is used to mark if this row has data.
+        if (y1[node0] == NULL) H2P_dense_mat_init(&y1[node0], n_thread, U[node0]->ncol + 1);
+        if (y1[node1] == NULL) H2P_dense_mat_init(&y1[node1], n_thread, U[node1]->ncol + 1);
+        y1[node0]->ld = 1;
+        y1[node1]->ld = 1;
+    }
+    
+    #pragma omp parallel for num_threads(n_thread) schedule(dynamic)
+    for (int i = 0; i < n_node; i++)
+    {
+        if (y1[i] == NULL) continue;
+        if (y1[i]->ld == 0) continue;
+        int length = y1[i]->nrow * y1[i]->ncol;
+        memset(y1[i]->data, 0, sizeof(DTYPE) * length);
     }
 
     // 2. Intermediate sweep
-    DTYPE *y = h2pack->tb[0]->y;
-    for (int i = 0; i < n_r_adm_pair; i++)
+    #pragma omp parallel num_threads(n_thread)
     {
-        int node0  = r_adm_pairs[2 * i];
-        int node1  = r_adm_pairs[2 * i + 1];
-        int level0 = node_level[node0];
-        int level1 = node_level[node1];
-        H2P_dense_mat_t Bi = B[i];
+        int tid = omp_get_thread_num();
+        DTYPE *y = h2pack->tb[tid]->y;
         
-        // (1) Two nodes are of the same level, compress on both sides
-        if (level0 == level1)
+        #pragma omp for schedule(dynamic)
+        for (int i = 0; i < n_r_adm_pair; i++)
         {
-            CBLAS_GEMV(
-                CblasRowMajor, CblasNoTrans, Bi->nrow, Bi->ncol, 
-                1.0, Bi->data, Bi->ld, 
-                y0[node1]->data, 1, 1.0, y1[node0]->data, 1
-            );
-            CBLAS_GEMV(
-                CblasRowMajor, CblasTrans, Bi->nrow, Bi->ncol, 
-                1.0, Bi->data, Bi->ld, 
-                y0[node0]->data, 1, 1.0, y1[node1]->data, 1
-            );
-        }
-        
-        // (2) node1 is a leaf node and its level is higher than node0's level, 
-        //     only compressed on node0's side, node1's side don't need the 
-        //     downward sweep and can directly accumulate result to output vector
-        if (level0 > level1)
-        {
-            int s_index = cluster[node1 * 2];
-            const DTYPE *x_spos = x + s_index;
-            DTYPE *y_spos = y + s_index;
-            CBLAS_GEMV(
-                CblasRowMajor, CblasNoTrans, Bi->nrow, Bi->ncol, 
-                1.0, Bi->data, Bi->ld, 
-                x_spos, 1, 1.0, y1[node0]->data, 1
-            );
-            CBLAS_GEMV(
-                CblasRowMajor, CblasTrans, Bi->nrow, Bi->ncol, 
-                1.0, Bi->data, Bi->ld, 
-                y0[node0]->data, 1, 1.0, y_spos, 1
-            );
-        }
-        
-        // (3) node0 is a leaf node and its level is higher than node1's level, 
-        //     only compressed on node1's side, node0's side don't need the 
-        //     downward sweep and can directly accumulate result to output vector
-        if (level0 < level1)
-        {
-            int s_index = cluster[node0 * 2];
-            const DTYPE *x_spos = x + s_index;
-            DTYPE *y_spos = y + s_index;
-            CBLAS_GEMV(
-                CblasRowMajor, CblasNoTrans, Bi->nrow, Bi->ncol, 
-                1.0, Bi->data, Bi->ld, 
-                y0[node1]->data, 1, 1.0, y_spos, 1
-            );
-            CBLAS_GEMV(
-                CblasRowMajor, CblasTrans, Bi->nrow, Bi->ncol, 
-                1.0, Bi->data, Bi->ld, 
-                x_spos, 1, 1.0, y1[node1]->data, 1
-            );
+            int node0  = r_adm_pairs[2 * i];
+            int node1  = r_adm_pairs[2 * i + 1];
+            int level0 = node_level[node0];
+            int level1 = node_level[node1];
+            H2P_dense_mat_t Bi = B[i];
+            
+            // (1) Two nodes are of the same level, compress on both sides
+            if (level0 == level1)
+            {
+                int ncol0 = y1[node0]->ncol;
+                int ncol1 = y1[node1]->ncol;
+                DTYPE *y1_dst_0 = y1[node0]->data + tid * ncol0;
+                DTYPE *y1_dst_1 = y1[node1]->data + tid * ncol1;
+                y1_dst_0[ncol0 - 1] = 1.0;
+                y1_dst_1[ncol1 - 1] = 1.0;
+                CBLAS_GEMV(
+                    CblasRowMajor, CblasNoTrans, Bi->nrow, Bi->ncol, 
+                    1.0, Bi->data, Bi->ld, 
+                    y0[node1]->data, 1, 1.0, y1_dst_0, 1
+                );
+                CBLAS_GEMV(
+                    CblasRowMajor, CblasTrans, Bi->nrow, Bi->ncol, 
+                    1.0, Bi->data, Bi->ld, 
+                    y0[node0]->data, 1, 1.0, y1_dst_1, 1
+                );
+            }
+            
+            // (2) node1 is a leaf node and its level is higher than node0's level, 
+            //     only compressed on node0's side, node1's side don't need the 
+            //     downward sweep and can directly accumulate result to output vector
+            if (level0 > level1)
+            {
+                int s_index = cluster[node1 * 2];
+                const DTYPE *x_spos = x + s_index;
+                DTYPE *y_spos = y + s_index;
+                int ncol0 = y1[node0]->ncol;
+                DTYPE *y1_dst_0 = y1[node0]->data + tid * ncol0;
+                y1_dst_0[ncol0 - 1] = 1.0;
+                CBLAS_GEMV(
+                    CblasRowMajor, CblasNoTrans, Bi->nrow, Bi->ncol, 
+                    1.0, Bi->data, Bi->ld, 
+                    x_spos, 1, 1.0, y1_dst_0, 1
+                );
+                CBLAS_GEMV(
+                    CblasRowMajor, CblasTrans, Bi->nrow, Bi->ncol, 
+                    1.0, Bi->data, Bi->ld, 
+                    y0[node0]->data, 1, 1.0, y_spos, 1
+                );
+            }
+            
+            // (3) node0 is a leaf node and its level is higher than node1's level, 
+            //     only compressed on node1's side, node0's side don't need the 
+            //     downward sweep and can directly accumulate result to output vector
+            if (level0 < level1)
+            {
+                int s_index = cluster[node0 * 2];
+                const DTYPE *x_spos = x + s_index;
+                DTYPE *y_spos = y + s_index;
+                int ncol1 = y1[node1]->ncol;
+                DTYPE *y1_dst_1 = y1[node1]->data + tid * ncol1;
+                y1_dst_1[ncol1 - 1] = 1.0;
+                CBLAS_GEMV(
+                    CblasRowMajor, CblasNoTrans, Bi->nrow, Bi->ncol, 
+                    1.0, Bi->data, Bi->ld, 
+                    y0[node1]->data, 1, 1.0, y_spos, 1
+                );
+                CBLAS_GEMV(
+                    CblasRowMajor, CblasTrans, Bi->nrow, Bi->ncol, 
+                    1.0, Bi->data, Bi->ld, 
+                    x_spos, 1, 1.0, y1_dst_1, 1
+                );
+            }
         }
     }
     
-    // 3. Initialize empty y1
+    // 3. Sum thread-local buffers
+    #pragma omp parallel for num_threads(n_thread) schedule(dynamic)
+    for (int i = 0; i < n_node; i++)
+    {
+        if (y1[i] == NULL) continue;
+        if (y1[i]->ld == 0) continue;
+        
+        int ncol = y1[i]->ncol;
+        DTYPE *dst_row = y1[i]->data;
+        for (int j = 1; j < n_thread; j++)
+        {
+            DTYPE *src_row = y1[i]->data + j * ncol;
+            if (src_row[ncol - 1] != 1.0) continue;
+            #pragma omp simd
+            for (int k = 0; k < ncol - 1; k++)
+                dst_row[k] += src_row[k];
+        }
+    }
+    
+    // 4. Initialize empty y1
     for (int node = 0; node < n_node; node++)
     {
         if (y1[node] == NULL)

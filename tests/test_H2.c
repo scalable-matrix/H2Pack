@@ -4,6 +4,7 @@
 #include <math.h>
 #include <assert.h>
 #include <time.h>
+#include <omp.h>
 
 #include <mkl.h>
 
@@ -47,7 +48,7 @@ int main()
     FILE *inf, *ouf;
     double st, et, ut, total_t;
     
-    srand(time(NULL));
+    srand48(time(NULL));
     mkl_set_num_threads(1);
     
     DTYPE *coord = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts * dim);
@@ -104,54 +105,39 @@ int main()
     printf("H2Pack generate proxy point used %.3lf (s)\n", et - st);
     H2P_build(h2pack, kernel, pp);
     
-    DTYPE *x, *y0, *y1, *A;
+    DTYPE *x, *y0, *y1;
     x  = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts);
     y0 = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts);
     y1 = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts);
-    A  = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts * npts);
-    assert(x != NULL && y0 != NULL && y1 != NULL && A != NULL);
-    for (int i = 0; i < npts; i++) 
-        x[i] = (DTYPE) rand() / (DTYPE) RAND_MAX;
+    assert(x != NULL && y0 != NULL && y1 != NULL);
+    for (int i = 0; i < npts; i++) x[i] = drand48();
     
     st = H2P_get_wtime_sec();
+    #pragma omp parallel for
     for (int i = 0; i < npts; i++)
     {
-        // Use the sorted coordinates
+        DTYPE res = 0.0;
         DTYPE *coord_i = h2pack->coord + i * dim;
-        for (int j = 0; j <= i; j++)
+        #pragma omp simd
+        for (int j = 0; j < npts; j++)
         {
             DTYPE *coord_j = h2pack->coord + j * dim;
-            DTYPE res = reciprocal_kernel(dim, coord_i, coord_j);
-            A[i * npts + j] = res;
-            A[j * npts + i] = res;
+            DTYPE Aij = reciprocal_kernel(dim, coord_i, coord_j);
+            res += Aij * x[j];
         }
+        y0[i] = res;
     }
     et = H2P_get_wtime_sec();
-    printf("Dense matrix A construction time = %.4lf (s)\n", et - st);
+    printf("Reference result obtained, time = %.4lf (s)\n", et - st);
     
     // Warm up
-    CBLAS_GEMV(
-        CblasRowMajor, CblasNoTrans, npts, npts, 
-        1.0, A, npts, x, 1, 0.0, y0, 1
-    );
     H2P_matvec(h2pack, x, y1); 
     h2pack->n_matvec = 0;
     memset(h2pack->timers + 4, 0, sizeof(double) * 5);
     
-    ut = 0.0;
     for (int i = 0; i < 10; i++) 
-    {
-        st = H2P_get_wtime_sec();
-        CBLAS_GEMV(
-            CblasRowMajor, CblasNoTrans, npts, npts, 
-            1.0, A, npts, x, 1, 0.0, y0, 1
-        );
-        et = H2P_get_wtime_sec();
-        ut += et - st;
-        
         H2P_matvec(h2pack, x, y1);
-    }
-    printf("cblas_dgemv time = %e (s)\n", ut / 10.0);
+    
     H2P_print_statistic(h2pack);
     
     DTYPE y0_norm = 0.0, err_norm = 0.0;
@@ -168,7 +154,6 @@ int main()
     H2P_free_aligned(x);
     H2P_free_aligned(y0);
     H2P_free_aligned(y1);
-    H2P_free_aligned(A);
     H2P_free_aligned(coord);
     H2P_destroy(h2pack);
 }

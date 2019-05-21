@@ -29,67 +29,81 @@ DTYPE reciprocal_kernel(const int dim, const DTYPE *x, const DTYPE *y)
     return res;
 }
 
-int main()
+int main(int argc, char **argv)
 {
     int dim  = 2;
-    int npts = 8000;
+    int npts = 10000;
     DTYPE rel_tol = 1e-6;
-    printf("dim: ");
-    scanf("%d", &dim);
-    printf("npts: ");
-    scanf("%d", &npts);
-    printf("rel_tol: ");
-    scanf("%lf", &rel_tol);
+    
+    if (argc < 2)
+    {
+        printf("Dimension = ");
+        scanf("%d", &dim);
+    } else {
+        dim = atoi(argv[1]);
+        printf("Dimension = %d\n", dim);
+    }
+    
+    if (argc < 3)
+    {
+        printf("N points  = ");
+        scanf("%d", &npts);
+    } else {
+        npts = atoi(argv[2]);
+        printf("N points  = %d\n", npts);
+    }
+    
+    if (argc < 4)
+    {
+        printf("rel_tol   = ");
+        scanf("%lf", &rel_tol);
+    } else {
+        rel_tol = atof(argv[3]);
+        printf("rel_tol   = %e\n", rel_tol);
+    }
     
     int max_child = 1 << dim;
-    int max_leaf_points = 100;
+    int max_leaf_points = 128;
     const DTYPE max_leaf_size = 0.0;
     
     FILE *inf, *ouf;
     double st, et, ut, total_t;
     
     srand48(time(NULL));
-    mkl_set_num_threads(1);
     
     DTYPE *coord = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts * dim);
     
-    DTYPE k = pow((DTYPE) npts, 1.0 / (DTYPE) dim);
-    for (int i = 0; i < npts; i++)
+    if (argc < 5)
     {
-        DTYPE *coord_i = coord + i * dim;
-        for (int j = 0; j < dim; j++)
-            coord_i[j] = k * (DTYPE) rand() / (DTYPE) RAND_MAX;
-        /*
-        DTYPE tmp = 0.0;
-        tmp += coord_i[0] * coord_i[0];
-        tmp += coord_i[1] * coord_i[1];
-        tmp += coord_i[2] * coord_i[2];
-        tmp = DSQRT(tmp);
-        coord_i[0] /= tmp;
-        coord_i[1] /= tmp;
-        coord_i[2] /= tmp;
-        */
+        DTYPE k = pow((DTYPE) npts, 1.0 / (DTYPE) dim);
+        for (int i = 0; i < npts; i++)
+        {
+            DTYPE *coord_i = coord + i * dim;
+            for (int j = 0; j < dim; j++)
+                coord_i[j] = k * (DTYPE) rand() / (DTYPE) RAND_MAX;
+        }
+        #if 0
+        ouf = fopen("coord.txt", "w");
+        for (int i = 0; i < npts; i++)
+        {
+            DTYPE *coord_i = coord + i * dim;
+            for (int j = 0; j < dim-1; j++) 
+                fprintf(ouf, "% .15lf, ", coord_i[j]);
+            fprintf(ouf, "% .15lf\n", coord_i[dim-1]);
+        }
+        fclose(ouf);
+        #endif
+    } else {
+        inf = fopen(argv[4], "r");
+        for (int i = 0; i < npts; i++)
+        {
+            DTYPE *coord_i = coord + i * dim;
+            for (int j = 0; j < dim-1; j++) 
+                fscanf(inf, "%lf,", &coord_i[j]);
+            fscanf(inf, "%lf\n", &coord_i[dim-1]);
+        }
+        fclose(inf);
     }
-    ouf = fopen("coord.txt", "w");
-    for (int i = 0; i < npts; i++)
-    {
-        DTYPE *coord_i = coord + i * dim;
-        for (int j = 0; j < dim-1; j++) 
-            fprintf(ouf, "% .15lf, ", coord_i[j]);
-        fprintf(ouf, "% .15lf\n", coord_i[dim-1]);
-    }
-    fclose(ouf);
-    /*
-    inf = fopen("coord.txt", "r");
-    for (int i = 0; i < npts; i++)
-    {
-        DTYPE *coord_i = coord + i * dim;
-        for (int j = 0; j < dim-1; j++) 
-            fscanf(inf, "%lf, ", &coord_i[j]);
-        fscanf(inf, "%lf\n", &coord_i[dim-1]);
-    }
-    fclose(inf);
-    */
     
     H2Pack_t h2pack;
     H2P_init(&h2pack, dim, QR_REL_NRM, &rel_tol);

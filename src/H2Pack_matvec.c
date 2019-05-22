@@ -303,7 +303,7 @@ void H2P_matvec_downward_sweep(H2Pack_t h2pack, const DTYPE *x)
                 int n_child_node = n_child[node];
                 int *child_nodes = children + node * max_child;
                 
-                if (y1[node]->nrow == 0) continue;
+                if (y1[node]->ld == 0) continue;
                 
                 CBLAS_GEMV(
                     CblasRowMajor, CblasNoTrans, U[node]->nrow, U[node]->ncol,
@@ -329,7 +329,7 @@ void H2P_matvec_downward_sweep(H2Pack_t h2pack, const DTYPE *x)
                         int child_k = child_nodes[k];
                         int child_k_len = U[child_k]->ncol;
                         DTYPE *y1_tmp_spos = y1_tmp->data + y1_tmp_idx;
-                        if (y1[child_k]->nrow == 0)
+                        if (y1[child_k]->ld == 0)
                         {
                             H2P_dense_mat_resize(y1[child_k], child_k_len, 1);
                             memcpy(y1[child_k]->data, y1_tmp_spos, sizeof(DTYPE) * child_k_len);

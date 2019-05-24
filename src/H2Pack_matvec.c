@@ -474,6 +474,7 @@ void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
         }
     }
     et = H2P_get_wtime_sec();
+    h2pack->mat_size[7] = (n_thread + 1) * h2pack->n_point;
     h2pack->timers[8] += et - st;
     
     h2pack->n_matvec++;

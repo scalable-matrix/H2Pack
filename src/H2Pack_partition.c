@@ -444,7 +444,6 @@ void H2P_partition_points(
     h2pack->coord = (DTYPE*) malloc(sizeof(DTYPE) * n_point * dim);
     assert(h2pack->coord != NULL);
     memcpy(h2pack->coord, coord, sizeof(DTYPE) * n_point * dim);
-    h2pack->mem_bytes += sizeof(DTYPE) * n_point * dim;
     
     // 2. Partition points for H2 tree using linked list 
     DTYPE *coord_tmp = (DTYPE*) malloc(sizeof(DTYPE) * n_point * dim);
@@ -485,9 +484,6 @@ void H2P_partition_points(
     assert(h2pack->level_n_node  != NULL && h2pack->level_nodes   != NULL);
     assert(h2pack->height_n_node != NULL && h2pack->height_nodes  != NULL);
     assert(h2pack->enbox         != NULL);
-    h2pack->mem_bytes += sizeof(int)   * n_node    * (max_child + 6);
-    h2pack->mem_bytes += sizeof(int)   * max_level * (2 * h2pack->n_leaf_node + 2);
-    h2pack->mem_bytes += sizeof(DTYPE) * n_node    * (dim * 2);
     partition_vars.curr_leaf_idx = 0;
     memset(h2pack->level_n_node,  0, sizeof(int) * max_level);
     memset(h2pack->height_n_node, 0, sizeof(int) * max_level);

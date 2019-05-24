@@ -65,9 +65,8 @@ struct H2Pack
     H2P_thread_buf_t *tb;   // Thread-local buffer
     
     // Statistic data
-    size_t mem_bytes;       // Memory usage in bytes
     int    n_matvec;        // Number of performed matvec
-    int    mat_size[4];     // Total size of U, B, D; matvec memory footprint
+    int    mat_size[8];     // Total size of U, B, D; matvec memory footprint
     double timers[9];       // Partition; construct U, B, D; matvec up, down, B, D, reduce
 };
 typedef struct H2Pack* H2Pack_t;

@@ -19,11 +19,10 @@ void H2P_init(
     
     h2pack->n_thread  = omp_get_max_threads();
     h2pack->dim       = dim;
-    h2pack->mem_bytes = 0;
     h2pack->max_child = 1 << dim;
     h2pack->n_matvec  = 0;
     memset(h2pack->timers,   0, sizeof(double) * 9);
-    memset(h2pack->mat_size, 0, sizeof(int)    * 4);
+    memset(h2pack->mat_size, 0, sizeof(int)    * 8);
     
     h2pack->QR_stop_type = QR_stop_type;
     if (QR_stop_type == QR_RANK) 
@@ -120,16 +119,22 @@ void H2P_print_statistic(H2Pack_t h2pack)
     printf("  * Number of reduced near pairs   : %d\n", h2pack->n_r_inadm_pair);
     
     printf("==================== H2Pack storage info ====================\n");
-    double y0y1_MB = 0.0, tb_MB = 0.0, UBD_k = 0.0;
     double DTYPE_msize = sizeof(DTYPE);
-    double U_MB  = (double) h2pack->mat_size[0] * DTYPE_msize / 1048576.0;
-    double B_MB  = (double) h2pack->mat_size[1] * DTYPE_msize / 1048576.0;
-    double D_MB  = (double) h2pack->mat_size[2] * DTYPE_msize / 1048576.0;
-    double mv_MB = (double) h2pack->mat_size[3] * DTYPE_msize / 1048576.0;
+    double U_MB   = (double) h2pack->mat_size[0] * DTYPE_msize / 1048576.0;
+    double B_MB   = (double) h2pack->mat_size[1] * DTYPE_msize / 1048576.0;
+    double D_MB   = (double) h2pack->mat_size[2] * DTYPE_msize / 1048576.0;
+    double uw_MB  = (double) h2pack->mat_size[3] * DTYPE_msize / 1048576.0;
+    double mid_MB = (double) h2pack->mat_size[4] * DTYPE_msize / 1048576.0;
+    double dw_MB  = (double) h2pack->mat_size[5] * DTYPE_msize / 1048576.0;
+    double db_MB  = (double) h2pack->mat_size[6] * DTYPE_msize / 1048576.0;
+    double rd_MB  = (double) h2pack->mat_size[7] * DTYPE_msize / 1048576.0;
+    double mv_MB  = uw_MB + mid_MB + dw_MB + db_MB;
+    double UBD_k  = 0.0;
     UBD_k += (double) h2pack->mat_size[0];
     UBD_k += (double) h2pack->mat_size[1];
     UBD_k += (double) h2pack->mat_size[2];
     UBD_k /= (double) h2pack->n_point;
+    double y0y1_MB = 0.0, tb_MB = 0.0;
     for (int i = 0; i < h2pack->n_thread; i++)
     {
         H2P_thread_buf_t tbi = h2pack->tb[i];
@@ -157,39 +162,39 @@ void H2P_print_statistic(H2Pack_t h2pack)
     int n_matvec = h2pack->n_matvec;
     double d_n_matvec = (double) h2pack->n_matvec;
     for (int i = 0; i < 4; i++) build_t  += h2pack->timers[i];
-    for (int i = 4; i < 9; i++) matvec_t += h2pack->timers[i];
-    printf("  * H2 construction time = %.4lf (s)\n", build_t);
-    printf("      |----> Point partition = %.4lf (s)\n", h2pack->timers[0]);
-    printf("      |----> U construction  = %.4lf (s)\n", h2pack->timers[1]);
-    printf("      |----> B construction  = %.4lf (s)\n", h2pack->timers[2]);
-    printf("      |----> D construction  = %.4lf (s)\n", h2pack->timers[3]);
+    for (int i = 4; i < 9; i++) 
+    {
+        h2pack->timers[i] /= d_n_matvec;
+        matvec_t += h2pack->timers[i];
+    }
+    printf("  * H2 construction time (sec) = %.3lf \n", build_t);
+    printf("      |----> Point partition   = %.3lf \n", h2pack->timers[0]);
+    printf("      |----> U construction    = %.3lf \n", h2pack->timers[1]);
+    printf("      |----> B construction    = %.3lf \n", h2pack->timers[2]);
+    printf("      |----> D construction    = %.3lf \n", h2pack->timers[3]);
     printf(
-        "  * H2 matvec total (average) time   = %.4lf (%.4lf) (s)\n", 
-        matvec_t, matvec_t / d_n_matvec
+        "  * H2 matvec average time (sec) = %.3lf, %.2lf GB/s\n", 
+        matvec_t, mv_MB / matvec_t / 1024.0
     );
     printf(
-        "      |----> Upward sweep time       = %.4lf (%.4lf) (s)\n", 
-        h2pack->timers[4], h2pack->timers[4] / d_n_matvec
+        "      |----> Upward sweep        = %.3lf, %.2lf GB/s\n", 
+        h2pack->timers[4], uw_MB  / h2pack->timers[4] / 1024.0
     );
     printf(
-        "      |----> Intermediate sweep time = %.4lf (%.4lf) (s)\n", 
-        h2pack->timers[5], h2pack->timers[5] / d_n_matvec
+        "      |----> Intermediate sweep  = %.3lf, %.2lf GB/s\n", 
+        h2pack->timers[5], mid_MB / h2pack->timers[5] / 1024.0
     );
     printf(
-        "      |----> Downward sweep time     = %.4lf (%.4lf) (s)\n", 
-        h2pack->timers[6], h2pack->timers[6] / d_n_matvec
+        "      |----> Downward sweep      = %.3lf, %.2lf GB/s\n", 
+        h2pack->timers[6], dw_MB  / h2pack->timers[6] / 1024.0
     );
     printf(
-        "      |----> Dense block sweep time  = %.4lf (%.4lf) (s)\n", 
-        h2pack->timers[7], h2pack->timers[7] / d_n_matvec
+        "      |----> Dense block sweep   = %.3lf, %.2lf GB/s\n", 
+        h2pack->timers[7], db_MB  / h2pack->timers[7] / 1024.0
     );
     printf(
-        "      |----> OpenMP reduction time   = %.4lf (%.4lf) (s)\n", 
-        h2pack->timers[8], h2pack->timers[8] / d_n_matvec
-    );
-    printf(
-        "      ## Effective memory bandwidth  = %.2lf GB/s \n", 
-        (mv_MB * d_n_matvec) / (1024.0 * matvec_t)
+        "      |----> OpenMP reduction    = %.3lf, %.2lf GB/s\n", 
+        h2pack->timers[8], rd_MB  / h2pack->timers[8] / 1024.0
     );
     
     printf("=============================================================\n");

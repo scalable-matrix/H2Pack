@@ -383,8 +383,10 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
             U[i]->ld   = 0;
         } else {
             h2pack->mat_size[0] += U[i]->nrow * U[i]->ncol;
-            h2pack->mat_size[3] += 2 * (U[i]->nrow * U[i]->ncol);
-            h2pack->mat_size[3] += 2 * (U[i]->nrow + U[i]->ncol);
+            h2pack->mat_size[3] += U[i]->nrow * U[i]->ncol;
+            h2pack->mat_size[3] += U[i]->nrow + U[i]->ncol;
+            h2pack->mat_size[5] += U[i]->nrow * U[i]->ncol;
+            h2pack->mat_size[5] += U[i]->nrow + U[i]->ncol;
         }
         if (h2pack->J[i] == NULL) H2P_int_vec_init(&J[i], 1);
     }
@@ -469,8 +471,8 @@ void H2P_build_B(H2Pack_t h2pack)
     for (int i = 0; i < n_r_adm_pair; i++)
     {
         h2pack->mat_size[1] += B[i]->nrow * B[i]->ncol;
-        h2pack->mat_size[3] += 2 * (B[i]->nrow * B[i]->ncol);
-        h2pack->mat_size[3] += 2 * (B[i]->nrow + B[i]->ncol);
+        h2pack->mat_size[4] += 2 * (B[i]->nrow * B[i]->ncol);
+        h2pack->mat_size[4] += 2 * (B[i]->nrow + B[i]->ncol);
     }
 }
 
@@ -546,14 +548,14 @@ void H2P_build_D(H2Pack_t h2pack)
     for (int i = 0; i < n_leaf_node; i++)
     {
         h2pack->mat_size[2] += D[i]->nrow * D[i]->ncol;
-        h2pack->mat_size[3] += D[i]->nrow * D[i]->ncol;
-        h2pack->mat_size[3] += D[i]->nrow + D[i]->ncol;
+        h2pack->mat_size[6] += D[i]->nrow * D[i]->ncol;
+        h2pack->mat_size[6] += D[i]->nrow + D[i]->ncol;
     }
     for (int i = n_leaf_node; i < n_leaf_node + n_r_inadm_pair; i++)
     {
         h2pack->mat_size[2] += D[i]->nrow * D[i]->ncol;
-        h2pack->mat_size[3] += 2 * (D[i]->nrow * D[i]->ncol);
-        h2pack->mat_size[3] += 2 * (D[i]->nrow + D[i]->ncol);
+        h2pack->mat_size[6] += 2 * (D[i]->nrow * D[i]->ncol);
+        h2pack->mat_size[6] += 2 * (D[i]->nrow + D[i]->ncol);
     }
 }
 

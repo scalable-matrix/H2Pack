@@ -23,7 +23,7 @@ void H2P_init(
     h2pack->max_child = 1 << dim;
     h2pack->n_matvec  = 0;
     memset(h2pack->timers,   0, sizeof(double) * 9);
-    memset(h2pack->mat_size, 0, sizeof(int)    * 3);
+    memset(h2pack->mat_size, 0, sizeof(int)    * 4);
     
     h2pack->QR_stop_type = QR_stop_type;
     if (QR_stop_type == QR_RANK) 
@@ -121,9 +121,11 @@ void H2P_print_statistic(H2Pack_t h2pack)
     
     printf("==================== H2Pack storage info ====================\n");
     double y0y1_MB = 0.0, tb_MB = 0.0, UBD_k = 0.0;
-    double U_MB = (double) h2pack->mat_size[0] / 1048576.0;
-    double B_MB = (double) h2pack->mat_size[1] / 1048576.0;
-    double D_MB = (double) h2pack->mat_size[2] / 1048576.0;
+    double DTYPE_msize = sizeof(DTYPE);
+    double U_MB  = (double) h2pack->mat_size[0] * DTYPE_msize / 1048576.0;
+    double B_MB  = (double) h2pack->mat_size[1] * DTYPE_msize / 1048576.0;
+    double D_MB  = (double) h2pack->mat_size[2] * DTYPE_msize / 1048576.0;
+    double mv_MB = (double) h2pack->mat_size[3] * DTYPE_msize / 1048576.0;
     UBD_k += (double) h2pack->mat_size[0];
     UBD_k += (double) h2pack->mat_size[1];
     UBD_k += (double) h2pack->mat_size[2];
@@ -133,15 +135,15 @@ void H2P_print_statistic(H2Pack_t h2pack)
         H2P_thread_buf_t tbi = h2pack->tb[i];
         double msize0 = (double) tbi->mat0->size     + (double) tbi->mat1->size;
         double msize1 = (double) tbi->idx0->capacity + (double) tbi->idx1->capacity;
-        tb_MB += (double) sizeof(DTYPE) * msize0 + (double) sizeof(int) * msize1;
-        tb_MB += (double) sizeof(DTYPE) * (double) h2pack->n_point;
+        tb_MB += DTYPE_msize * msize0 + (double) sizeof(int) * msize1;
+        tb_MB += DTYPE_msize * (double) h2pack->n_point;
     }
     for (int i = 0; i < h2pack->n_node; i++)
     {
         H2P_dense_mat_t y0i = h2pack->y0[i];
         H2P_dense_mat_t y1i = h2pack->y1[i];
-        y0y1_MB += (double) sizeof(DTYPE) * (double) (y0i->size + y1i->ncol - 1);
-        tb_MB   += (double) sizeof(DTYPE) * (double) (y1i->size - y1i->ncol + 1);
+        y0y1_MB += DTYPE_msize * (double) (y0i->size + y1i->ncol - 1);
+        tb_MB   += DTYPE_msize * (double) (y1i->size - y1i->ncol + 1);
     }
     y0y1_MB /= 1048576.0;
     tb_MB   /= 1048576.0;
@@ -184,6 +186,10 @@ void H2P_print_statistic(H2Pack_t h2pack)
     printf(
         "      |----> OpenMP reduction time   = %.4lf (%.4lf) (s)\n", 
         h2pack->timers[8], h2pack->timers[8] / d_n_matvec
+    );
+    printf(
+        "      ## Effective memory bandwidth  = %.2lf GB/s \n", 
+        (mv_MB * d_n_matvec) / (1024.0 * matvec_t)
     );
     
     printf("=============================================================\n");

@@ -182,36 +182,6 @@ void H2P_dense_mat_select_rows(H2P_dense_mat_t mat, H2P_int_vec_t row_idx)
     mat->nrow = row_idx->length;
 }
 
-// Transpose a dense matrix
-void H2P_dense_mat_transpose(H2P_dense_mat_t mat)
-{
-    DTYPE *mat_dst = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * mat->nrow * mat->ncol);
-    assert(mat_dst != NULL);
-    
-    DTYPE *mat_src = mat->data;
-    int src_ld = mat->ld;
-    int dst_ld = mat->nrow;
-    for (int icol = 0; icol < mat->ncol; icol++)
-    {
-        #pragma omp simd
-        for (int irow = 0; irow < mat->nrow; irow++)
-        {
-            int src_idx = irow * src_ld + icol;
-            int dst_idx = icol * dst_ld + irow;
-            mat_dst[dst_idx] = mat_src[src_idx];
-        }
-    }
-    
-    int dst_nrow = mat->ncol;
-    int dst_ncol = mat->nrow;
-    mat->nrow = dst_nrow;
-    mat->ncol = dst_ncol;
-    mat->ld   = dst_ncol;
-    mat->size = dst_nrow * dst_ncol;
-    H2P_free_aligned(mat->data);
-    mat->data = mat_dst;
-}
-
 // Print a H2P_dense_mat structure, for debugging
 // Input parameter:
 //   mat : H2P_dense_mat structure to be printed

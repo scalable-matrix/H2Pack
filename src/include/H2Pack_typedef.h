@@ -67,7 +67,7 @@ struct H2Pack
     // Statistic data
     size_t mem_bytes;       // Memory usage in bytes
     int    n_matvec;        // Number of performed matvec
-    int    mat_size[3];     // Total size of U, D, B
+    int    mat_size[4];     // Total size of U, B, D; matvec memory footprint
     double timers[9];       // Partition; construct U, B, D; matvec up, down, B, D, reduce
 };
 typedef struct H2Pack* H2Pack_t;

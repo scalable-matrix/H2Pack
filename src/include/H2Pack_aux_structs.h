@@ -144,13 +144,6 @@ void H2P_dense_mat_permute_rows(H2P_dense_mat_t mat, const int *p);
 //   mat : H2P_dense_mat structure with selected row
 void H2P_dense_mat_select_rows(H2P_dense_mat_t mat, H2P_int_vec_t row_idx);
 
-// Transpose a dense matrix
-// Input parameter:
-//   mat : H2P_dense_mat structure to be transposed
-// Output parameter:
-//   mat : Transposed H2P_dense_mat structure
-void H2P_dense_mat_transpose(H2P_dense_mat_t mat);
-
 // Print a H2P_dense_mat structure, for debugging
 // Input parameter:
 //   mat : H2P_dense_mat structure to be printed

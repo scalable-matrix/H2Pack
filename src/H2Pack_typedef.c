@@ -5,6 +5,7 @@
 #include <omp.h>
 
 #include "H2Pack_config.h"
+#include "H2Pack_utils.h"
 #include "H2Pack_typedef.h"
 #include "H2Pack_aux_structs.h"
 
@@ -46,14 +47,21 @@ void H2P_init(
     h2pack->enbox         = NULL;
     h2pack->U             = NULL;
     h2pack->J             = NULL;
-    h2pack->B             = NULL;
-    h2pack->D             = NULL;
     h2pack->y0            = NULL;
     h2pack->y1            = NULL;
     h2pack->tb            = NULL;
+    h2pack->B_nrow        = NULL;
+    h2pack->B_ncol        = NULL;
+    h2pack->B_ptr         = NULL;
+    h2pack->D_nrow        = NULL;
+    h2pack->D_ncol        = NULL;
+    h2pack->D_ptr         = NULL;
+    h2pack->B_data        = NULL;
+    h2pack->D_data        = NULL;
     H2P_int_vec_init(&h2pack->B_blk,  h2pack->n_thread * 5 + 5);
     H2P_int_vec_init(&h2pack->D_blk0, h2pack->n_thread * 5 + 5);
     H2P_int_vec_init(&h2pack->D_blk1, h2pack->n_thread * 5 + 5);
+    
     
     *h2pack_ = h2pack;
 }
@@ -75,20 +83,22 @@ void H2P_destroy(H2Pack_t h2pack)
     free(h2pack->r_adm_pairs);
     free(h2pack->coord);
     free(h2pack->enbox);
+    free(h2pack->B_nrow);
+    free(h2pack->B_ncol);
+    free(h2pack->B_ptr);
+    free(h2pack->D_nrow);
+    free(h2pack->D_ncol);
+    free(h2pack->D_ptr);
+    H2P_free_aligned(h2pack->B_data);
+    H2P_free_aligned(h2pack->D_data);
     
     for (int i = 0; i < h2pack->n_UJ; i++)
     {
         H2P_dense_mat_destroy(h2pack->U[i]);
         H2P_int_vec_destroy(h2pack->J[i]);
     }
-    for (int i = 0; i < h2pack->n_B; i++)
-        H2P_dense_mat_destroy(h2pack->B[i]);
-    for (int i = 0; i < h2pack->n_D; i++)
-        H2P_dense_mat_destroy(h2pack->D[i]);
     free(h2pack->U);
     free(h2pack->J);
-    free(h2pack->B);
-    free(h2pack->D);
     
     for (int i = 0; i < h2pack->n_node; i++)
     {

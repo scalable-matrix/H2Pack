@@ -63,6 +63,9 @@ struct H2Pack
     H2P_dense_mat_t *y1;    // Temporary arrays used in matvec
     kernel_func_ptr kernel; // Pointer to the kernel function
     H2P_thread_buf_t *tb;   // Thread-local buffer
+    H2P_int_vec_t   B_blk;  // B matrices task partitioning
+    H2P_int_vec_t   D_blk0; // Diagonal blocks in D matrices task partitioning
+    H2P_int_vec_t   D_blk1; // Inadmissible blocks in D matrices task partitioning
     
     // Statistic data
     int    n_matvec;        // Number of performed matvec

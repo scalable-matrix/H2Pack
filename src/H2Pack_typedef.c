@@ -51,6 +51,9 @@ void H2P_init(
     h2pack->y0            = NULL;
     h2pack->y1            = NULL;
     h2pack->tb            = NULL;
+    H2P_int_vec_init(&h2pack->B_blk,  h2pack->n_thread * 5 + 5);
+    H2P_int_vec_init(&h2pack->D_blk0, h2pack->n_thread * 5 + 5);
+    H2P_int_vec_init(&h2pack->D_blk1, h2pack->n_thread * 5 + 5);
     
     *h2pack_ = h2pack;
 }
@@ -98,6 +101,10 @@ void H2P_destroy(H2Pack_t h2pack)
     for (int i = 0; i < h2pack->n_thread; i++)
         H2P_thread_buf_destroy(h2pack->tb[i]);
     free(h2pack->tb);
+    
+    H2P_int_vec_destroy(h2pack->B_blk);
+    H2P_int_vec_destroy(h2pack->D_blk0);
+    H2P_int_vec_destroy(h2pack->D_blk1);
 }
 
 // Print statistic info of a H2Pack structure

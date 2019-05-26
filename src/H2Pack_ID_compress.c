@@ -33,13 +33,14 @@ static inline DTYPE CBLAS_NRM2(const int n, const DTYPE *x)
 //   tol_norm : QR stopping parameter, maximum column 2-norm
 //   rel_norm : If tol_norm is relative to the largest column 2-norm in A
 //   nthreads : Number of threads used in this function
+//   QR_buff  : Size 2 * A->ncol, working buffer for partial pivoting QR
 // Output parameters:
 //   A : Matrix R: [R11, R12; 0, R22]
 //   p : Matrix A column permutation array, A(:, p) = A * P
 //   r : Dimension of upper-triangular matrix R11
 void H2P_partial_pivot_QR(
     H2P_dense_mat_t A, const int tol_rank, const DTYPE tol_norm, 
-    const int rel_norm, int *p, int *r, const int nthreads
+    const int rel_norm, int *p, int *r, const int nthreads, DTYPE *QR_buff
 )
 {
     DTYPE *R = A->data;
@@ -50,9 +51,8 @@ void H2P_partial_pivot_QR(
     
     BLAS_SET_NUM_THREADS(nthreads);
     
-    DTYPE *col_norm = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * ncol);
-    DTYPE *h_R_mv   = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * ncol);
-    assert(col_norm != NULL && h_R_mv != NULL);
+    DTYPE *col_norm = QR_buff + 0 * ncol; 
+    DTYPE *h_R_mv   = QR_buff + 1 * ncol;
     
     // 1. Find a column with largest 2-norm
     #pragma omp parallel for num_threads(nthreads) schedule(static)
@@ -171,8 +171,6 @@ void H2P_partial_pivot_QR(
     if (rank == -1) rank = max_iter;
     
     *r = rank;
-    H2P_free_aligned(h_R_mv);
-    H2P_free_aligned(col_norm);
 }
 
 // Partial pivoting QR for ID, may need to be upgraded to Strong Rank 
@@ -182,10 +180,14 @@ void H2P_partial_pivot_QR(
 //   stop_type  : Partial QR stop criteria: QR_RANK, QR_REL_NRM, or QR_ABS_NRM
 //   stop_param : Pointer to partial QR stop parameter
 //   nthreads   : Number of threads used in this function
+//   QR_buff    : Size 2 * A->ncol, working buffer for partial pivoting QR
 // Output parameters:
 //   A : Matrix R: [R11, R12]
 //   p : Matrix A column permutation array, A(:, p) = A * P
-void H2P_ID_QR(H2P_dense_mat_t A, const int stop_type, void *stop_param, int *p, const int nthreads)
+void H2P_ID_QR(
+    H2P_dense_mat_t A, const int stop_type, void *stop_param, int *p, 
+    const int nthreads, DTYPE *QR_buff
+)
 {
     // Parse partial QR stop criteria and perform partial QR
     int r, tol_rank, rel_norm;
@@ -211,7 +213,7 @@ void H2P_ID_QR(H2P_dense_mat_t A, const int stop_type, void *stop_param, int *p,
         tol_norm = param[0];
         rel_norm = 0;
     }
-    H2P_partial_pivot_QR(A, tol_rank, tol_norm, rel_norm, p, &r, nthreads);
+    H2P_partial_pivot_QR(A, tol_rank, tol_norm, rel_norm, p, &r, nthreads, QR_buff);
     
     // Special case: each column's 2-norm is smaller than the threshold
     if (r == 0)
@@ -256,8 +258,8 @@ static void H2P_qsort_key_value(int *key, int *val, const int l, const int r)
 // Interpolative Decomposition (ID) using partial QR over rows of a target 
 // matrix. Partial pivoting QR may need to be upgraded to SRRQR later. 
 void H2P_ID_compress(
-    H2P_dense_mat_t A, const int stop_type, void *stop_param,
-    H2P_dense_mat_t *U_, H2P_int_vec_t J, const int nthreads
+    H2P_dense_mat_t A, const int stop_type, void *stop_param, H2P_dense_mat_t *U_, 
+    H2P_int_vec_t J, const int nthreads, DTYPE *QR_buff, int *ID_buff
 )
 {
     // 1. Partial pivoting QR for A^T
@@ -268,17 +270,16 @@ void H2P_ID_compress(
     A->nrow = ncol;
     A->ncol = nrow;
     H2P_int_vec_set_capacity(J, nrow);
-    H2P_ID_QR(A, stop_type, stop_param, J->data, nthreads);
+    H2P_ID_QR(A, stop_type, stop_param, J->data, nthreads, QR_buff);
     H2P_dense_mat_t R = A; // Note: the output R stored in A is still stored in column major style
     int r = A->nrow;  // Obtained rank
     J->length = r;
     
     // 2. Set permutation indices p0, sort the index subset J[0:r-1]
-    int *p0 = (int*) malloc(sizeof(int) * nrow);
-    int *p1 = (int*) malloc(sizeof(int) * nrow);
-    int *i0 = (int*) malloc(sizeof(int) * nrow);
-    int *i1 = (int*) malloc(sizeof(int) * nrow);
-    assert(p0 != NULL && p1 != NULL && i0 != NULL && i1 != NULL);
+    int *p0 = ID_buff + 0 * nrow;
+    int *p1 = ID_buff + 1 * nrow;
+    int *i0 = ID_buff + 2 * nrow;
+    int *i1 = ID_buff + 3 * nrow;
     for (int i = 0; i < nrow; i++) 
     {
         p0[J->data[i]] = i;
@@ -332,10 +333,6 @@ void H2P_ID_compress(
         }
     }
     
-    free(p0);
-    free(p1);
-    free(i0);
-    free(i1);
     if (U_ != NULL) *U_ = U;
 }
 

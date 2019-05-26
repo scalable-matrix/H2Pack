@@ -47,7 +47,7 @@ void H2P_matvec_upward_sweep(H2Pack_t h2pack, const DTYPE *x)
             {
                 H2P_dense_mat_init(&y0[node], ncol, 1);
             } else {
-                H2P_dense_mat_init(&y0[node], 1, 1);
+                H2P_dense_mat_init(&y0[node], 0, 0);
                 y0[node]->nrow = 0;
                 y0[node]->ncol = 0;
                 y0[node]->ld   = 0;
@@ -126,20 +126,20 @@ void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x)
     {
         h2pack->y1 = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
         assert(h2pack->y1 != NULL);
-        for (int i = 0; i < n_node; i++) h2pack->y1[i] = NULL;
+        for (int i = 0; i < n_node; i++) 
+            H2P_dense_mat_init(&h2pack->y1[i], 0, 0);
     }
     H2P_dense_mat_t *y1 = h2pack->y1;
-
-    // Use ld to mark if y1[i] is visited in this intermediate sweep
     for (int i = 0; i < n_node; i++) 
     {
-        if (y1[i] != NULL) y1[i]->ld = 0;
+        // Use ld to mark if y1[i] is visited in this intermediate sweep
+        y1[i]->ld = 0;
         if (node_n_r_adm[i])
         {
             // The first U[node{0, 1}]->ncol elements in y1[node{0, 1}] will be used in downward
             // sweep, store the final results in this part and use the positions behind this as
             // thread buffers. The last position of each row is used to mark if this row has data.
-            if (y1[i] == NULL) H2P_dense_mat_init(&y1[i], n_thread, U[i]->ncol + 1);
+            H2P_dense_mat_resize(y1[i], n_thread, U[i]->ncol + 1);
             y1[i]->ld = 1;
         }
     }
@@ -154,7 +154,6 @@ void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x)
         #pragma omp for schedule(static)
         for (int i = 0; i < n_node; i++)
         {
-            if (y1[i] == NULL) continue;
             if (y1[i]->ld == 0) continue;
             const int ncol = y1[i]->ncol;
             // Need not to reset all copies of y1 to be 0 here, use the last element in
@@ -258,9 +257,7 @@ void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x)
     #pragma omp parallel for num_threads(n_thread) schedule(dynamic)
     for (int i = 0; i < n_node; i++)
     {
-        if (y1[i] == NULL) continue;
         if (y1[i]->ld == 0) continue;
-        
         int ncol = y1[i]->ncol;
         DTYPE *dst_row = y1[i]->data;
         for (int j = 1; j < n_thread; j++)
@@ -270,18 +267,6 @@ void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x)
             #pragma omp simd
             for (int k = 0; k < ncol - 1; k++)
                 dst_row[k] += src_row[k];
-        }
-    }
-    
-    // 4. Initialize empty y1
-    for (int node = 0; node < n_node; node++)
-    {
-        if (y1[node] == NULL)
-        {
-            H2P_dense_mat_init(&y1[node], 1, 1);
-            y1[node]->nrow = 0;
-            y1[node]->ncol = 0;
-            y1[node]->ld   = 0;
         }
     }
 }

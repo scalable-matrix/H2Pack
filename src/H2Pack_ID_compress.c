@@ -55,7 +55,7 @@ void H2P_partial_pivot_QR(
     assert(col_norm != NULL && h_R_mv != NULL);
     
     // 1. Find a column with largest 2-norm
-    #pragma omp parallel for num_threads(nthreads) schedule(dynamic)
+    #pragma omp parallel for num_threads(nthreads) schedule(static)
     for (int j = 0; j < ncol; j++)
     {
         p[j] = j;
@@ -136,7 +136,7 @@ void H2P_partial_pivot_QR(
         int h_len_m1 = h_len - 1;
         pivot  = iter + 1;
         norm_p = 0.0;
-        #pragma omp parallel for num_threads(nthreads) schedule(dynamic)
+        #pragma omp parallel for num_threads(nthreads) schedule(guided)
         for (int j = iter + 1; j < ncol; j++)
         {
             // Skip small columns

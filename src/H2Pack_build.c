@@ -79,20 +79,22 @@ void H2P_eval_kernel_matrix_UJ_proxy(
     H2P_dense_mat_t box_center, H2P_dense_mat_t pp_coord, H2P_dense_mat_t kernel_mat
 )
 {
-    H2P_dense_mat_t shift_x_i;
-    H2P_dense_mat_init(&shift_x_i, dim, 1);
     H2P_dense_mat_resize(kernel_mat, idx_x->length, pp_coord->nrow);
     for (int i = 0; i < idx_x->length; i++)
     {
         DTYPE *kernel_mat_row = kernel_mat->data + i * kernel_mat->ld;
         const DTYPE *x_i = coord + idx_x->data[i] * dim;
+        // Store the shifted coordinate in box_center
         for (int j = 0; j < dim; j++)
-            shift_x_i->data[j] = x_i[j] - box_center->data[j];
+            box_center->data[j] = x_i[j] - box_center->data[j];
         for (int j = 0; j < pp_coord->nrow; j++)
         {
             const DTYPE *y_j = pp_coord->data + j * dim;
-            kernel_mat_row[j] = kernel(dim, shift_x_i->data, y_j);
+            kernel_mat_row[j] = kernel(dim, box_center->data, y_j);
         }
+        // Recover box_center from shifted coordinate
+        for (int j = 0; j < dim; j++)
+            box_center->data[j] = x_i[j] - box_center->data[j];
     }
 }
 
@@ -464,6 +466,7 @@ void H2P_build_B(H2Pack_t h2pack)
     //    the same workload (total size of B matrices in a block)
     B_ptr[0] = 0;
     int B_total_size = 0;
+    int n_DTYPE_64B  = 64 / sizeof(DTYPE);
     H2P_int_vec_t *J = h2pack->J;
     for (int i = 0; i < n_r_adm_pair; i++)
     {
@@ -492,6 +495,7 @@ void H2P_build_B(H2Pack_t h2pack)
             n_point1 = J[node1]->length;
         }
         int Bi_size = n_point0 * n_point1;
+        Bi_size = (Bi_size + n_DTYPE_64B - 1) / n_DTYPE_64B * n_DTYPE_64B;
         B_total_size += Bi_size;
         B_ptr[i + 1] = Bi_size;
     }
@@ -608,6 +612,7 @@ void H2P_build_D(H2Pack_t h2pack)
     //    the same workload (total size of D matrices in a block)
     D_ptr[0] = 0;
     int D0_total_size = 0;
+    int n_DTYPE_64B   = 64 / sizeof(DTYPE);
     for (int i = 0; i < n_leaf_node; i++)
     {
         int node = leaf_nodes[i];
@@ -615,6 +620,7 @@ void H2P_build_D(H2Pack_t h2pack)
         int e_index = cluster[2 * node + 1];
         int n_point = e_index - s_index + 1;
         int Di_size = n_point * n_point;
+        Di_size = (Di_size + n_DTYPE_64B - 1) / n_DTYPE_64B * n_DTYPE_64B;
         D_ptr[i + 1] = Di_size;
         D0_total_size += Di_size;
     }
@@ -631,6 +637,7 @@ void H2P_build_D(H2Pack_t h2pack)
         int n_point0 = e_index0 - s_index0 + 1;
         int n_point1 = e_index1 - s_index1 + 1;
         int Di_size = n_point0 * n_point1;
+        Di_size = (Di_size + n_DTYPE_64B - 1) / n_DTYPE_64B * n_DTYPE_64B;
         D_ptr[n_leaf_node + 1 + i] = Di_size;
         D1_total_size += Di_size;
     }

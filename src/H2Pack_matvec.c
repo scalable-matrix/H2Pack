@@ -106,14 +106,21 @@ void H2P_matvec_upward_sweep(H2Pack_t h2pack, const DTYPE *x)
 // H2 representation matvec intermediate sweep, calculate B_{ij} * (U_j^T * x_j)
 void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x)
 {
-    int n_node       = h2pack->n_node;
-    int n_thread     = h2pack->n_thread;
-    int n_r_adm_pair = h2pack->n_r_adm_pair;
-    int *r_adm_pairs = h2pack->r_adm_pairs;
-    int *node_level  = h2pack->node_level;
-    int *cluster     = h2pack->cluster;
+    int n_node        = h2pack->n_node;
+    int n_thread      = h2pack->n_thread;
+    int n_r_adm_pair  = h2pack->n_r_adm_pair;
+    int *r_adm_pairs  = h2pack->r_adm_pairs;
+    int *node_level   = h2pack->node_level;
+    int *cluster      = h2pack->cluster;
+    int *node_n_r_adm = h2pack->node_n_r_adm;
+    int *B_nrow       = h2pack->B_nrow;
+    int *B_ncol       = h2pack->B_ncol;
+    int *B_ptr        = h2pack->B_ptr;
+    DTYPE *B_data     = h2pack->B_data;
     H2P_int_vec_t B_blk = h2pack->B_blk;
-    
+    H2P_dense_mat_t *y0 = h2pack->y0;
+    H2P_dense_mat_t *U  = h2pack->U;
+
     // 1. Initialize y1 
     if (h2pack->y1 == NULL)
     {
@@ -121,33 +128,20 @@ void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x)
         assert(h2pack->y1 != NULL);
         for (int i = 0; i < n_node; i++) h2pack->y1[i] = NULL;
     }
-    H2P_dense_mat_t *y0 = h2pack->y0;
     H2P_dense_mat_t *y1 = h2pack->y1;
-    H2P_dense_mat_t *U  = h2pack->U;
-    //H2P_dense_mat_t *B  = h2pack->B;
-    
-    int *B_nrow  = h2pack->B_nrow;
-    int *B_ncol  = h2pack->B_ncol;
-    int *B_ptr   = h2pack->B_ptr;
-    DTYPE *B_data = h2pack->B_data;
-    
+
     // Use ld to mark if y1[i] is visited in this intermediate sweep
     for (int i = 0; i < n_node; i++) 
-        if (y1[i] != NULL) y1[i]->ld = 0;
-    for (int i = 0; i < n_r_adm_pair; i++)
     {
-        int node0  = r_adm_pairs[2 * i];
-        int node1  = r_adm_pairs[2 * i + 1];
-        int level0 = node_level[node0];
-        int level1 = node_level[node1];
-        
-        // The first U[node{0, 1}]->ncol elements in y1[node{0, 1}] will be used in downward
-        // sweep, store the final results in this part and use the positions behind this as
-        // thread buffers. The last position of each row is used to mark if this row has data.
-        if (y1[node0] == NULL) H2P_dense_mat_init(&y1[node0], n_thread, U[node0]->ncol + 1);
-        if (y1[node1] == NULL) H2P_dense_mat_init(&y1[node1], n_thread, U[node1]->ncol + 1);
-        y1[node0]->ld = 1;
-        y1[node1]->ld = 1;
+        if (y1[i] != NULL) y1[i]->ld = 0;
+        if (node_n_r_adm[i])
+        {
+            // The first U[node{0, 1}]->ncol elements in y1[node{0, 1}] will be used in downward
+            // sweep, store the final results in this part and use the positions behind this as
+            // thread buffers. The last position of each row is used to mark if this row has data.
+            if (y1[i] == NULL) H2P_dense_mat_init(&y1[i], n_thread, U[i]->ncol + 1);
+            y1[i]->ld = 1;
+        }
     }
 
     // 2. Intermediate sweep
@@ -157,16 +151,18 @@ void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x)
         int tid = omp_get_thread_num();
         DTYPE *y = h2pack->tb[tid]->y;
         
-        #pragma omp for schedule(dynamic)
+        #pragma omp for schedule(static)
         for (int i = 0; i < n_node; i++)
         {
             if (y1[i] == NULL) continue;
             if (y1[i]->ld == 0) continue;
-            int length = y1[i]->nrow * y1[i]->ncol;
-            memset(y1[i]->data, 0, sizeof(DTYPE) * length);
+            const int ncol = y1[i]->ncol;
+            // Need not to reset all copies of y1 to be 0 here, use the last element in
+            // each row as the beta value to rewrite / accumulate y1 results in GEMV
+            memset(y1[i]->data, 0, sizeof(DTYPE) * ncol);
+            for (int j = 1; j < n_thread; j++)
+                y1[i]->data[(j + 1) * ncol - 1] = 0.0;
         }
-        
-        #pragma omp barrier
         
         #pragma omp for schedule(dynamic)
         for (int i_blk = 0; i_blk < n_B_blk; i_blk++)
@@ -191,17 +187,19 @@ void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x)
                     int ncol1 = y1[node1]->ncol;
                     DTYPE *y1_dst_0 = y1[node0]->data + tid * ncol0;
                     DTYPE *y1_dst_1 = y1[node1]->data + tid * ncol1;
+                    DTYPE beta0 = y1_dst_0[ncol0 - 1];
+                    DTYPE beta1 = y1_dst_1[ncol1 - 1];
                     y1_dst_0[ncol0 - 1] = 1.0;
                     y1_dst_1[ncol1 - 1] = 1.0;
                     CBLAS_GEMV(
                         CblasRowMajor, CblasNoTrans, Bi_nrow, Bi_ncol, 
                         1.0, Bi, Bi_ncol, 
-                        y0[node1]->data, 1, 1.0, y1_dst_0, 1
+                        y0[node1]->data, 1, beta0, y1_dst_0, 1
                     );
                     CBLAS_GEMV(
                         CblasRowMajor, CblasTrans, Bi_nrow, Bi_ncol, 
                         1.0, Bi, Bi_ncol, 
-                        y0[node0]->data, 1, 1.0, y1_dst_1, 1
+                        y0[node0]->data, 1, beta1, y1_dst_1, 1
                     );
                 }
                 
@@ -215,11 +213,12 @@ void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x)
                     DTYPE *y_spos = y + s_index;
                     int ncol0 = y1[node0]->ncol;
                     DTYPE *y1_dst_0 = y1[node0]->data + tid * ncol0;
+                    DTYPE beta0 = y1_dst_0[ncol0 - 1];
                     y1_dst_0[ncol0 - 1] = 1.0;
                     CBLAS_GEMV(
                         CblasRowMajor, CblasNoTrans, Bi_nrow, Bi_ncol, 
                         1.0, Bi, Bi_ncol, 
-                        x_spos, 1, 1.0, y1_dst_0, 1
+                        x_spos, 1, beta0, y1_dst_0, 1
                     );
                     CBLAS_GEMV(
                         CblasRowMajor, CblasTrans, Bi_nrow, Bi_ncol, 
@@ -238,6 +237,7 @@ void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x)
                     DTYPE *y_spos = y + s_index;
                     int ncol1 = y1[node1]->ncol;
                     DTYPE *y1_dst_1 = y1[node1]->data + tid * ncol1;
+                    DTYPE beta1 = y1_dst_1[ncol1 - 1];
                     y1_dst_1[ncol1 - 1] = 1.0;
                     CBLAS_GEMV(
                         CblasRowMajor, CblasNoTrans, Bi_nrow, Bi_ncol, 
@@ -247,7 +247,7 @@ void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x)
                     CBLAS_GEMV(
                         CblasRowMajor, CblasTrans, Bi_nrow, Bi_ncol, 
                         1.0, Bi, Bi_ncol, 
-                        x_spos, 1, 1.0, y1_dst_1, 1
+                        x_spos, 1, beta1, y1_dst_1, 1
                     );
                 }
             }

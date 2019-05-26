@@ -48,8 +48,9 @@ struct H2Pack
     int   *level_nodes;      // Size (max_level+1) * n_leaf_node, indices of nodes on each level
     int   *height_n_node;    // Size max_level+1, number of nodes of each height
     int   *height_nodes;     // Size (max_level+1) * n_leaf_node, indices of nodes of each height
-    int   *r_inadm_pairs;    // Size unknown, Reduced inadmissible pairs 
-    int   *r_adm_pairs;      // Size unknown, Reduced admissible pairs 
+    int   *r_inadm_pairs;    // Size unknown, reduced inadmissible pairs 
+    int   *r_adm_pairs;      // Size unknown, reduced admissible pairs 
+    int   *node_n_r_adm;     // Size n_node, number of reduced admissible pairs of a node
     int   *B_nrow;           // Numbers of rows of generator matrices
     int   *B_ncol;           // Numbers of columns of generator matrices
     int   *B_ptr;            // Offset of each generator matrix's data in B_data
@@ -62,17 +63,18 @@ struct H2Pack
     DTYPE *enbox;            // Size n_node * (2*dim), enclosing box data of each node
     DTYPE *B_data;           // Data of generator matrices
     DTYPE *D_data;           // Data of dense blocks in the original matrix
-    H2P_dense_mat_t  *pp;    // Proxy points on each level for generating U and J
-    H2P_dense_mat_t  *U;     // Projection matrices
-    H2P_int_vec_t    *J;     // Skeleton row sets
-    H2P_dense_mat_t  *y0;    // Temporary arrays used in matvec
-    H2P_dense_mat_t  *y1;    // Temporary arrays used in matvec
-    kernel_func_ptr  kernel; // Pointer to the kernel function
-    H2P_thread_buf_t *tb;    // Thread-local buffer
     H2P_int_vec_t    B_blk;  // B matrices task partitioning
     H2P_int_vec_t    D_blk0; // Diagonal blocks in D matrices task partitioning
     H2P_int_vec_t    D_blk1; // Inadmissible blocks in D matrices task partitioning
-    
+    H2P_int_vec_t    *J;     // Skeleton row sets
+    H2P_dense_mat_t  *pp;    // Proxy points on each level for generating U and J
+    H2P_dense_mat_t  *U;     // Projection matrices
+    H2P_dense_mat_t  *y0;    // Temporary arrays used in matvec
+    H2P_dense_mat_t  *y1;    // Temporary arrays used in matvec
+    H2P_thread_buf_t *tb;    // Thread-local buffer
+    kernel_func_ptr  kernel; // Pointer to the kernel function
+
+
     // Statistic data
     int    n_matvec;        // Number of performed matvec
     int    mat_size[8];     // Total size of U, B, D; matvec memory footprint

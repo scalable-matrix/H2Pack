@@ -375,7 +375,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
         }
     }
 
-    // 3. Initialize other not touched U J
+    // 3. Initialize other not touched U J & add statistic info
     for (int i = 0; i < h2pack->n_UJ; i++)
     {
         if (h2pack->U[i] == NULL)
@@ -440,6 +440,7 @@ void H2P_partition_workload(
 void H2P_build_B(H2Pack_t h2pack)
 {
     int   dim          = h2pack->dim;
+    int   n_node       = h2pack->n_node;
     int   n_thread     = h2pack->n_thread;
     int   n_r_adm_pair = h2pack->n_r_adm_pair;
     int   *r_adm_pairs = h2pack->r_adm_pairs;
@@ -468,12 +469,18 @@ void H2P_build_B(H2Pack_t h2pack)
     int B_total_size = 0;
     int n_DTYPE_64B  = 64 / sizeof(DTYPE);
     H2P_int_vec_t *J = h2pack->J;
+    h2pack->node_n_r_adm = (int*) malloc(sizeof(int) * n_node);
+    assert(h2pack->node_n_r_adm != NULL);
+    int *node_n_r_adm = h2pack->node_n_r_adm;
+    memset(node_n_r_adm, 0, sizeof(int) * n_node);
     for (int i = 0; i < n_r_adm_pair; i++)
     {
         int node0  = r_adm_pairs[2 * i];
         int node1  = r_adm_pairs[2 * i + 1];
         int level0 = node_level[node0];
         int level1 = node_level[node1];
+        node_n_r_adm[node0]++;
+        node_n_r_adm[node1]++;
         int n_point0, n_point1;
         if (level0 == level1)
         {
@@ -571,6 +578,7 @@ void H2P_build_B(H2Pack_t h2pack)
         }
     }
     
+    // 4. Add statistic info
     h2pack->mat_size[1] = B_total_size;
     for (int i = 0; i < n_r_adm_pair; i++)
     {
@@ -710,6 +718,7 @@ void H2P_build_D(H2Pack_t h2pack)
         }
     }
     
+    // 5. Add statistic info
     h2pack->mat_size[2] = D0_total_size + D1_total_size;
     for (int i = 0; i < n_leaf_node; i++)
     {

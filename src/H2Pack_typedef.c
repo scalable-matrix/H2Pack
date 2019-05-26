@@ -58,6 +58,7 @@ void H2P_init(
     h2pack->D_ptr         = NULL;
     h2pack->B_data        = NULL;
     h2pack->D_data        = NULL;
+    h2pack->node_n_r_adm  = NULL;
     H2P_int_vec_init(&h2pack->B_blk,  h2pack->n_thread * 5 + 5);
     H2P_int_vec_init(&h2pack->D_blk0, h2pack->n_thread * 5 + 5);
     H2P_int_vec_init(&h2pack->D_blk1, h2pack->n_thread * 5 + 5);
@@ -89,6 +90,7 @@ void H2P_destroy(H2Pack_t h2pack)
     free(h2pack->D_nrow);
     free(h2pack->D_ncol);
     free(h2pack->D_ptr);
+    free(h2pack->node_n_r_adm);
     H2P_free_aligned(h2pack->B_data);
     H2P_free_aligned(h2pack->D_data);
     

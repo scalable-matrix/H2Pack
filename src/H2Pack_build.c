@@ -321,8 +321,8 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                 int e_index = cluster[node * 2 + 1];
                 int n_point = e_index - s_index + 1;
                 H2P_int_vec_init(&J[node], n_point);
-                for (int j = 0; j < n_point; j++)
-                    J[node]->data[j] = s_index + j;
+                for (int k = 0; k < n_point; k++)
+                    J[node]->data[k] = s_index + k;
                 J[node]->length = n_point;
             }
         } else {

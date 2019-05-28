@@ -456,7 +456,12 @@ void H2P_partition_points(
         max_leaf_size, max_leaf_points, 
         NULL, h2pack->coord, coord_tmp
     );
-    free(coord_tmp);
+    for (int i = 0; i < dim; i++)
+        for (int j = 0; j < n_point; j++)
+            coord_tmp[i * n_point + j] = h2pack->coord[j * dim + i];
+    free(h2pack->coord);
+    h2pack->coord = coord_tmp;
+    //free(coord_tmp);
     
     // 3. Convert linked list H2 tree partition to arrays
     int n_node    = root->n_node;

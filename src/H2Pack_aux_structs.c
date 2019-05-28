@@ -182,6 +182,25 @@ void H2P_dense_mat_select_rows(H2P_dense_mat_t mat, H2P_int_vec_t row_idx)
     mat->nrow = row_idx->length;
 }
 
+// Select columns in a H2P_dense_mat structure
+void H2P_dense_mat_select_columns(H2P_dense_mat_t mat, H2P_int_vec_t col_idx)
+{
+    for (int irow = 0; irow < mat->nrow; irow++)
+    {
+        DTYPE *mat_row = mat->data + irow * mat->ld;
+        for (int icol = 0; icol < col_idx->length; icol++)
+            mat_row[icol] = mat_row[col_idx->data[icol]];
+    }
+    mat->ncol = col_idx->length;
+    for (int irow = 1; irow < mat->nrow; irow++)
+    {
+        DTYPE *src = mat->data + irow * mat->ld;
+        DTYPE *dst = mat->data + irow * mat->ncol;
+        memmove(dst, src, sizeof(DTYPE) * mat->ncol);
+    }
+    mat->ld = mat->ncol;
+}
+
 // Print a H2P_dense_mat structure, for debugging
 // Input parameter:
 //   mat : H2P_dense_mat structure to be printed

@@ -131,11 +131,18 @@ int main(int argc, char **argv)
     for (int i = 0; i < npts; i++)
     {
         DTYPE res = 0.0;
-        DTYPE *coord_i = h2pack->coord + i * dim;
+        //DTYPE *coord_i = h2pack->coord + i * dim;
+        DTYPE coord_i[3], coord_j[3];
+        for (int k = 0; k < dim; k++)
+            coord_i[k] = h2pack->coord[i + k * npts];
+        
         #pragma omp simd
         for (int j = 0; j < npts; j++)
         {
-            DTYPE *coord_j = h2pack->coord + j * dim;
+            //DTYPE *coord_j = h2pack->coord + j * dim;
+            for (int k = 0; k < dim; k++)
+                coord_j[k] = h2pack->coord[j + k * npts];
+            
             DTYPE Aij = reciprocal_kernel(dim, coord_i, coord_j);
             res += Aij * x[j];
         }

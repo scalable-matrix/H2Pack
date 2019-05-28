@@ -97,10 +97,10 @@ int main(int argc, char **argv)
         inf = fopen(argv[4], "r");
         for (int i = 0; i < npts; i++)
         {
-            DTYPE *coord_i = coord + i * dim;
+            DTYPE *coord_i = coord + i;
             for (int j = 0; j < dim-1; j++) 
-                fscanf(inf, "%lf,", &coord_i[j]);
-            fscanf(inf, "%lf\n", &coord_i[dim-1]);
+                fscanf(inf, "%lf,", &coord_i[j * npts]);
+            fscanf(inf, "%lf\n", &coord_i[(dim-1) * npts]);
         }
         fclose(inf);
     }

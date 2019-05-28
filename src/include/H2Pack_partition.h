@@ -10,7 +10,7 @@ extern "C" {
 // Partition points for a H2 tree
 // Input parameters:
 //   n_point         : Number of points for the kernel matrix
-//   coord           : Size n_point * dim, coordinates of points
+//   coord           : Size dim * n_point, each column is the coordinate of a point
 //   max_leaf_points : Maximum point in a leaf node's box
 //   max_leaf_size   : Maximum size of a leaf node's box
 //   h2pack          : H2Pack structure initialized using H2P_init()

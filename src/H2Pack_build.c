@@ -60,16 +60,21 @@ void H2P_eval_kernel_matrix_direct(
     H2P_dense_mat_t y_coord, H2P_dense_mat_t kernel_mat
 )
 {
-    H2P_dense_mat_resize(kernel_mat, x_coord->nrow, y_coord->nrow);
+    H2P_dense_mat_resize(kernel_mat, x_coord->ncol, y_coord->ncol);
     #pragma omp parallel for schedule(dynamic)
-    for (int i = 0; i < x_coord->nrow; i++)
+    for (int i = 0; i < x_coord->ncol; i++)
     {
+        DTYPE x_i[3], y_j[3];
         DTYPE *kernel_mat_row = kernel_mat->data + i * kernel_mat->ld;
-        const DTYPE *x_i = x_coord->data + i * dim;
-        for (int j = 0; j < y_coord->nrow; j++)
+        const DTYPE *x_i0 = x_coord->data + i;
+        for (int k = 0; k < dim; k++)
+            x_i[k] = x_i0[k * x_coord->ncol];
+        for (int j = 0; j < y_coord->ncol; j++)
         {
-            const DTYPE *y_j = y_coord->data + j * dim;
-            kernel_mat_row[j] = kernel(dim, x_i, y_j);
+            const DTYPE *y_j0 = y_coord->data + j;
+            for (int k = 0; k < dim; k++)
+                y_j[k] = y_j0[k * y_coord->ncol];
+            kernel_mat_row[j] = kernel(dim, &x_i[0], &y_j[0]);
         }
     }
 }
@@ -160,8 +165,8 @@ void H2P_generate_proxy_point(
     H2P_dense_mat_t tmpA, Nx_points, Ny_points, min_dist;
     H2P_int_vec_t skel_idx;
     H2P_dense_mat_init(&tmpA, Nx_size, Ny_size);
-    H2P_dense_mat_init(&Nx_points, Nx_size, dim);
-    H2P_dense_mat_init(&Ny_points, Ny_size, dim);
+    H2P_dense_mat_init(&Nx_points, dim, Nx_size);
+    H2P_dense_mat_init(&Ny_points, dim, Ny_size);
     H2P_dense_mat_init(&min_dist, Nx_size, 1);
     H2P_int_vec_init(&skel_idx, Nx_size);
     srand48(time(NULL));
@@ -188,26 +193,29 @@ void H2P_generate_proxy_point(
         DTYPE L3 = 2.0 * semi_L3;
         
         // (2) Generate Nx and Ny points
-        H2P_dense_mat_resize(Nx_points, Nx_size, dim);
+        H2P_dense_mat_resize(Nx_points, dim, Nx_size);
         for (int i = 0; i < Nx_size * dim; i++)
         {
             DTYPE val = drand48();
             Nx_points->data[i] = L1 * val - semi_L1;
         }
-        H2P_dense_mat_resize(Ny_points, Ny_size, dim);
+        H2P_dense_mat_resize(Ny_points, dim, Ny_size);
         for (int i = 0; i < Ny_size; i++)
         {
-            DTYPE *Ny_i = Ny_points->data + i * dim;
+            DTYPE *tmp_coord = tmpA->data;
             int flag = 1;
             while (flag == 1)
             {
                 for (int j = 0; j < dim; j++)
                 {
                     DTYPE val = drand48();
-                    Ny_i[j] = L3 * val - semi_L3;
+                    tmp_coord[j] = L3 * val - semi_L3;
                 }
-                flag = point_in_box(dim, Ny_i, L2);
+                flag = point_in_box(dim, tmp_coord, L2);
             }
+            DTYPE *Ny_i = Ny_points->data + i;
+            for (int j = 0; j < dim; j++)
+                Ny_i[j * Ny_size] = tmp_coord[j];
         }
         
 
@@ -222,7 +230,7 @@ void H2P_generate_proxy_point(
             tmpA, QR_REL_NRM, &rel_tol, NULL, skel_idx, 
             nthreads, QR_buff->data, ID_buff->data
         );
-        H2P_dense_mat_select_rows(Nx_points, skel_idx);
+        H2P_dense_mat_select_columns(Nx_points, skel_idx);
         
         H2P_eval_kernel_matrix_direct(kernel, dim, Ny_points, Nx_points, tmpA);
         H2P_dense_mat_resize(QR_buff, 2 * tmpA->nrow, 1);
@@ -231,22 +239,25 @@ void H2P_generate_proxy_point(
             tmpA, QR_REL_NRM, &rel_tol, NULL, skel_idx, 
             nthreads, QR_buff->data, ID_buff->data
         );
-        H2P_dense_mat_select_rows(Ny_points, skel_idx);
+        H2P_dense_mat_select_columns(Ny_points, skel_idx);
         
         // (4) Make the skeleton Ny points dense and then use them as proxy points
         int ny = skel_idx->length;
         H2P_dense_mat_resize(min_dist, ny, 1);
+        DTYPE *coord_i = tmpA->data;
+        DTYPE *coord_j = tmpA->data + dim;
         for (int i = 0; i < ny; i++) min_dist->data[i] = 1e20;
         for (int i = 0; i < ny; i++)
         {
-            DTYPE *coord_i = Ny_points->data + i * dim;
+            for (int k = 0; k < dim; k++)
+                coord_i[k] = Ny_points->data[i + k * Ny_points->ncol];
+            
             for (int j = 0; j < i; j++)
             {
-                DTYPE *coord_j = Ny_points->data + j * dim;
                 DTYPE dist_ij = 0.0;
                 for (int k = 0; k < dim; k++)
                 {
-                    DTYPE diff = coord_i[k] - coord_j[k];
+                    DTYPE diff = coord_i[k] - Ny_points->data[j + k * Ny_points->ncol];
                     dist_ij += diff * diff;
                 }
                 dist_ij = DSQRT(dist_ij);
@@ -260,8 +271,11 @@ void H2P_generate_proxy_point(
         // Also transpose the coordinate array for vectorizing kernel evaluation here
         for (int i = 0; i < ny; i++)
         {
-            DTYPE *tmp_coord  = tmpA->data;
-            DTYPE *Ny_point_i = Ny_points->data + i * dim;
+            DTYPE *tmp_coord0 = tmpA->data;
+            DTYPE *tmp_coord1 = tmpA->data + dim;
+            DTYPE *Ny_point_i = Ny_points->data + i;
+            for (int j = 0; j < dim; j++)
+                tmp_coord0[j] = Ny_point_i[j * Ny_points->ncol];
             DTYPE radius_i_scale = min_dist->data[i] * 0.33;
             int flag = 1;
             while (flag == 1)
@@ -269,26 +283,26 @@ void H2P_generate_proxy_point(
                 DTYPE radius_1 = 0.0;
                 for (int j = 0; j < dim; j++)
                 {
-                    tmp_coord[j] = drand48() - 0.5;
-                    radius_1 += tmp_coord[j] * tmp_coord[j];
+                    tmp_coord1[j] = drand48() - 0.5;
+                    radius_1 += tmp_coord1[j] * tmp_coord1[j];
                 }
                 DTYPE inv_radius_1 = 1.0 / DSQRT(radius_1);
                 for (int j = 0; j < dim; j++) 
                 {
-                    tmp_coord[j] *= inv_radius_1;
-                    tmp_coord[j] *= radius_i_scale;
-                    tmp_coord[j] += Ny_point_i[j];
+                    tmp_coord1[j] *= inv_radius_1;
+                    tmp_coord1[j] *= radius_i_scale;
+                    tmp_coord1[j] += tmp_coord0[j];
                 }
-                if ((point_in_box(dim, tmp_coord, L2) == 0) &&
-                    (point_in_box(dim, tmp_coord, L3) == 1))
+                if ((point_in_box(dim, tmp_coord1, L2) == 0) &&
+                    (point_in_box(dim, tmp_coord1, L3) == 1))
                     flag = 0;
             }
             DTYPE *coord_0 = pp_level->data + (2 * i);
             DTYPE *coord_1 = pp_level->data + (2 * i + 1);
             for (int j = 0; j < dim; j++)
             {
-                coord_0[j * Ny_size2] = Ny_point_i[j];
-                coord_1[j * Ny_size2] = tmp_coord[j];
+                coord_0[j * Ny_size2] = tmp_coord0[j];
+                coord_1[j * Ny_size2] = tmp_coord1[j];
             }
         }
     }

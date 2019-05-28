@@ -44,24 +44,25 @@ void H2P_exclusive_scan(const int n, int *x, int *res)
 //   coord_s         : Index of the first point in this box
 //   coord_e         : Index of the last point in this box
 //   dim             : Dimension of point coordinate
+//   n_point         : Total number of points
 //   max_leaf_size   : Maximum box size for leaf nodes
 //   max_leaf_points : Maximum number of points for leaf nodes
 //   enbox           : Box that encloses all points in this node. 
 //                     enbox[0 : dim-1] are the corner with the smallest
 //                     x/y/z/... coordinates. enbox[dim : 2*dim-1] are the 
 //                     sizes of this box.
-//   coord           : Array, size H2Pack->n_point * dim, point coordinates.
+//   coord           : Array, size n_point * dim, point coordinates.
 //   coord_tmp       : Temporary array for sorting coord
 // Output parameters:
 //   coord           : Sorted coordinates
 //   <return>        : Information of current node
 H2P_tree_node_t H2P_bisection_partition_points(
-    int level, int coord_s, int coord_e, const int dim, 
+    int level, int coord_s, int coord_e, const int dim, const int n_point, 
     const DTYPE max_leaf_size, const int max_leaf_points, 
     DTYPE *enbox, DTYPE *coord, DTYPE *coord_tmp
 )
 {
-    int n_point   = coord_e - coord_s + 1;
+    int node_npts = coord_e - coord_s + 1;
     int max_child = 1 << dim;
     if (level > partition_vars.max_level) partition_vars.max_level = level;
     
@@ -74,22 +75,23 @@ H2P_tree_node_t H2P_bisection_partition_points(
         DTYPE *center = (DTYPE*) malloc(sizeof(DTYPE) * dim);
         memset(center, 0, sizeof(DTYPE) * dim);
         // Calculate the center of points in this box
-        for (int i = 0; i < n_point; i++)
+        for (int j = 0; j < dim; j++)
         {
-            DTYPE *coord_i = coord + (coord_s + i) * dim;
-            for (int j = 0; j < dim; j++) 
-                center[j] += coord_i[j];
+            DTYPE *coord_dim_j = coord + j * n_point;
+            for (int i = coord_s; i <= coord_e; i++)
+                center[j] += coord_dim_j[i];
         }
         DTYPE semi_box_size = 0.0;
-        DTYPE npts = (DTYPE) n_point;
+        DTYPE npts = (DTYPE) node_npts;
         for (int j = 0; j < dim; j++) center[j] /= npts;
         // Calculate the box size
-        for (int i = 0; i < n_point; i++)
+        for (int j = 0; j < dim; j++)
         {
-            DTYPE *coord_i = coord + (coord_s + i) * dim;
-            for (int j = 0; j < dim; j++)
+            DTYPE *coord_dim_j = coord + j * n_point;
+            DTYPE center_j = center_j;
+            for (int i = coord_s; i <= coord_e; i++)
             {
-                DTYPE tmp = DABS(coord_i[j] - center[j]);
+                DTYPE tmp = DABS(coord_dim_j[i] - center_j);
                 semi_box_size = MAX(semi_box_size, tmp);
             }
         }
@@ -105,7 +107,7 @@ H2P_tree_node_t H2P_bisection_partition_points(
     
     // 2. If the size of current box or the number of points in current box
     //    is smaller than the threshold, set current box as a leaf node
-    if ((n_point <= max_leaf_points) || (box_size <= max_leaf_size))
+    if ((node_npts <= max_leaf_points) || (box_size <= max_leaf_size))
     {
         H2P_tree_node_t node;
         H2P_tree_node_init(&node, dim);
@@ -124,48 +126,56 @@ H2P_tree_node_t H2P_bisection_partition_points(
     }
     
     // 3. Bisection partition points in current box
-    int *rel_idx   = (int*) malloc(sizeof(int) * n_point * dim);
-    int *child_idx = (int*) malloc(sizeof(int) * n_point);
+    int *rel_idx   = (int*) malloc(sizeof(int) * node_npts * dim);
+    int *child_idx = (int*) malloc(sizeof(int) * node_npts);
     assert(rel_idx != NULL && child_idx != NULL);
-    memset(child_idx, 0, sizeof(int) * n_point);
-    for (int i = 0; i < n_point; i++)
+    memset(child_idx, 0, sizeof(int) * node_npts);
+    int pow2 = 1;
+    for (int j = 0; j < dim; j++)
     {
-        DTYPE *coord_i = coord + (coord_s + i) * dim;
-        int *rel_idx_i = rel_idx + i * dim;
-        int pow2 = 1;
-        for (int j = 0; j < dim; j++)
+        DTYPE enbox_corner_j = enbox[j];
+        DTYPE enbox_width_j  = enbox[dim + j];
+        DTYPE *coord_dim_j_s = coord   + j * n_point + coord_s;
+        int   *rel_idx_dim_j = rel_idx + j * node_npts;
+        for (int i = 0; i < node_npts; i++)
         {
-            DTYPE rel_coord = coord_i[j] - enbox[j];
-            rel_idx_i[j] = DFLOOR(2 * rel_coord / enbox[dim + j]);
-            if (rel_idx_i[j] == 2) rel_idx_i[j] = 1;
-            child_idx[i] += rel_idx_i[j] * pow2;
-            pow2 *= 2;
+            DTYPE rel_coord = coord_dim_j_s[i] - enbox_corner_j;
+            rel_idx_dim_j[i] = DFLOOR(2 * rel_coord / enbox_width_j);
+            if (rel_idx_dim_j[i] == 2) rel_idx_dim_j[i] = 1;
+            child_idx[i] += rel_idx_dim_j[i] * pow2;
         }
+        pow2 *= 2;
     }
+    
     
     // 4. Get the number of points in each sub-box, then bucket sort all 
     //    points according to the sub-box a point in
-    int *sub_rel_idx = (int*) malloc(sizeof(int) * max_child * dim);
-    int *sub_n_point = (int*) malloc(sizeof(int) * max_child);
-    int *sub_displs  = (int*) malloc(sizeof(int) * (max_child + 1));
-    assert(sub_rel_idx != NULL && sub_n_point != NULL && sub_displs != NULL);
-    memset(sub_n_point, 0, sizeof(int) * max_child);
-    for (int i = 0; i < n_point; i++)
+    int *sub_rel_idx   = (int*) malloc(sizeof(int) * max_child * dim);
+    int *sub_node_npts = (int*) malloc(sizeof(int) * max_child);
+    int *sub_displs    = (int*) malloc(sizeof(int) * (max_child + 1));
+    assert(sub_rel_idx != NULL && sub_node_npts != NULL && sub_displs != NULL);
+    memset(sub_node_npts, 0, sizeof(int) * max_child);
+    for (int i = 0; i < node_npts; i++)
     {
         int child_idx_i = child_idx[i];
-        sub_n_point[child_idx_i]++;
-        memcpy(sub_rel_idx + child_idx_i * dim, rel_idx + i * dim, sizeof(int) * dim);
+        sub_node_npts[child_idx_i]++;
+        for (int j = 0; j < dim; j++)
+            sub_rel_idx[j * max_child + child_idx_i] = rel_idx[j * node_npts + i];
     }
-    H2P_exclusive_scan(max_child, sub_n_point, sub_displs);
-    DTYPE *coord_tmp_ptr = coord_tmp + coord_s * dim;
-    DTYPE *coord_ptr     = coord     + coord_s * dim;
-    memcpy(coord_tmp_ptr, coord_ptr, sizeof(DTYPE) * n_point * dim);
-    for (int i = 0; i < n_point; i++)
+    H2P_exclusive_scan(max_child, sub_node_npts, sub_displs);
+    for (int j = 0; j < dim; j++)
+    {
+        DTYPE *src = coord     + j * n_point + coord_s;
+        DTYPE *dst = coord_tmp + j * n_point + coord_s;
+        memcpy(dst, src, sizeof(DTYPE) * node_npts);
+    }
+    for (int i = 0; i < node_npts; i++)
     {
         int child_idx_i = child_idx[i];
-        DTYPE *src_ptr = coord_tmp + dim * (coord_s + i);
-        DTYPE *dst_ptr = coord     + dim * (coord_s + sub_displs[child_idx_i]);
-        memcpy(dst_ptr, src_ptr, sizeof(DTYPE) * dim);
+        DTYPE *src = coord_tmp + coord_s + i;
+        DTYPE *dst = coord     + coord_s + sub_displs[child_idx_i];
+        for (int j = 0; j < dim; j++)
+            dst[j * n_point] = src[j * n_point];
         sub_displs[child_idx_i]++;
     }
     
@@ -174,15 +184,15 @@ H2P_tree_node_t H2P_bisection_partition_points(
     DTYPE *sub_box      = (DTYPE*) malloc(sizeof(DTYPE) * max_child * dim * 2);
     int   *sub_coord_se = (int*)   malloc(sizeof(int)   * max_child * 2);
     assert(sub_box != NULL && sub_coord_se != NULL);
-    H2P_exclusive_scan(max_child, sub_n_point, sub_displs);
+    H2P_exclusive_scan(max_child, sub_node_npts, sub_displs);
     for (int i = 0; i < max_child; i++)
     {
-        if (sub_n_point[i] == 0) continue;
+        if (sub_node_npts[i] == 0) continue;
         DTYPE *sub_box_child = sub_box + n_child * dim * 2;
-        int *sub_rel_idx_i = sub_rel_idx + i * dim;
+        int *sub_rel_idx_i = sub_rel_idx + i;
         for (int j = 0; j < dim; j++)
         {
-            sub_box_child[j]       = enbox[j] + 0.5 * enbox[dim + j] * sub_rel_idx_i[j];
+            sub_box_child[j]       = enbox[j] + 0.5 * enbox[dim + j] * sub_rel_idx_i[j * max_child];
             sub_box_child[dim + j] = 0.5 * enbox[dim + j];
         }
         sub_coord_se[2 * n_child + 0] = coord_s + sub_displs[i];
@@ -200,7 +210,7 @@ H2P_tree_node_t H2P_bisection_partition_points(
         int coord_e_i = sub_coord_se[2 * i + 1];
         DTYPE *sub_box_i = sub_box + i * dim * 2;
         node->children[i] = H2P_bisection_partition_points(
-            level + 1, coord_s_i, coord_e_i, dim, 
+            level + 1, coord_s_i, coord_e_i, dim, n_point, 
             max_leaf_size, max_leaf_points, 
             sub_box_i, coord, coord_tmp
         );
@@ -224,7 +234,7 @@ H2P_tree_node_t H2P_bisection_partition_points(
     free(sub_coord_se);
     free(sub_box);
     free(sub_displs);
-    free(sub_n_point);
+    free(sub_node_npts);
     free(sub_rel_idx);
     free(child_idx);
     free(rel_idx);
@@ -452,16 +462,11 @@ void H2P_partition_points(
     partition_vars.max_level   = 0;
     partition_vars.n_leaf_node = 0;
     H2P_tree_node_t root = H2P_bisection_partition_points(
-        0, 0, n_point-1, dim, 
+        0, 0, n_point-1, dim, n_point, 
         max_leaf_size, max_leaf_points, 
         NULL, h2pack->coord, coord_tmp
     );
-    for (int i = 0; i < dim; i++)
-        for (int j = 0; j < n_point; j++)
-            coord_tmp[i * n_point + j] = h2pack->coord[j * dim + i];
-    free(h2pack->coord);
-    h2pack->coord = coord_tmp;
-    //free(coord_tmp);
+    free(coord_tmp);
     
     // 3. Convert linked list H2 tree partition to arrays
     int n_node    = root->n_node;

@@ -47,6 +47,7 @@ void H2P_init(
     h2pack->enbox         = NULL;
     h2pack->U             = NULL;
     h2pack->J             = NULL;
+    h2pack->J_coord       = NULL;
     h2pack->y0            = NULL;
     h2pack->y1            = NULL;
     h2pack->tb            = NULL;
@@ -97,10 +98,12 @@ void H2P_destroy(H2Pack_t h2pack)
     for (int i = 0; i < h2pack->n_UJ; i++)
     {
         H2P_dense_mat_destroy(h2pack->U[i]);
+        H2P_dense_mat_destroy(h2pack->J_coord[i]);
         H2P_int_vec_destroy(h2pack->J[i]);
     }
     free(h2pack->U);
     free(h2pack->J);
+    free(h2pack->J_coord);
     
     for (int i = 0; i < h2pack->n_node; i++)
     {

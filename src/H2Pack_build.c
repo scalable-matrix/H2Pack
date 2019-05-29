@@ -36,6 +36,30 @@ void H2P_copy_matrix_columns(
     }
 }
 
+// Copy a block from ta matrix to another matrix
+// Input parameters:
+//   nrow    : Number of rows to be copied 
+//   ncol    : Number of columns to be copied
+//   src_mat : Source matrix 
+//   src_ld  : Leading dimension of the source matrix
+//   dst_ld  : Leading dimension of the destination matrix
+// Output parameter:
+//   dst_mat : Destination matrix
+void H2P_copy_matrix_block(
+    const int nrow, const int ncol, DTYPE *src_mat, const int src_ld, 
+    DTYPE *dst_mat, const int dst_ld
+)
+{
+    size_t row_msize = sizeof(DTYPE) * ncol;
+    for (int irow = 0; irow < nrow; irow ++)
+    {
+        DTYPE *src_row = src_mat + irow * src_ld;
+        DTYPE *dst_row = dst_mat + irow * dst_ld;
+        memcpy(dst_row, src_row, row_msize);
+    }
+}
+
+
 // Evaluate a kernel matrix
 // Input parameters:
 //   kernel  : Kernel matrix evaluation function
@@ -129,7 +153,7 @@ void H2P_eval_kernel_matrix_UJ_proxy(
 )
 {
     const int nrow = idx_x->length;
-    const int ncol = pp_coord->nrow;
+    const int ncol = pp_coord->ncol;
     H2P_dense_mat_resize(kernel_mat, nrow, ncol);
     H2P_dense_mat_resize(tmp_x, dim, nrow);
     H2P_copy_matrix_columns(coord, n_point, tmp_x->data, nrow, dim, idx_x->data, nrow);
@@ -289,7 +313,7 @@ void H2P_generate_proxy_point(
             }
         }
         const int Ny_size2 = 2 * ny;
-        H2P_dense_mat_init(&pp[level], Ny_size2, dim);
+        H2P_dense_mat_init(&pp[level], dim, Ny_size2);
         H2P_dense_mat_t pp_level = pp[level];
         // Also transpose the coordinate array for vectorizing kernel evaluation here
         for (int i = 0; i < ny; i++)
@@ -360,6 +384,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     int   *n_child       = h2pack->n_child;
     int   *height_n_node = h2pack->height_n_node;
     int   *height_nodes  = h2pack->height_nodes;
+    int   *leaf_nodes    = h2pack->height_nodes;
     int   *node_level    = h2pack->node_level;
     int   *cluster       = h2pack->cluster;
     DTYPE *coord         = h2pack->coord;
@@ -374,16 +399,19 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     
     // 1. Allocate U and J
     h2pack->n_UJ = n_node;
-    h2pack->U = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
-    h2pack->J = (H2P_int_vec_t*)   malloc(sizeof(H2P_int_vec_t)   * n_node);
-    assert(h2pack->U != NULL && h2pack->J != NULL);
+    h2pack->U       = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
+    h2pack->J       = (H2P_int_vec_t*)   malloc(sizeof(H2P_int_vec_t)   * n_node);
+    h2pack->J_coord = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
+    assert(h2pack->U != NULL && h2pack->J != NULL && h2pack->J_coord != NULL);
     for (int i = 0; i < h2pack->n_UJ; i++)
     {
-        h2pack->U[i] = NULL;
-        h2pack->J[i] = NULL;
+        h2pack->U[i]       = NULL;
+        h2pack->J[i]       = NULL;
+        h2pack->J_coord[i] = NULL;
     }
-    H2P_dense_mat_t *U = h2pack->U;
-    H2P_int_vec_t   *J = h2pack->J;
+    H2P_dense_mat_t *U       = h2pack->U;
+    H2P_int_vec_t   *J       = h2pack->J;
+    H2P_dense_mat_t *J_coord = h2pack->J_coord;
     
     // 2. Hierarchical construction height by height. max_adm_height is the 
     //    highest position that still has admissible blocks, so we only need 
@@ -410,6 +438,9 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                 for (int k = 0; k < node_npts; k++)
                     J[node]->data[k] = s_index + k;
                 J[node]->length = node_npts;
+
+                H2P_dense_mat_init(&J_coord[node], dim, node_npts);
+                H2P_copy_matrix_block(dim, node_npts, coord + s_index, n_point, J_coord[node]->data, node_npts);
             }
         } else {
             // Non-leaf nodes, gather row indices from children nodes
@@ -452,12 +483,48 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                 int level = node_level[node];
                 if (level < min_adm_level) continue;
                 
-                // Use the first dim elements in node_box to store the box center coordinate
                 DTYPE *node_box = enbox + node * 2 * dim;
-                for (int k = 0; k < dim; k++) node_box[k] += 0.5 * node_box[dim + k];
-                H2P_eval_kernel_matrix_UJ_proxy(kernel, dim, coord, n_point, J[node], node_box, pp[level], tmp_x, A_block);
-                for (int k = 0; k < dim; k++) node_box[k] -= 0.5 * node_box[dim + k];
+                int nrow = J[node]->length;
+                int ncol = pp[level]->ncol;
+                H2P_dense_mat_resize(tmp_x, dim, J[node]->length);
+                H2P_dense_mat_resize(A_block, nrow, ncol);
+
+                // Gather coordinates of this node's points (== all children nodes' skeleton points)
+                if (i == 0)
+                {
+                    tmp_x = J_coord[node];
+                } else {
+                    int n_child_node = n_child[node];
+                    int *child_nodes = children + node * max_child;
+                    int J_child_size = 0;
+                    for (int i_child = 0; i_child < n_child_node; i_child++)
+                    {
+                        int   i_child_node = child_nodes[i_child];
+                        DTYPE *src_mat     = J_coord[i_child_node]->data;
+                        DTYPE *dst_mat     = tmp_x->data + J_child_size;
+                        int   src_ld       = J_coord[i_child_node]->ncol;
+                        int   dst_ld       = tmp_x->ncol;
+                        H2P_copy_matrix_block(dim, src_ld, src_mat, src_ld, dst_mat, dst_ld);
+                        J_child_size += J[i_child_node]->length;
+                    }
+                }
                 
+                // Shift points in this node so their center is at the original point
+                for (int k = 0; k < dim; k++)
+                {
+                    DTYPE box_center_k = node_box[k] + 0.5 * node_box[dim + k];
+                    DTYPE *tmp_x_row_k = tmp_x->data + k * nrow;
+                    #pragma omp simd
+                    for (int l = 0; l < nrow; l++)
+                        tmp_x_row_k[l] -= box_center_k;
+                }
+                kernel(
+                    tmp_x->data, nrow, nrow,
+                    pp[level]->data, ncol, ncol, 
+                    dim, A_block->data, A_block->ld
+                );
+
+                // ID compress
                 H2P_dense_mat_resize(QR_buff, 2 * A_block->nrow, 1);
                 H2P_int_vec_set_capacity(ID_buff, 4 * A_block->nrow);
                 H2P_ID_compress(
@@ -465,9 +532,15 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                     1, QR_buff->data, ID_buff->data
                 );
                 
+                // Choose the skeleton points of this node
                 for (int k = 0; k < U[node]->ncol; k++)
                     J[node]->data[k] = J[node]->data[sub_idx->data[k]];
                 J[node]->length = U[node]->ncol;
+                H2P_dense_mat_init(&J_coord[node], dim, U[node]->ncol);
+                H2P_copy_matrix_columns(
+                    coord, n_point, J_coord[node]->data, J[node]->length, 
+                    dim, J[node]->data, J[node]->length
+                );
             }
         }
     }
@@ -475,7 +548,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     // 3. Initialize other not touched U J & add statistic info
     for (int i = 0; i < h2pack->n_UJ; i++)
     {
-        if (h2pack->U[i] == NULL)
+        if (U[i] == NULL)
         {
             H2P_dense_mat_init(&U[i], 1, 1);
             U[i]->nrow = 0;
@@ -488,7 +561,14 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
             h2pack->mat_size[5] += U[i]->nrow * U[i]->ncol;
             h2pack->mat_size[5] += U[i]->nrow + U[i]->ncol;
         }
-        if (h2pack->J[i] == NULL) H2P_int_vec_init(&J[i], 1);
+        if (J[i] == NULL) H2P_int_vec_init(&J[i], 1);
+        if (J_coord[i] == NULL)
+        {
+        	H2P_dense_mat_init(&J_coord[i], 1, 1);
+            J_coord[i]->nrow = 0;
+            J_coord[i]->ncol = 0;
+            J_coord[i]->ld   = 0;
+        }
     }
 }
 
@@ -545,8 +625,9 @@ void H2P_build_B(H2Pack_t h2pack)
     int   *node_level  = h2pack->node_level;
     int   *cluster     = h2pack->cluster;
     DTYPE *coord       = h2pack->coord;
-    kernel_func_ptr kernel = h2pack->kernel;
-    H2P_int_vec_t B_blk  = h2pack->B_blk;
+    kernel_func_ptr kernel   = h2pack->kernel;
+    H2P_int_vec_t   B_blk    = h2pack->B_blk;
+    H2P_dense_mat_t *J_coord = h2pack->J_coord;
 
     double st, et;
     st = H2P_get_wtime_sec();
@@ -606,7 +687,8 @@ void H2P_build_B(H2Pack_t h2pack)
     }
     H2P_partition_workload(n_r_adm_pair, B_ptr + 1, B_total_size, n_thread * 5, B_blk);
     for (int i = 1; i <= n_r_adm_pair; i++) B_ptr[i] += B_ptr[i - 1];
-    
+
+
     // 3. Generate B matrices
     h2pack->B_data = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * B_total_size);
     assert(h2pack->B_data != NULL);
@@ -615,9 +697,7 @@ void H2P_build_B(H2Pack_t h2pack)
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
-        H2P_int_vec_t   idx   = h2pack->tb[tid]->idx0;
-        H2P_dense_mat_t tmp_x = h2pack->tb[tid]->mat0;
-        H2P_dense_mat_t tmp_y = h2pack->tb[tid]->mat1;
+
         #pragma omp for schedule(dynamic)
         for (int i_blk = 0; i_blk < n_B_blk; i_blk++)
         {
@@ -638,7 +718,11 @@ void H2P_build_B(H2Pack_t h2pack)
                     int node1_npts = J[node1]->length;
                     B_nrow[i] = node0_npts;
                     B_ncol[i] = node1_npts;
-                    H2P_eval_kernel_matrix_index(kernel, dim, coord, n_point, J[node0], J[node1], tmp_x, tmp_y, Bi);
+                    kernel(
+                    	J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
+                    	J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
+                    	dim, Bi, J_coord[node1]->ncol
+                    );
                 }
                 
                 // (2) node1 is a leaf node and its level is higher than node0's level, 
@@ -649,13 +733,13 @@ void H2P_build_B(H2Pack_t h2pack)
                     int e_index1 = cluster[2 * node1 + 1];
                     int node0_npts = J[node0]->length;
                     int node1_npts = e_index1 - s_index1 + 1;
-                    H2P_int_vec_set_capacity(idx, node1_npts);
-                    idx->length = node1_npts;
-                    for (int j = 0; j < node1_npts; j++)
-                        idx->data[j] = s_index1 + j;
                     B_nrow[i] = node0_npts;
                     B_ncol[i] = node1_npts;
-                    H2P_eval_kernel_matrix_index(kernel, dim, coord, n_point, J[node0], idx, tmp_x, tmp_y, Bi);
+                    kernel(
+                    	J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
+                    	coord + s_index1, n_point, node1_npts, 
+                    	dim, Bi, node1_npts
+                    );
                 }
                 
                 // (3) node0 is a leaf node and its level is higher than node1's level, 
@@ -666,13 +750,13 @@ void H2P_build_B(H2Pack_t h2pack)
                     int e_index0 = cluster[2 * node0 + 1];
                     int node0_npts = e_index0 - s_index0 + 1;
                     int node1_npts = J[node1]->length;
-                    H2P_int_vec_set_capacity(idx, node0_npts);
-                    idx->length = node0_npts;
-                    for (int j = 0; j < node0_npts; j++)
-                        idx->data[j] = s_index0 + j;
                     B_nrow[i] = node0_npts;
                     B_ncol[i] = node1_npts;
-                    H2P_eval_kernel_matrix_index(kernel, dim, coord, n_point, idx, J[node1], tmp_x, tmp_y, Bi);
+                    kernel(
+                    	coord + s_index0, n_point, node0_npts, 
+                    	J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
+                    	dim, Bi, J_coord[node1]->ncol
+                    );
                 }
             }
         }
@@ -761,11 +845,7 @@ void H2P_build_D(H2Pack_t h2pack)
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
-        H2P_int_vec_t   idx0  = h2pack->tb[tid]->idx0;
-        H2P_int_vec_t   idx1  = h2pack->tb[tid]->idx1;
-        H2P_dense_mat_t tmp_x = h2pack->tb[tid]->mat0;
-        H2P_dense_mat_t tmp_y = h2pack->tb[tid]->mat1;
-        
+  
         // 3. Generate diagonal blocks (leaf node self interaction)
         #pragma omp for schedule(dynamic) nowait
         for (int i_blk0 = 0; i_blk0 < n_D0_blk; i_blk0++)
@@ -779,14 +859,13 @@ void H2P_build_D(H2Pack_t h2pack)
                 int e_index = cluster[2 * node + 1];
                 int node_npts = e_index - s_index + 1;
                 DTYPE *Di = D_data + D_ptr[i];
-                H2P_int_vec_set_capacity(idx0, node_npts);
-                idx0->length = node_npts;
-                for (int j = 0; j < node_npts; j++)
-                    idx0->data[j] = s_index + j;
                 D_nrow[i] = node_npts;
                 D_ncol[i] = node_npts;
-                H2P_dense_mat_resize(tmp_y, dim, node_npts);
-                H2P_eval_kernel_matrix_index(kernel, dim, coord, n_point, idx0, idx0, tmp_x, tmp_y, Di);
+                kernel(
+                	coord + s_index, n_point, node_npts,
+                	coord + s_index, n_point, node_npts,
+                	dim, Di, node_npts
+                );
             }
         }
         
@@ -807,18 +886,13 @@ void H2P_build_D(H2Pack_t h2pack)
                 int node0_npts = e_index0 - s_index0 + 1;
                 int node1_npts = e_index1 - s_index1 + 1;
                 DTYPE *Di = D_data + D_ptr[i + n_leaf_node];
-                H2P_int_vec_set_capacity(idx0, node0_npts);
-                H2P_int_vec_set_capacity(idx1, node1_npts);
-                idx0->length = node0_npts;
-                idx1->length = node1_npts;
-                for (int j = 0; j < node0_npts; j++)
-                    idx0->data[j] = s_index0 + j;
-                for (int j = 0; j < node1_npts; j++)
-                    idx1->data[j] = s_index1 + j;
                 D_nrow[i + n_leaf_node] = node0_npts;
                 D_ncol[i + n_leaf_node] = node1_npts;
-                H2P_dense_mat_resize(tmp_y, dim, node1_npts);
-                H2P_eval_kernel_matrix_index(kernel, dim, coord, n_point, idx0, idx1, tmp_x, tmp_y, Di);
+                kernel(
+                	coord + s_index0, n_point, node0_npts,
+                	coord + s_index1, n_point, node1_npts,
+                	dim, Di, node1_npts
+                );
             }
         }
     }

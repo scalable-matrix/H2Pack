@@ -77,6 +77,7 @@ struct H2Pack
     H2P_int_vec_t    D_blk0; // Diagonal blocks in D matrices task partitioning
     H2P_int_vec_t    D_blk1; // Inadmissible blocks in D matrices task partitioning
     H2P_int_vec_t    *J;     // Skeleton row sets
+    H2P_dense_mat_t  *J_coord;  // Coordinate of J points
     H2P_dense_mat_t  *pp;    // Proxy points on each level for generating U and J
     H2P_dense_mat_t  *U;     // Projection matrices
     H2P_dense_mat_t  *y0;    // Temporary arrays used in matvec

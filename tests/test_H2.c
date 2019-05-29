@@ -10,23 +10,62 @@
 
 #include "H2Pack.h"
 
-// Symmetry kernel function: reciprocal
-// Input parameters:
-//   dim  : Dimension of point coordinate
-//   x, y : Coordinate of two points
-// Output parameter:
-//   <return> : Output of kernel function
-DTYPE reciprocal_kernel(const int dim, const DTYPE *x, const DTYPE *y)
+void reciprocal_kernel_3d(
+    const DTYPE *coord0, const int ld0, const int n0,
+    const DTYPE *coord1, const int ld1, const int n1,
+    const int dim, DTYPE *mat, const int ldm
+)
 {
-    DTYPE res = 0.0;
-    for (int i = 0; i < dim; i++)
+    const DTYPE *x0 = coord0 + ld0 * 0;
+    const DTYPE *y0 = coord0 + ld0 * 1;
+    const DTYPE *z0 = coord0 + ld0 * 2;
+    const DTYPE *x1 = coord1 + ld1 * 0;
+    const DTYPE *y1 = coord1 + ld1 * 1;
+    const DTYPE *z1 = coord1 + ld1 * 2;
+    for (int i = 0; i < n0; i++)
     {
-        DTYPE delta = x[i] - y[i];
-        res += delta * delta;
+        const DTYPE x0_i = x0[i];
+        const DTYPE y0_i = y0[i];
+        const DTYPE z0_i = z0[i];
+        DTYPE *mat_i_row = mat + i * ldm;
+        #pragma omp simd
+        for (int j = 0; j < n1; j++)
+        {
+            DTYPE dx = x0_i - x1[j];
+            DTYPE dy = y0_i - y1[j];
+            DTYPE dz = z0_i - z1[j];
+            DTYPE r2 = dx * dx + dy * dy + dz * dz;
+            if (r2 < 1e-20) r2 = 1.0;
+            mat_i_row[j] = 1.0 / DSQRT(r2);
+        }
     }
-    if (res < 1e-20) res = 1.0;
-    res = 1.0 / DSQRT(res);
-    return res;
+}
+
+void reciprocal_kernel_2d(
+    const DTYPE *coord0, const int ld0, const int n0,
+    const DTYPE *coord1, const int ld1, const int n1,
+    const int dim, DTYPE *mat, const int ldm
+)
+{
+    const DTYPE *x0 = coord0 + ld0 * 0;
+    const DTYPE *y0 = coord0 + ld0 * 1;
+    const DTYPE *x1 = coord1 + ld1 * 0;
+    const DTYPE *y1 = coord1 + ld1 * 1;
+    for (int i = 0; i < n0; i++)
+    {
+        const DTYPE x0_i = x0[i];
+        const DTYPE y0_i = y0[i];
+        DTYPE *mat_i_row = mat + i * ldm;
+        #pragma omp simd
+        for (int j = 0; j < n1; j++)
+        {
+            DTYPE dx = x0_i - x1[j];
+            DTYPE dy = y0_i - y1[j];
+            DTYPE r2 = dx * dx + dy * dy;
+            if (r2 < 1e-20) r2 = 1.0;
+            mat_i_row[j] = 1.0 / DSQRT(r2);
+        }
+    }
 }
 
 int main(int argc, char **argv)
@@ -110,7 +149,9 @@ int main(int argc, char **argv)
     
     H2P_partition_points(h2pack, npts, coord, max_leaf_points, max_leaf_size);
 
-    kernel_func_ptr kernel = reciprocal_kernel;
+    kernel_func_ptr kernel;
+    if (dim == 3) kernel = reciprocal_kernel_3d;
+    if (dim == 2) kernel = reciprocal_kernel_2d;
     H2P_dense_mat_t *pp;
     DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * dim + dim];
     st = H2P_get_wtime_sec();
@@ -119,34 +160,34 @@ int main(int argc, char **argv)
     printf("H2Pack generate proxy point used %.3lf (s)\n", et - st);
     H2P_build(h2pack, kernel, pp);
     
-    DTYPE *x, *y0, *y1;
+    int nthreads = omp_get_max_threads();
+    DTYPE *x, *y0, *y1, *tb;
     x  = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts);
     y0 = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts);
     y1 = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts);
-    assert(x != NULL && y0 != NULL && y1 != NULL);
+    tb = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts * nthreads);
+    assert(x != NULL && y0 != NULL && y1 != NULL && tb != NULL);
     for (int i = 0; i < npts; i++) x[i] = drand48();
     
     st = H2P_get_wtime_sec();
-    #pragma omp parallel for
-    for (int i = 0; i < npts; i++)
+    #pragma omp parallel num_threads(nthreads)
     {
-        DTYPE res = 0.0;
-        //DTYPE *coord_i = h2pack->coord + i * dim;
-        DTYPE coord_i[3], coord_j[3];
-        for (int k = 0; k < dim; k++)
-            coord_i[k] = h2pack->coord[i + k * npts];
+        int tid = omp_get_thread_num();
+        DTYPE *Ai = tb + tid * npts;
         
-        #pragma omp simd
-        for (int j = 0; j < npts; j++)
+        #pragma omp for schedule(static)
+        for (int i = 0; i < npts; i++)
         {
-            //DTYPE *coord_j = h2pack->coord + j * dim;
+            DTYPE res = 0.0;
+            DTYPE coord_i[3];
             for (int k = 0; k < dim; k++)
-                coord_j[k] = h2pack->coord[j + k * npts];
+                coord_i[k] = h2pack->coord[i + k * npts];
+
+            kernel(&coord_i[0], 1, 1, h2pack->coord, npts, npts, dim, Ai, npts);
+            for (int j = 0; j < npts; j++) res += Ai[j] * x[j];
             
-            DTYPE Aij = reciprocal_kernel(dim, coord_i, coord_j);
-            res += Aij * x[j];
+            y0[i] = res;
         }
-        y0[i] = res;
     }
     et = H2P_get_wtime_sec();
     printf("Reference result obtained, time = %.4lf (s)\n", et - st);
@@ -175,6 +216,7 @@ int main(int argc, char **argv)
     H2P_free_aligned(x);
     H2P_free_aligned(y0);
     H2P_free_aligned(y1);
+    H2P_free_aligned(tb);
     H2P_free_aligned(coord);
     H2P_destroy(h2pack);
 }

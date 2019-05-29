@@ -12,45 +12,59 @@
 #include "H2Pack_aux_structs.h"
 #include "H2Pack_ID_compress.h"
 
+// Copy some columns from a matrix to another matrix
+// Input parameters:
+//   src_mat : Source matrix with required columns
+//   src_ld  : Leading dimension of the source matrix, should >= max(col_idx(:))+1
+//   dst_ld  : Leading dimension of the destination matrix, should >= ncol
+//   nrow    : Number of rows in the source and destination matrices
+//   col_idx : Indices of required columns
+//   ncol    : Number of required columns
+// Output parameter:
+//   dst_mat : Destination matrix with required columns only
+void H2P_copy_matrix_columns(
+    DTYPE *src_mat, const int src_ld, DTYPE *dst_mat, const int dst_ld, 
+    const int nrow, int *col_idx, const int ncol
+)
+{
+    for (int irow = 0; irow < nrow; irow++)
+    {
+        DTYPE *src_row = src_mat + src_ld * irow;
+        DTYPE *dst_row = dst_mat + dst_ld * irow;
+        for (int icol = 0; icol < ncol; icol++)
+            dst_row[icol] = src_row[col_idx[icol]];
+    }
+}
+
 // Evaluate a kernel matrix
 // Input parameters:
 //   kernel  : Kernel matrix evaluation function
+//   dim     : Dimension of point coordinate
 //   coord   : Point coordinates
 //   n_point : Total number of points 
-//   dim     : Dimension of point coordinate
-//   idx_x   : Indices of points in the x point set
-//   idx_y   : Indices of points in the y point set
-//   tmp_y   : Auxiliary buffer for storing y point coordinates 
+//   idx_x   : Indices of points in the X point set
+//   idx_y   : Indices of points in the Y point set
+//   tmp_x   : Auxiliary matrix for storing X point coordinates
+//   tmp_y   : Auxiliary matrix for storing Y point coordinates 
 // Output parameter:
-//   mat : Obtained kernel matrix, size idx_x->length * idx_y->length
+//   kernel_mat : Obtained kernel matrix, size idx_x->length * idx_y->length
 void H2P_eval_kernel_matrix_index(
-    kernel_func_ptr kernel, DTYPE *coord, const int n_point, const int dim, 
-    H2P_int_vec_t idx_x, H2P_int_vec_t idx_y, DTYPE *mat, DTYPE *tmp_y
+    kernel_func_ptr kernel, const int dim, DTYPE *coord, const int n_point, 
+    H2P_int_vec_t idx_x, H2P_int_vec_t idx_y, H2P_dense_mat_t tmp_x, 
+    H2P_dense_mat_t tmp_y, DTYPE *kernel_mat
 )
 {
-    DTYPE x_i[3], y_j[3];
     const int nrow = idx_x->length;
-    const int ncol = idx_y->length;
-    
-    // Gather y point coordinates
-    for (int k = 0; k < dim; k++)
-    {
-        DTYPE *tmp_y_k = tmp_y + k * ncol;
-        DTYPE *coord_k = coord + k * n_point;
-        for (int j = 0; j < ncol; j++)
-            tmp_y_k[j] = coord_k[idx_y->data[j]];
-    }
-    
-    // Evaluate kernel matrix row by row
-    for (int i = 0; i < nrow; i++)
-    {
-        DTYPE *kernel_mat_row = mat + i * ncol;
-        const DTYPE *x_i0 = coord + idx_x->data[i];
-        for (int k = 0; k < dim; k++)
-            x_i[k] = x_i0[k * n_point];
-
-        kernel(&x_i[0], 1, 1, tmp_y, ncol, ncol, dim, kernel_mat_row, ncol);
-    }
+    const int ncol = idx_y->length;   
+    H2P_dense_mat_resize(tmp_x, dim, nrow);
+    H2P_dense_mat_resize(tmp_y, dim, ncol);
+    H2P_copy_matrix_columns(coord, n_point, tmp_x->data, nrow, dim, idx_x->data, nrow);
+    H2P_copy_matrix_columns(coord, n_point, tmp_y->data, ncol, dim, idx_y->data, ncol);
+    kernel(
+        tmp_x->data, nrow, nrow, 
+        tmp_y->data, ncol, ncol, 
+        dim, kernel_mat, ncol
+    );
 }
 
 // Evaluate a kernel matrix
@@ -66,17 +80,33 @@ void H2P_eval_kernel_matrix_direct(
     H2P_dense_mat_t y_coord, H2P_dense_mat_t kernel_mat
 )
 {
-    H2P_dense_mat_resize(kernel_mat, x_coord->ncol, y_coord->ncol);
-    #pragma omp parallel for schedule(dynamic)
-    for (int i = 0; i < x_coord->ncol; i++)
+    const int nrow = x_coord->ncol;
+    const int ncol = y_coord->ncol;
+    H2P_dense_mat_resize(kernel_mat, nrow, ncol);
+    #pragma omp parallel
     {
-        DTYPE x_i[3];
-        DTYPE *kernel_mat_row = kernel_mat->data + i * kernel_mat->ld;
-        const DTYPE *x_i0 = x_coord->data + i;
-        for (int k = 0; k < dim; k++)
-            x_i[k] = x_i0[k * x_coord->ncol];
+        int tid = omp_get_thread_num();
+        int nt  = omp_get_num_threads();
+        int rem = nrow % nt;
+        int bs0 = nrow / nt;
+        int bs1 = bs0 + 1;
+        int x_blk_srow, x_blk_nrow;
+        if (tid < rem)
+        {
+            x_blk_srow = tid * bs1;
+            x_blk_nrow = bs1;
+        } else {
+            x_blk_srow = tid * bs0 + rem;
+            x_blk_nrow = bs0;
+        }
+        DTYPE *kernel_mat_srow = kernel_mat->data + x_blk_srow * kernel_mat->ld;
+        DTYPE *x_coord_spos = x_coord->data + x_blk_srow;
         
-        kernel(&x_i[0], 1, 1, y_coord->data, y_coord->ncol, y_coord->ncol, dim, kernel_mat_row, kernel_mat->ld);
+        kernel(
+            x_coord_spos, x_coord->ncol, x_blk_nrow, 
+            y_coord->data, ncol, ncol, 
+            dim, kernel_mat_srow, kernel_mat->ld
+        );
     }
 }
 
@@ -89,30 +119,33 @@ void H2P_eval_kernel_matrix_direct(
 //   idx_x      : Indices of points in the x point set, length nx
 //   box_center : X point box center coordinate, for shifting x points
 //   pp_coord   : Proxy point set coordinates, size ny-by-dim
+//   tmp_x      : Auxiliary matrix for storing x point coordinates
 // Output parameter:
 //   kernel_mat : Obtained kernel matrix, nx-by-ny
 void H2P_eval_kernel_matrix_UJ_proxy(
-    kernel_func_ptr kernel, const int dim, DTYPE *coord, const int n_point, H2P_int_vec_t idx_x, 
-    H2P_dense_mat_t box_center, H2P_dense_mat_t pp_coord, H2P_dense_mat_t kernel_mat
+    kernel_func_ptr kernel, const int dim, DTYPE *coord, const int n_point, 
+    H2P_int_vec_t idx_x, DTYPE *box_center, H2P_dense_mat_t pp_coord, 
+    H2P_dense_mat_t tmp_x, H2P_dense_mat_t kernel_mat
 )
 {
-    H2P_dense_mat_resize(kernel_mat, idx_x->length, pp_coord->nrow);
-    DTYPE y_j[3];
-    for (int i = 0; i < idx_x->length; i++)
+    const int nrow = idx_x->length;
+    const int ncol = pp_coord->nrow;
+    H2P_dense_mat_resize(kernel_mat, nrow, ncol);
+    H2P_dense_mat_resize(tmp_x, dim, nrow);
+    H2P_copy_matrix_columns(coord, n_point, tmp_x->data, nrow, dim, idx_x->data, nrow);
+    for (int j = 0; j < dim; j++)
     {
-        DTYPE *kernel_mat_row = kernel_mat->data + i * kernel_mat->ld;
-        
-        // Store the shifted coordinate in box_center
-        const DTYPE *x_i = coord + idx_x->data[i];
-        for (int k = 0; k < dim; k++)
-            box_center->data[k] = x_i[k * n_point] - box_center->data[k];
-    
-        kernel(box_center->data, 1, 1, pp_coord->data, pp_coord->nrow, pp_coord->nrow, dim, kernel_mat_row, kernel_mat->ld);
-        
-        // Recover box_center from shifted coordinate
-        for (int k = 0; k < dim; k++)
-            box_center->data[k] = x_i[k * n_point] - box_center->data[k];
+        DTYPE *tmp_x_j = tmp_x->data + j * nrow;
+        DTYPE box_center_j = box_center[j];
+        #pragma omp simd
+        for (int i = 0; i < nrow; i++) 
+            tmp_x_j[i] -= box_center_j;
     }
+    kernel(
+        tmp_x->data, nrow, nrow,
+        pp_coord->data, ncol, ncol, 
+        dim, kernel_mat->data, kernel_mat->ld
+    );
 }
 
 // Check if a coordinate is in box [-L/2, L/2]^dim
@@ -407,27 +440,31 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
         #pragma omp parallel num_threads(nthreads)
         {
             int tid = omp_get_thread_num();
-            H2P_dense_mat_t A_block    = h2pack->tb[tid]->mat0;
-            H2P_dense_mat_t box_center = h2pack->tb[tid]->mat1;
-            H2P_dense_mat_t QR_buff    = h2pack->tb[tid]->mat1;
-            H2P_int_vec_t   sub_idx    = h2pack->tb[tid]->idx0;
-            H2P_int_vec_t   ID_buff    = h2pack->tb[tid]->idx1;
+            H2P_dense_mat_t A_block = h2pack->tb[tid]->mat0;
+            H2P_dense_mat_t tmp_x   = h2pack->tb[tid]->mat1;
+            H2P_dense_mat_t QR_buff = h2pack->tb[tid]->mat1;
+            H2P_int_vec_t   sub_idx = h2pack->tb[tid]->idx0;
+            H2P_int_vec_t   ID_buff = h2pack->tb[tid]->idx1;
             #pragma omp for schedule(dynamic)
             for (int j = 0; j < height_n_node[i]; j++)
             {
                 int node  = height_i_nodes[j];
                 int level = node_level[node];
                 if (level < min_adm_level) continue;
+                
+                // Use the first dim elements in node_box to store the box center coordinate
                 DTYPE *node_box = enbox + node * 2 * dim;
-                for (int k = 0; k < dim; k++)
-                    box_center->data[k] = node_box[k] + 0.5 * node_box[dim + k];
-                H2P_eval_kernel_matrix_UJ_proxy(kernel, dim, coord, n_point, J[node], box_center, pp[level], A_block);
+                for (int k = 0; k < dim; k++) node_box[k] += 0.5 * node_box[dim + k];
+                H2P_eval_kernel_matrix_UJ_proxy(kernel, dim, coord, n_point, J[node], node_box, pp[level], tmp_x, A_block);
+                for (int k = 0; k < dim; k++) node_box[k] -= 0.5 * node_box[dim + k];
+                
                 H2P_dense_mat_resize(QR_buff, 2 * A_block->nrow, 1);
                 H2P_int_vec_set_capacity(ID_buff, 4 * A_block->nrow);
                 H2P_ID_compress(
                     A_block, stop_type, stop_param, &U[node], sub_idx, 
                     1, QR_buff->data, ID_buff->data
                 );
+                
                 for (int k = 0; k < U[node]->ncol; k++)
                     J[node]->data[k] = J[node]->data[sub_idx->data[k]];
                 J[node]->length = U[node]->ncol;
@@ -579,7 +616,8 @@ void H2P_build_B(H2Pack_t h2pack)
     {
         int tid = omp_get_thread_num();
         H2P_int_vec_t   idx   = h2pack->tb[tid]->idx0;
-        H2P_dense_mat_t tmp_y = h2pack->tb[tid]->mat0;
+        H2P_dense_mat_t tmp_x = h2pack->tb[tid]->mat0;
+        H2P_dense_mat_t tmp_y = h2pack->tb[tid]->mat1;
         #pragma omp for schedule(dynamic)
         for (int i_blk = 0; i_blk < n_B_blk; i_blk++)
         {
@@ -600,8 +638,7 @@ void H2P_build_B(H2Pack_t h2pack)
                     int node1_npts = J[node1]->length;
                     B_nrow[i] = node0_npts;
                     B_ncol[i] = node1_npts;
-                    H2P_dense_mat_resize(tmp_y, dim, node1_npts);
-                    H2P_eval_kernel_matrix_index(kernel, coord, n_point, dim, J[node0], J[node1], Bi, tmp_y->data);
+                    H2P_eval_kernel_matrix_index(kernel, dim, coord, n_point, J[node0], J[node1], tmp_x, tmp_y, Bi);
                 }
                 
                 // (2) node1 is a leaf node and its level is higher than node0's level, 
@@ -618,8 +655,7 @@ void H2P_build_B(H2Pack_t h2pack)
                         idx->data[j] = s_index1 + j;
                     B_nrow[i] = node0_npts;
                     B_ncol[i] = node1_npts;
-                    H2P_dense_mat_resize(tmp_y, dim, node1_npts);
-                    H2P_eval_kernel_matrix_index(kernel, coord, n_point, dim, J[node0], idx, Bi, tmp_y->data);
+                    H2P_eval_kernel_matrix_index(kernel, dim, coord, n_point, J[node0], idx, tmp_x, tmp_y, Bi);
                 }
                 
                 // (3) node0 is a leaf node and its level is higher than node1's level, 
@@ -636,8 +672,7 @@ void H2P_build_B(H2Pack_t h2pack)
                         idx->data[j] = s_index0 + j;
                     B_nrow[i] = node0_npts;
                     B_ncol[i] = node1_npts;
-                    H2P_dense_mat_resize(tmp_y, dim, node1_npts);
-                    H2P_eval_kernel_matrix_index(kernel, coord, n_point, dim, idx, J[node1], Bi, tmp_y->data);
+                    H2P_eval_kernel_matrix_index(kernel, dim, coord, n_point, idx, J[node1], tmp_x, tmp_y, Bi);
                 }
             }
         }
@@ -728,7 +763,8 @@ void H2P_build_D(H2Pack_t h2pack)
         int tid = omp_get_thread_num();
         H2P_int_vec_t   idx0  = h2pack->tb[tid]->idx0;
         H2P_int_vec_t   idx1  = h2pack->tb[tid]->idx1;
-        H2P_dense_mat_t tmp_y = h2pack->tb[tid]->mat0;
+        H2P_dense_mat_t tmp_x = h2pack->tb[tid]->mat0;
+        H2P_dense_mat_t tmp_y = h2pack->tb[tid]->mat1;
         
         // 3. Generate diagonal blocks (leaf node self interaction)
         #pragma omp for schedule(dynamic) nowait
@@ -750,7 +786,7 @@ void H2P_build_D(H2Pack_t h2pack)
                 D_nrow[i] = node_npts;
                 D_ncol[i] = node_npts;
                 H2P_dense_mat_resize(tmp_y, dim, node_npts);
-                H2P_eval_kernel_matrix_index(kernel, coord, n_point, dim, idx0, idx0, Di, tmp_y->data);
+                H2P_eval_kernel_matrix_index(kernel, dim, coord, n_point, idx0, idx0, tmp_x, tmp_y, Di);
             }
         }
         
@@ -782,7 +818,7 @@ void H2P_build_D(H2Pack_t h2pack)
                 D_nrow[i + n_leaf_node] = node0_npts;
                 D_ncol[i + n_leaf_node] = node1_npts;
                 H2P_dense_mat_resize(tmp_y, dim, node1_npts);
-                H2P_eval_kernel_matrix_index(kernel, coord, n_point, dim, idx0, idx1, Di, tmp_y->data);
+                H2P_eval_kernel_matrix_index(kernel, dim, coord, n_point, idx0, idx1, tmp_x, tmp_y, Di);
             }
         }
     }

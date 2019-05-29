@@ -165,7 +165,7 @@ int main(int argc, char **argv)
     x  = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts);
     y0 = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts);
     y1 = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts);
-    tb = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts * nthreads);
+    tb = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * 1024 * nthreads);
     assert(x != NULL && y0 != NULL && y1 != NULL && tb != NULL);
     for (int i = 0; i < npts; i++) x[i] = drand48();
     
@@ -173,7 +173,7 @@ int main(int argc, char **argv)
     #pragma omp parallel num_threads(nthreads)
     {
         int tid = omp_get_thread_num();
-        DTYPE *Ai = tb + tid * npts;
+        DTYPE *Ai = tb + tid * 1024;
         
         #pragma omp for schedule(static)
         for (int i = 0; i < npts; i++)
@@ -182,9 +182,15 @@ int main(int argc, char **argv)
             DTYPE coord_i[3];
             for (int k = 0; k < dim; k++)
                 coord_i[k] = h2pack->coord[i + k * npts];
-
-            kernel(&coord_i[0], 1, 1, h2pack->coord, npts, npts, dim, Ai, npts);
-            for (int j = 0; j < npts; j++) res += Ai[j] * x[j];
+            
+            for (int j = 0; j < npts; j += 1024)
+            {
+                int ncol_j = (j + 1024 > npts) ? npts - j : 1024;
+                kernel(&coord_i[0], 1, 1, h2pack->coord + j, npts, ncol_j, dim, Ai, npts);
+                #pragma omp simd
+                for (int k = 0; k < ncol_j; k++)
+                    res += Ai[k] * x[j + k];
+            }
             
             y0[i] = res;
         }

@@ -88,7 +88,7 @@ H2P_tree_node_t H2P_bisection_partition_points(
         for (int j = 0; j < dim; j++)
         {
             DTYPE *coord_dim_j = coord + j * n_point;
-            DTYPE center_j = center_j;
+            DTYPE center_j = center[j];
             for (int i = coord_s; i <= coord_e; i++)
             {
                 DTYPE tmp = DABS(coord_dim_j[i] - center_j);

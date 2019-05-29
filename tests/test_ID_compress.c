@@ -1,10 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include <math.h>
-#include <mkl.h>
 #include <time.h>
 #include <omp.h>
+
+#include <mkl.h>
 
 #include "H2Pack_utils.h"
 #include "H2Pack_aux_structs.h"
@@ -20,20 +22,21 @@ int main()
     H2P_dense_mat_init(&A0, nrow, ncol);
     
     DTYPE A0_fnorm = 0.0;
-    srand(time(NULL));
+    srand48(time(NULL));
     DTYPE *x1 = (DTYPE*) malloc(sizeof(DTYPE) * nrow);
     DTYPE *y1 = (DTYPE*) malloc(sizeof(DTYPE) * nrow);
     DTYPE *x2 = (DTYPE*) malloc(sizeof(DTYPE) * ncol);
     DTYPE *y2 = (DTYPE*) malloc(sizeof(DTYPE) * ncol);
+    assert(x1 != NULL && x2 != NULL && y1 != NULL && y2 != NULL);
     for (int i = 0; i < nrow; i++) 
     {
-        x1[i] = (DTYPE) rand() / (DTYPE) RAND_MAX;
-        y1[i] = (DTYPE) rand() / (DTYPE) RAND_MAX;
+        x1[i] = drand48();
+        y1[i] = drand48();
     }
     for (int i = 0; i < ncol; i++) 
     {
-        x2[i] = (DTYPE) rand() / (DTYPE) RAND_MAX + 1.0;
-        y2[i] = (DTYPE) rand() / (DTYPE) RAND_MAX + 1.0;
+        x2[i] = drand48() + 0.6;
+        y2[i] = drand48() + 0.4;
     }
     for (int irow = 0; irow < nrow; irow++)
     {
@@ -71,7 +74,10 @@ int main()
     printf("norm_rel_tol: ");
     scanf("%lf", &tol_norm);
     int nthreads = omp_get_max_threads();
-    H2P_ID_compress(A, QR_REL_NRM, &tol_norm, &U, J, nthreads);  // Warm up
+    int *ID_buff = (int*) malloc(sizeof(int) * 4 * A->nrow);
+    DTYPE *QR_buff = (DTYPE*) malloc(sizeof(DTYPE) * 2 * A->nrow);
+    assert(ID_buff != NULL && QR_buff != NULL);
+    H2P_ID_compress(A, QR_REL_NRM, &tol_norm, &U, J, nthreads, QR_buff, ID_buff);  // Warm up
     double ut = 0.0;
     for (int i = 0; i < 10; i++)
     {
@@ -80,7 +86,7 @@ int main()
         A->ncol = ncol;
         A->ld = ncol;
         double st = H2P_get_wtime_sec();
-        H2P_ID_compress(A, QR_REL_NRM, &tol_norm, &U, J, nthreads);
+        H2P_ID_compress(A, QR_REL_NRM, &tol_norm, &U, J, nthreads, QR_buff, ID_buff);
         double et = H2P_get_wtime_sec();
         ut += et - st;
     }
@@ -118,6 +124,8 @@ int main()
     res_fnorm = sqrt(res_fnorm);
     printf("||A - A_{H2}||_fro / ||A||_fro = %e\n", res_fnorm / A0_fnorm);
     
+    free(ID_buff);
+    free(QR_buff);
     free(x1);
     free(y1);
     free(x2);

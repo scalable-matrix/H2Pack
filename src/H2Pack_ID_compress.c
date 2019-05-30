@@ -18,8 +18,18 @@ static inline DTYPE CBLAS_NRM2(const int n, const DTYPE *x)
 {
     DTYPE res = 0.0;
     #pragma omp simd
-    for (int i = 0; i < n; i++) res += x[i] * x[i];
+    for (int i = 0; i < n; i++) 
+        res += x[i] * x[i];
     return DSQRT(res);
+}
+
+static inline DTYPE CBLAS_DOT(const int n, const DTYPE *x, const DTYPE *y)
+{
+    DTYPE res = 0.0;
+    #pragma omp simd
+    for (int i = 0; i < n; i++) 
+        res += x[i] * y[i];
+    return res;
 }
 
 // Partial pivoting QR decomposition, simplified output version
@@ -120,14 +130,16 @@ void H2P_partial_pivot_QR(
         DTYPE *R_block = R + (iter + 1) * ldR + iter;
         int R_block_nrow = h_len;
         int R_block_ncol = ncol - iter - 1;
-        CBLAS_GEMV(
-            CblasColMajor, CblasTrans, R_block_nrow, R_block_ncol,
-            1.0, R_block, ldR, h_vec, 1, 0.0, h_R_mv, 1
-        );
-        CBLAS_GER(
-            CblasColMajor, R_block_nrow, R_block_ncol, -2.0,
-            h_vec, 1, h_R_mv, 1, R_block, ldR
-        );
+        // Linpack xQRDC approach
+        #pragma omp parallel for num_threads(nthreads) schedule(static)
+        for (int j = 0; j < R_block_ncol; j++)
+        {
+            DTYPE *R_block_j = R_block + j * ldR;
+            DTYPE h_Rj = 2.0 * CBLAS_DOT(R_block_nrow, h_vec, R_block_j);
+            #pragma omp simd
+            for (int k = 0; k < R_block_nrow; k++)
+                R_block_j[k] -= h_Rj * h_vec[k];
+        }
         // We don't need h_vec anymore, can overwrite the iter-th column of R
         R[iter * ldR + iter] = -sign * h_norm;
         memset(R + iter * ldR + (iter + 1), 0, sizeof(DTYPE) * (h_len - 1));
@@ -283,7 +295,7 @@ void H2P_ID_compress(
     for (int i = 0; i < nrow; i++) 
     {
         p0[J->data[i]] = i;
-        i0[i]    = i;
+        i0[i] = i;
     }
     H2P_qsort_key_value(J->data, i0, 0, r - 1);
     for (int i = 0; i < nrow; i++) i1[i0[i]] = i;

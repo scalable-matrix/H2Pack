@@ -17,4 +17,4 @@ all: $(EXES)
 	$(HOSTCC) $(CFLAGS) -o $@ $^ $(LIB)
 	
 clean:
-	rm -f $(EXES)
+	rm -f $(EXES) $(OBJS)

@@ -102,7 +102,7 @@ int main(int argc, char **argv)
     }
     
     int max_child = 1 << dim;
-    int max_leaf_points = 128;
+    int max_leaf_points = (dim == 3) ? 400 : 200;
     const DTYPE max_leaf_size = 0.0;
     
     FILE *inf, *ouf;

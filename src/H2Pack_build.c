@@ -74,7 +74,9 @@ void H2P_eval_kernel_matrix_direct(
 {
     const int nrow = x_coord->ncol;
     const int ncol = y_coord->ncol;
-    H2P_dense_mat_resize(kernel_mat, nrow, ncol);
+    int ncol_64B = (ncol + N_DTYPE_64B - 1) / N_DTYPE_64B * N_DTYPE_64B;
+    H2P_dense_mat_resize(kernel_mat, nrow, ncol_64B);
+    kernel_mat->ncol = ncol;
     #pragma omp parallel
     {
         int tid = omp_get_thread_num();
@@ -417,7 +419,10 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                 int nrow = J[node]->length;
                 int ncol = pp[level]->ncol;
                 H2P_dense_mat_resize(tmp_x, dim, J[node]->length);
-                H2P_dense_mat_resize(A_block, nrow, ncol);
+                
+                int ncol_64B = (ncol + N_DTYPE_64B - 1) / N_DTYPE_64B * N_DTYPE_64B;
+                H2P_dense_mat_resize(A_block, nrow, ncol_64B);
+                A_block->ncol = ncol;
 
                 // Gather coordinates of this node's points (== all children nodes' skeleton points)
                 if (i == 0)
@@ -576,7 +581,6 @@ void H2P_build_B(H2Pack_t h2pack)
     //    the same workload (total size of B matrices in a block)
     B_ptr[0] = 0;
     int B_total_size = 0;
-    int n_DTYPE_64B  = 64 / sizeof(DTYPE);
     H2P_int_vec_t *J = h2pack->J;
     h2pack->node_n_r_adm = (int*) malloc(sizeof(int) * n_node);
     assert(h2pack->node_n_r_adm != NULL);
@@ -611,7 +615,7 @@ void H2P_build_B(H2Pack_t h2pack)
             node1_npts = J[node1]->length;
         }
         int Bi_size = node0_npts * node1_npts;
-        Bi_size = (Bi_size + n_DTYPE_64B - 1) / n_DTYPE_64B * n_DTYPE_64B;
+        Bi_size = (Bi_size + N_DTYPE_64B - 1) / N_DTYPE_64B * N_DTYPE_64B;
         B_total_size += Bi_size;
         B_ptr[i + 1] = Bi_size;
     }
@@ -735,7 +739,6 @@ void H2P_build_D(H2Pack_t h2pack)
     //    the same workload (total size of D matrices in a block)
     D_ptr[0] = 0;
     int D0_total_size = 0;
-    int n_DTYPE_64B   = 64 / sizeof(DTYPE);
     for (int i = 0; i < n_leaf_node; i++)
     {
         int node = leaf_nodes[i];
@@ -743,7 +746,7 @@ void H2P_build_D(H2Pack_t h2pack)
         int e_index = cluster[2 * node + 1];
         int node_npts = e_index - s_index + 1;
         int Di_size = node_npts * node_npts;
-        Di_size = (Di_size + n_DTYPE_64B - 1) / n_DTYPE_64B * n_DTYPE_64B;
+        Di_size = (Di_size + N_DTYPE_64B - 1) / N_DTYPE_64B * N_DTYPE_64B;
         D_ptr[i + 1] = Di_size;
         D0_total_size += Di_size;
     }
@@ -760,7 +763,7 @@ void H2P_build_D(H2Pack_t h2pack)
         int node0_npts = e_index0 - s_index0 + 1;
         int node1_npts = e_index1 - s_index1 + 1;
         int Di_size = node0_npts * node1_npts;
-        Di_size = (Di_size + n_DTYPE_64B - 1) / n_DTYPE_64B * n_DTYPE_64B;
+        Di_size = (Di_size + N_DTYPE_64B - 1) / N_DTYPE_64B * N_DTYPE_64B;
         D_ptr[n_leaf_node + 1 + i] = Di_size;
         D1_total_size += Di_size;
     }

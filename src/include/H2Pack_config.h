@@ -16,6 +16,7 @@
 #define CBLAS_GEMV  cblas_dgemv   // CBLAS matrix-vector multiplication
 #define CBLAS_GER   cblas_dger    // CBLAS matrix rank-1 update
 #define CBLAS_TRSM  cblas_dtrsm   // CBLAS triangle solve
+#define N_DTYPE_64B 8             // 8 double == 64 bytes, for alignment
 #endif
 
 #if DTYPE_SIZE == FLOAT_SIZE      // Functions for float data type
@@ -26,6 +27,7 @@
 #define CBLAS_GEMV  cblas_sgemv
 #define CBLAS_GER   cblas_sger
 #define CBLAS_TRSM  cblas_strsm
+#define N_DTYPE_64B 16
 #endif
 
 #define QR_RANK     0   // Partial QR stop criteria: maximum rank

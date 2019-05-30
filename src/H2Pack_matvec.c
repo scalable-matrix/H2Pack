@@ -98,9 +98,9 @@ void H2P_matvec_upward_sweep(H2Pack_t h2pack, const DTYPE *x)
                     );
                     U_srow += child_k_len;
                 }
-            }
-        }
-    }
+            }  // End of "if (n_child_node == 0)"
+        }  // End of j loop
+    }  // End of i loop
 }
 
 // H2 representation matvec intermediate sweep, calculate B_{ij} * (U_j^T * x_j)
@@ -249,9 +249,9 @@ void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x)
                         x_spos, 1, beta1, y1_dst_1, 1
                     );
                 }
-            }
-        }
-    }
+            }  // End of i loop
+        }  // End of i_blk loop
+    }  // End of "pragma omp parallel"
     
     // 3. Sum thread-local buffers
     #pragma omp parallel for num_threads(n_thread) schedule(dynamic)
@@ -342,10 +342,10 @@ void H2P_matvec_downward_sweep(H2Pack_t h2pack, const DTYPE *x)
                         }
                         y1_tmp_idx += child_k_len;
                     }
-                }
-            }
-        }
-    }
+                }  // End of "if (n_child_node == 0)"
+            }  // End of j loop
+        }  // End of "pragma omp parallel"
+    }  // End of i loop
 }
 
 // H2 representation matvec dense blocks matvec, calculate D_i * x_i
@@ -393,7 +393,7 @@ void H2P_matvec_dense_blocks(H2Pack_t h2pack, const DTYPE *x)
                     x_spos, 1, 1.0, y_spos, 1
                 );
             }
-        }
+        }  // End of i_blk0 loop 
         
         // 2. Off-diagonal blocks from inadmissible pairs matvec
         #pragma omp for schedule(dynamic) 
@@ -425,8 +425,8 @@ void H2P_matvec_dense_blocks(H2Pack_t h2pack, const DTYPE *x)
                     x_spos0, 1, 1.0, y_spos1, 1
                 );
             }
-        }
-    }
+        }  // End of i_blk1 loop 
+    }  // End of "pragma omp parallel"
 }
 
 // H2 representation multiplies a column vector

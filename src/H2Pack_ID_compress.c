@@ -89,35 +89,36 @@ void H2P_partial_pivot_QR(
     
     int rank = -1;
     // Main iteration of Household QR
-    for (int iter = 0; iter < max_iter; iter++)
+    for (int i = 0; i < max_iter; i++)
     {   
         // 1. Check the stop criteria
-        if ((norm_p < stop_norm) || (iter >= stop_rank))
+        if ((norm_p < stop_norm) || (i >= stop_rank))
         {
-            rank = iter;
+            rank = i;
             break;
         }
         
         // 2. Swap the column
-        if (iter != pivot)
+        if (i != pivot)
         {
-            int tmp_p = p[iter]; p[iter] = p[pivot]; p[pivot] = tmp_p;
-            DTYPE tmp_norm  = col_norm[iter];
-            col_norm[iter]  = col_norm[pivot];
+            int tmp_p = p[i]; p[i] = p[pivot]; p[pivot] = tmp_p;
+            DTYPE tmp_norm  = col_norm[i];
+            col_norm[i]  = col_norm[pivot];
             col_norm[pivot] = tmp_norm;
-            DTYPE *R_iter  = R + iter  * ldR;
+            DTYPE *R_i     = R + i     * ldR;
             DTYPE *R_pivot = R + pivot * ldR;
             for (int j = 0; j < nrow; j++)
             {
-                DTYPE tmp_R = R_iter[j];
-                R_iter[j]   = R_pivot[j];
+                DTYPE tmp_R = R_i[j];
+                R_i[j]      = R_pivot[j];
                 R_pivot[j]  = tmp_R;
             }
         }
         
-        // 3. Householder orthogonalization
-        int h_len    = nrow - iter;
-        DTYPE *h_vec = R + iter * ldR + iter;
+        // 3. Calculate Householder vector
+        int h_len    = nrow - i;
+        int h_len_m1 = h_len - 1;
+        DTYPE *h_vec = R + i * ldR + i;
         DTYPE sign   = (h_vec[0] > 0.0) ? 1.0 : -1.0;
         DTYPE h_norm = CBLAS_NRM2(h_len, h_vec);
         h_vec[0] = h_vec[0] + sign * h_norm;
@@ -125,53 +126,61 @@ void H2P_partial_pivot_QR(
         #pragma omp simd
         for (int j = 0; j < h_len; j++) h_vec[j] *= inv_h_norm;
         
-        // 4. Eliminate the iter-th sub-column and orthogonalize columns 
-        //    right to the iter-th column
-        DTYPE *R_block = R + (iter + 1) * ldR + iter;
+        // 4. & 5. Householder update & column norm update
+        DTYPE *R_block = R + (i + 1) * ldR + i;
         int R_block_nrow = h_len;
-        int R_block_ncol = ncol - iter - 1;
-        // Linpack xQRDC approach
-        #pragma omp parallel for num_threads(nthreads) schedule(static)
+        int R_block_ncol = ncol - i - 1;
+        #pragma omp parallel for num_threads(nthreads) schedule(guided)
         for (int j = 0; j < R_block_ncol; j++)
         {
+            int ji1 = j + i + 1;
+            
             DTYPE *R_block_j = R_block + j * ldR;
             DTYPE h_Rj = 2.0 * CBLAS_DOT(R_block_nrow, h_vec, R_block_j);
-            #pragma omp simd
-            for (int k = 0; k < R_block_nrow; k++)
-                R_block_j[k] -= h_Rj * h_vec[k];
-        }
-        // We don't need h_vec anymore, can overwrite the iter-th column of R
-        R[iter * ldR + iter] = -sign * h_norm;
-        memset(R + iter * ldR + (iter + 1), 0, sizeof(DTYPE) * (h_len - 1));
-        
-        // 5. Update 2-norm of columns right to the iter-th column and find next pivot
-        int h_len_m1 = h_len - 1;
-        pivot  = iter + 1;
-        norm_p = 0.0;
-        #pragma omp parallel for num_threads(nthreads) schedule(guided)
-        for (int j = iter + 1; j < ncol; j++)
-        {
+            
             // Skip small columns
-            if (col_norm[j] < stop_norm)
+            if (col_norm[ji1] < stop_norm)
             {
-                col_norm[j] = 0.0;
+                col_norm[ji1] = 0.0;
                 continue;
             }
             
-            // Update column norm: fast update when the new norm is not so small,
-            // recalculate when the new norm is small for stability
-            DTYPE tmp = R[j * ldR + iter];
-            tmp = tmp * tmp;
-            tmp = col_norm[j] * col_norm[j] - tmp;
-            if (tmp <= 1e-10)  // TODO: Find a better threshold?
+            R_block_j[0] -= h_Rj * h_vec[0];
+            DTYPE tmp = R_block_j[0] * R_block_j[0];
+            tmp = col_norm[ji1] * col_norm[ji1] - tmp;
+            if (tmp <= 1e-10)
             {
-                DTYPE *R_col_j = R + j * ldR + (iter + 1);
-                col_norm[j] = CBLAS_NRM2(h_len_m1, R_col_j);
+                tmp = 0.0;
+                #pragma omp simd
+                for (int k = 1; k < R_block_nrow; k++)
+                {
+                    // 4. Orthogonalize columns right to the i-th column
+                    R_block_j[k] -= h_Rj * h_vec[k];
+                    
+                    // 5. Recalculate 2-norm of columns right to the i-th column
+                    //    when the new column now is relatively small
+                    tmp += R_block_j[k] * R_block_j[k];
+                }
+                col_norm[ji1] = DSQRT(tmp);
             } else {
-                col_norm[j] = DSQRT(tmp);
+                // 4. Orthogonalize columns right to the i-th column
+                #pragma omp simd
+                for (int k = 1; k < R_block_nrow; k++)
+                    R_block_j[k] -= h_Rj * h_vec[k];
+                
+                // 5. Fast update 2-norm of columns right to the i-th column
+                //    when the new column norm is not so small
+                col_norm[ji1] = DSQRT(tmp);
             }
         }
-        for (int j = iter + 1; j < ncol; j++)
+        
+        // We don't need h_vec anymore, can overwrite the i-th column of R
+        h_vec[0] = -sign * h_norm;
+        memset(h_vec + 1, 0, sizeof(DTYPE) * (h_len - 1));
+        // Find next pivot 
+        pivot  = i + 1;
+        norm_p = 0.0;
+        for (int j = i + 1; j < ncol; j++)
         {
             if (col_norm[j] > norm_p)
             {
@@ -347,4 +356,3 @@ void H2P_ID_compress(
     
     if (U_ != NULL) *U_ = U;
 }
-

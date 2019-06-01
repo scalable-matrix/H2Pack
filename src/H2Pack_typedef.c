@@ -23,7 +23,7 @@ void H2P_init(
     h2pack->max_child = 1 << dim;
     h2pack->n_matvec  = 0;
     memset(h2pack->timers,   0, sizeof(double) * 9);
-    memset(h2pack->mat_size, 0, sizeof(int)    * 8);
+    memset(h2pack->mat_size, 0, sizeof(size_t) * 8);
     
     h2pack->QR_stop_type = QR_stop_type;
     if (QR_stop_type == QR_RANK) 
@@ -60,11 +60,10 @@ void H2P_init(
     h2pack->B_data        = NULL;
     h2pack->D_data        = NULL;
     h2pack->node_n_r_adm  = NULL;
-    H2P_int_vec_init(&h2pack->B_blk,  h2pack->n_thread * 5 + 5);
-    H2P_int_vec_init(&h2pack->D_blk0, h2pack->n_thread * 5 + 5);
-    H2P_int_vec_init(&h2pack->D_blk1, h2pack->n_thread * 5 + 5);
-    
-    
+    H2P_int_vec_init(&h2pack->B_blk,  h2pack->n_thread * BD_NTASK_THREAD + 5);
+    H2P_int_vec_init(&h2pack->D_blk0, h2pack->n_thread * BD_NTASK_THREAD + 5);
+    H2P_int_vec_init(&h2pack->D_blk1, h2pack->n_thread * BD_NTASK_THREAD + 5);
+
     *h2pack_ = h2pack;
 }
 
@@ -183,7 +182,7 @@ void H2P_print_statistic(H2Pack_t h2pack)
     double build_t = 0.0, matvec_t = 0.0;
     int n_matvec = h2pack->n_matvec;
     double d_n_matvec = (double) h2pack->n_matvec;
-    for (int i = 0; i < 4; i++) build_t  += h2pack->timers[i];
+    for (int i = 0; i < 4; i++) build_t += h2pack->timers[i];
     for (int i = 4; i < 9; i++) 
     {
         h2pack->timers[i] /= d_n_matvec;

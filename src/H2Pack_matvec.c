@@ -106,20 +106,20 @@ void H2P_matvec_upward_sweep(H2Pack_t h2pack, const DTYPE *x)
 // H2 representation matvec intermediate sweep, calculate B_{ij} * (U_j^T * x_j)
 void H2P_matvec_intermediate_sweep(H2Pack_t h2pack, const DTYPE *x)
 {
-    int n_node        = h2pack->n_node;
-    int n_thread      = h2pack->n_thread;
-    int n_r_adm_pair  = h2pack->n_r_adm_pair;
-    int *r_adm_pairs  = h2pack->r_adm_pairs;
-    int *node_level   = h2pack->node_level;
-    int *cluster      = h2pack->cluster;
-    int *node_n_r_adm = h2pack->node_n_r_adm;
-    int *B_nrow       = h2pack->B_nrow;
-    int *B_ncol       = h2pack->B_ncol;
-    int *B_ptr        = h2pack->B_ptr;
-    DTYPE *B_data     = h2pack->B_data;
-    H2P_int_vec_t B_blk = h2pack->B_blk;
-    H2P_dense_mat_t *y0 = h2pack->y0;
-    H2P_dense_mat_t *U  = h2pack->U;
+    int    n_node        = h2pack->n_node;
+    int    n_thread      = h2pack->n_thread;
+    int    n_r_adm_pair  = h2pack->n_r_adm_pair;
+    int    *r_adm_pairs  = h2pack->r_adm_pairs;
+    int    *node_level   = h2pack->node_level;
+    int    *cluster      = h2pack->cluster;
+    int    *node_n_r_adm = h2pack->node_n_r_adm;
+    int    *B_nrow       = h2pack->B_nrow;
+    int    *B_ncol       = h2pack->B_ncol;
+    size_t *B_ptr        = h2pack->B_ptr;
+    DTYPE  *B_data       = h2pack->B_data;
+    H2P_int_vec_t B_blk  = h2pack->B_blk;
+    H2P_dense_mat_t *y0  = h2pack->y0;
+    H2P_dense_mat_t *U   = h2pack->U;
 
     // 1. Initialize y1 
     if (h2pack->y1 == NULL)
@@ -351,19 +351,17 @@ void H2P_matvec_downward_sweep(H2Pack_t h2pack, const DTYPE *x)
 // H2 representation matvec dense blocks matvec, calculate D_i * x_i
 void H2P_matvec_dense_blocks(H2Pack_t h2pack, const DTYPE *x)
 {
-    int n_leaf_node    = h2pack->n_leaf_node;
-    int n_r_inadm_pair = h2pack->n_r_inadm_pair;
-    int *r_inadm_pairs = h2pack->r_inadm_pairs;
-    int *leaf_nodes    = h2pack->height_nodes;
-    int *cluster       = h2pack->cluster;
-    //H2P_dense_mat_t *D = h2pack->D;
-    int *D_nrow  = h2pack->D_nrow;
-    int *D_ncol  = h2pack->D_ncol;
-    int *D_ptr   = h2pack->D_ptr;
-    DTYPE *D_data = h2pack->D_data;
-    
-    H2P_int_vec_t D_blk0 = h2pack->D_blk0;
-    H2P_int_vec_t D_blk1 = h2pack->D_blk1;
+    int    n_leaf_node    = h2pack->n_leaf_node;
+    int    n_r_inadm_pair = h2pack->n_r_inadm_pair;
+    int    *r_inadm_pairs = h2pack->r_inadm_pairs;
+    int    *leaf_nodes    = h2pack->height_nodes;
+    int    *cluster       = h2pack->cluster;
+    int    *D_nrow        = h2pack->D_nrow;
+    int    *D_ncol        = h2pack->D_ncol;
+    size_t *D_ptr         = h2pack->D_ptr;
+    DTYPE  *D_data        = h2pack->D_data;
+    H2P_int_vec_t D_blk0  = h2pack->D_blk0;
+    H2P_int_vec_t D_blk1  = h2pack->D_blk1;
     
     const int n_D0_blk = D_blk0->length;
     const int n_D1_blk = D_blk1->length;

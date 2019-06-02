@@ -210,6 +210,7 @@ void H2P_matvec_intermediate_sweep_AOT(H2Pack_t h2pack, const DTYPE *x)
                 DTYPE *Bi = B_data + B_ptr[i];
                 int Bi_nrow = B_nrow[i];
                 int Bi_ncol = B_ncol[i];
+                int Bi_nrow_128KB = (128 * 1024) / (sizeof(DTYPE) * Bi_ncol);
                 
                 // (1) Two nodes are of the same level, compress on both sides
                 if (level0 == level1)
@@ -222,16 +223,22 @@ void H2P_matvec_intermediate_sweep_AOT(H2Pack_t h2pack, const DTYPE *x)
                     DTYPE beta1 = y1_dst_1[ncol1 - 1];
                     y1_dst_0[ncol0 - 1] = 1.0;
                     y1_dst_1[ncol1 - 1] = 1.0;
-                    CBLAS_GEMV(
-                        CblasRowMajor, CblasNoTrans, Bi_nrow, Bi_ncol, 
-                        1.0, Bi, Bi_ncol, 
-                        y0[node1]->data, 1, beta0, y1_dst_0, 1
-                    );
-                    CBLAS_GEMV(
-                        CblasRowMajor, CblasTrans, Bi_nrow, Bi_ncol, 
-                        1.0, Bi, Bi_ncol, 
-                        y0[node0]->data, 1, beta1, y1_dst_1, 1
-                    );
+                    
+                    for (int blk_srow = 0; blk_srow < Bi_nrow; blk_srow += Bi_nrow_128KB)
+                    {
+                        int blk_nrow = (blk_srow + Bi_nrow_128KB > Bi_nrow) ? Bi_nrow - blk_srow : Bi_nrow_128KB;
+                        CBLAS_GEMV(
+                            CblasRowMajor, CblasNoTrans, blk_nrow, Bi_ncol, 
+                            1.0, Bi + blk_srow * Bi_ncol, Bi_ncol, 
+                            y0[node1]->data, 1, beta0, y1_dst_0 + blk_srow, 1
+                        );
+                        CBLAS_GEMV(
+                            CblasRowMajor, CblasTrans, blk_nrow, Bi_ncol, 
+                            1.0, Bi + blk_srow * Bi_ncol, Bi_ncol, 
+                            y0[node0]->data + blk_srow, 1, beta1, y1_dst_1, 1
+                        );
+                        beta1 = 1.0;
+                    }
                 }
                 
                 // (2) node1 is a leaf node and its level is higher than node0's level, 
@@ -239,23 +246,28 @@ void H2P_matvec_intermediate_sweep_AOT(H2Pack_t h2pack, const DTYPE *x)
                 //     downward sweep and can directly accumulate result to output vector
                 if (level0 > level1)
                 {
+                    int ncol0   = y1[node0]->ncol;
                     int s_index = cluster[node1 * 2];
-                    const DTYPE *x_spos = x + s_index;
-                    DTYPE *y_spos = y + s_index;
-                    int ncol0 = y1[node0]->ncol;
+                    DTYPE *y_spos   = y + s_index;
                     DTYPE *y1_dst_0 = y1[node0]->data + tid * ncol0;
-                    DTYPE beta0 = y1_dst_0[ncol0 - 1];
+                    DTYPE beta0     = y1_dst_0[ncol0 - 1];
+                    const DTYPE *x_spos = x + s_index;
                     y1_dst_0[ncol0 - 1] = 1.0;
-                    CBLAS_GEMV(
-                        CblasRowMajor, CblasNoTrans, Bi_nrow, Bi_ncol, 
-                        1.0, Bi, Bi_ncol, 
-                        x_spos, 1, beta0, y1_dst_0, 1
-                    );
-                    CBLAS_GEMV(
-                        CblasRowMajor, CblasTrans, Bi_nrow, Bi_ncol, 
-                        1.0, Bi, Bi_ncol, 
-                        y0[node0]->data, 1, 1.0, y_spos, 1
-                    );
+                    
+                    for (int blk_srow = 0; blk_srow < Bi_nrow; blk_srow += Bi_nrow_128KB)
+                    {
+                        int blk_nrow = (blk_srow + Bi_nrow_128KB > Bi_nrow) ? Bi_nrow - blk_srow : Bi_nrow_128KB;
+                        CBLAS_GEMV(
+                            CblasRowMajor, CblasNoTrans, blk_nrow, Bi_ncol, 
+                            1.0, Bi + blk_srow * Bi_ncol, Bi_ncol, 
+                            x_spos, 1, beta0, y1_dst_0 + blk_srow, 1
+                        );
+                        CBLAS_GEMV(
+                            CblasRowMajor, CblasTrans, blk_nrow, Bi_ncol, 
+                            1.0, Bi + blk_srow * Bi_ncol, Bi_ncol, 
+                            y0[node0]->data + blk_srow, 1, 1.0, y_spos, 1
+                        );
+                    }
                 }
                 
                 // (3) node0 is a leaf node and its level is higher than node1's level, 
@@ -263,23 +275,29 @@ void H2P_matvec_intermediate_sweep_AOT(H2Pack_t h2pack, const DTYPE *x)
                 //     downward sweep and can directly accumulate result to output vector
                 if (level0 < level1)
                 {
+                    int ncol1   = y1[node1]->ncol;
                     int s_index = cluster[node0 * 2];
-                    const DTYPE *x_spos = x + s_index;
-                    DTYPE *y_spos = y + s_index;
-                    int ncol1 = y1[node1]->ncol;
+                    DTYPE *y_spos   = y + s_index;
                     DTYPE *y1_dst_1 = y1[node1]->data + tid * ncol1;
-                    DTYPE beta1 = y1_dst_1[ncol1 - 1];
+                    DTYPE beta1     = y1_dst_1[ncol1 - 1];
+                    const DTYPE *x_spos = x + s_index;
                     y1_dst_1[ncol1 - 1] = 1.0;
-                    CBLAS_GEMV(
-                        CblasRowMajor, CblasNoTrans, Bi_nrow, Bi_ncol, 
-                        1.0, Bi, Bi_ncol, 
-                        y0[node1]->data, 1, 1.0, y_spos, 1
-                    );
-                    CBLAS_GEMV(
-                        CblasRowMajor, CblasTrans, Bi_nrow, Bi_ncol, 
-                        1.0, Bi, Bi_ncol, 
-                        x_spos, 1, beta1, y1_dst_1, 1
-                    );
+                    
+                    for (int blk_srow = 0; blk_srow < Bi_nrow; blk_srow += Bi_nrow_128KB)
+                    {
+                        int blk_nrow = (blk_srow + Bi_nrow_128KB > Bi_nrow) ? Bi_nrow - blk_srow : Bi_nrow_128KB;
+                        CBLAS_GEMV(
+                            CblasRowMajor, CblasNoTrans, blk_nrow, Bi_ncol, 
+                            1.0, Bi + blk_srow * Bi_ncol, Bi_ncol, 
+                            y0[node1]->data, 1, 1.0, y_spos + blk_srow, 1
+                        );
+                        CBLAS_GEMV(
+                            CblasRowMajor, CblasTrans, blk_nrow, Bi_ncol, 
+                            1.0, Bi + blk_srow * Bi_ncol, Bi_ncol, 
+                            x_spos + blk_srow, 1, beta1, y1_dst_1, 1
+                        );
+                        beta1 = 1.0;
+                    }
                 }
             }  // End of i loop
         }  // End of i_blk loop
@@ -348,7 +366,8 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                 int level1  = node_level[node1];
                 int Bi_nrow = B_nrow[i];
                 int Bi_ncol = B_ncol[i];
-                H2P_dense_mat_resize(Bi, Bi_nrow, Bi_ncol);
+                int Bi_nrow_128KB = (128 * 1024) / (sizeof(DTYPE) * Bi_ncol);
+                H2P_dense_mat_resize(Bi, Bi_nrow_128KB, Bi_ncol);
                 
                 // (1) Two nodes are of the same level, compress on both sides
                 if (level0 == level1)
@@ -361,21 +380,26 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                     DTYPE beta1 = y1_dst_1[ncol1 - 1];
                     y1_dst_0[ncol0 - 1] = 1.0;
                     y1_dst_1[ncol1 - 1] = 1.0;
-                    kernel(
-                        J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
-                        J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                        dim, Bi->data, J_coord[node1]->ncol
-                    );
-                    CBLAS_GEMV(
-                        CblasRowMajor, CblasNoTrans, Bi_nrow, Bi_ncol, 
-                        1.0, Bi->data, Bi_ncol, 
-                        y0[node1]->data, 1, beta0, y1_dst_0, 1
-                    );
-                    CBLAS_GEMV(
-                        CblasRowMajor, CblasTrans, Bi_nrow, Bi_ncol, 
-                        1.0, Bi->data, Bi_ncol, 
-                        y0[node0]->data, 1, beta1, y1_dst_1, 1
-                    );
+                    for (int blk_srow = 0; blk_srow < Bi_nrow; blk_srow += Bi_nrow_128KB)
+                    {
+                        int blk_nrow = (blk_srow + Bi_nrow_128KB > Bi_nrow) ? Bi_nrow - blk_srow : Bi_nrow_128KB;
+                        kernel(
+                            J_coord[node0]->data + blk_srow, J_coord[node0]->ncol, blk_nrow,
+                            J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
+                            dim, Bi->data, J_coord[node1]->ncol
+                        );
+                        CBLAS_GEMV(
+                            CblasRowMajor, CblasNoTrans, blk_nrow, Bi_ncol, 
+                            1.0, Bi->data, Bi_ncol, 
+                            y0[node1]->data, 1, beta0, y1_dst_0 + blk_srow, 1
+                        );
+                        CBLAS_GEMV(
+                            CblasRowMajor, CblasTrans, blk_nrow, Bi_ncol, 
+                            1.0, Bi->data, Bi_ncol, 
+                            y0[node0]->data + blk_srow, 1, beta1, y1_dst_1, 1
+                        );
+                        beta1 = 1.0;
+                    }
                 }
                 
                 // (2) node1 is a leaf node and its level is higher than node0's level, 
@@ -385,26 +409,30 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                 {
                     int s_index1 = cluster[node1 * 2];
                     int ncol0    = y1[node0]->ncol;
-                    const DTYPE *x_spos = x + s_index1;
                     DTYPE *y_spos   = y + s_index1;
                     DTYPE *y1_dst_0 = y1[node0]->data + tid * ncol0;
                     DTYPE beta0     = y1_dst_0[ncol0 - 1];
+                    const DTYPE *x_spos = x + s_index1;
                     y1_dst_0[ncol0 - 1] = 1.0;
-                    kernel(
-                        J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
-                        coord + s_index1, n_point, Bi_ncol, 
-                        dim, Bi->data, Bi_ncol
-                    );
-                    CBLAS_GEMV(
-                        CblasRowMajor, CblasNoTrans, Bi_nrow, Bi_ncol, 
-                        1.0, Bi->data, Bi_ncol, 
-                        x_spos, 1, beta0, y1_dst_0, 1
-                    );
-                    CBLAS_GEMV(
-                        CblasRowMajor, CblasTrans, Bi_nrow, Bi_ncol, 
-                        1.0, Bi->data, Bi_ncol, 
-                        y0[node0]->data, 1, 1.0, y_spos, 1
-                    );
+                    for (int blk_srow = 0; blk_srow < Bi_nrow; blk_srow += Bi_nrow_128KB)
+                    {
+                        int blk_nrow = (blk_srow + Bi_nrow_128KB > Bi_nrow) ? Bi_nrow - blk_srow : Bi_nrow_128KB;
+                        kernel(
+                            J_coord[node0]->data + blk_srow, J_coord[node0]->ncol, blk_nrow,
+                            coord + s_index1, n_point, Bi_ncol, 
+                            dim, Bi->data, Bi_ncol
+                        );
+                        CBLAS_GEMV(
+                            CblasRowMajor, CblasNoTrans, blk_nrow, Bi_ncol, 
+                            1.0, Bi->data, Bi_ncol, 
+                            x_spos, 1, beta0, y1_dst_0 + blk_srow, 1
+                        );
+                        CBLAS_GEMV(
+                            CblasRowMajor, CblasTrans, blk_nrow, Bi_ncol, 
+                            1.0, Bi->data, Bi_ncol, 
+                            y0[node0]->data + blk_srow, 1, 1.0, y_spos, 1
+                        );
+                    }
                 }
                 
                 // (3) node0 is a leaf node and its level is higher than node1's level, 
@@ -414,26 +442,31 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                 {
                     int s_index0 = cluster[2 * node0];
                     int ncol1    = y1[node1]->ncol;
-                    const DTYPE *x_spos = x + s_index0;
                     DTYPE *y_spos   = y + s_index0;
                     DTYPE *y1_dst_1 = y1[node1]->data + tid * ncol1;
                     DTYPE beta1     = y1_dst_1[ncol1 - 1];
+                    const DTYPE *x_spos = x + s_index0;
                     y1_dst_1[ncol1 - 1] = 1.0;
-                    kernel(
-                        coord + s_index0, n_point, Bi_nrow, 
-                        J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                        dim, Bi->data, J_coord[node1]->ncol
-                    );
-                    CBLAS_GEMV(
-                        CblasRowMajor, CblasNoTrans, Bi_nrow, Bi_ncol, 
-                        1.0, Bi->data, Bi_ncol, 
-                        y0[node1]->data, 1, 1.0, y_spos, 1
-                    );
-                    CBLAS_GEMV(
-                        CblasRowMajor, CblasTrans, Bi_nrow, Bi_ncol, 
-                        1.0, Bi->data, Bi_ncol, 
-                        x_spos, 1, beta1, y1_dst_1, 1
-                    );
+                    for (int blk_srow = 0; blk_srow < Bi_nrow; blk_srow += Bi_nrow_128KB)
+                    {
+                        int blk_nrow = (blk_srow + Bi_nrow_128KB > Bi_nrow) ? Bi_nrow - blk_srow : Bi_nrow_128KB;
+                        kernel(
+                            coord + s_index0 + blk_srow, n_point, blk_nrow, 
+                            J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
+                            dim, Bi->data, J_coord[node1]->ncol
+                        );
+                        CBLAS_GEMV(
+                            CblasRowMajor, CblasNoTrans, blk_nrow, Bi_ncol, 
+                            1.0, Bi->data, Bi_ncol, 
+                            y0[node1]->data, 1, 1.0, y_spos + blk_srow, 1
+                        );
+                        CBLAS_GEMV(
+                            CblasRowMajor, CblasTrans, blk_nrow, Bi_ncol, 
+                            1.0, Bi->data, Bi_ncol, 
+                            x_spos + blk_srow, 1, beta1, y1_dst_1, 1
+                        );
+                        beta1 = 1.0;
+                    }
                 }
             }  // End of i loop
         }  // End of i_blk loop
@@ -558,11 +591,17 @@ void H2P_matvec_dense_blocks_AOT(H2Pack_t h2pack, const DTYPE *x)
                 DTYPE *Di = D_data + D_ptr[i];
                 int Di_nrow = D_nrow[i];
                 int Di_ncol = D_ncol[i];
-                CBLAS_GEMV(
-                    CblasRowMajor, CblasNoTrans, Di_nrow, Di_ncol,
-                    1.0, Di, Di_ncol, 
-                    x_spos, 1, 1.0, y_spos, 1
-                );
+                int Di_nrow_128KB = (128 * 1024) / (sizeof(DTYPE) * Di_ncol);
+                
+                for (int blk_srow = 0; blk_srow < Di_nrow; blk_srow += Di_nrow_128KB)
+                {
+                    int blk_nrow = (blk_srow + Di_nrow_128KB > Di_nrow) ? Di_nrow - blk_srow : Di_nrow_128KB;
+                    CBLAS_GEMV(
+                        CblasRowMajor, CblasNoTrans, blk_nrow, Di_ncol,
+                        1.0, Di + blk_srow * Di_ncol, Di_ncol, 
+                        x_spos, 1, 1.0, y_spos + blk_srow, 1
+                    );
+                }
             }
         }  // End of i_blk0 loop 
         
@@ -585,16 +624,22 @@ void H2P_matvec_dense_blocks_AOT(H2Pack_t h2pack, const DTYPE *x)
                 DTYPE *Di = D_data + D_ptr[n_leaf_node + i];
                 int Di_nrow = D_nrow[n_leaf_node + i];
                 int Di_ncol = D_ncol[n_leaf_node + i];
-                CBLAS_GEMV(
-                    CblasRowMajor, CblasNoTrans, Di_nrow, Di_ncol,
-                    1.0, Di, Di_ncol, 
-                    x_spos1, 1, 1.0, y_spos0, 1
-                );
-                CBLAS_GEMV(
-                    CblasRowMajor, CblasTrans, Di_nrow, Di_ncol,
-                    1.0, Di, Di_ncol, 
-                    x_spos0, 1, 1.0, y_spos1, 1
-                );
+                int Di_nrow_128KB = (128 * 1024) / (sizeof(DTYPE) * Di_ncol);
+                
+                for (int blk_srow = 0; blk_srow < Di_nrow; blk_srow += Di_nrow_128KB)
+                {
+                    int blk_nrow = (blk_srow + Di_nrow_128KB > Di_nrow) ? Di_nrow - blk_srow : Di_nrow_128KB;
+                    CBLAS_GEMV(
+                        CblasRowMajor, CblasNoTrans, blk_nrow, Di_ncol,
+                        1.0, Di + blk_srow * Di_ncol, Di_ncol, 
+                        x_spos1, 1, 1.0, y_spos0 + blk_srow, 1
+                    );
+                    CBLAS_GEMV(
+                        CblasRowMajor, CblasTrans, blk_nrow, Di_ncol,
+                        1.0, Di + blk_srow * Di_ncol, Di_ncol, 
+                        x_spos0 + blk_srow, 1, 1.0, y_spos1, 1
+                    );
+                }
             }
         }  // End of i_blk1 loop 
     }  // End of "pragma omp parallel"
@@ -640,17 +685,23 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
                 int Di_ncol = D_ncol[i];
                 DTYPE *y_spos = y + s_index;
                 const DTYPE *x_spos = x + s_index;
-                H2P_dense_mat_resize(Di, Di_nrow, Di_ncol);
-                kernel(
-                    coord + s_index, n_point, Di_nrow,
-                    coord + s_index, n_point, Di_ncol,
-                    dim, Di->data, Di_ncol
-                );
-                CBLAS_GEMV(
-                    CblasRowMajor, CblasNoTrans, Di_nrow, Di_ncol,
-                    1.0, Di->data, Di_ncol, 
-                    x_spos, 1, 1.0, y_spos, 1
-                );
+                int Di_nrow_128KB = (128 * 1024) / (sizeof(DTYPE) * Di_ncol);
+                H2P_dense_mat_resize(Di, Di_nrow_128KB, Di_ncol);
+                
+                for (int blk_srow = 0; blk_srow < Di_nrow; blk_srow += Di_nrow_128KB)
+                {
+                    int blk_nrow = (blk_srow + Di_nrow_128KB > Di_nrow) ? Di_nrow - blk_srow : Di_nrow_128KB;
+                    kernel(
+                        coord + s_index + blk_srow, n_point, blk_nrow,
+                        coord + s_index, n_point, Di_ncol,
+                        dim, Di->data, Di_ncol
+                    );
+                    CBLAS_GEMV(
+                        CblasRowMajor, CblasNoTrans, blk_nrow, Di_ncol,
+                        1.0, Di->data, Di_ncol, 
+                        x_spos, 1, 1.0, y_spos + blk_srow, 1
+                    );
+                }
             }
         }  // End of i_blk0 loop 
         
@@ -672,22 +723,28 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
                 DTYPE *y_spos1 = y + s_index1;
                 const DTYPE *x_spos0 = x + s_index0;
                 const DTYPE *x_spos1 = x + s_index1;
-                H2P_dense_mat_resize(Di, Di_nrow, Di_ncol);
-                kernel(
-                    coord + s_index0, n_point, Di_nrow,
-                    coord + s_index1, n_point, Di_ncol,
-                    dim, Di->data, Di_ncol
-                );
-                CBLAS_GEMV(
-                    CblasRowMajor, CblasNoTrans, Di_nrow, Di_ncol,
-                    1.0, Di->data, Di_ncol, 
-                    x_spos1, 1, 1.0, y_spos0, 1
-                );
-                CBLAS_GEMV(
-                    CblasRowMajor, CblasTrans, Di_nrow, Di_ncol,
-                    1.0, Di->data, Di_ncol, 
-                    x_spos0, 1, 1.0, y_spos1, 1
-                );
+                int Di_nrow_128KB = (128 * 1024) / (sizeof(DTYPE) * Di_ncol);
+                H2P_dense_mat_resize(Di, Di_nrow_128KB, Di_ncol);
+                
+                for (int blk_srow = 0; blk_srow < Di_nrow; blk_srow += Di_nrow_128KB)
+                {
+                    int blk_nrow = (blk_srow + Di_nrow_128KB > Di_nrow) ? Di_nrow - blk_srow : Di_nrow_128KB;
+                    kernel(
+                        coord + s_index0 + blk_srow, n_point, blk_nrow,
+                        coord + s_index1, n_point, Di_ncol,
+                        dim, Di->data, Di_ncol
+                    );
+                    CBLAS_GEMV(
+                        CblasRowMajor, CblasNoTrans, blk_nrow, Di_ncol,
+                        1.0, Di->data, Di_ncol, 
+                        x_spos1, 1, 1.0, y_spos0 + blk_srow, 1
+                    );
+                    CBLAS_GEMV(
+                        CblasRowMajor, CblasTrans, blk_nrow, Di_ncol,
+                        1.0, Di->data, Di_ncol, 
+                        x_spos0 + blk_srow, 1, 1.0, y_spos1, 1
+                    );
+                }
             }
         }  // End of i_blk1 loop 
     }  // End of "pragma omp parallel"

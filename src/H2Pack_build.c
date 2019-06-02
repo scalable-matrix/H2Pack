@@ -596,114 +596,100 @@ void H2P_build_B(H2Pack_t h2pack)
         int level1 = node_level[node1];
         node_n_r_adm[node0]++;
         node_n_r_adm[node1]++;
-        size_t node0_npts, node1_npts;
+        int node0_npts, node1_npts;
         if (level0 == level1)
         {
-            node0_npts = (size_t) J[node0]->length;
-            node1_npts = (size_t) J[node1]->length;
+            node0_npts = J[node0]->length;
+            node1_npts = J[node1]->length;
         }
         if (level0 > level1)
         {
             int s_index1 = cluster[2 * node1];
             int e_index1 = cluster[2 * node1 + 1];
-            node0_npts = (size_t) J[node0]->length;
-            node1_npts = (size_t) (e_index1 - s_index1 + 1);
+            node0_npts = J[node0]->length;
+            node1_npts = e_index1 - s_index1 + 1;
         }
         if (level0 < level1)
         {
             int s_index0 = cluster[2 * node0];
             int e_index0 = cluster[2 * node0 + 1];
-            node0_npts = (size_t) (e_index0 - s_index0 + 1);
-            node1_npts = (size_t) J[node1]->length;
+            node0_npts = e_index0 - s_index0 + 1;
+            node1_npts = J[node1]->length;
         }
-        size_t Bi_size = node0_npts * node1_npts;
+        B_nrow[i] = node0_npts;
+        B_ncol[i] = node1_npts;
+        size_t Bi_size = (size_t) node0_npts * (size_t) node1_npts;
         Bi_size = (Bi_size + N_DTYPE_64B - 1) / N_DTYPE_64B * N_DTYPE_64B;
         B_total_size += Bi_size;
         B_ptr[i + 1] = Bi_size;
+        // Add Statistic info
+        h2pack->mat_size[4] += 2 * (B_nrow[i] * B_ncol[i]);
+        h2pack->mat_size[4] += 2 * (B_nrow[i] + B_ncol[i]);
     }
     H2P_partition_workload(n_r_adm_pair, B_ptr + 1, B_total_size, n_thread * BD_NTASK_THREAD, B_blk);
     for (int i = 1; i <= n_r_adm_pair; i++) B_ptr[i] += B_ptr[i - 1];
 
+    if (h2pack->BD_JIT == 1) return;
+
     // 3. Generate B matrices
     h2pack->B_data = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * B_total_size);
     assert(h2pack->B_data != NULL);
+    h2pack->mat_size[1] = B_total_size;
     DTYPE *B_data = h2pack->B_data;
     const int n_B_blk = B_blk->length;
-    #pragma omp parallel num_threads(n_thread)
+    #pragma omp parallel for num_threads(n_thread) schedule(dynamic)
+    for (int i_blk = 0; i_blk < n_B_blk; i_blk++)
     {
-        int tid = omp_get_thread_num();
-
-        #pragma omp for schedule(dynamic)
-        for (int i_blk = 0; i_blk < n_B_blk; i_blk++)
+        int s_index = B_blk->data[i_blk];
+        int e_index = B_blk->data[i_blk + 1];
+        for (int i = s_index; i < e_index; i++)
         {
-            int s_index = B_blk->data[i_blk];
-            int e_index = B_blk->data[i_blk + 1];
-            for (int i = s_index; i < e_index; i++)
-            {
-                int node0  = r_adm_pairs[2 * i];
-                int node1  = r_adm_pairs[2 * i + 1];
-                int level0 = node_level[node0];
-                int level1 = node_level[node1];
-                DTYPE *Bi  = B_data + B_ptr[i];
+            int node0  = r_adm_pairs[2 * i];
+            int node1  = r_adm_pairs[2 * i + 1];
+            int level0 = node_level[node0];
+            int level1 = node_level[node1];
+            DTYPE *Bi  = B_data + B_ptr[i];
 
-                // (1) Two nodes are of the same level, compress on both sides
-                if (level0 == level1)
-                {
-                    int node0_npts = J[node0]->length;
-                    int node1_npts = J[node1]->length;
-                    B_nrow[i] = node0_npts;
-                    B_ncol[i] = node1_npts;
-                    kernel(
-                        J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
-                        J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                        dim, Bi, J_coord[node1]->ncol
-                    );
-                }
-                
-                // (2) node1 is a leaf node and its level is higher than node0's level, 
-                //     only compress on node0's side
-                if (level0 > level1)
-                {
-                    int s_index1 = cluster[2 * node1];
-                    int e_index1 = cluster[2 * node1 + 1];
-                    int node0_npts = J[node0]->length;
-                    int node1_npts = e_index1 - s_index1 + 1;
-                    B_nrow[i] = node0_npts;
-                    B_ncol[i] = node1_npts;
-                    kernel(
-                        J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
-                        coord + s_index1, n_point, node1_npts, 
-                        dim, Bi, node1_npts
-                    );
-                }
-                
-                // (3) node0 is a leaf node and its level is higher than node1's level, 
-                //     only compress on node1's side
-                if (level0 < level1)
-                {
-                    int s_index0 = cluster[2 * node0];
-                    int e_index0 = cluster[2 * node0 + 1];
-                    int node0_npts = e_index0 - s_index0 + 1;
-                    int node1_npts = J[node1]->length;
-                    B_nrow[i] = node0_npts;
-                    B_ncol[i] = node1_npts;
-                    kernel(
-                        coord + s_index0, n_point, node0_npts, 
-                        J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                        dim, Bi, J_coord[node1]->ncol
-                    );
-                }
-            }  // End of i loop
-        }  // End of i_blk loop
-    }  // End of "pragma omp parallel"
-    
-    // 4. Add statistic info
-    h2pack->mat_size[1] = B_total_size;
-    for (int i = 0; i < n_r_adm_pair; i++)
-    {
-        h2pack->mat_size[4] += 2 * (B_nrow[i] * B_ncol[i]);
-        h2pack->mat_size[4] += 2 * (B_nrow[i] + B_ncol[i]);
-    }
+            // (1) Two nodes are of the same level, compress on both sides
+            if (level0 == level1)
+            {
+                kernel(
+                    J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
+                    J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
+                    dim, Bi, J_coord[node1]->ncol
+                );
+            }
+            
+            // (2) node1 is a leaf node and its level is higher than node0's level, 
+            //     only compress on node0's side
+            if (level0 > level1)
+            {
+                int s_index1   = cluster[2 * node1];
+                int e_index1   = cluster[2 * node1 + 1];
+                int node1_npts = e_index1 - s_index1 + 1;
+                kernel(
+                    J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
+                    coord + s_index1, n_point, node1_npts, 
+                    dim, Bi, node1_npts
+                );
+            }
+            
+            // (3) node0 is a leaf node and its level is higher than node1's level, 
+            //     only compress on node1's side
+            if (level0 < level1)
+            {
+                int s_index0   = cluster[2 * node0];
+                int e_index0   = cluster[2 * node0 + 1];
+                int node0_npts = e_index0 - s_index0 + 1;
+                B_nrow[i] = node0_npts;
+                kernel(
+                    coord + s_index0, n_point, node0_npts, 
+                    J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
+                    dim, Bi, J_coord[node1]->ncol
+                );
+            }
+        }  // End of i loop
+    }  // End of i_blk loop
 }
 
 // Build dense blocks in the original matrices
@@ -745,11 +731,16 @@ void H2P_build_D(H2Pack_t h2pack)
         int node = leaf_nodes[i];
         int s_index = cluster[2 * node];
         int e_index = cluster[2 * node + 1];
-        int node_npts = e_index - s_index + 1;
-        size_t Di_size = node_npts * node_npts;
+        int node_npts  = e_index - s_index + 1;
+        size_t Di_size = (size_t) node_npts * (size_t) node_npts;
+        D_nrow[i] = node_npts;
+        D_ncol[i] = node_npts;
         Di_size = (Di_size + N_DTYPE_64B - 1) / N_DTYPE_64B * N_DTYPE_64B;
         D_ptr[i + 1] = Di_size;
         D0_total_size += Di_size;
+        // Add statistic info
+        h2pack->mat_size[6] += node_npts * node_npts;
+        h2pack->mat_size[6] += node_npts + node_npts;
     }
     H2P_partition_workload(n_leaf_node, D_ptr + 1, D0_total_size, n_thread * 5, D_blk0);
     size_t D1_total_size = 0;
@@ -763,23 +754,30 @@ void H2P_build_D(H2Pack_t h2pack)
         int e_index1 = cluster[2 * node1 + 1];
         int node0_npts = e_index0 - s_index0 + 1;
         int node1_npts = e_index1 - s_index1 + 1;
-        size_t Di_size = node0_npts * node1_npts;
+        size_t Di_size = (size_t) node0_npts * (size_t) node1_npts;
+        D_nrow[i + n_leaf_node] = node0_npts;
+        D_ncol[i + n_leaf_node] = node1_npts;
         Di_size = (Di_size + N_DTYPE_64B - 1) / N_DTYPE_64B * N_DTYPE_64B;
         D_ptr[n_leaf_node + 1 + i] = Di_size;
         D1_total_size += Di_size;
+        // Add statistic info
+        h2pack->mat_size[6] += 2 * (node0_npts * node1_npts);
+        h2pack->mat_size[6] += 2 * (node0_npts + node1_npts);
     }
     H2P_partition_workload(n_r_inadm_pair, D_ptr + n_leaf_node + 1, D1_total_size, n_thread * BD_NTASK_THREAD, D_blk1);
     for (int i = 1; i <= n_leaf_node + n_r_inadm_pair; i++) D_ptr[i] += D_ptr[i - 1];
     
+    if (h2pack->BD_JIT == 1) return;
+    
     h2pack->D_data = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * (D0_total_size + D1_total_size));
     assert(h2pack->D_data != NULL);
+    h2pack->mat_size[2] = D0_total_size + D1_total_size;
     DTYPE *D_data = h2pack->D_data;
     const int n_D0_blk = D_blk0->length;
     const int n_D1_blk = D_blk1->length;
+    
     #pragma omp parallel num_threads(n_thread)
     {
-        int tid = omp_get_thread_num();
-  
         // 3. Generate diagonal blocks (leaf node self interaction)
         #pragma omp for schedule(dynamic) nowait
         for (int i_blk0 = 0; i_blk0 < n_D0_blk; i_blk0++)
@@ -793,8 +791,6 @@ void H2P_build_D(H2Pack_t h2pack)
                 int e_index = cluster[2 * node + 1];
                 int node_npts = e_index - s_index + 1;
                 DTYPE *Di = D_data + D_ptr[i];
-                D_nrow[i] = node_npts;
-                D_ncol[i] = node_npts;
                 kernel(
                     coord + s_index, n_point, node_npts,
                     coord + s_index, n_point, node_npts,
@@ -820,38 +816,24 @@ void H2P_build_D(H2Pack_t h2pack)
                 int node0_npts = e_index0 - s_index0 + 1;
                 int node1_npts = e_index1 - s_index1 + 1;
                 DTYPE *Di = D_data + D_ptr[i + n_leaf_node];
-                D_nrow[i + n_leaf_node] = node0_npts;
-                D_ncol[i + n_leaf_node] = node1_npts;
                 kernel(
                     coord + s_index0, n_point, node0_npts,
                     coord + s_index1, n_point, node1_npts,
                     dim, Di, node1_npts
                 );
             }
-        }  // End of i_blk1 loop 
+        }  // End of i_blk1 loop
     }  // End of "pragma omp parallel"
-    
-    // 5. Add statistic info
-    h2pack->mat_size[2] = D0_total_size + D1_total_size;
-    for (int i = 0; i < n_leaf_node; i++)
-    {
-        h2pack->mat_size[6] += D_nrow[i] * D_ncol[i];
-        h2pack->mat_size[6] += D_nrow[i] + D_ncol[i];
-    }
-    for (int i = n_leaf_node; i < n_leaf_node + n_r_inadm_pair; i++)
-    {
-        h2pack->mat_size[6] += 2 * (D_nrow[i] * D_ncol[i]);
-        h2pack->mat_size[6] += 2 * (D_nrow[i] + D_ncol[i]);
-    }
 }
 
 // Build H2 representation with a kernel function
-void H2P_build(H2Pack_t h2pack, kernel_func_ptr kernel, H2P_dense_mat_t *pp)
+void H2P_build(H2Pack_t h2pack, kernel_func_ptr kernel, H2P_dense_mat_t *pp, const int BD_JIT)
 {
     double st, et;
 
     h2pack->kernel = kernel;
     h2pack->pp     = pp;
+    h2pack->BD_JIT = BD_JIT;
 
     // 1. Build projection matrices and skeleton row sets
     st = H2P_get_wtime_sec();

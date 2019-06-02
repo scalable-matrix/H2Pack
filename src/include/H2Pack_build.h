@@ -28,9 +28,10 @@ void H2P_generate_proxy_point(
 //   h2pack : H2Pack structure with point partitioning info
 //   kernel : Kernel function pointer
 //   pp     : Array of proxy points for each level
+//   BD_JIT : If B and D matrices are computed just-in-time in matvec
 // Output parameter:
 //   h2pack : H2Pack structure with H2 representation matrices
-void H2P_build(H2Pack_t h2pack, kernel_func_ptr kernel, H2P_dense_mat_t *pp);
+void H2P_build(H2Pack_t h2pack, kernel_func_ptr kernel, H2P_dense_mat_t *pp, const int BD_JIT);
 
 #ifdef __cplusplus
 }

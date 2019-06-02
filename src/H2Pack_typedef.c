@@ -10,10 +10,7 @@
 #include "H2Pack_aux_structs.h"
 
 // Initialize a H2Pack structure
-void H2P_init(
-    H2Pack_t *h2pack_, const int dim, 
-    const int QR_stop_type, void *QR_stop_param
-)
+void H2P_init(H2Pack_t *h2pack_, const int dim, const int QR_stop_type, void *QR_stop_param)
 {
     H2Pack_t h2pack = (H2Pack_t) malloc(sizeof(struct H2Pack));
     assert(h2pack != NULL);
@@ -179,8 +176,8 @@ void H2P_print_statistic(H2Pack_t h2pack)
     printf("  * sizeof(U + B + D) / npts  : %.3lf \n", UBD_k);
     
     printf("==================== H2Pack timing info =====================\n");
-    double build_t = 0.0, matvec_t = 0.0;
     int n_matvec = h2pack->n_matvec;
+    double build_t = 0.0, matvec_t = 0.0;
     double d_n_matvec = (double) h2pack->n_matvec;
     for (int i = 0; i < 4; i++) build_t += h2pack->timers[i];
     for (int i = 4; i < 9; i++) 

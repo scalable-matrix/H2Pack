@@ -30,65 +30,66 @@ typedef void (*kernel_func_ptr) (
 struct H2Pack
 {
     // H2 matrix tree flatten representation
-    int    n_thread;          // Number of threads
-    int    dim;               // Dimension of point coordinate
-    int    QR_stop_type;      // Partial QR stop criteria
-    int    QR_stop_rank;      // Partial QR maximum rank
-    int    n_point;           // Number of points for the kernel matrix
-    int    max_leaf_points;   // Maximum point in a leaf node's box
-    int    n_node;            // Number of nodes in this H2 tree
-    int    root_idx;          // Index of the root node (== n_node - 1, save it for convenience)
-    int    n_leaf_node;       // Number of leaf nodes in this H2 tree
-    int    max_child;         // Maximum number of children per node, == 2^dim
-    int    max_level;         // Maximum level of this H2 tree, (root = 0, total max_level + 1 levels)
-    int    min_adm_level;     // Minimum level of reduced admissible pair
-    int    max_adm_height;    // Maximum height of reduced admissible pair
-    int    n_r_inadm_pair;    // Number of reduced inadmissible pairs 
-    int    n_r_adm_pair;      // Number of reduced admissible pairs 
-    int    n_UJ;              // Number of projection matrices & skeleton row sets
-    int    n_B;               // Number of generator matrices
-    int    n_D;               // Number of dense blocks
-    int    *parent;           // Size n_node, parent index of each node
-    int    *children;         // Size n_node * max_child, indices of a node's children nodes
-    int    *cluster;          // Size n_node * 2, start and end (included) indices of points belong to each node
-    int    *n_child;          // Size n_node, number of children nodes of each node
-    int    *node_level;       // Size n_node, level of each node
-    int    *node_height;      // Size n_node, height of each node
-    int    *level_n_node;     // Size max_level+1, number of nodes in each level
-    int    *level_nodes;      // Size (max_level+1) * n_leaf_node, indices of nodes on each level
-    int    *height_n_node;    // Size max_level+1, number of nodes of each height
-    int    *height_nodes;     // Size (max_level+1) * n_leaf_node, indices of nodes of each height
-    int    *r_inadm_pairs;    // Size unknown, reduced inadmissible pairs 
-    int    *r_adm_pairs;      // Size unknown, reduced admissible pairs 
-    int    *node_n_r_adm;     // Size n_node, number of reduced admissible pairs of a node
-    int    *B_nrow;           // Numbers of rows of generator matrices
-    int    *B_ncol;           // Numbers of columns of generator matrices
-    int    *D_nrow;           // Numbers of rows of dense blocks in the original matrix
-    int    *D_ncol;           // Numbers of columns of dense blocks in the original matrix
-    size_t *B_ptr;            // Offset of each generator matrix's data in B_data
-    size_t *D_ptr;            // Offset of each dense block's data in D_data
-    DTYPE  max_leaf_size;     // Maximum size of a leaf node's box
-    DTYPE  QR_stop_tol;       // Partial QR stop column norm tolerance
-    DTYPE  *coord;            // Size n_point * dim, sorted point coordinates
-    DTYPE  *enbox;            // Size n_node * (2*dim), enclosing box data of each node
-    DTYPE  *B_data;           // Data of generator matrices
-    DTYPE  *D_data;           // Data of dense blocks in the original matrix
-    H2P_int_vec_t    B_blk;  // B matrices task partitioning
-    H2P_int_vec_t    D_blk0; // Diagonal blocks in D matrices task partitioning
-    H2P_int_vec_t    D_blk1; // Inadmissible blocks in D matrices task partitioning
-    H2P_int_vec_t    *J;     // Skeleton row sets
+    int    n_thread;            // Number of threads
+    int    dim;                 // Dimension of point coordinate
+    int    QR_stop_type;        // Partial QR stop criteria
+    int    QR_stop_rank;        // Partial QR maximum rank
+    int    n_point;             // Number of points for the kernel matrix
+    int    max_leaf_points;     // Maximum point in a leaf node's box
+    int    n_node;              // Number of nodes in this H2 tree
+    int    root_idx;            // Index of the root node (== n_node - 1, save it for convenience)
+    int    n_leaf_node;         // Number of leaf nodes in this H2 tree
+    int    max_child;           // Maximum number of children per node, == 2^dim
+    int    max_level;           // Maximum level of this H2 tree, (root = 0, total max_level + 1 levels)
+    int    min_adm_level;       // Minimum level of reduced admissible pair
+    int    max_adm_height;      // Maximum height of reduced admissible pair
+    int    n_r_inadm_pair;      // Number of reduced inadmissible pairs 
+    int    n_r_adm_pair;        // Number of reduced admissible pairs 
+    int    n_UJ;                // Number of projection matrices & skeleton row sets
+    int    n_B;                 // Number of generator matrices
+    int    n_D;                 // Number of dense blocks
+    int    BD_JIT;              // If B and D matrices are computed just-in-time in matvec
+    int    *parent;             // Size n_node, parent index of each node
+    int    *children;           // Size n_node * max_child, indices of a node's children nodes
+    int    *cluster;            // Size n_node * 2, start and end (included) indices of points belong to each node
+    int    *n_child;            // Size n_node, number of children nodes of each node
+    int    *node_level;         // Size n_node, level of each node
+    int    *node_height;        // Size n_node, height of each node
+    int    *level_n_node;       // Size max_level+1, number of nodes in each level
+    int    *level_nodes;        // Size (max_level+1) * n_leaf_node, indices of nodes on each level
+    int    *height_n_node;      // Size max_level+1, number of nodes of each height
+    int    *height_nodes;       // Size (max_level+1) * n_leaf_node, indices of nodes of each height
+    int    *r_inadm_pairs;      // Size unknown, reduced inadmissible pairs 
+    int    *r_adm_pairs;        // Size unknown, reduced admissible pairs 
+    int    *node_n_r_adm;       // Size n_node, number of reduced admissible pairs of a node
+    int    *B_nrow;             // Numbers of rows of generator matrices
+    int    *B_ncol;             // Numbers of columns of generator matrices
+    int    *D_nrow;             // Numbers of rows of dense blocks in the original matrix
+    int    *D_ncol;             // Numbers of columns of dense blocks in the original matrix
+    size_t *B_ptr;              // Offset of each generator matrix's data in B_data
+    size_t *D_ptr;              // Offset of each dense block's data in D_data
+    DTYPE  max_leaf_size;       // Maximum size of a leaf node's box
+    DTYPE  QR_stop_tol;         // Partial QR stop column norm tolerance
+    DTYPE  *coord;              // Size n_point * dim, sorted point coordinates
+    DTYPE  *enbox;              // Size n_node * (2*dim), enclosing box data of each node
+    DTYPE  *B_data;             // Data of generator matrices
+    DTYPE  *D_data;             // Data of dense blocks in the original matrix
+    H2P_int_vec_t    B_blk;     // B matrices task partitioning
+    H2P_int_vec_t    D_blk0;    // Diagonal blocks in D matrices task partitioning
+    H2P_int_vec_t    D_blk1;    // Inadmissible blocks in D matrices task partitioning
+    H2P_int_vec_t    *J;        // Skeleton row sets
     H2P_dense_mat_t  *J_coord;  // Coordinate of J points
-    H2P_dense_mat_t  *pp;    // Proxy points on each level for generating U and J
-    H2P_dense_mat_t  *U;     // Projection matrices
-    H2P_dense_mat_t  *y0;    // Temporary arrays used in matvec
-    H2P_dense_mat_t  *y1;    // Temporary arrays used in matvec
-    H2P_thread_buf_t *tb;    // Thread-local buffer
-    kernel_func_ptr  kernel; // Pointer to the kernel function
+    H2P_dense_mat_t  *pp;       // Proxy points on each level for generating U and J
+    H2P_dense_mat_t  *U;        // Projection matrices
+    H2P_dense_mat_t  *y0;       // Temporary arrays used in matvec
+    H2P_dense_mat_t  *y1;       // Temporary arrays used in matvec
+    H2P_thread_buf_t *tb;       // Thread-local buffer
+    kernel_func_ptr  kernel;    // Pointer to the kernel function
 
     // Statistic data
-    int    n_matvec;        // Number of performed matvec
-    size_t mat_size[8];     // Total size of U, B, D; matvec memory footprint
-    double timers[9];       // Partition; construct U, B, D; matvec up, down, B, D, reduce
+    int    n_matvec;            // Number of performed matvec
+    size_t mat_size[8];         // Total size of U, B, D; matvec memory footprint
+    double timers[9];           // Partition; construct U, B, D; matvec up, down, B, D, reduce
 };
 typedef struct H2Pack* H2Pack_t;
 
@@ -99,10 +100,7 @@ typedef struct H2Pack* H2Pack_t;
 //   QR_stop_param : Pointer to partial QR stop parameter
 // Output parameter:
 //   h2pack_ : Initialized H2Pack structure
-void H2P_init(
-    H2Pack_t *h2pack_, const int dim, 
-    const int QR_stop_type, void *QR_stop_param
-);
+void H2P_init(H2Pack_t *h2pack_, const int dim, const int QR_stop_type, void *QR_stop_param);
 
 // Destroy a H2Pack structure
 // Input parameter:

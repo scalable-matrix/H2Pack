@@ -119,7 +119,7 @@ int main(int argc, char **argv)
         {
             DTYPE *coord_i = coord + i * dim;
             for (int j = 0; j < dim; j++)
-                coord_i[j] = k * (DTYPE) rand() / (DTYPE) RAND_MAX;
+                coord_i[j] = k * drand48();
         }
         #if 0
         ouf = fopen("coord.txt", "w");
@@ -158,7 +158,8 @@ int main(int argc, char **argv)
     H2P_generate_proxy_point(dim, h2pack->max_level, 2, max_L, kernel, &pp);
     et = H2P_get_wtime_sec();
     printf("H2Pack generate proxy point used %.3lf (s)\n", et - st);
-    H2P_build(h2pack, kernel, pp);
+    
+    H2P_build(h2pack, kernel, pp, 0);
     
     int nthreads = omp_get_max_threads();
     DTYPE *x, *y0, *y1, *tb;

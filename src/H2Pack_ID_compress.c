@@ -138,38 +138,24 @@ void H2P_partial_pivot_QR(
             DTYPE *R_block_j = R_block + j * ldR;
             DTYPE h_Rj = 2.0 * CBLAS_DOT(R_block_nrow, h_vec, R_block_j);
             
-            // Skip small columns
+            // 4. Orthogonalize columns right to the i-th column
+            #pragma omp simd
+            for (int k = 0; k < R_block_nrow; k++)
+                R_block_j[k] -= h_Rj * h_vec[k];
+            
+            // 5. Update i-th column's 2-norm
             if (col_norm[ji1] < stop_norm)
             {
                 col_norm[ji1] = 0.0;
                 continue;
             }
-            
-            R_block_j[0] -= h_Rj * h_vec[0];
             DTYPE tmp = R_block_j[0] * R_block_j[0];
             tmp = col_norm[ji1] * col_norm[ji1] - tmp;
             if (tmp <= 1e-10)
             {
-                tmp = 0.0;
-                #pragma omp simd
-                for (int k = 1; k < R_block_nrow; k++)
-                {
-                    // 4. Orthogonalize columns right to the i-th column
-                    R_block_j[k] -= h_Rj * h_vec[k];
-                    
-                    // 5. Recalculate 2-norm of columns right to the i-th column
-                    //    when the new column now is relatively small
-                    tmp += R_block_j[k] * R_block_j[k];
-                }
-                col_norm[ji1] = DSQRT(tmp);
+                col_norm[ji1] = CBLAS_NRM2(h_len_m1, R_block_j + 1);
             } else {
-                // 4. Orthogonalize columns right to the i-th column
-                #pragma omp simd
-                for (int k = 1; k < R_block_nrow; k++)
-                    R_block_j[k] -= h_Rj * h_vec[k];
-                
-                // 5. Fast update 2-norm of columns right to the i-th column
-                //    when the new column norm is not so small
+                // Fast update 2-norm when the new column norm is not so small
                 col_norm[ji1] = DSQRT(tmp);
             }
         }

@@ -681,7 +681,6 @@ void H2P_build_B(H2Pack_t h2pack)
                 int s_index0   = cluster[2 * node0];
                 int e_index0   = cluster[2 * node0 + 1];
                 int node0_npts = e_index0 - s_index0 + 1;
-                B_nrow[i] = node0_npts;
                 kernel(
                     coord + s_index0, n_point, node0_npts, 
                     J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,

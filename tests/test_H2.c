@@ -159,7 +159,7 @@ int main(int argc, char **argv)
     et = H2P_get_wtime_sec();
     printf("H2Pack generate proxy point used %.3lf (s)\n", et - st);
     
-    H2P_build(h2pack, kernel, pp, 0);
+    H2P_build(h2pack, kernel, pp, 1);
     
     int nthreads = omp_get_max_threads();
     DTYPE *x, *y0, *y1, *tb;

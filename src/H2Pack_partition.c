@@ -437,10 +437,7 @@ void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0
 }
 
 // Partition points for a H2 tree
-void H2P_partition_points(
-    H2Pack_t h2pack, const int n_point, const DTYPE *coord,
-    const int max_leaf_points, const DTYPE max_leaf_size
-)
+void H2P_partition_points(H2Pack_t h2pack, const int n_point, const DTYPE *coord, int max_leaf_points)
 {
     const int dim = h2pack->dim;
     double st, et;
@@ -448,9 +445,16 @@ void H2P_partition_points(
     st = H2P_get_wtime_sec();
     
     // 1. Copy input point coordinates
+    DTYPE max_leaf_size = 0.0;
     h2pack->n_point = n_point;
+    if (max_leaf_points <= 0)
+    {
+        if (dim == 2) max_leaf_points = 200;
+        if (dim == 3) max_leaf_points = 400;
+        if (max_leaf_points <= 0) max_leaf_points = 400;
+    }
     h2pack->max_leaf_points = max_leaf_points;
-    h2pack->max_leaf_size = max_leaf_size;
+    h2pack->max_leaf_size   = max_leaf_size;
     h2pack->coord = (DTYPE*) malloc(sizeof(DTYPE) * n_point * dim);
     assert(h2pack->coord != NULL);
     memcpy(h2pack->coord, coord, sizeof(DTYPE) * n_point * dim);

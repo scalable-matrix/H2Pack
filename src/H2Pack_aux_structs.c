@@ -64,20 +64,6 @@ void H2P_int_vec_destroy(H2P_int_vec_t int_vec)
     int_vec->length = 0;
 }
 
-// Set the capacity of an initialized H2P_int_vec structure
-void H2P_int_vec_set_capacity(H2P_int_vec_t int_vec, const int capacity)
-{
-    if (capacity > int_vec->capacity)
-    {
-        int_vec->capacity = capacity;
-        int *new_data = (int*) malloc(sizeof(int) * int_vec->capacity);
-        assert(new_data != NULL);
-        memcpy(new_data, int_vec->data, sizeof(int) * int_vec->length);
-        free(int_vec->data);
-        int_vec->data = new_data;
-    }
-}
-
 // Push an integer to the tail of a H2P_int_vec
 void H2P_int_vec_push_back(H2P_int_vec_t int_vec, int value)
 {
@@ -132,23 +118,6 @@ void H2P_dense_mat_destroy(H2P_dense_mat_t mat)
     H2P_free_aligned(mat->data);
     mat->data = NULL;
     mat->size = 0;
-}
-
-// Resize an initialized H2P_dense_mat structure, original data in 
-// the dense matrix will be unavailable after this operation
-void H2P_dense_mat_resize(H2P_dense_mat_t mat, const int nrow, const int ncol)
-{
-    int new_size = nrow * ncol;
-    mat->nrow = nrow;
-    mat->ncol = ncol;
-    mat->ld   = ncol;
-    if (new_size > mat->size)
-    {
-        mat->size = new_size;
-        H2P_free_aligned(mat->data);
-        mat->data = H2P_malloc_aligned(sizeof(DTYPE) * mat->size);
-        assert(mat->data != NULL);
-    }
 }
 
 // Permute rows in a H2P_dense_mat structure

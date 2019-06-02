@@ -81,18 +81,9 @@ void H2P_eval_kernel_matrix_direct(
     {
         int tid = omp_get_thread_num();
         int nt  = omp_get_num_threads();
-        int rem = nrow % nt;
-        int bs0 = nrow / nt;
-        int bs1 = bs0 + 1;
         int x_blk_srow, x_blk_nrow;
-        if (tid < rem)
-        {
-            x_blk_srow = tid * bs1;
-            x_blk_nrow = bs1;
-        } else {
-            x_blk_srow = tid * bs0 + rem;
-            x_blk_nrow = bs0;
-        }
+        H2P_block_partition(nrow, nt, tid, &x_blk_srow, &x_blk_nrow);
+        
         DTYPE *kernel_mat_srow = kernel_mat->data + x_blk_srow * kernel_mat->ld;
         DTYPE *x_coord_spos = x_coord->data + x_blk_srow;
         

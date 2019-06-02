@@ -70,8 +70,9 @@ void reciprocal_kernel_2d(
 
 int main(int argc, char **argv)
 {
-    int dim  = 2;
-    int npts = 10000;
+    int dim    = 2;
+    int npts   = 10000;
+    int BD_JIT = 0;
     DTYPE rel_tol = 1e-6;
     
     if (argc < 2)
@@ -101,10 +102,15 @@ int main(int argc, char **argv)
         printf("rel_tol   = %e\n", rel_tol);
     }
     
-    int max_child = 1 << dim;
-    int max_leaf_points = (dim == 3) ? 400 : 200;
-    const DTYPE max_leaf_size = 0.0;
-    
+    if (argc < 5)
+    {
+        printf("BD_JIT    = ");
+        scanf("%d", &BD_JIT);
+    } else {
+        BD_JIT = atoi(argv[4]);
+        printf("BD_JIT    = %d\n", BD_JIT);
+    }
+
     FILE *inf, *ouf;
     double st, et, ut, total_t;
     
@@ -112,7 +118,7 @@ int main(int argc, char **argv)
     
     DTYPE *coord = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts * dim);
     
-    if (argc < 5)
+    if (argc < 6)
     {
         DTYPE k = pow((DTYPE) npts, 1.0 / (DTYPE) dim);
         for (int i = 0; i < npts; i++)
@@ -133,7 +139,7 @@ int main(int argc, char **argv)
         fclose(ouf);
         #endif
     } else {
-        inf = fopen(argv[4], "r");
+        inf = fopen(argv[5], "r");
         for (int i = 0; i < npts; i++)
         {
             DTYPE *coord_i = coord + i;
@@ -146,8 +152,7 @@ int main(int argc, char **argv)
     
     H2Pack_t h2pack;
     H2P_init(&h2pack, dim, QR_REL_NRM, &rel_tol);
-    
-    H2P_partition_points(h2pack, npts, coord, max_leaf_points, max_leaf_size);
+    H2P_partition_points(h2pack, npts, coord, 0);
 
     kernel_func_ptr kernel;
     if (dim == 3) kernel = reciprocal_kernel_3d;
@@ -159,7 +164,7 @@ int main(int argc, char **argv)
     et = H2P_get_wtime_sec();
     printf("H2Pack generate proxy point used %.3lf (s)\n", et - st);
     
-    H2P_build(h2pack, kernel, pp, 1);
+    H2P_build(h2pack, kernel, pp, BD_JIT);
     
     int nthreads = omp_get_max_threads();
     DTYPE *x, *y0, *y1, *tb;

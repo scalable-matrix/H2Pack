@@ -123,6 +123,7 @@ void H2P_print_statistic(H2Pack_t h2pack)
 {
     printf("==================== H2Pack H2 tree info ====================\n");
     printf("  * Number of points (npts)        : %d\n", h2pack->n_point);
+    printf("  * Maximum points in a leaf node  : %d\n", h2pack->max_leaf_points);
     printf("  * Height of H2 tree              : %d\n", h2pack->max_level+1);
     printf("  * Number of nodes                : %d\n", h2pack->n_node);
     printf("  * Number of nodes on each level  : ");
@@ -170,6 +171,7 @@ void H2P_print_statistic(H2Pack_t h2pack)
     }
     y0y1_MB /= 1048576.0;
     tb_MB   /= 1048576.0;
+    printf("  * Just-In-Time B & D build  : %s\n", h2pack->BD_JIT ? "Yes" : "No");
     printf("  * H2 representation U, B, D : %.2lf, %.2lf, %.2lf (MB) \n", U_MB, B_MB, D_MB);
     printf("  * Matvec auxiliary arrays   : %.2lf (MB) \n", y0y1_MB);
     printf("  * Thread-local buffers      : %.2lf (MB) \n", tb_MB);

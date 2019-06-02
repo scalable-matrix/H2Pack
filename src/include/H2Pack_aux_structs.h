@@ -61,15 +61,27 @@ void H2P_int_vec_init(H2P_int_vec_t *int_vec_, int capacity);
 //   int_vec : H2P_int_vec structure to be destroyed
 void H2P_int_vec_destroy(H2P_int_vec_t int_vec);
 
-// Set the capacity of an initialized H2P_int_vec structure. 
-// If new capacity > original capacity, allocate a new data buffer and 
-// copy values to the new buffer. Otherwise, do nothing.
+// Set the capacity of an initialized H2P_int_vec structure. If new 
+// capacity > original capacity, allocate a new data buffer and copy 
+// values to the new buffer. Otherwise, do nothing.
+// Frequently used, inline it.
 // Input parameters:
 //   int_vec  : Initialized H2P_int_vec structure
 //   capacity : New capacity
 // Output parameter:
 //   int_vec  : H2P_int_vec structure with adjusted capacity
-void H2P_int_vec_set_capacity(H2P_int_vec_t int_vec, const int capacity);
+static inline void H2P_int_vec_set_capacity(H2P_int_vec_t int_vec, const int capacity)
+{
+    if (capacity > int_vec->capacity)
+    {
+        int_vec->capacity = capacity;
+        int *new_data = (int*) malloc(sizeof(int) * int_vec->capacity);
+        assert(new_data != NULL);
+        memcpy(new_data, int_vec->data, sizeof(int) * int_vec->length);
+        free(int_vec->data);
+        int_vec->data = new_data;
+    }
+}
 
 // Push an integer to the tail of a H2P_int_vec
 // Input parameters:
@@ -116,13 +128,27 @@ void H2P_dense_mat_init(H2P_dense_mat_t *mat_, const int nrow, const int ncol);
 void H2P_dense_mat_destroy(H2P_dense_mat_t mat);
 
 // Resize an initialized H2P_dense_mat structure, original data in 
-// the dense matrix will be unavailable after this operation
+// the dense matrix will be unavailable after this operation.
+// Frequently used, inline it.
 // Input parameters:
 //   nrow : Number of rows of the new dense matrix
 //   ncol : Number of columns of the new dense matrix
 // Output parameter:
 //   mat  : Resized H2P_dense_mat structure
-void H2P_dense_mat_resize(H2P_dense_mat_t mat, const int nrow, const int ncol);
+static inline void H2P_dense_mat_resize(H2P_dense_mat_t mat, const int nrow, const int ncol)
+{
+    int new_size = nrow * ncol;
+    mat->nrow = nrow;
+    mat->ncol = ncol;
+    mat->ld   = ncol;
+    if (new_size > mat->size)
+    {
+        mat->size = new_size;
+        H2P_free_aligned(mat->data);
+        mat->data = H2P_malloc_aligned(sizeof(DTYPE) * mat->size);
+        assert(mat->data != NULL);
+    }
+}
 
 // Permute rows in a H2P_dense_mat structure
 // WARNING: This function DOES NOT perform sanity check!

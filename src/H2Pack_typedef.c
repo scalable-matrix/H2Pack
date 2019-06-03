@@ -40,23 +40,26 @@ void H2P_init(H2Pack_t *h2pack_, const int dim, const int QR_stop_type, void *QR
     h2pack->height_nodes  = NULL;
     h2pack->r_inadm_pairs = NULL;
     h2pack->r_adm_pairs   = NULL;
+    h2pack->node_n_r_adm  = NULL;
+    h2pack->coord_idx     = NULL;
+    h2pack->B_nrow        = NULL;
+    h2pack->B_ncol        = NULL;
+    h2pack->D_nrow        = NULL;
+    h2pack->D_ncol        = NULL;
+    h2pack->B_ptr         = NULL;
+    h2pack->D_ptr         = NULL;
     h2pack->coord         = NULL;
     h2pack->enbox         = NULL;
-    h2pack->U             = NULL;
+    h2pack->B_data        = NULL;
+    h2pack->D_data        = NULL;
     h2pack->J             = NULL;
     h2pack->J_coord       = NULL;
+    h2pack->pp            = NULL;
+    h2pack->U             = NULL;
     h2pack->y0            = NULL;
     h2pack->y1            = NULL;
     h2pack->tb            = NULL;
-    h2pack->B_nrow        = NULL;
-    h2pack->B_ncol        = NULL;
-    h2pack->B_ptr         = NULL;
-    h2pack->D_nrow        = NULL;
-    h2pack->D_ncol        = NULL;
-    h2pack->D_ptr         = NULL;
-    h2pack->B_data        = NULL;
-    h2pack->D_data        = NULL;
-    h2pack->node_n_r_adm  = NULL;
+    
     H2P_int_vec_init(&h2pack->B_blk,  h2pack->n_thread * BD_NTASK_THREAD + 5);
     H2P_int_vec_init(&h2pack->D_blk0, h2pack->n_thread * BD_NTASK_THREAD + 5);
     H2P_int_vec_init(&h2pack->D_blk1, h2pack->n_thread * BD_NTASK_THREAD + 5);
@@ -79,27 +82,36 @@ void H2P_destroy(H2Pack_t h2pack)
     free(h2pack->height_nodes);
     free(h2pack->r_inadm_pairs);
     free(h2pack->r_adm_pairs);
-    free(h2pack->coord);
-    free(h2pack->enbox);
+    free(h2pack->node_n_r_adm);
+    free(h2pack->coord_idx);
     free(h2pack->B_nrow);
     free(h2pack->B_ncol);
-    free(h2pack->B_ptr);
     free(h2pack->D_nrow);
     free(h2pack->D_ncol);
+    free(h2pack->B_ptr);
     free(h2pack->D_ptr);
-    free(h2pack->node_n_r_adm);
+    free(h2pack->coord);
+    free(h2pack->enbox);
     H2P_free_aligned(h2pack->B_data);
     H2P_free_aligned(h2pack->D_data);
     
+    H2P_int_vec_destroy(h2pack->B_blk);
+    H2P_int_vec_destroy(h2pack->D_blk0);
+    H2P_int_vec_destroy(h2pack->D_blk1);
+    
+    for (int i = 0; i <= h2pack->max_level; i++)
+        H2P_dense_mat_destroy(h2pack->pp[i]);
+    free(h2pack->pp);
+    
     for (int i = 0; i < h2pack->n_UJ; i++)
     {
-        H2P_dense_mat_destroy(h2pack->U[i]);
-        H2P_dense_mat_destroy(h2pack->J_coord[i]);
         H2P_int_vec_destroy(h2pack->J[i]);
+        H2P_dense_mat_destroy(h2pack->J_coord[i]);
+        H2P_dense_mat_destroy(h2pack->U[i]);
     }
-    free(h2pack->U);
     free(h2pack->J);
     free(h2pack->J_coord);
+    free(h2pack->U);
     
     for (int i = 0; i < h2pack->n_node; i++)
     {
@@ -112,10 +124,6 @@ void H2P_destroy(H2Pack_t h2pack)
     for (int i = 0; i < h2pack->n_thread; i++)
         H2P_thread_buf_destroy(h2pack->tb[i]);
     free(h2pack->tb);
-    
-    H2P_int_vec_destroy(h2pack->B_blk);
-    H2P_int_vec_destroy(h2pack->D_blk0);
-    H2P_int_vec_destroy(h2pack->D_blk1);
 }
 
 // Print statistic info of a H2Pack structure

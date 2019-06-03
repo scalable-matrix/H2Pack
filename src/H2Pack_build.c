@@ -619,13 +619,13 @@ void H2P_build_B(H2Pack_t h2pack)
     }
     H2P_partition_workload(n_r_adm_pair, B_ptr + 1, B_total_size, n_thread * BD_NTASK_THREAD, B_blk);
     for (int i = 1; i <= n_r_adm_pair; i++) B_ptr[i] += B_ptr[i - 1];
+    h2pack->mat_size[1] = B_total_size;
 
     if (h2pack->BD_JIT == 1) return;
 
     // 3. Generate B matrices
     h2pack->B_data = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * B_total_size);
     assert(h2pack->B_data != NULL);
-    h2pack->mat_size[1] = B_total_size;
     DTYPE *B_data = h2pack->B_data;
     const int n_B_blk = B_blk->length;
     #pragma omp parallel for num_threads(n_thread) schedule(dynamic)
@@ -756,16 +756,15 @@ void H2P_build_D(H2Pack_t h2pack)
     }
     H2P_partition_workload(n_r_inadm_pair, D_ptr + n_leaf_node + 1, D1_total_size, n_thread * BD_NTASK_THREAD, D_blk1);
     for (int i = 1; i <= n_leaf_node + n_r_inadm_pair; i++) D_ptr[i] += D_ptr[i - 1];
+    h2pack->mat_size[2] = D0_total_size + D1_total_size;
     
     if (h2pack->BD_JIT == 1) return;
     
     h2pack->D_data = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * (D0_total_size + D1_total_size));
     assert(h2pack->D_data != NULL);
-    h2pack->mat_size[2] = D0_total_size + D1_total_size;
     DTYPE *D_data = h2pack->D_data;
     const int n_D0_blk = D_blk0->length;
     const int n_D1_blk = D_blk1->length;
-    
     #pragma omp parallel num_threads(n_thread)
     {
         // 3. Generate diagonal blocks (leaf node self interaction)

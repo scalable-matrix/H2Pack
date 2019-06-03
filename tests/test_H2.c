@@ -214,6 +214,17 @@ int main(int argc, char **argv)
     
     H2P_print_statistic(h2pack);
     
+    DTYPE coord_diff_sum = 0.0;
+    for (int i = 0; i < npts; i++)
+    {
+        DTYPE *coord_s_i = h2pack->coord + i;
+        DTYPE *coord_i   = coord + h2pack->coord_idx[i];
+        for (int j = 0; j < dim; j++)
+            coord_diff_sum += DABS(coord_s_i[j * npts] - coord_i[j * npts]);
+        
+    }
+    printf("Coordinate permutation results %s", coord_diff_sum < 1e-15 ? "are correct\n" : "are wrong\n");
+    
     DTYPE y0_norm = 0.0, err_norm = 0.0;
     for (int i = 0; i < npts; i++)
     {

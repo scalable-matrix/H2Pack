@@ -15,13 +15,14 @@ struct H2P_test_params
     int   dim;
     int   n_point;
     int   BD_JIT;
+    int   kernel_id;
     DTYPE rel_tol;
     DTYPE *coord;
     kernel_func_ptr kernel;
 };
 struct H2P_test_params test_params;
 
-void reciprocal_kernel_3d(
+void Coulomb_kernel_3d(
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
     const int dim, DTYPE *mat, const int ldm
@@ -52,7 +53,69 @@ void reciprocal_kernel_3d(
     }
 }
 
-void reciprocal_kernel_2d(
+void Laplace_kernel_3d(
+    const DTYPE *coord0, const int ld0, const int n0,
+    const DTYPE *coord1, const int ld1, const int n1,
+    const int dim, DTYPE *mat, const int ldm
+)
+{
+    const DTYPE *x0 = coord0 + ld0 * 0;
+    const DTYPE *y0 = coord0 + ld0 * 1;
+    const DTYPE *z0 = coord0 + ld0 * 2;
+    const DTYPE *x1 = coord1 + ld1 * 0;
+    const DTYPE *y1 = coord1 + ld1 * 1;
+    const DTYPE *z1 = coord1 + ld1 * 2;
+    for (int i = 0; i < n0; i++)
+    {
+        const DTYPE x0_i = x0[i];
+        const DTYPE y0_i = y0[i];
+        const DTYPE z0_i = z0[i];
+        DTYPE *mat_i_row = mat + i * ldm;
+        #pragma omp simd
+        for (int j = 0; j < n1; j++)
+        {
+            DTYPE dx = x0_i - x1[j];
+            DTYPE dy = y0_i - y1[j];
+            DTYPE dz = z0_i - z1[j];
+            DTYPE r2 = dx * dx + dy * dy + dz * dz;
+            if (r2 < 1e-20) r2 = 1.0;
+            r2 = DSQRT(r2);
+            mat_i_row[j] = DLOG(r2);
+        }
+    }
+}
+
+void Gaussian_kernel_3d(
+    const DTYPE *coord0, const int ld0, const int n0,
+    const DTYPE *coord1, const int ld1, const int n1,
+    const int dim, DTYPE *mat, const int ldm
+)
+{
+    const DTYPE *x0 = coord0 + ld0 * 0;
+    const DTYPE *y0 = coord0 + ld0 * 1;
+    const DTYPE *z0 = coord0 + ld0 * 2;
+    const DTYPE *x1 = coord1 + ld1 * 0;
+    const DTYPE *y1 = coord1 + ld1 * 1;
+    const DTYPE *z1 = coord1 + ld1 * 2;
+    for (int i = 0; i < n0; i++)
+    {
+        const DTYPE x0_i = x0[i];
+        const DTYPE y0_i = y0[i];
+        const DTYPE z0_i = z0[i];
+        DTYPE *mat_i_row = mat + i * ldm;
+        #pragma omp simd
+        for (int j = 0; j < n1; j++)
+        {
+            DTYPE dx = x0_i - x1[j];
+            DTYPE dy = y0_i - y1[j];
+            DTYPE dz = z0_i - z1[j];
+            DTYPE r2 = dx * dx + dy * dy + dz * dz;
+            mat_i_row[j] = DEXP(-r2);
+        }
+    }
+}
+
+void Coulomb_kernel_2d(
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
     const int dim, DTYPE *mat, const int ldm
@@ -79,42 +142,111 @@ void reciprocal_kernel_2d(
     }
 }
 
+void Laplace_kernel_2d(
+    const DTYPE *coord0, const int ld0, const int n0,
+    const DTYPE *coord1, const int ld1, const int n1,
+    const int dim, DTYPE *mat, const int ldm
+)
+{
+    const DTYPE *x0 = coord0 + ld0 * 0;
+    const DTYPE *y0 = coord0 + ld0 * 1;
+    const DTYPE *x1 = coord1 + ld1 * 0;
+    const DTYPE *y1 = coord1 + ld1 * 1;
+    for (int i = 0; i < n0; i++)
+    {
+        const DTYPE x0_i = x0[i];
+        const DTYPE y0_i = y0[i];
+        DTYPE *mat_i_row = mat + i * ldm;
+        #pragma omp simd
+        for (int j = 0; j < n1; j++)
+        {
+            DTYPE dx = x0_i - x1[j];
+            DTYPE dy = y0_i - y1[j];
+            DTYPE r2 = dx * dx + dy * dy;
+            if (r2 < 1e-20) r2 = 1.0;
+            r2 = DSQRT(r2);
+            mat_i_row[j] = DLOG(r2);
+        }
+    }
+}
+
+void Gaussian_kernel_2d(
+    const DTYPE *coord0, const int ld0, const int n0,
+    const DTYPE *coord1, const int ld1, const int n1,
+    const int dim, DTYPE *mat, const int ldm
+)
+{
+    const DTYPE *x0 = coord0 + ld0 * 0;
+    const DTYPE *y0 = coord0 + ld0 * 1;
+    const DTYPE *x1 = coord1 + ld1 * 0;
+    const DTYPE *y1 = coord1 + ld1 * 1;
+    for (int i = 0; i < n0; i++)
+    {
+        const DTYPE x0_i = x0[i];
+        const DTYPE y0_i = y0[i];
+        DTYPE *mat_i_row = mat + i * ldm;
+        #pragma omp simd
+        for (int j = 0; j < n1; j++)
+        {
+            DTYPE dx = x0_i - x1[j];
+            DTYPE dy = y0_i - y1[j];
+            DTYPE r2 = dx * dx + dy * dy;
+            mat_i_row[j] = DEXP(-r2);
+        }
+    }
+}
+
 void parse_params(int argc, char **argv)
 {
     if (argc < 2)
     {
-        printf("Dimension = ");
+        printf("Kernel dimension   = ");
         scanf("%d", &test_params.dim);
     } else {
         test_params.dim = atoi(argv[1]);
-        printf("Dimension = %d\n", test_params.dim);
+        printf("Kernel dimension   = %d\n", test_params.dim);
     }
     
     if (argc < 3)
     {
-        printf("N points  = ");
+        printf("Number of points   = ");
         scanf("%d", &test_params.n_point);
     } else {
         test_params.n_point = atoi(argv[2]);
-        printf("N points  = %d\n", test_params.n_point);
+        printf("Number of points   = %d\n", test_params.n_point);
     }
     
     if (argc < 4)
     {
-        printf("rel_tol   = ");
+        printf("QR relative tol    = ");
         scanf("%lf", &test_params.rel_tol);
     } else {
         test_params.rel_tol = atof(argv[3]);
-        printf("rel_tol   = %e\n", test_params.rel_tol);
+        printf("QR relative tol    = %e\n", test_params.rel_tol);
     }
     
     if (argc < 5)
     {
-        printf("BD_JIT    = ");
+        printf("Just-In-Time B & D = ");
         scanf("%d", &test_params.BD_JIT);
     } else {
         test_params.BD_JIT = atoi(argv[4]);
-        printf("BD_JIT    = %d\n", test_params.BD_JIT);
+        printf("Just-In-Time B & D = %d\n", test_params.BD_JIT);
+    }
+    
+    if (argc < 6)
+    {
+        printf("Kernel function ID = ");
+        scanf("%d", &test_params.kernel_id);
+    } else {
+        test_params.kernel_id = atoi(argv[5]);
+        printf("Kernel function ID = %d\n", test_params.kernel_id);
+    }
+    switch (test_params.kernel_id)
+    {
+        case 0: printf("Using Coulomb kernel : k(x, y) = 1 / ||x - y||  \n"); break;
+        case 1: printf("Using Laplace kernel : k(x, y) = log(||x - y||) \n"); break;
+        case 2: printf("Using Gaussian kernel : k(x, y) = exp(-||x - y||^2) \n"); break;
     }
     
     test_params.coord = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * test_params.n_point * test_params.dim);
@@ -122,7 +254,7 @@ void parse_params(int argc, char **argv)
     
     // Note: coordinates need to be stored in column-major style, i.e. test_params.coord 
     // is row-major and each column stores the coordinate of a point. 
-    if (argc < 6)
+    if (argc < 7)
     {
         DTYPE k = pow((DTYPE) test_params.n_point, 1.0 / (DTYPE) test_params.dim);
         for (int i = 0; i < test_params.n_point; i++)
@@ -143,7 +275,7 @@ void parse_params(int argc, char **argv)
         fclose(ouf);
         */
     } else {
-        FILE *inf = fopen(argv[5], "r");
+        FILE *inf = fopen(argv[6], "r");
         for (int i = 0; i < test_params.n_point; i++)
         {
             DTYPE *coord_i = test_params.coord + i;
@@ -154,8 +286,24 @@ void parse_params(int argc, char **argv)
         fclose(inf);
     }
     
-    if (test_params.dim == 3) test_params.kernel = reciprocal_kernel_3d;
-    if (test_params.dim == 2) test_params.kernel = reciprocal_kernel_2d;
+    if (test_params.dim == 3) 
+    {
+        switch (test_params.kernel_id)
+        {
+            case 0: test_params.kernel =  Coulomb_kernel_3d; break;
+            case 1: test_params.kernel =  Laplace_kernel_3d; break;
+            case 2: test_params.kernel = Gaussian_kernel_3d; break;
+        }
+    }
+    if (test_params.dim == 2) 
+    {
+        switch (test_params.kernel_id)
+        {
+            case 0: test_params.kernel =  Coulomb_kernel_2d; break;
+            case 1: test_params.kernel =  Laplace_kernel_2d; break;
+            case 2: test_params.kernel = Gaussian_kernel_2d; break;
+        }
+    }
 }
 
 void direct_nbody(

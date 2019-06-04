@@ -11,6 +11,8 @@
 #if DTYPE_SIZE == DOUBLE_SIZE          // Functions for double data type
 #define DTYPE            double        // Data type
 #define DABS             fabs          // Abs function
+#define DLOG             log           // Logarithm function
+#define DEXP             exp           // Exponential function
 #define DFLOOR           floor         // Floor function
 #define DSQRT            sqrt          // Sqrt function
 #define CBLAS_GEMV       cblas_dgemv   // CBLAS matrix-vector multiplication
@@ -22,6 +24,8 @@
 #if DTYPE_SIZE == FLOAT_SIZE           // Functions for float data type
 #define DTYPE            float
 #define DABS             fabsf
+#define DLOG             logf
+#define DEXP             expf
 #define DFLOOR           floorf
 #define DSQRT            sqrtf    
 #define CBLAS_GEMV       cblas_sgemv

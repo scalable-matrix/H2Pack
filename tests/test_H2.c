@@ -68,6 +68,50 @@ void reciprocal_kernel_2d(
     }
 }
 
+void direct_nbody(
+    kernel_func_ptr kernel, const int dim, const int n_point, 
+    const DTYPE *coord, const DTYPE *x, DTYPE *y
+)
+{
+    int row_blk_size = 128;
+    int col_blk_size = 128;
+    int thread_blk_size = row_blk_size * col_blk_size;
+    int nthreads = omp_get_max_threads();
+    DTYPE *thread_buffs = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * thread_blk_size * nthreads);
+    double st = H2P_get_wtime_sec();
+    #pragma omp parallel
+    {
+        int tid = omp_get_thread_num();
+        int t_srow, t_nrow, t_erow;
+        H2P_block_partition(n_point, nthreads, tid, &t_srow, &t_nrow);
+        t_erow = t_srow + t_nrow;
+        DTYPE *thread_A_blk = thread_buffs + tid * thread_blk_size;
+        
+        for (int irow = t_srow; irow < t_erow; irow += row_blk_size)
+        {
+            int blk_nrow = (irow + row_blk_size > t_erow) ? t_erow - irow : row_blk_size;
+            for (int icol = 0; icol < n_point; icol += col_blk_size)
+            {
+                DTYPE beta = (icol > 0) ? 1.0 : 0.0;
+                int blk_ncol = (icol + col_blk_size > n_point) ? n_point - icol : col_blk_size;
+                kernel(
+                    coord + irow, n_point, blk_nrow,
+                    coord + icol, n_point, blk_ncol,
+                    dim, thread_A_blk, blk_ncol
+                );
+                CBLAS_GEMV(
+                    CblasRowMajor, CblasNoTrans, blk_nrow, blk_ncol,
+                    1.0, thread_A_blk, blk_ncol,
+                    x + icol, 1, beta, y + irow, 1
+                );
+            }
+        }
+    }
+    double et = H2P_get_wtime_sec();
+    printf("Direct N-body reference result obtained, used time = %.3lf (s)\n", et - st);
+    H2P_free_aligned(thread_buffs);
+}
+
 int main(int argc, char **argv)
 {
     int dim    = 2;
@@ -153,6 +197,16 @@ int main(int argc, char **argv)
     H2Pack_t h2pack;
     H2P_init(&h2pack, dim, QR_REL_NRM, &rel_tol);
     H2P_partition_points(h2pack, npts, coord, 0);
+    
+    DTYPE coord_diff_sum = 0.0;
+    for (int i = 0; i < npts; i++)
+    {
+        DTYPE *coord_s_i = h2pack->coord + i;
+        DTYPE *coord_i   = coord + h2pack->coord_idx[i];
+        for (int j = 0; j < dim; j++)
+            coord_diff_sum += DABS(coord_s_i[j * npts] - coord_i[j * npts]);
+    }
+    printf("Coordinate permutation results %s", coord_diff_sum < 1e-15 ? "are correct\n" : "are wrong\n");
 
     kernel_func_ptr kernel;
     if (dim == 3) kernel = reciprocal_kernel_3d;
@@ -171,60 +225,22 @@ int main(int argc, char **argv)
     x  = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts);
     y0 = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts);
     y1 = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts);
-    tb = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * 1024 * nthreads);
-    assert(x != NULL && y0 != NULL && y1 != NULL && tb != NULL);
+    assert(x != NULL && y0 != NULL && y1 != NULL);
     for (int i = 0; i < npts; i++) x[i] = drand48();
     
-    st = H2P_get_wtime_sec();
-    #pragma omp parallel num_threads(nthreads)
-    {
-        int tid = omp_get_thread_num();
-        DTYPE *Ai = tb + tid * 1024;
-        
-        #pragma omp for schedule(static)
-        for (int i = 0; i < npts; i++)
-        {
-            DTYPE res = 0.0;
-            DTYPE coord_i[3];
-            for (int k = 0; k < dim; k++)
-                coord_i[k] = h2pack->coord[i + k * npts];
-            
-            for (int j = 0; j < npts; j += 1024)
-            {
-                int ncol_j = (j + 1024 > npts) ? npts - j : 1024;
-                kernel(&coord_i[0], 1, 1, h2pack->coord + j, npts, ncol_j, dim, Ai, npts);
-                #pragma omp simd
-                for (int k = 0; k < ncol_j; k++)
-                    res += Ai[k] * x[j + k];
-            }
-            
-            y0[i] = res;
-        }
-    }
-    et = H2P_get_wtime_sec();
-    printf("Reference result obtained, time = %.4lf (s)\n", et - st);
+    // Get reference results
+    direct_nbody(kernel, dim, npts, h2pack->coord, x, y0);
     
-    // Warm up
+    // Warm up, reset timers, and test the matvec performance
     H2P_matvec(h2pack, x, y1); 
     h2pack->n_matvec = 0;
     memset(h2pack->timers + 4, 0, sizeof(double) * 5);
-    
     for (int i = 0; i < 10; i++) 
         H2P_matvec(h2pack, x, y1);
     
     H2P_print_statistic(h2pack);
     
-    DTYPE coord_diff_sum = 0.0;
-    for (int i = 0; i < npts; i++)
-    {
-        DTYPE *coord_s_i = h2pack->coord + i;
-        DTYPE *coord_i   = coord + h2pack->coord_idx[i];
-        for (int j = 0; j < dim; j++)
-            coord_diff_sum += DABS(coord_s_i[j * npts] - coord_i[j * npts]);
-        
-    }
-    printf("Coordinate permutation results %s", coord_diff_sum < 1e-15 ? "are correct\n" : "are wrong\n");
-    
+    // Verify H2 matvec results
     DTYPE y0_norm = 0.0, err_norm = 0.0;
     for (int i = 0; i < npts; i++)
     {
@@ -235,11 +251,10 @@ int main(int argc, char **argv)
     y0_norm  = DSQRT(y0_norm);
     err_norm = DSQRT(err_norm);
     printf("||y_{H2} - y||_2 / ||y||_2 = %e\n", err_norm / y0_norm);
-
+    
     H2P_free_aligned(x);
     H2P_free_aligned(y0);
     H2P_free_aligned(y1);
-    H2P_free_aligned(tb);
     H2P_free_aligned(coord);
     H2P_destroy(h2pack);
 }

@@ -41,6 +41,6 @@
 #define ALIGN_SIZE       64            // Memory allocation alignment
 #define ALPHA_H2         0.999999      // Admissible coefficient, == 1 here
 
-#define BD_NTASK_THREAD  5             // Average number of tasks each thread has in B & D build
+#define BD_NTASK_THREAD  10            // Average number of tasks each thread has in B & D build
 
 #endif

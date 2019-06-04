@@ -61,42 +61,63 @@ void H2P_matvec_upward_sweep(H2Pack_t h2pack, const DTYPE *x)
         int height_i_n_node = height_n_node[i];
         int nthreads = MIN(height_i_n_node, h2pack->n_thread);
         
-        #pragma omp parallel for schedule(dynamic) num_threads(nthreads)
-        for (int j = 0; j < height_i_n_node; j++)
+        #pragma omp parallel num_threads(nthreads)
         {
-            int node  = height_i_nodes[j];
-            int level = node_level[node];
-            if (level < min_adm_level) continue;
-            int n_child_node = n_child[node];
-            int *child_nodes = children + node * max_child;
-            if (n_child_node == 0)
+            int tid = omp_get_thread_num();
+            
+            h2pack->tb[tid]->timer = -H2P_get_wtime_sec();
+            #pragma omp for schedule(dynamic) nowait
+            for (int j = 0; j < height_i_n_node; j++)
             {
-                // Leaf node, directly calculate U_j^T * x_j
-                const DTYPE *x_spos = x + cluster[node * 2];
-                CBLAS_GEMV(
-                    CblasRowMajor, CblasTrans, U[node]->nrow, U[node]->ncol, 
-                    1.0, U[node]->data, U[node]->ld, 
-                    x_spos, 1, 0.0, y0[node]->data, 1
-                );
-            } else {
-                // Non-leaf node, concatenate children node's y0 and multiple
-                // it with U_j^T
-                int U_srow = 0;
-                for (int k = 0; k < n_child_node; k++)
+                int node  = height_i_nodes[j];
+                int level = node_level[node];
+                if (level < min_adm_level) continue;
+                int n_child_node = n_child[node];
+                int *child_nodes = children + node * max_child;
+                if (n_child_node == 0)
                 {
-                    int child_k = child_nodes[k];
-                    int child_k_len = y0[child_k]->nrow; 
-                    DTYPE *U_node_k = U[node]->data + U_srow * U[node]->ld;
-                    DTYPE beta = (k == 0) ? 0.0 : 1.0;
+                    // Leaf node, directly calculate U_j^T * x_j
+                    const DTYPE *x_spos = x + cluster[node * 2];
                     CBLAS_GEMV(
-                        CblasRowMajor, CblasTrans, child_k_len, U[node]->ncol, 
-                        1.0, U_node_k, U[node]->ld, 
-                        y0[child_k]->data, 1, beta, y0[node]->data, 1
+                        CblasRowMajor, CblasTrans, U[node]->nrow, U[node]->ncol, 
+                        1.0, U[node]->data, U[node]->ld, 
+                        x_spos, 1, 0.0, y0[node]->data, 1
                     );
-                    U_srow += child_k_len;
-                }
-            }  // End of "if (n_child_node == 0)"
-        }  // End of j loop
+                } else {
+                    // Non-leaf node, concatenate children node's y0 and multiple
+                    // it with U_j^T
+                    int U_srow = 0;
+                    for (int k = 0; k < n_child_node; k++)
+                    {
+                        int child_k = child_nodes[k];
+                        int child_k_len = y0[child_k]->nrow; 
+                        DTYPE *U_node_k = U[node]->data + U_srow * U[node]->ld;
+                        DTYPE beta = (k == 0) ? 0.0 : 1.0;
+                        CBLAS_GEMV(
+                            CblasRowMajor, CblasTrans, child_k_len, U[node]->ncol, 
+                            1.0, U_node_k, U[node]->ld, 
+                            y0[child_k]->data, 1, beta, y0[node]->data, 1
+                        );
+                        U_srow += child_k_len;
+                    }
+                }  // End of "if (n_child_node == 0)"
+            }  // End of j loop
+            h2pack->tb[tid]->timer += H2P_get_wtime_sec();
+        }  // End of "pragma omp parallel"
+        
+        #ifdef PROFILING_OUTPUT
+        double max_t = 0.0, avg_t = 0.0, min_t = 1145141919.0;
+        for (int i = 0; i < nthreads; i++)
+        {
+            double thread_i_timer = h2pack->tb[i]->timer;
+            avg_t += thread_i_timer;
+            max_t = MAX(max_t, thread_i_timer);
+            min_t = MIN(min_t, thread_i_timer);
+        }
+        avg_t /= (double) nthreads;
+        printf("[PROFILING] MatVec upward sweep: height %d, %d/%d threads, %d nodes, ", i, nthreads, h2pack->n_thread, height_i_n_node);
+        printf("min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
+        #endif
     }  // End of i loop
 }
 
@@ -136,20 +157,27 @@ void H2P_matvec_sum_y1_thread(H2Pack_t h2pack)
     int n_node   = h2pack->n_node;
     int n_thread = h2pack->n_thread;
     H2P_dense_mat_t *y1 = h2pack->y1;
-    #pragma omp parallel for num_threads(n_thread) schedule(dynamic)
-    for (int i = 0; i < n_node; i++)
+    #pragma omp parallel num_threads(n_thread)
     {
-        if (y1[i]->ld == 0) continue;
-        int ncol = y1[i]->ncol;
-        DTYPE *dst_row = y1[i]->data;
-        for (int j = 1; j < n_thread; j++)
+        int tid = omp_get_thread_num();
+        
+        h2pack->tb[tid]->timer -= H2P_get_wtime_sec();
+        #pragma omp for schedule(dynamic) nowait
+        for (int i = 0; i < n_node; i++)
         {
-            DTYPE *src_row = y1[i]->data + j * ncol;
-            if (src_row[ncol - 1] != 1.0) continue;
-            #pragma omp simd
-            for (int k = 0; k < ncol - 1; k++)
-                dst_row[k] += src_row[k];
+            if (y1[i]->ld == 0) continue;
+            int ncol = y1[i]->ncol;
+            DTYPE *dst_row = y1[i]->data;
+            for (int j = 1; j < n_thread; j++)
+            {
+                DTYPE *src_row = y1[i]->data + j * ncol;
+                if (src_row[ncol - 1] != 1.0) continue;
+                #pragma omp simd
+                for (int k = 0; k < ncol - 1; k++)
+                    dst_row[k] += src_row[k];
+            }
         }
+        h2pack->tb[tid]->timer += H2P_get_wtime_sec();
     }
 }
 
@@ -183,6 +211,7 @@ void H2P_matvec_intermediate_sweep_AOT(H2Pack_t h2pack, const DTYPE *x)
         int tid = omp_get_thread_num();
         DTYPE *y = h2pack->tb[tid]->y;
         
+        h2pack->tb[tid]->timer = -H2P_get_wtime_sec();
         #pragma omp for schedule(static)
         for (int i = 0; i < n_node; i++)
         {
@@ -195,7 +224,9 @@ void H2P_matvec_intermediate_sweep_AOT(H2Pack_t h2pack, const DTYPE *x)
                 y1[i]->data[(j + 1) * ncol - 1] = 0.0;
         }
         
-        #pragma omp for schedule(dynamic)
+        #pragma omp barrier
+        
+        #pragma omp for schedule(dynamic) nowait
         for (int i_blk = 0; i_blk < n_B_blk; i_blk++)
         {
             int s_index = B_blk->data[i_blk];
@@ -301,10 +332,24 @@ void H2P_matvec_intermediate_sweep_AOT(H2Pack_t h2pack, const DTYPE *x)
                 }
             }  // End of i loop
         }  // End of i_blk loop
+        h2pack->tb[tid]->timer += H2P_get_wtime_sec();
     }  // End of "pragma omp parallel"
     
     // 3. Sum thread-local buffers in y1
     H2P_matvec_sum_y1_thread(h2pack);
+    
+    #ifdef PROFILING_OUTPUT
+    double max_t = 0.0, avg_t = 0.0, min_t = 1145141919.0;
+    for (int i = 0; i < n_thread; i++)
+    {
+        double thread_i_timer = h2pack->tb[i]->timer;
+        avg_t += thread_i_timer;
+        max_t = MAX(max_t, thread_i_timer);
+        min_t = MIN(min_t, thread_i_timer);
+    }
+    avg_t /= (double) n_thread;
+    printf("[PROFILING] MatVec intermediate sweep: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
+    #endif
 }
 
 // H2 representation matvec intermediate sweep, calculate B_{ij} * (U_j^T * x_j)
@@ -341,6 +386,7 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
         H2P_dense_mat_t Bi = h2pack->tb[tid]->mat0;
         DTYPE *y = h2pack->tb[tid]->y;
         
+        h2pack->tb[tid]->timer = -H2P_get_wtime_sec();
         #pragma omp for schedule(static)
         for (int i = 0; i < n_node; i++)
         {
@@ -353,7 +399,9 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                 y1[i]->data[(j + 1) * ncol - 1] = 0.0;
         }
         
-        #pragma omp for schedule(dynamic)
+        #pragma omp barrier
+        
+        #pragma omp for schedule(dynamic) nowait
         for (int i_blk = 0; i_blk < n_B_blk; i_blk++)
         {
             int s_index = B_blk->data[i_blk];
@@ -470,10 +518,24 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                 }
             }  // End of i loop
         }  // End of i_blk loop
+        h2pack->tb[tid]->timer += H2P_get_wtime_sec();
     }  // End of "pragma omp parallel"
     
     // 3. Sum thread-local buffers in y1
     H2P_matvec_sum_y1_thread(h2pack);
+    
+    #ifdef PROFILING_OUTPUT
+    double max_t = 0.0, avg_t = 0.0, min_t = 1145141919.0;
+    for (int i = 0; i < n_thread; i++)
+    {
+        double thread_i_timer = h2pack->tb[i]->timer;
+        avg_t += thread_i_timer;
+        max_t = MAX(max_t, thread_i_timer);
+        min_t = MIN(min_t, thread_i_timer);
+    }
+    avg_t /= (double) n_thread;
+    printf("[PROFILING] MatVec intermediate sweep: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
+    #endif
 }
 
 // H2 representation matvec downward sweep, calculate U_i * (B_{ij} * (U_j^T * x_j))
@@ -503,7 +565,8 @@ void H2P_matvec_downward_sweep(H2Pack_t h2pack, const DTYPE *x)
             DTYPE *y = h2pack->tb[tid]->y;
             H2P_dense_mat_t y1_tmp = h2pack->tb[tid]->mat0;
             
-            #pragma omp for schedule(dynamic)
+            h2pack->tb[tid]->timer = -H2P_get_wtime_sec();
+            #pragma omp for schedule(dynamic) nowait
             for (int j = 0; j < level_i_n_node; j++)
             {
                 int node = level_i_nodes[j];
@@ -549,7 +612,21 @@ void H2P_matvec_downward_sweep(H2Pack_t h2pack, const DTYPE *x)
                     }
                 }  // End of "if (n_child_node == 0)"
             }  // End of j loop
+            h2pack->tb[tid]->timer += H2P_get_wtime_sec();
         }  // End of "pragma omp parallel"
+        #ifdef PROFILING_OUTPUT
+        double max_t = 0.0, avg_t = 0.0, min_t = 1145141919.0;
+        for (int i = 0; i < nthreads; i++)
+        {
+            double thread_i_timer = h2pack->tb[i]->timer;
+            avg_t += thread_i_timer;
+            max_t = MAX(max_t, thread_i_timer);
+            min_t = MIN(min_t, thread_i_timer);
+        }
+        avg_t /= (double) nthreads;
+        printf("[PROFILING] MatVec downward sweep: level %d, %d/%d threads, %d nodes, ", i, nthreads, h2pack->n_thread, level_i_n_node);
+        printf("min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
+        #endif
     }  // End of i loop
 }
 
@@ -576,6 +653,7 @@ void H2P_matvec_dense_blocks_AOT(H2Pack_t h2pack, const DTYPE *x)
         int tid = omp_get_thread_num();
         DTYPE *y = h2pack->tb[tid]->y;
         
+        h2pack->tb[tid]->timer = -H2P_get_wtime_sec();
         // 1. Diagonal blocks matvec
         #pragma omp for schedule(dynamic) nowait
         for (int i_blk0 = 0; i_blk0 < n_D0_blk; i_blk0++)
@@ -606,7 +684,7 @@ void H2P_matvec_dense_blocks_AOT(H2Pack_t h2pack, const DTYPE *x)
         }  // End of i_blk0 loop 
         
         // 2. Off-diagonal blocks from inadmissible pairs matvec
-        #pragma omp for schedule(dynamic) 
+        #pragma omp for schedule(dynamic) nowait
         for (int i_blk1 = 0; i_blk1 < n_D1_blk; i_blk1++)
         {
             int s_index = D_blk1->data[i_blk1];
@@ -642,7 +720,21 @@ void H2P_matvec_dense_blocks_AOT(H2Pack_t h2pack, const DTYPE *x)
                 }
             }
         }  // End of i_blk1 loop 
+        h2pack->tb[tid]->timer += H2P_get_wtime_sec();
     }  // End of "pragma omp parallel"
+    
+    #ifdef PROFILING_OUTPUT
+    double max_t = 0.0, avg_t = 0.0, min_t = 1145141919.0;
+    for (int i = 0; i < h2pack->n_thread; i++)
+    {
+        double thread_i_timer = h2pack->tb[i]->timer;
+        avg_t += thread_i_timer;
+        max_t = MAX(max_t, thread_i_timer);
+        min_t = MIN(min_t, thread_i_timer);
+    }
+    avg_t /= (double) h2pack->n_thread;
+    printf("[PROFILING] MatVec dense block sweep: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
+    #endif
 }
 
 // H2 representation matvec dense blocks matvec, calculate D_{ij} * x_j
@@ -671,6 +763,7 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
         H2P_dense_mat_t Di = h2pack->tb[tid]->mat0;
         DTYPE *y = h2pack->tb[tid]->y;
         
+        h2pack->tb[tid]->timer = -H2P_get_wtime_sec();
         // 1. Diagonal blocks matvec
         #pragma omp for schedule(dynamic) nowait
         for (int i_blk0 = 0; i_blk0 < n_D0_blk; i_blk0++)
@@ -706,7 +799,7 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
         }  // End of i_blk0 loop 
         
         // 2. Off-diagonal blocks from inadmissible pairs matvec
-        #pragma omp for schedule(dynamic) 
+        #pragma omp for schedule(dynamic) nowait
         for (int i_blk1 = 0; i_blk1 < n_D1_blk; i_blk1++)
         {
             int s_index = D_blk1->data[i_blk1];
@@ -747,7 +840,21 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
                 }
             }
         }  // End of i_blk1 loop 
+        h2pack->tb[tid]->timer += H2P_get_wtime_sec();
     }  // End of "pragma omp parallel"
+    
+    #ifdef PROFILING_OUTPUT
+    double max_t = 0.0, avg_t = 0.0, min_t = 1145141919.0;
+    for (int i = 0; i < h2pack->n_thread; i++)
+    {
+        double thread_i_timer = h2pack->tb[i]->timer;
+        avg_t += thread_i_timer;
+        max_t = MAX(max_t, thread_i_timer);
+        min_t = MIN(min_t, thread_i_timer);
+    }
+    avg_t /= (double) h2pack->n_thread;
+    printf("[PROFILING] MatVec dense block sweep: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
+    #endif
 }
 
 // H2 representation multiplies a column vector

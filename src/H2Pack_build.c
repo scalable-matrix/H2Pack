@@ -350,44 +350,56 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
         if (i == 0)
         {
             // Leaf nodes, use all points
-            #pragma omp parallel for schedule(dynamic) num_threads(nthreads)
-            for (int j = 0; j < height_n_node[i]; j++)
+            #pragma omp parallel num_threads(nthreads)
             {
-                int node = height_i_nodes[j];
-                int s_index = cluster[node * 2];
-                int e_index = cluster[node * 2 + 1];
-                int node_npts = e_index - s_index + 1;
-                H2P_int_vec_init(&J[node], node_npts);
-                for (int k = 0; k < node_npts; k++)
-                    J[node]->data[k] = s_index + k;
-                J[node]->length = node_npts;
+                int tid = omp_get_thread_num();
+                h2pack->tb[tid]->timer = -H2P_get_wtime_sec();
+                #pragma omp for schedule(dynamic) nowait
+                for (int j = 0; j < height_n_node[i]; j++)
+                {
+                    int node = height_i_nodes[j];
+                    int s_index = cluster[node * 2];
+                    int e_index = cluster[node * 2 + 1];
+                    int node_npts = e_index - s_index + 1;
+                    H2P_int_vec_init(&J[node], node_npts);
+                    for (int k = 0; k < node_npts; k++)
+                        J[node]->data[k] = s_index + k;
+                    J[node]->length = node_npts;
 
-                H2P_dense_mat_init(&J_coord[node], dim, node_npts);
-                H2P_copy_matrix_block(dim, node_npts, coord + s_index, n_point, J_coord[node]->data, node_npts);
+                    H2P_dense_mat_init(&J_coord[node], dim, node_npts);
+                    H2P_copy_matrix_block(dim, node_npts, coord + s_index, n_point, J_coord[node]->data, node_npts);
+                }
+                h2pack->tb[tid]->timer += H2P_get_wtime_sec();
             }
         } else {
             // Non-leaf nodes, gather row indices from children nodes
-            #pragma omp parallel for schedule(dynamic) num_threads(nthreads)
-            for (int j = 0; j < height_n_node[i]; j++)
+            #pragma omp parallel num_threads(nthreads)
             {
-                int node = height_i_nodes[j];
-                int level = node_level[node];
-                if (level < min_adm_level) continue;
-                int n_child_node = n_child[node];
-                int *child_nodes = children + node * max_child;
-                int J_child_size = 0;
-                for (int i_child = 0; i_child < n_child_node; i_child++)
+                int tid = omp_get_thread_num();
+                h2pack->tb[tid]->timer = -H2P_get_wtime_sec();
+                #pragma omp for schedule(dynamic) nowait
+                for (int j = 0; j < height_n_node[i]; j++)
                 {
-                    int i_child_node = child_nodes[i_child];
-                    J_child_size += J[i_child_node]->length;
+                    int node = height_i_nodes[j];
+                    int level = node_level[node];
+                    if (level < min_adm_level) continue;
+                    int n_child_node = n_child[node];
+                    int *child_nodes = children + node * max_child;
+                    int J_child_size = 0;
+                    for (int i_child = 0; i_child < n_child_node; i_child++)
+                    {
+                        int i_child_node = child_nodes[i_child];
+                        J_child_size += J[i_child_node]->length;
+                    }
+                    H2P_int_vec_init(&J[node], J_child_size);
+                    for (int i_child = 0; i_child < n_child_node; i_child++)
+                    {
+                        int i_child_node = child_nodes[i_child];
+                        H2P_int_vec_concatenate(J[node], J[i_child_node]);
+                    }
                 }
-                H2P_int_vec_init(&J[node], J_child_size);
-                for (int i_child = 0; i_child < n_child_node; i_child++)
-                {
-                    int i_child_node = child_nodes[i_child];
-                    H2P_int_vec_concatenate(J[node], J[i_child_node]);
-                }
-            }
+                h2pack->tb[tid]->timer += H2P_get_wtime_sec();
+            }  // End of "pragma omp parallel"
         }  // End of "if (i == 0)"
         
         // (2) Compression at height i
@@ -399,7 +411,9 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
             H2P_dense_mat_t QR_buff = h2pack->tb[tid]->mat1;
             H2P_int_vec_t   sub_idx = h2pack->tb[tid]->idx0;
             H2P_int_vec_t   ID_buff = h2pack->tb[tid]->idx1;
-            #pragma omp for schedule(dynamic)
+            
+            h2pack->tb[tid]->timer -= H2P_get_wtime_sec();
+            #pragma omp for schedule(dynamic) nowait
             for (int j = 0; j < height_n_node[i]; j++)
             {
                 int node  = height_i_nodes[j];
@@ -468,7 +482,22 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                     dim, J[node]->data, J[node]->length
                 );
             }  // End of j loop
+            h2pack->tb[tid]->timer += H2P_get_wtime_sec();
         }  // End of "pragma omp parallel"
+        
+        #ifdef PROFILING_OUTPUT
+        double max_t = 0.0, avg_t = 0.0, min_t = 1145141919.0;
+        for (int i = 0; i < nthreads; i++)
+        {
+            double thread_i_timer = h2pack->tb[i]->timer;
+            avg_t += thread_i_timer;
+            max_t = MAX(max_t, thread_i_timer);
+            min_t = MIN(min_t, thread_i_timer);
+        }
+        avg_t /= (double) nthreads;
+        printf("[PROFILING] Build U: height %d, %d/%d threads, %d nodes, ", i, nthreads, h2pack->n_thread, height_n_node[i]);
+        printf("min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
+        #endif
     }  // End of i loop
 
     // 3. Initialize other not touched U J & add statistic info
@@ -628,58 +657,78 @@ void H2P_build_B(H2Pack_t h2pack)
     assert(h2pack->B_data != NULL);
     DTYPE *B_data = h2pack->B_data;
     const int n_B_blk = B_blk->length;
-    #pragma omp parallel for num_threads(n_thread) schedule(dynamic)
-    for (int i_blk = 0; i_blk < n_B_blk; i_blk++)
+    #pragma omp parallel num_threads(n_thread)
     {
-        int s_index = B_blk->data[i_blk];
-        int e_index = B_blk->data[i_blk + 1];
-        for (int i = s_index; i < e_index; i++)
+        int tid = omp_get_thread_num();
+        
+        h2pack->tb[tid]->timer = -H2P_get_wtime_sec();
+        #pragma omp for schedule(dynamic) nowait
+        for (int i_blk = 0; i_blk < n_B_blk; i_blk++)
         {
-            int node0  = r_adm_pairs[2 * i];
-            int node1  = r_adm_pairs[2 * i + 1];
-            int level0 = node_level[node0];
-            int level1 = node_level[node1];
-            DTYPE *Bi  = B_data + B_ptr[i];
+            int s_index = B_blk->data[i_blk];
+            int e_index = B_blk->data[i_blk + 1];
+            for (int i = s_index; i < e_index; i++)
+            {
+                int node0  = r_adm_pairs[2 * i];
+                int node1  = r_adm_pairs[2 * i + 1];
+                int level0 = node_level[node0];
+                int level1 = node_level[node1];
+                DTYPE *Bi  = B_data + B_ptr[i];
 
-            // (1) Two nodes are of the same level, compress on both sides
-            if (level0 == level1)
-            {
-                kernel(
-                    J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
-                    J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                    dim, Bi, J_coord[node1]->ncol
-                );
-            }
-            
-            // (2) node1 is a leaf node and its level is higher than node0's level, 
-            //     only compress on node0's side
-            if (level0 > level1)
-            {
-                int s_index1   = cluster[2 * node1];
-                int e_index1   = cluster[2 * node1 + 1];
-                int node1_npts = e_index1 - s_index1 + 1;
-                kernel(
-                    J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
-                    coord + s_index1, n_point, node1_npts, 
-                    dim, Bi, node1_npts
-                );
-            }
-            
-            // (3) node0 is a leaf node and its level is higher than node1's level, 
-            //     only compress on node1's side
-            if (level0 < level1)
-            {
-                int s_index0   = cluster[2 * node0];
-                int e_index0   = cluster[2 * node0 + 1];
-                int node0_npts = e_index0 - s_index0 + 1;
-                kernel(
-                    coord + s_index0, n_point, node0_npts, 
-                    J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                    dim, Bi, J_coord[node1]->ncol
-                );
-            }
-        }  // End of i loop
-    }  // End of i_blk loop
+                // (1) Two nodes are of the same level, compress on both sides
+                if (level0 == level1)
+                {
+                    kernel(
+                        J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
+                        J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
+                        dim, Bi, J_coord[node1]->ncol
+                    );
+                }
+                
+                // (2) node1 is a leaf node and its level is higher than node0's level, 
+                //     only compress on node0's side
+                if (level0 > level1)
+                {
+                    int s_index1   = cluster[2 * node1];
+                    int e_index1   = cluster[2 * node1 + 1];
+                    int node1_npts = e_index1 - s_index1 + 1;
+                    kernel(
+                        J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
+                        coord + s_index1, n_point, node1_npts, 
+                        dim, Bi, node1_npts
+                    );
+                }
+                
+                // (3) node0 is a leaf node and its level is higher than node1's level, 
+                //     only compress on node1's side
+                if (level0 < level1)
+                {
+                    int s_index0   = cluster[2 * node0];
+                    int e_index0   = cluster[2 * node0 + 1];
+                    int node0_npts = e_index0 - s_index0 + 1;
+                    kernel(
+                        coord + s_index0, n_point, node0_npts, 
+                        J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
+                        dim, Bi, J_coord[node1]->ncol
+                    );
+                }
+            }  // End of i loop
+        }  // End of i_blk loop
+        h2pack->tb[tid]->timer += H2P_get_wtime_sec();
+    }  // End of "pragma omp parallel"
+    
+    #ifdef PROFILING_OUTPUT
+    double max_t = 0.0, avg_t = 0.0, min_t = 1145141919.0;
+    for (int i = 0; i < n_thread; i++)
+    {
+        double thread_i_timer = h2pack->tb[i]->timer;
+        avg_t += thread_i_timer;
+        max_t = MAX(max_t, thread_i_timer);
+        min_t = MIN(min_t, thread_i_timer);
+    }
+    avg_t /= (double) n_thread;
+    printf("[PROFILING] Build B: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
+    #endif
 }
 
 // Build dense blocks in the original matrices
@@ -732,7 +781,7 @@ void H2P_build_D(H2Pack_t h2pack)
         h2pack->mat_size[6] += node_npts * node_npts;
         h2pack->mat_size[6] += node_npts + node_npts;
     }
-    H2P_partition_workload(n_leaf_node, D_ptr + 1, D0_total_size, n_thread * 5, D_blk0);
+    H2P_partition_workload(n_leaf_node, D_ptr + 1, D0_total_size, n_thread * BD_NTASK_THREAD, D_blk0);
     size_t D1_total_size = 0;
     for (int i = 0; i < n_r_inadm_pair; i++)
     {
@@ -767,6 +816,10 @@ void H2P_build_D(H2Pack_t h2pack)
     const int n_D1_blk = D_blk1->length;
     #pragma omp parallel num_threads(n_thread)
     {
+        int tid = omp_get_thread_num();
+        
+        h2pack->tb[tid]->timer = -H2P_get_wtime_sec();
+        
         // 3. Generate diagonal blocks (leaf node self interaction)
         #pragma omp for schedule(dynamic) nowait
         for (int i_blk0 = 0; i_blk0 < n_D0_blk; i_blk0++)
@@ -789,7 +842,7 @@ void H2P_build_D(H2Pack_t h2pack)
         }  // End of i_blk0 loop
         
         // 4. Generate off-diagonal blocks from inadmissible pairs
-        #pragma omp for schedule(dynamic) 
+        #pragma omp for schedule(dynamic) nowait
         for (int i_blk1 = 0; i_blk1 < n_D1_blk; i_blk1++)
         {
             int s_index = D_blk1->data[i_blk1];
@@ -812,7 +865,22 @@ void H2P_build_D(H2Pack_t h2pack)
                 );
             }
         }  // End of i_blk1 loop
+        
+        h2pack->tb[tid]->timer += H2P_get_wtime_sec();
     }  // End of "pragma omp parallel"
+    
+    #ifdef PROFILING_OUTPUT
+    double max_t = 0.0, avg_t = 0.0, min_t = 1145141919.0;
+    for (int i = 0; i < n_thread; i++)
+    {
+        double thread_i_timer = h2pack->tb[i]->timer;
+        avg_t += thread_i_timer;
+        max_t = MAX(max_t, thread_i_timer);
+        min_t = MIN(min_t, thread_i_timer);
+    }
+    avg_t /= (double) n_thread;
+    printf("[PROFILING] Build D: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
+    #endif
 }
 
 // Build H2 representation with a kernel function

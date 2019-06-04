@@ -10,6 +10,17 @@
 
 #include "H2Pack.h"
 
+struct H2P_test_params
+{
+    int   dim;
+    int   n_point;
+    int   BD_JIT;
+    DTYPE rel_tol;
+    DTYPE *coord;
+    kernel_func_ptr kernel;
+};
+struct H2P_test_params test_params;
+
 void reciprocal_kernel_3d(
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
@@ -68,6 +79,85 @@ void reciprocal_kernel_2d(
     }
 }
 
+void parse_params(int argc, char **argv)
+{
+    if (argc < 2)
+    {
+        printf("Dimension = ");
+        scanf("%d", &test_params.dim);
+    } else {
+        test_params.dim = atoi(argv[1]);
+        printf("Dimension = %d\n", test_params.dim);
+    }
+    
+    if (argc < 3)
+    {
+        printf("N points  = ");
+        scanf("%d", &test_params.n_point);
+    } else {
+        test_params.n_point = atoi(argv[2]);
+        printf("N points  = %d\n", test_params.n_point);
+    }
+    
+    if (argc < 4)
+    {
+        printf("rel_tol   = ");
+        scanf("%lf", &test_params.rel_tol);
+    } else {
+        test_params.rel_tol = atof(argv[3]);
+        printf("rel_tol   = %e\n", test_params.rel_tol);
+    }
+    
+    if (argc < 5)
+    {
+        printf("BD_JIT    = ");
+        scanf("%d", &test_params.BD_JIT);
+    } else {
+        test_params.BD_JIT = atoi(argv[4]);
+        printf("BD_JIT    = %d\n", test_params.BD_JIT);
+    }
+    
+    test_params.coord = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * test_params.n_point * test_params.dim);
+    assert(test_params.coord != NULL);
+    
+    // Note: coordinates need to be stored in column-major style, i.e. test_params.coord 
+    // is row-major and each column stores the coordinate of a point. 
+    if (argc < 6)
+    {
+        DTYPE k = pow((DTYPE) test_params.n_point, 1.0 / (DTYPE) test_params.dim);
+        for (int i = 0; i < test_params.n_point; i++)
+        {
+            DTYPE *coord_i = test_params.coord + i * test_params.dim;
+            for (int j = 0; j < test_params.dim; j++)
+                coord_i[j] = k * drand48();
+        }
+        /*
+        FILE *ouf = fopen("coord.txt", "w");
+        for (int i = 0; i < test_params.n_point; i++)
+        {
+            DTYPE *coord_i = test_params.coord + i;
+            for (int j = 0; j < test_params.dim-1; j++) 
+                fprintf(ouf, "% .15lf, ", coord_i[j * test_params.n_point]]);
+            fprintf(ouf, "% .15lf\n", coord_i[(test_params.dim-1) * test_params.n_point]);
+        }
+        fclose(ouf);
+        */
+    } else {
+        FILE *inf = fopen(argv[5], "r");
+        for (int i = 0; i < test_params.n_point; i++)
+        {
+            DTYPE *coord_i = test_params.coord + i;
+            for (int j = 0; j < test_params.dim-1; j++) 
+                fscanf(inf, "%lf,", &coord_i[j * test_params.n_point]);
+            fscanf(inf, "%lf\n", &coord_i[(test_params.dim-1) * test_params.n_point]);
+        }
+        fclose(inf);
+    }
+    
+    if (test_params.dim == 3) test_params.kernel = reciprocal_kernel_3d;
+    if (test_params.dim == 2) test_params.kernel = reciprocal_kernel_2d;
+}
+
 void direct_nbody(
     kernel_func_ptr kernel, const int dim, const int n_point, 
     const DTYPE *coord, const DTYPE *x, DTYPE *y
@@ -114,122 +204,48 @@ void direct_nbody(
 
 int main(int argc, char **argv)
 {
-    int dim    = 2;
-    int npts   = 10000;
-    int BD_JIT = 0;
-    DTYPE rel_tol = 1e-6;
-    
-    if (argc < 2)
-    {
-        printf("Dimension = ");
-        scanf("%d", &dim);
-    } else {
-        dim = atoi(argv[1]);
-        printf("Dimension = %d\n", dim);
-    }
-    
-    if (argc < 3)
-    {
-        printf("N points  = ");
-        scanf("%d", &npts);
-    } else {
-        npts = atoi(argv[2]);
-        printf("N points  = %d\n", npts);
-    }
-    
-    if (argc < 4)
-    {
-        printf("rel_tol   = ");
-        scanf("%lf", &rel_tol);
-    } else {
-        rel_tol = atof(argv[3]);
-        printf("rel_tol   = %e\n", rel_tol);
-    }
-    
-    if (argc < 5)
-    {
-        printf("BD_JIT    = ");
-        scanf("%d", &BD_JIT);
-    } else {
-        BD_JIT = atoi(argv[4]);
-        printf("BD_JIT    = %d\n", BD_JIT);
-    }
-
-    FILE *inf, *ouf;
-    double st, et, ut, total_t;
-    
     srand48(time(NULL));
     
-    DTYPE *coord = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts * dim);
+    parse_params(argc, argv);
     
-    if (argc < 6)
-    {
-        DTYPE k = pow((DTYPE) npts, 1.0 / (DTYPE) dim);
-        for (int i = 0; i < npts; i++)
-        {
-            DTYPE *coord_i = coord + i * dim;
-            for (int j = 0; j < dim; j++)
-                coord_i[j] = k * drand48();
-        }
-        #if 0
-        ouf = fopen("coord.txt", "w");
-        for (int i = 0; i < npts; i++)
-        {
-            DTYPE *coord_i = coord + i * dim;
-            for (int j = 0; j < dim-1; j++) 
-                fprintf(ouf, "% .15lf, ", coord_i[j]);
-            fprintf(ouf, "% .15lf\n", coord_i[dim-1]);
-        }
-        fclose(ouf);
-        #endif
-    } else {
-        inf = fopen(argv[5], "r");
-        for (int i = 0; i < npts; i++)
-        {
-            DTYPE *coord_i = coord + i;
-            for (int j = 0; j < dim-1; j++) 
-                fscanf(inf, "%lf,", &coord_i[j * npts]);
-            fscanf(inf, "%lf\n", &coord_i[(dim-1) * npts]);
-        }
-        fclose(inf);
-    }
-    
+    double st, et, ut, total_t;
+
     H2Pack_t h2pack;
-    H2P_init(&h2pack, dim, QR_REL_NRM, &rel_tol);
-    H2P_partition_points(h2pack, npts, coord, 0);
     
+    H2P_init(&h2pack, test_params.dim, QR_REL_NRM, &test_params.rel_tol);
+    
+    H2P_partition_points(h2pack, test_params.n_point, test_params.coord, 0);
+    
+    // Check if point index permutation is correct in H2Pack
     DTYPE coord_diff_sum = 0.0;
-    for (int i = 0; i < npts; i++)
+    for (int i = 0; i < test_params.n_point; i++)
     {
         DTYPE *coord_s_i = h2pack->coord + i;
-        DTYPE *coord_i   = coord + h2pack->coord_idx[i];
-        for (int j = 0; j < dim; j++)
-            coord_diff_sum += DABS(coord_s_i[j * npts] - coord_i[j * npts]);
+        DTYPE *coord_i   = test_params.coord + h2pack->coord_idx[i];
+        for (int j = 0; j < test_params.dim; j++)
+            coord_diff_sum += DABS(coord_s_i[j * test_params.n_point] - coord_i[j * test_params.n_point]);
     }
-    printf("Coordinate permutation results %s", coord_diff_sum < 1e-15 ? "are correct\n" : "are wrong\n");
+    printf("Point index permutation results %s", coord_diff_sum < 1e-15 ? "are correct\n" : "are wrong\n");
 
-    kernel_func_ptr kernel;
-    if (dim == 3) kernel = reciprocal_kernel_3d;
-    if (dim == 2) kernel = reciprocal_kernel_2d;
     H2P_dense_mat_t *pp;
-    DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * dim + dim];
+    DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * test_params.dim + test_params.dim];
     st = H2P_get_wtime_sec();
-    H2P_generate_proxy_point(dim, h2pack->max_level, 2, max_L, kernel, &pp);
+    H2P_generate_proxy_point(test_params.dim, h2pack->max_level, 2, max_L, test_params.kernel, &pp);
     et = H2P_get_wtime_sec();
     printf("H2Pack generate proxy point used %.3lf (s)\n", et - st);
     
-    H2P_build(h2pack, kernel, pp, BD_JIT);
+    H2P_build(h2pack, test_params.kernel, pp, test_params.BD_JIT);
     
     int nthreads = omp_get_max_threads();
     DTYPE *x, *y0, *y1, *tb;
-    x  = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts);
-    y0 = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts);
-    y1 = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * npts);
+    x  = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * test_params.n_point);
+    y0 = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * test_params.n_point);
+    y1 = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * test_params.n_point);
     assert(x != NULL && y0 != NULL && y1 != NULL);
-    for (int i = 0; i < npts; i++) x[i] = drand48();
+    for (int i = 0; i < test_params.n_point; i++) x[i] = drand48();
     
     // Get reference results
-    direct_nbody(kernel, dim, npts, h2pack->coord, x, y0);
+    direct_nbody(test_params.kernel, test_params.dim, test_params.n_point, h2pack->coord, x, y0);
     
     // Warm up, reset timers, and test the matvec performance
     H2P_matvec(h2pack, x, y1); 
@@ -242,7 +258,7 @@ int main(int argc, char **argv)
     
     // Verify H2 matvec results
     DTYPE y0_norm = 0.0, err_norm = 0.0;
-    for (int i = 0; i < npts; i++)
+    for (int i = 0; i < test_params.n_point; i++)
     {
         DTYPE diff = y1[i] - y0[i];
         y0_norm  += y0[i] * y0[i];
@@ -255,6 +271,6 @@ int main(int argc, char **argv)
     H2P_free_aligned(x);
     H2P_free_aligned(y0);
     H2P_free_aligned(y1);
-    H2P_free_aligned(coord);
+    H2P_free_aligned(test_params.coord);
     H2P_destroy(h2pack);
 }

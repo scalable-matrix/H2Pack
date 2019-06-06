@@ -236,7 +236,7 @@ void H2P_generate_proxy_point(
             }
         }
         const int Ny_size2 = 2 * ny;
-        H2P_dense_mat_init(&pp[level], dim, Ny_size2);
+        H2P_dense_mat_init(&pp[level], Ny_size2, dim);
         H2P_dense_mat_t pp_level = pp[level];
         // Also transpose the coordinate array for vectorizing kernel evaluation here
         for (int i = 0; i < ny; i++)
@@ -422,7 +422,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                 
                 DTYPE *node_box = enbox + node * 2 * dim;
                 int nrow = J[node]->length;
-                int ncol = pp[level]->ncol;
+                int ncol = pp[level]->nrow;
                 H2P_dense_mat_resize(tmp_x, dim, J[node]->length);
                 
                 int ncol_64B = (ncol + N_DTYPE_64B - 1) / N_DTYPE_64B * N_DTYPE_64B;

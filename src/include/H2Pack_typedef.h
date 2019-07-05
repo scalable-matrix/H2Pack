@@ -1,6 +1,7 @@
 #ifndef __H2PACK_TYPEDEF_H__
 #define __H2PACK_TYPEDEF_H__
 
+#include "H2Pack_utils.h"
 #include "H2Pack_config.h"
 #include "H2Pack_aux_structs.h"
 
@@ -32,9 +33,11 @@ struct H2Pack
     // H2 matrix tree flatten representation
     int    n_thread;            // Number of threads
     int    dim;                 // Dimension of point coordinate
+    int    krnl_dim;            // Dimension of kernel function's return value
     int    QR_stop_type;        // Partial QR stop criteria
     int    QR_stop_rank;        // Partial QR maximum rank
     int    n_point;             // Number of points for the kernel matrix
+    int    krnl_mat_size;       // Size of the kernel matrix
     int    max_leaf_points;     // Maximum point in a leaf node's box
     int    n_node;              // Number of nodes in this H2 tree
     int    root_idx;            // Index of the root node (== n_node - 1, save it for convenience)
@@ -52,6 +55,7 @@ struct H2Pack
     int    *parent;             // Size n_node, parent index of each node
     int    *children;           // Size n_node * max_child, indices of a node's children nodes
     int    *cluster;            // Size n_node * 2, start and end (included) indices of points belong to each node
+    int    *mat_cluster;        // Size n_node * 2, start and end (included) indices of matvec vector elements belong to each node
     int    *n_child;            // Size n_node, number of children nodes of each node
     int    *node_level;         // Size n_node, level of each node
     int    *node_height;        // Size n_node, height of each node

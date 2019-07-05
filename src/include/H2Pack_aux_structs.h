@@ -1,6 +1,7 @@
 #ifndef __H2PACK_AUX_STRUCTS_H__
 #define __H2PACK_AUX_STRUCTS_H__
 
+#include "H2Pack_utils.h"
 #include "H2Pack_config.h"
 
 #ifdef __cplusplus
@@ -83,13 +84,20 @@ static inline void H2P_int_vec_set_capacity(H2P_int_vec_t int_vec, const int cap
     }
 }
 
-// Push an integer to the tail of a H2P_int_vec
+// Push an integer to the tail of a H2P_int_vec.
+// Frequently used, inline it.
 // Input parameters:
 //   int_vec : H2P_int_vec structure
 //   value   : Value to be pushed 
 // Output parameter:
 //   int_vec : H2P_int_vec structure with the pushed value
-void H2P_int_vec_push_back(H2P_int_vec_t int_vec, int value);
+static inline void H2P_int_vec_push_back(H2P_int_vec_t int_vec, int value)
+{
+    if (int_vec->capacity == int_vec->length)
+        H2P_int_vec_set_capacity(int_vec, int_vec->capacity * 2);
+    int_vec->data[int_vec->length] = value;
+    int_vec->length++;
+}
 
 // Concatenate values in a H2P_int_vec to another H2P_int_vec
 // Input parameters:
@@ -98,6 +106,14 @@ void H2P_int_vec_push_back(H2P_int_vec_t int_vec, int value);
 // Output parameter:
 //   dst_vec : Destination H2P_int_vec structure
 void H2P_int_vec_concatenate(H2P_int_vec_t dst_vec, H2P_int_vec_t src_vec);
+
+// Gather elements in a H2P_int_vec to another H2P_int_vec
+// Input parameters:
+//   src_vec : Source H2P_int_vec structure
+//   idx     : Indices of elements to be gathered
+// Output parameter:
+//   dst_vec : Destination H2P_int_vec structure
+void H2P_int_vec_gather(H2P_int_vec_t src_vec, H2P_int_vec_t idx, H2P_int_vec_t dst_vec);
 
 // ------------------------------------------------------------------------------ // 
 
@@ -152,7 +168,7 @@ static inline void H2P_dense_mat_resize(H2P_dense_mat_t mat, const int nrow, con
 
 // Permute rows in a H2P_dense_mat structure
 // WARNING: This function DOES NOT perform sanity check!
-// Input parameter:
+// Input parameters:
 //   mat : H2P_dense_mat structure to be permuted
 //   p   : Permutation array. After permutation, the i-th row is the p[i]-th row
 //         in the original matrix
@@ -162,7 +178,7 @@ void H2P_dense_mat_permute_rows(H2P_dense_mat_t mat, const int *p);
 
 // Select rows in a H2P_dense_mat structure
 // WARNING: This function DOES NOT perform sanity check!
-// Input parameter:
+// Input parameters:
 //   mat     : H2P_dense_mat structure to be selected
 //   row_idx : Row index array, sorted in ascending order. The i-th row in the
 //             new matrix is the row_idx->data[i]-th row in the original matrix
@@ -172,13 +188,21 @@ void H2P_dense_mat_select_rows(H2P_dense_mat_t mat, H2P_int_vec_t row_idx);
 
 // Select columns in a H2P_dense_mat structure
 // WARNING: This function DOES NOT perform sanity check!
-// Input parameter:
+// Input parameters:
 //   mat     : H2P_dense_mat structure to be selected
 //   col_idx : Column index array, sorted in ascending order. The i-th column in the
 //             new matrix is the col_idx->data[i]-th column in the original matrix
 // Output parameter:
 //   mat : H2P_dense_mat structure with selected columns
 void H2P_dense_mat_select_columns(H2P_dense_mat_t mat, H2P_int_vec_t col_idx);
+
+// Normalize columns in a H2P_dense_mat structure
+// Input parameters:
+//   mat     : H2P_dense_mat structure to be normalized columns
+//   workbuf : H2P_dense_mat structure as working buffer
+// Output parameter:
+//   mat     : H2P_dense_mat structure with normalized columns
+void H2P_dense_mat_normalize_columns(H2P_dense_mat_t mat, H2P_dense_mat_t workbuf);
 
 // Print a H2P_dense_mat structure, for debugging
 // Input parameter:
@@ -198,15 +222,21 @@ struct H2P_thread_buf
     H2P_dense_mat_t mat1;   // Used in H2P_build_UJ_proxy, H2P_matvec_downward_sweep
     DTYPE  *y;              // Used in H2P_matvec except H2P_matvec_upward_sweep
     double timer;           // Used for profiling
+    
+    // For H2ERI
+    H2P_int_vec_t   idx2;
+    H2P_int_vec_t   idx3;
+    H2P_int_vec_t   idx4;
+    H2P_dense_mat_t mat2;
 };
 typedef struct H2P_thread_buf* H2P_thread_buf_t;
 
 // Initialize a H2P_thread_buf structure
 // Input parameter:
-//   n_point : Number of points for the kernel matrix
+//   krnl_mat_size : Size of the kernel matrix
 // Output parameter:
 //   thread_buf_ : Initialized H2P_thread_buf structure
-void H2P_thread_buf_init(H2P_thread_buf_t *thread_buf_, const int n_point);
+void H2P_thread_buf_init(H2P_thread_buf_t *thread_buf_, const int krnl_mat_size);
 
 // Destroy a H2P_thread_buf structure
 // Input parameter:

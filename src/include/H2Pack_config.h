@@ -16,6 +16,7 @@
 #define DFLOOR           floor         // Floor function
 #define DSQRT            sqrt          // Sqrt function
 #define CBLAS_GEMV       cblas_dgemv   // CBLAS matrix-vector multiplication
+#define CBLAS_GEMM       cblas_dgemm   // CBLAS matrix-matrix multiplication
 #define CBLAS_GER        cblas_dger    // CBLAS matrix rank-1 update
 #define CBLAS_TRSM       cblas_dtrsm   // CBLAS triangle solve
 #define N_DTYPE_64B      8             // 8 double == 64 bytes, for alignment
@@ -29,6 +30,7 @@
 #define DFLOOR           floorf
 #define DSQRT            sqrtf    
 #define CBLAS_GEMV       cblas_sgemv
+#define CBLAS_GEMM       cblas_sgemm
 #define CBLAS_GER        cblas_sger
 #define CBLAS_TRSM       cblas_strsm
 #define N_DTYPE_64B      16

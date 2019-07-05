@@ -31,6 +31,7 @@ void H2P_init(H2Pack_t *h2pack_, const int dim, const int QR_stop_type, void *QR
     h2pack->parent        = NULL;
     h2pack->children      = NULL;
     h2pack->cluster       = NULL;
+    h2pack->mat_cluster   = NULL;
     h2pack->n_child       = NULL;
     h2pack->node_level    = NULL;
     h2pack->node_height   = NULL;
@@ -73,6 +74,7 @@ void H2P_destroy(H2Pack_t h2pack)
     free(h2pack->parent);
     free(h2pack->children);
     free(h2pack->cluster);
+    free(h2pack->mat_cluster);
     free(h2pack->n_child);
     free(h2pack->node_level);
     free(h2pack->node_height);
@@ -130,7 +132,8 @@ void H2P_destroy(H2Pack_t h2pack)
 void H2P_print_statistic(H2Pack_t h2pack)
 {
     printf("==================== H2Pack H2 tree info ====================\n");
-    printf("  * Number of points (npts)        : %d\n", h2pack->n_point);
+    printf("  * Number of points               : %d\n", h2pack->n_point);
+    printf("  * Kernel matrix size (kms)       : %d\n", h2pack->krnl_mat_size);
     printf("  * Maximum points in a leaf node  : %d\n", h2pack->max_leaf_points);
     printf("  * Height of H2 tree              : %d\n", h2pack->max_level+1);
     printf("  * Number of nodes                : %d\n", h2pack->n_node);
@@ -160,7 +163,7 @@ void H2P_print_statistic(H2Pack_t h2pack)
     UBD_k += (double) h2pack->mat_size[0];
     UBD_k += (double) h2pack->mat_size[1];
     UBD_k += (double) h2pack->mat_size[2];
-    UBD_k /= (double) h2pack->n_point;
+    UBD_k /= (double) h2pack->krnl_mat_size;
     double y0y1_MB = 0.0, tb_MB = 0.0;
     for (int i = 0; i < h2pack->n_thread; i++)
     {
@@ -168,7 +171,7 @@ void H2P_print_statistic(H2Pack_t h2pack)
         double msize0 = (double) tbi->mat0->size     + (double) tbi->mat1->size;
         double msize1 = (double) tbi->idx0->capacity + (double) tbi->idx1->capacity;
         tb_MB += DTYPE_msize * msize0 + (double) sizeof(int) * msize1;
-        tb_MB += DTYPE_msize * (double) h2pack->n_point;
+        tb_MB += DTYPE_msize * (double) h2pack->krnl_mat_size;
     }
     for (int i = 0; i < h2pack->n_node; i++)
     {
@@ -183,7 +186,7 @@ void H2P_print_statistic(H2Pack_t h2pack)
     printf("  * H2 representation U, B, D : %.2lf, %.2lf, %.2lf (MB) \n", U_MB, B_MB, D_MB);
     printf("  * Matvec auxiliary arrays   : %.2lf (MB) \n", y0y1_MB);
     printf("  * Thread-local buffers      : %.2lf (MB) \n", tb_MB);
-    printf("  * sizeof(U + B + D) / npts  : %.3lf \n", UBD_k);
+    printf("  * sizeof(U + B + D) / kms   : %.3lf \n", UBD_k);
     
     printf("==================== H2Pack timing info =====================\n");
     int n_matvec = h2pack->n_matvec;

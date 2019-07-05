@@ -97,11 +97,11 @@ H2P_tree_node_t H2P_bisection_partition_points(
                 semi_box_size = MAX(semi_box_size, tmp);
             }
         }
-        semi_box_size = semi_box_size + 1e-10;
+        semi_box_size = semi_box_size + 1e-8;
         for (int j = 0; j < dim; j++)
         {
-            enbox[j] = center[j] - semi_box_size;
-            enbox[dim + j] = 2 * semi_box_size;
+            enbox[j] = center[j] - semi_box_size - 2e-12;
+            enbox[dim + j] = 2 * semi_box_size   + 4e-12;
         }
         free(center);
     }
@@ -141,14 +141,13 @@ H2P_tree_node_t H2P_bisection_partition_points(
         int   *rel_idx_dim_j = rel_idx + j * node_npts;
         for (int i = 0; i < node_npts; i++)
         {
-            DTYPE rel_coord = coord_dim_j_s[i] - enbox_corner_j;
-            rel_idx_dim_j[i] = DFLOOR(2 * rel_coord / enbox_width_j);
+            DTYPE rel_coord  = coord_dim_j_s[i] - enbox_corner_j;
+            rel_idx_dim_j[i] = DFLOOR(2.0 * rel_coord / enbox_width_j);
             if (rel_idx_dim_j[i] == 2) rel_idx_dim_j[i] = 1;
             child_idx[i] += rel_idx_dim_j[i] * pow2;
         }
         pow2 *= 2;
     }
-    
     
     // 4. Get the number of points in each sub-box, then bucket sort all 
     //    points according to the sub-box a point in
@@ -199,8 +198,8 @@ H2P_tree_node_t H2P_bisection_partition_points(
         int *sub_rel_idx_i = sub_rel_idx + i;
         for (int j = 0; j < dim; j++)
         {
-            sub_box_child[j]       = enbox[j] + 0.5 * enbox[dim + j] * sub_rel_idx_i[j * max_child];
-            sub_box_child[dim + j] = 0.5 * enbox[dim + j];
+            sub_box_child[j]       = enbox[j] + 0.5 * enbox[dim + j] * sub_rel_idx_i[j * max_child] - 1e-12;
+            sub_box_child[dim + j] = 0.5 * enbox[dim + j] + 2e-12;
         }
         sub_coord_se[2 * n_child + 0] = coord_s + sub_displs[i];
         sub_coord_se[2 * n_child + 1] = coord_s + sub_displs[i + 1] - 1;
@@ -386,10 +385,14 @@ void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0
         {
             H2P_int_vec_push_back(partition_vars.r_adm_pairs, n0);
             H2P_int_vec_push_back(partition_vars.r_adm_pairs, n1);
-            partition_vars.min_adm_level  = MIN(partition_vars.min_adm_level,  level_n0);
-            partition_vars.min_adm_level  = MIN(partition_vars.min_adm_level,  level_n1);
-            partition_vars.max_adm_height = MAX(partition_vars.max_adm_height, height_n0);
-            partition_vars.max_adm_height = MAX(partition_vars.max_adm_height, height_n1);
+            //partition_vars.min_adm_level  = MIN(partition_vars.min_adm_level,  level_n0);
+            //partition_vars.min_adm_level  = MIN(partition_vars.min_adm_level,  level_n1);
+            //partition_vars.max_adm_height = MAX(partition_vars.max_adm_height, height_n0);
+            //partition_vars.max_adm_height = MAX(partition_vars.max_adm_height, height_n1);
+            int max_level_n01  = MAX(level_n0,  level_n1);
+            int min_height_n01 = MIN(height_n0, height_n1);
+            partition_vars.min_adm_level  = MIN(partition_vars.min_adm_level,  max_level_n01);
+            partition_vars.max_adm_height = MAX(partition_vars.max_adm_height, min_height_n01);
             return;
         }
         
@@ -444,7 +447,10 @@ void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0
 }
 
 // Partition points for a H2 tree
-void H2P_partition_points(H2Pack_t h2pack, const int n_point, const DTYPE *coord, int max_leaf_points)
+void H2P_partition_points(
+    H2Pack_t h2pack, const int n_point, const DTYPE *coord, 
+    int max_leaf_points, DTYPE max_leaf_size
+)
 {
     const int dim = h2pack->dim;
     double st, et;
@@ -452,7 +458,6 @@ void H2P_partition_points(H2Pack_t h2pack, const int n_point, const DTYPE *coord
     st = H2P_get_wtime_sec();
     
     // 1. Copy input point coordinates
-    DTYPE max_leaf_size = 0.0;
     h2pack->n_point = n_point;
     if (max_leaf_points <= 0)
     {
@@ -494,6 +499,7 @@ void H2P_partition_points(H2Pack_t h2pack, const int n_point, const DTYPE *coord
     h2pack->parent        = malloc(sizeof(int)   * n_node);
     h2pack->children      = malloc(sizeof(int)   * n_node * max_child);
     h2pack->cluster       = malloc(sizeof(int)   * n_node * 2);
+    h2pack->mat_cluster   = malloc(sizeof(int)   * n_node * 2);
     h2pack->n_child       = malloc(sizeof(int)   * n_node);
     h2pack->node_level    = malloc(sizeof(int)   * n_node);
     h2pack->node_height   = malloc(sizeof(int)   * n_node);
@@ -507,13 +513,18 @@ void H2P_partition_points(H2Pack_t h2pack, const int n_point, const DTYPE *coord
     assert(h2pack->node_level    != NULL && h2pack->node_height   != NULL);
     assert(h2pack->level_n_node  != NULL && h2pack->level_nodes   != NULL);
     assert(h2pack->height_n_node != NULL && h2pack->height_nodes  != NULL);
-    assert(h2pack->enbox         != NULL);
+    assert(h2pack->enbox         != NULL && h2pack->mat_cluster   != NULL);
     partition_vars.curr_leaf_idx = 0;
     memset(h2pack->level_n_node,  0, sizeof(int) * max_level);
     memset(h2pack->height_n_node, 0, sizeof(int) * max_level);
     H2P_tree_to_array(root, h2pack);
     h2pack->parent[h2pack->root_idx] = -1;  // Root node doesn't have parent
     H2P_tree_node_destroy(root);  // We don't need the linked list H2 tree anymore
+    
+    h2pack->krnl_dim = 1;
+    for (int i = 0; i < n_node * 2; i++)
+        h2pack->mat_cluster[i] = h2pack->krnl_dim * h2pack->cluster[i];
+    h2pack->krnl_mat_size = h2pack->krnl_dim * h2pack->n_point;
     
     // 4. Calculate reduced (in)admissible pairs
     int estimated_n_pair = h2pack->n_node * h2pack->max_child;
@@ -546,7 +557,7 @@ void H2P_partition_points(H2Pack_t h2pack, const int n_point, const DTYPE *coord
     h2pack->tb = (H2P_thread_buf_t*) malloc(sizeof(H2P_thread_buf_t) * h2pack->n_thread);
     assert(h2pack->tb != NULL);
     for (int i = 0; i < h2pack->n_thread; i++)
-        H2P_thread_buf_init(&h2pack->tb[i], n_point);
+        H2P_thread_buf_init(&h2pack->tb[i], h2pack->krnl_mat_size);
     
     et = H2P_get_wtime_sec();
     h2pack->timers[0] = et - st;

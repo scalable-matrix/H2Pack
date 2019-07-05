@@ -28,7 +28,7 @@ void H2P_matvec_upward_sweep(H2Pack_t h2pack, const DTYPE *x)
     int *height_n_node = h2pack->height_n_node;
     int *node_level    = h2pack->node_level;
     int *height_nodes  = h2pack->height_nodes;
-    int *cluster       = h2pack->cluster;
+    int *mat_cluster   = h2pack->mat_cluster;
     
     // 1. Initialize y0 on the first run
     if (h2pack->y0 == NULL)
@@ -77,7 +77,7 @@ void H2P_matvec_upward_sweep(H2Pack_t h2pack, const DTYPE *x)
                 if (n_child_node == 0)
                 {
                     // Leaf node, directly calculate U_j^T * x_j
-                    const DTYPE *x_spos = x + cluster[node * 2];
+                    const DTYPE *x_spos = x + mat_cluster[node * 2];
                     CBLAS_GEMV(
                         CblasRowMajor, CblasTrans, U[node]->nrow, U[node]->ncol, 
                         1.0, U[node]->data, U[node]->ld, 
@@ -190,7 +190,7 @@ void H2P_matvec_intermediate_sweep_AOT(H2Pack_t h2pack, const DTYPE *x)
     int    n_r_adm_pair  = h2pack->n_r_adm_pair;
     int    *r_adm_pairs  = h2pack->r_adm_pairs;
     int    *node_level   = h2pack->node_level;
-    int    *cluster      = h2pack->cluster;
+    int    *mat_cluster  = h2pack->mat_cluster;
     int    *node_n_r_adm = h2pack->node_n_r_adm;
     int    *B_nrow       = h2pack->B_nrow;
     int    *B_ncol       = h2pack->B_ncol;
@@ -229,9 +229,9 @@ void H2P_matvec_intermediate_sweep_AOT(H2Pack_t h2pack, const DTYPE *x)
         #pragma omp for schedule(dynamic) nowait
         for (int i_blk = 0; i_blk < n_B_blk; i_blk++)
         {
-            int s_index = B_blk->data[i_blk];
-            int e_index = B_blk->data[i_blk + 1];
-            for (int i = s_index; i < e_index; i++)
+            int B_blk_s = B_blk->data[i_blk];
+            int B_blk_e = B_blk->data[i_blk + 1];
+            for (int i = B_blk_s; i < B_blk_e; i++)
             {
                 int node0  = r_adm_pairs[2 * i];
                 int node1  = r_adm_pairs[2 * i + 1];
@@ -278,11 +278,11 @@ void H2P_matvec_intermediate_sweep_AOT(H2Pack_t h2pack, const DTYPE *x)
                 if (level0 > level1)
                 {
                     int ncol0   = y1[node0]->ncol;
-                    int s_index = cluster[node1 * 2];
-                    DTYPE *y_spos   = y + s_index;
+                    int xy_spos = mat_cluster[node1 * 2];
+                    DTYPE *y_spos   = y + xy_spos;
                     DTYPE *y1_dst_0 = y1[node0]->data + tid * ncol0;
                     DTYPE beta0     = y1_dst_0[ncol0 - 1];
-                    const DTYPE *x_spos = x + s_index;
+                    const DTYPE *x_spos = x + xy_spos;
                     y1_dst_0[ncol0 - 1] = 1.0;
                     
                     for (int blk_srow = 0; blk_srow < Bi_nrow; blk_srow += Bi_nrow_128KB)
@@ -307,11 +307,11 @@ void H2P_matvec_intermediate_sweep_AOT(H2Pack_t h2pack, const DTYPE *x)
                 if (level0 < level1)
                 {
                     int ncol1   = y1[node1]->ncol;
-                    int s_index = cluster[node0 * 2];
-                    DTYPE *y_spos   = y + s_index;
+                    int xy_spos = mat_cluster[node0 * 2];
+                    DTYPE *y_spos   = y + xy_spos;
                     DTYPE *y1_dst_1 = y1[node1]->data + tid * ncol1;
                     DTYPE beta1     = y1_dst_1[ncol1 - 1];
-                    const DTYPE *x_spos = x + s_index;
+                    const DTYPE *x_spos = x + xy_spos;
                     y1_dst_1[ncol1 - 1] = 1.0;
                     
                     for (int blk_srow = 0; blk_srow < Bi_nrow; blk_srow += Bi_nrow_128KB)
@@ -404,9 +404,9 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
         #pragma omp for schedule(dynamic) nowait
         for (int i_blk = 0; i_blk < n_B_blk; i_blk++)
         {
-            int s_index = B_blk->data[i_blk];
-            int e_index = B_blk->data[i_blk + 1];
-            for (int i = s_index; i < e_index; i++)
+            int B_blk_s = B_blk->data[i_blk];
+            int B_blk_e = B_blk->data[i_blk + 1];
+            for (int i = B_blk_s; i < B_blk_e; i++)
             {
                 int node0   = r_adm_pairs[2 * i];
                 int node1   = r_adm_pairs[2 * i + 1];
@@ -549,7 +549,7 @@ void H2P_matvec_downward_sweep(H2Pack_t h2pack, const DTYPE *x)
     int *n_child        = h2pack->n_child;
     int *level_n_node   = h2pack->level_n_node;
     int *level_nodes    = h2pack->level_nodes;
-    int *cluster        = h2pack->cluster;
+    int *mat_cluster    = h2pack->mat_cluster;
     H2P_dense_mat_t *U  = h2pack->U;
     H2P_dense_mat_t *y1 = h2pack->y1;
     
@@ -584,8 +584,8 @@ void H2P_matvec_downward_sweep(H2Pack_t h2pack, const DTYPE *x)
                 if (n_child_node == 0)
                 {
                     // Leaf node, accumulate final results to output vector
-                    int s_index = cluster[2 * node];
-                    int e_index = cluster[2 * node + 1];
+                    int s_index = mat_cluster[2 * node];
+                    int e_index = mat_cluster[2 * node + 1];
                     int n_point = e_index - s_index + 1;
                     DTYPE *y_spos = y + s_index;
                     #pragma omp simd
@@ -638,7 +638,7 @@ void H2P_matvec_dense_blocks_AOT(H2Pack_t h2pack, const DTYPE *x)
     int    n_r_inadm_pair = h2pack->n_r_inadm_pair;
     int    *r_inadm_pairs = h2pack->r_inadm_pairs;
     int    *leaf_nodes    = h2pack->height_nodes;
-    int    *cluster       = h2pack->cluster;
+    int    *mat_cluster   = h2pack->mat_cluster;
     int    *D_nrow        = h2pack->D_nrow;
     int    *D_ncol        = h2pack->D_ncol;
     size_t *D_ptr         = h2pack->D_ptr;
@@ -658,14 +658,14 @@ void H2P_matvec_dense_blocks_AOT(H2Pack_t h2pack, const DTYPE *x)
         #pragma omp for schedule(dynamic) nowait
         for (int i_blk0 = 0; i_blk0 < n_D0_blk; i_blk0++)
         {
-            int s_index = D_blk0->data[i_blk0];
-            int e_index = D_blk0->data[i_blk0 + 1];
-            for (int i = s_index; i < e_index; i++)
+            int D_blk0_s = D_blk0->data[i_blk0];
+            int D_blk0_e = D_blk0->data[i_blk0 + 1];
+            for (int i = D_blk0_s; i < D_blk0_e; i++)
             {
                 int node = leaf_nodes[i];
-                int s_index = cluster[node * 2];
-                const DTYPE *x_spos = x + s_index;
-                DTYPE *y_spos = y + s_index;
+                int xy_spos = mat_cluster[node * 2];
+                const DTYPE *x_spos = x + xy_spos;
+                DTYPE *y_spos = y + xy_spos;
                 DTYPE *Di = D_data + D_ptr[i];
                 int Di_nrow = D_nrow[i];
                 int Di_ncol = D_ncol[i];
@@ -687,18 +687,18 @@ void H2P_matvec_dense_blocks_AOT(H2Pack_t h2pack, const DTYPE *x)
         #pragma omp for schedule(dynamic) nowait
         for (int i_blk1 = 0; i_blk1 < n_D1_blk; i_blk1++)
         {
-            int s_index = D_blk1->data[i_blk1];
-            int e_index = D_blk1->data[i_blk1 + 1];
-            for (int i = s_index; i < e_index; i++)
+            int D_blk1_s = D_blk1->data[i_blk1];
+            int D_blk1_e = D_blk1->data[i_blk1 + 1];
+            for (int i = D_blk1_s; i < D_blk1_e; i++)
             {
                 int node0 = r_inadm_pairs[2 * i];
                 int node1 = r_inadm_pairs[2 * i + 1];
-                int s_index0 = cluster[2 * node0];
-                int s_index1 = cluster[2 * node1];
-                const DTYPE *x_spos0 = x + s_index0;
-                const DTYPE *x_spos1 = x + s_index1;
-                DTYPE *y_spos0 = y + s_index0;
-                DTYPE *y_spos1 = y + s_index1;
+                int xy_spos0 = mat_cluster[2 * node0];
+                int xy_spos1 = mat_cluster[2 * node1];
+                const DTYPE *x_spos0 = x + xy_spos0;
+                const DTYPE *x_spos1 = x + xy_spos1;
+                DTYPE *y_spos0 = y + xy_spos0;
+                DTYPE *y_spos1 = y + xy_spos1;
                 DTYPE *Di = D_data + D_ptr[n_leaf_node + i];
                 int Di_nrow = D_nrow[n_leaf_node + i];
                 int Di_ncol = D_ncol[n_leaf_node + i];
@@ -768,9 +768,9 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
         #pragma omp for schedule(dynamic) nowait
         for (int i_blk0 = 0; i_blk0 < n_D0_blk; i_blk0++)
         {
-            int s_index = D_blk0->data[i_blk0];
-            int e_index = D_blk0->data[i_blk0 + 1];
-            for (int i = s_index; i < e_index; i++)
+            int D_blk0_s = D_blk0->data[i_blk0];
+            int D_blk0_e = D_blk0->data[i_blk0 + 1];
+            for (int i = D_blk0_s; i < D_blk0_e; i++)
             {
                 int node    = leaf_nodes[i];
                 int s_index = cluster[node * 2];
@@ -802,9 +802,9 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
         #pragma omp for schedule(dynamic) nowait
         for (int i_blk1 = 0; i_blk1 < n_D1_blk; i_blk1++)
         {
-            int s_index = D_blk1->data[i_blk1];
-            int e_index = D_blk1->data[i_blk1 + 1];
-            for (int i = s_index; i < e_index; i++)
+            int D_blk1_s = D_blk1->data[i_blk1];
+            int D_blk1_e = D_blk1->data[i_blk1 + 1];
+            for (int i = D_blk1_s; i < D_blk1_e; i++)
             {
                 int node0    = r_inadm_pairs[2 * i];
                 int node1    = r_inadm_pairs[2 * i + 1];
@@ -861,7 +861,7 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
 void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
 {
     double st, et;
-    int n_point  = h2pack->n_point;
+    int krnl_mat_size = h2pack->krnl_mat_size;
     int n_thread = h2pack->n_thread;
     int BD_JIT   = h2pack->BD_JIT;
     
@@ -871,7 +871,7 @@ void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
     {
         int tid = omp_get_thread_num();
         DTYPE *tid_y = h2pack->tb[tid]->y;
-        memset(tid_y, 0, sizeof(DTYPE) * n_point);
+        memset(tid_y, 0, sizeof(DTYPE) * krnl_mat_size);
     }
     et = H2P_get_wtime_sec();
     h2pack->timers[8] += et - st;
@@ -916,7 +916,7 @@ void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
     {
         int tid = omp_get_thread_num();
         int spos, len;
-        H2P_block_partition(n_point, n_thread, tid, &spos, &len);
+        H2P_block_partition(krnl_mat_size, n_thread, tid, &spos, &len);
         
         DTYPE *y_src = h2pack->tb[0]->y;
         memcpy(y + spos, y_src + spos, sizeof(DTYPE) * len);
@@ -928,7 +928,7 @@ void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
         }
     }
     et = H2P_get_wtime_sec();
-    h2pack->mat_size[7] = (n_thread + 1) * h2pack->n_point;
+    h2pack->mat_size[7] = (n_thread + 1) * h2pack->krnl_mat_size;
     h2pack->timers[8] += et - st;
     
     h2pack->n_matvec++;

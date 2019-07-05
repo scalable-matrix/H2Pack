@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <math.h>
 
 #include "H2Pack_config.h"
 #include "H2Pack_utils.h"
@@ -64,15 +65,6 @@ void H2P_int_vec_destroy(H2P_int_vec_t int_vec)
     int_vec->length = 0;
 }
 
-// Push an integer to the tail of a H2P_int_vec
-void H2P_int_vec_push_back(H2P_int_vec_t int_vec, int value)
-{
-    if (int_vec->capacity == int_vec->length)
-        H2P_int_vec_set_capacity(int_vec, int_vec->capacity * 2);
-    int_vec->data[int_vec->length] = value;
-    int_vec->length++;
-}
-
 // Concatenate values in a H2P_int_vec to another H2P_int_vec
 void H2P_int_vec_concatenate(H2P_int_vec_t dst_vec, H2P_int_vec_t src_vec)
 {
@@ -83,6 +75,15 @@ void H2P_int_vec_concatenate(H2P_int_vec_t dst_vec, H2P_int_vec_t src_vec)
         H2P_int_vec_set_capacity(dst_vec, new_length);
     memcpy(dst_vec->data + d_len, src_vec->data, sizeof(int) * s_len);
     dst_vec->length = new_length;
+}
+
+// Gather elements in a H2P_int_vec to another H2P_int_vec
+void H2P_int_vec_gather(H2P_int_vec_t src_vec, H2P_int_vec_t idx, H2P_int_vec_t dst_vec)
+{
+    H2P_int_vec_set_capacity(dst_vec, idx->length);
+    for (int i = 0; i < idx->length; i++)
+        dst_vec->data[i] = src_vec->data[idx->data[i]];
+    dst_vec->length = idx->length;
 }
 
 // ------------------------------------------------------------------- // 
@@ -170,15 +171,44 @@ void H2P_dense_mat_select_columns(H2P_dense_mat_t mat, H2P_int_vec_t col_idx)
     mat->ld = mat->ncol;
 }
 
+// Normalize columns in a H2P_dense_mat structure
+void H2P_dense_mat_normalize_columns(H2P_dense_mat_t mat, H2P_dense_mat_t workbuf)
+{
+    int nrow = mat->nrow, ncol = mat->ncol;
+    H2P_dense_mat_resize(workbuf, 1, ncol);
+    DTYPE *inv_2norm = workbuf->data;
+    
+    #pragma omp simd
+    for (int icol = 0; icol < ncol; icol++) 
+        inv_2norm[icol] = mat->data[icol] * mat->data[icol];
+    for (int irow = 1; irow < nrow; irow++)
+    {
+        double *mat_row = mat->data + irow * mat->ld;
+        #pragma omp simd
+        for (int icol = 0; icol < ncol; icol++) 
+            inv_2norm[icol] += mat_row[icol] * mat_row[icol];
+    }
+    
+    #pragma omp simd
+    for (int icol = 0; icol < ncol; icol++) 
+        inv_2norm[icol] = 1.0 / DSQRT(inv_2norm[icol]);
+    
+    for (int irow = 0; irow < nrow; irow++)
+    {
+        double *mat_row = mat->data + irow * mat->ld;
+        #pragma omp simd
+        for (int icol = 0; icol < ncol; icol++) 
+            mat_row[icol] *= inv_2norm[icol];
+    }
+}
+
 // Print a H2P_dense_mat structure, for debugging
-// Input parameter:
-//   mat : H2P_dense_mat structure to be printed
 void H2P_dense_mat_print(H2P_dense_mat_t mat)
 {
     for (int irow = 0; irow < mat->nrow; irow++)
     {
         DTYPE *mat_row = mat->data + irow * mat->ld;
-        for (int icol = 0; icol < mat->ncol; icol++) printf("% .10lf  ", mat_row[icol]);
+        for (int icol = 0; icol < mat->ncol; icol++) printf("% .4lf  ", mat_row[icol]);
         printf("\n");
     }
 }
@@ -188,15 +218,19 @@ void H2P_dense_mat_print(H2P_dense_mat_t mat)
 
 // ========================== H2P_thread_buf ========================= //
 
-void H2P_thread_buf_init(H2P_thread_buf_t *thread_buf_, const int n_point)
+void H2P_thread_buf_init(H2P_thread_buf_t *thread_buf_, const int krnl_mat_size)
 {
     H2P_thread_buf_t thread_buf = (H2P_thread_buf_t) malloc(sizeof(struct H2P_thread_buf));
     assert(thread_buf != NULL);
-    H2P_dense_mat_init(&thread_buf->mat0, 1024, 1);
-    H2P_dense_mat_init(&thread_buf->mat1, 1024, 1);
     H2P_int_vec_init(&thread_buf->idx0, 1024);
     H2P_int_vec_init(&thread_buf->idx1, 1024);
-    thread_buf->y = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * n_point);
+    H2P_int_vec_init(&thread_buf->idx2, 1024);
+    H2P_int_vec_init(&thread_buf->idx3, 1024);
+    H2P_int_vec_init(&thread_buf->idx4, 1024);
+    H2P_dense_mat_init(&thread_buf->mat0, 1024, 1);
+    H2P_dense_mat_init(&thread_buf->mat1, 1024, 1);
+    H2P_dense_mat_init(&thread_buf->mat2, 1024, 1);
+    thread_buf->y = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * krnl_mat_size);
     assert(thread_buf->y != NULL);
     *thread_buf_ = thread_buf;
 }
@@ -204,10 +238,14 @@ void H2P_thread_buf_init(H2P_thread_buf_t *thread_buf_, const int n_point)
 void H2P_thread_buf_destroy(H2P_thread_buf_t thread_buf)
 {
     if (thread_buf == NULL) return;
-    H2P_dense_mat_destroy(thread_buf->mat0);
-    H2P_dense_mat_destroy(thread_buf->mat1);
     H2P_int_vec_destroy(thread_buf->idx0);
     H2P_int_vec_destroy(thread_buf->idx1);
+    H2P_int_vec_destroy(thread_buf->idx2);
+    H2P_int_vec_destroy(thread_buf->idx3);
+    H2P_int_vec_destroy(thread_buf->idx4);
+    H2P_dense_mat_destroy(thread_buf->mat0);
+    H2P_dense_mat_destroy(thread_buf->mat1);
+    H2P_dense_mat_destroy(thread_buf->mat2);
     H2P_free_aligned(thread_buf->y);
 }
 

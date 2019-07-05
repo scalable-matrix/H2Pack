@@ -362,7 +362,7 @@ int main(int argc, char **argv)
     
     H2P_init(&h2pack, test_params.dim, QR_REL_NRM, &test_params.rel_tol);
     
-    H2P_partition_points(h2pack, test_params.n_point, test_params.coord, 0);
+    H2P_partition_points(h2pack, test_params.n_point, test_params.coord, 0, 0);
     
     // Check if point index permutation is correct in H2Pack
     DTYPE coord_diff_sum = 0.0;

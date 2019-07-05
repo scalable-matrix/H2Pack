@@ -287,7 +287,7 @@ void H2P_generate_proxy_point(
     H2P_dense_mat_destroy(min_dist);
 }
 
-// Build H2 projection matrices using the direct approach
+// Build H2 projection matrices using proxy points
 // Input parameter:
 //   h2pack : H2Pack structure with point partitioning info
 // Output parameter:
@@ -529,14 +529,6 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
 
 // Partition work units into multiple blocks s.t. each block has 
 // approximately the same amount of work
-// Input parameters:
-//   n_work     : Number of work units
-//   work_sizes : Work size of each work unit
-//   total_size : Sum of work_sizes
-//   n_block    : Number of blocks to be partitioned, the final result
-//                may have fewer blocks
-// Output parameter:
-//   blk_displs : Indices of each block's first work unit
 void H2P_partition_workload(
     const int n_work,  const size_t *work_sizes, const size_t total_size, 
     const int n_block, H2P_int_vec_t blk_displs
@@ -665,9 +657,9 @@ void H2P_build_B(H2Pack_t h2pack)
         #pragma omp for schedule(dynamic) nowait
         for (int i_blk = 0; i_blk < n_B_blk; i_blk++)
         {
-            int s_index = B_blk->data[i_blk];
-            int e_index = B_blk->data[i_blk + 1];
-            for (int i = s_index; i < e_index; i++)
+            int B_blk_s = B_blk->data[i_blk];
+            int B_blk_e = B_blk->data[i_blk + 1];
+            for (int i = B_blk_s; i < B_blk_e; i++)
             {
                 int node0  = r_adm_pairs[2 * i];
                 int node1  = r_adm_pairs[2 * i + 1];
@@ -824,9 +816,9 @@ void H2P_build_D(H2Pack_t h2pack)
         #pragma omp for schedule(dynamic) nowait
         for (int i_blk0 = 0; i_blk0 < n_D0_blk; i_blk0++)
         {
-            int s_index = D_blk0->data[i_blk0];
-            int e_index = D_blk0->data[i_blk0 + 1];
-            for (int i = s_index; i < e_index; i++)
+            int D_blk0_s = D_blk0->data[i_blk0];
+            int D_blk0_e = D_blk0->data[i_blk0 + 1];
+            for (int i = D_blk0_s; i < D_blk0_e; i++)
             {
                 int node = leaf_nodes[i];
                 int s_index = cluster[2 * node];
@@ -845,9 +837,9 @@ void H2P_build_D(H2Pack_t h2pack)
         #pragma omp for schedule(dynamic) nowait
         for (int i_blk1 = 0; i_blk1 < n_D1_blk; i_blk1++)
         {
-            int s_index = D_blk1->data[i_blk1];
-            int e_index = D_blk1->data[i_blk1 + 1];
-            for (int i = s_index; i < e_index; i++)
+            int D_blk1_s = D_blk1->data[i_blk1];
+            int D_blk1_e = D_blk1->data[i_blk1 + 1];
+            for (int i = D_blk1_s; i < D_blk1_e; i++)
             {
                 int node0 = r_inadm_pairs[2 * i];
                 int node1 = r_inadm_pairs[2 * i + 1];

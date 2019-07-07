@@ -194,20 +194,20 @@ void H2P_generate_proxy_point(
         DTYPE rel_tol = 1e-14;
         
         H2P_eval_kernel_matrix_direct(kernel, dim, Nx_points, Ny_points, tmpA);
-        H2P_dense_mat_resize(QR_buff, 2 * tmpA->nrow, 1);
+        H2P_dense_mat_resize(QR_buff, tmpA->nrow, 1);
         H2P_int_vec_set_capacity(ID_buff, 4 * tmpA->nrow);
         H2P_ID_compress(
             tmpA, QR_REL_NRM, &rel_tol, NULL, skel_idx, 
-            nthreads, QR_buff->data, ID_buff->data
+            nthreads, QR_buff->data, ID_buff->data, 1
         );
         H2P_dense_mat_select_columns(Nx_points, skel_idx);
         
         H2P_eval_kernel_matrix_direct(kernel, dim, Ny_points, Nx_points, tmpA);
-        H2P_dense_mat_resize(QR_buff, 2 * tmpA->nrow, 1);
+        H2P_dense_mat_resize(QR_buff, tmpA->nrow, 1);
         H2P_int_vec_set_capacity(ID_buff, 4 * tmpA->nrow);
         H2P_ID_compress(
             tmpA, QR_REL_NRM, &rel_tol, NULL, skel_idx, 
-            nthreads, QR_buff->data, ID_buff->data
+            nthreads, QR_buff->data, ID_buff->data, 1
         );
         H2P_dense_mat_select_columns(Ny_points, skel_idx);
         
@@ -465,11 +465,11 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                 );
 
                 // ID compress
-                H2P_dense_mat_resize(QR_buff, 2 * A_block->nrow, 1);
+                H2P_dense_mat_resize(QR_buff, A_block->nrow, 1);
                 H2P_int_vec_set_capacity(ID_buff, 4 * A_block->nrow);
                 H2P_ID_compress(
                     A_block, stop_type, stop_param, &U[node], sub_idx, 
-                    1, QR_buff->data, ID_buff->data
+                    1, QR_buff->data, ID_buff->data, 1
                 );
                 
                 // Choose the skeleton points of this node

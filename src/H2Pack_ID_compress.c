@@ -32,6 +32,28 @@ static inline DTYPE CBLAS_DOT(const int n, const DTYPE *x, const DTYPE *y)
     return res;
 }
 
+static inline void swap_int(int *x, int *y, int len)
+{
+    int tmp;
+    for (int i = 0; i < len; i++)
+    {
+        tmp  = x[i];
+        x[i] = y[i];
+        y[i] = tmp;
+    }
+}
+
+static inline void swap_DTYPE(DTYPE *x, DTYPE *y, int len)
+{
+    DTYPE tmp;
+    for (int i = 0; i < len; i++)
+    {
+        tmp  = x[i];
+        x[i] = y[i];
+        y[i] = tmp;
+    }
+}
+
 // Partial pivoting QR decomposition, simplified output version
 // The partial pivoting QR decomposition is of form:
 //     A * P = Q * [R11, R12; 0, R22]
@@ -43,7 +65,7 @@ static inline DTYPE CBLAS_DOT(const int n, const DTYPE *x, const DTYPE *y)
 //   tol_norm : QR stopping parameter, maximum column 2-norm
 //   rel_norm : If tol_norm is relative to the largest column 2-norm in A
 //   nthreads : Number of threads used in this function
-//   QR_buff  : Size 2 * A->ncol, working buffer for partial pivoting QR
+//   QR_buff  : Size A->ncol, working buffer for partial pivoting QR
 // Output parameters:
 //   A : Matrix R: [R11, R12; 0, R22]
 //   p : Matrix A column permutation array, A(:, p) = A * P
@@ -61,11 +83,11 @@ void H2P_partial_pivot_QR(
     
     BLAS_SET_NUM_THREADS(nthreads);
     
-    DTYPE *col_norm = QR_buff + 0 * ncol; 
-    DTYPE *h_R_mv   = QR_buff + 1 * ncol;
+    DTYPE *col_norm = QR_buff; 
     
-    // 1. Find a column with largest 2-norm
-    #pragma omp parallel for num_threads(nthreads) schedule(static)
+    // Find a column with largest 2-norm
+    #pragma omp parallel for if (nthreads > 1) \
+    num_threads(nthreads) schedule(static)
     for (int j = 0; j < ncol; j++)
     {
         p[j] = j;
@@ -82,6 +104,7 @@ void H2P_partial_pivot_QR(
         }
     }
     
+    // Scale the stopping norm
     int stop_rank = MIN(max_iter, tol_rank);
     DTYPE norm_eps = DSQRT((DTYPE) nrow) * 1e-15;
     DTYPE stop_norm = MAX(norm_eps, tol_norm);
@@ -101,18 +124,9 @@ void H2P_partial_pivot_QR(
         // 2. Swap the column
         if (i != pivot)
         {
-            int tmp_p = p[i]; p[i] = p[pivot]; p[pivot] = tmp_p;
-            DTYPE tmp_norm  = col_norm[i];
-            col_norm[i]  = col_norm[pivot];
-            col_norm[pivot] = tmp_norm;
-            DTYPE *R_i     = R + i     * ldR;
-            DTYPE *R_pivot = R + pivot * ldR;
-            for (int j = 0; j < nrow; j++)
-            {
-                DTYPE tmp_R = R_i[j];
-                R_i[j]      = R_pivot[j];
-                R_pivot[j]  = tmp_R;
-            }
+            swap_int(p + i, p + pivot, 1);
+            swap_DTYPE(col_norm + i, col_norm + pivot, 1);
+            swap_DTYPE(R + i * ldR, R + pivot * ldR, nrow);
         }
         
         // 3. Calculate Householder vector
@@ -130,7 +144,8 @@ void H2P_partial_pivot_QR(
         DTYPE *R_block = R + (i + 1) * ldR + i;
         int R_block_nrow = h_len;
         int R_block_ncol = ncol - i - 1;
-        #pragma omp parallel for num_threads(nthreads) schedule(guided)
+        #pragma omp parallel for if (nthreads > 1) \
+        num_threads(nthreads) schedule(guided)
         for (int j = 0; j < R_block_ncol; j++)
         {
             int ji1 = j + i + 1;
@@ -180,20 +195,188 @@ void H2P_partial_pivot_QR(
     *r = rank;
 }
 
-// Partial pivoting QR for ID, may need to be upgraded to Strong Rank 
-// Revealing QR later.
+// H2P_partial_pivot_QR operated on column blocks for tensor kernel matrix.
+// Each column block has kdim columns. In each step, we swap kdim columns 
+// and do kdim Householder orthogonalization.
+void H2P_partial_pivot_QR_kdim(
+    H2P_dense_mat_t A, const int kdim, const int tol_rank, const DTYPE tol_norm, 
+    const int rel_norm, int *p, int *r, const int nthreads, DTYPE *QR_buff
+)
+{
+    DTYPE *R = A->data;
+    int nrow = A->nrow;
+    int ncol = A->ncol;
+    int nblk = ncol / kdim;
+    int ldR  = A->ld;
+    int max_iter = MIN(nrow, ncol) / kdim;
+    
+    BLAS_SET_NUM_THREADS(nthreads);
+    
+    DTYPE *blk_norm = QR_buff;
+    
+    for (int j = 0; j < ncol; j++) p[j] = j;
+    
+    // Find a column with largest 2-norm as a scaling factor
+    #pragma omp parallel for if(nthreads > 1) \
+    num_threads(nthreads) schedule(static)
+    for (int j = 0; j < ncol; j++)
+        blk_norm[j] = CBLAS_NRM2(nrow, R + j * ldR);
+    DTYPE max_col_norm = 0.0;
+    for (int j = 0; j < ncol; j++)
+        max_col_norm = MAX(max_col_norm, blk_norm[j]);
+    
+    // Find a column block with largest 2-norm as the first pivot
+    DTYPE norm_p = 0.0;
+    int pivot = 0;
+    for (int j = 0; j < nblk; j++)
+    {
+        DTYPE tmp = 0.0;
+        for (int k = 0; k < kdim; k++) 
+        {
+            int idx = kdim * j + k;
+            tmp += blk_norm[idx] * blk_norm[idx]; 
+        }
+        blk_norm[j] = DSQRT(tmp);
+        if (tmp > norm_p)
+        {
+            norm_p = tmp;
+            pivot  = j;
+        }
+    }
+    
+    // Scale the stopping norm
+    int stop_rank   = MIN(max_iter, tol_rank);
+    DTYPE norm_eps  = DSQRT((DTYPE) nrow) * 1e-15;
+    DTYPE stop_norm = MAX(norm_eps, tol_norm);
+    if (rel_norm) stop_norm *= max_col_norm;
+    
+    int rank = -1;
+    // Main iteration of Household QR
+    for (int i = 0; i < max_iter; i++)
+    {   
+        // 1. Check the stop criteria
+        if ((norm_p < stop_norm) || (i >= stop_rank))
+        {
+            rank = i * kdim;
+            break;
+        }
+        
+        // 2. Swap the column
+        if (i != pivot)
+        {
+            swap_int(p + i * kdim, p + pivot * kdim, kdim);
+            swap_DTYPE(blk_norm + i, blk_norm + pivot, 1);
+            DTYPE *R_i = R + i * kdim * ldR;
+            DTYPE *R_pivot = R + pivot * kdim * ldR;
+            swap_DTYPE(R_i, R_pivot, ldR * kdim);
+        }
+        
+        // Do kdim times of consecutive Householder orthogonalize
+        for (int ii = i * kdim; ii < i * kdim + kdim; ii++)
+        {
+            // 3. Calculate Householder vector
+            int h_len    = nrow - ii;
+            DTYPE *h_vec = R + ii * ldR + ii;
+            DTYPE sign   = (h_vec[0] > 0.0) ? 1.0 : -1.0;
+            DTYPE h_norm = CBLAS_NRM2(h_len, h_vec);
+            h_vec[0] = h_vec[0] + sign * h_norm;
+            DTYPE inv_h_norm = 1.0 / CBLAS_NRM2(h_len, h_vec);
+            #pragma omp simd
+            for (int j = 0; j < h_len; j++) h_vec[j] *= inv_h_norm;
+            
+            // 4. Householder update 
+            DTYPE *R_block = R + (ii + 1) * ldR + ii;
+            int R_block_nrow = h_len;
+            int R_block_ncol = ncol - ii - 1;
+            #pragma omp parallel for if(nthreads > 1) \
+            num_threads(nthreads) schedule(guided)
+            for (int j = 0; j < R_block_ncol; j++)
+            {
+                int ji1 = j + ii + 1;
+                
+                DTYPE *R_block_j = R_block + j * ldR;
+                DTYPE h_Rj = 2.0 * CBLAS_DOT(R_block_nrow, h_vec, R_block_j);
+                
+                // Orthogonalize columns right to the ii-th column
+                #pragma omp simd
+                for (int k = 0; k < R_block_nrow; k++)
+                    R_block_j[k] -= h_Rj * h_vec[k];
+            }
+            
+            // We don't need h_vec anymore, can overwrite the i-th column of R
+            h_vec[0] = -sign * h_norm;
+            memset(h_vec + 1, 0, sizeof(DTYPE) * (h_len - 1));
+        }
+        
+        // 5. Update i-th column's 2-norm
+        #pragma omp parallel for if(nthreads > 1) \
+        num_threads(nthreads) schedule(guided)
+        for (int j = i + 1; j < nblk; j++)
+        {
+            if (blk_norm[j] < stop_norm)
+            {
+                blk_norm[j] = 0.0;
+                continue;
+            }
+            // R(i * kdim, j * kdim + k)
+            DTYPE *R_block = R + i * kdim + j * kdim * ldR;
+            DTYPE tmp = blk_norm[j] * blk_norm[j];
+            for (int k0 = 0; k0 < kdim; k0++)
+                for (int k1 = 0; k1 < kdim; k1++)
+                {
+                    int idx = k0 * ldR + k1;
+                    tmp -= R_block[idx] * R_block[idx];
+                }
+            
+            if (tmp <= 1e-10)
+            {
+                const int nrm_len = nrow - (i + 1) * kdim;
+                tmp = 0.0;
+                for (int k = 0; k < kdim; k++)
+                {
+                    // R((i + 1) * kdim, j * kdim + k)
+                    DTYPE *R_block_k = R + (j*kdim+k) * ldR + (i+1) * kdim;
+                    DTYPE tmp1 = CBLAS_NRM2(nrm_len, R_block_k);
+                    tmp += tmp1 * tmp1;
+                }
+                blk_norm[j] = DSQRT(tmp);
+            } else {
+                // Fast update 2-norm when the new column norm is not so small
+                blk_norm[j] = DSQRT(tmp);
+            }
+        }
+        
+        // 6. Find next pivot 
+        pivot  = i + 1;
+        norm_p = 0.0;
+        for (int j = i + 1; j < nblk; j++)
+        {
+            if (blk_norm[j] > norm_p)
+            {
+                norm_p = blk_norm[j];
+                pivot  = j;
+            }
+        }
+    }
+    if (rank == -1) rank = max_iter * kdim;
+    
+    *r = rank;
+}
+
+// Partial pivoting QR for ID
 // Input parameters:
 //   A          : Target matrix, stored in column major
 //   stop_type  : Partial QR stop criteria: QR_RANK, QR_REL_NRM, or QR_ABS_NRM
 //   stop_param : Pointer to partial QR stop parameter
 //   nthreads   : Number of threads used in this function
-//   QR_buff    : Size 2 * A->ncol, working buffer for partial pivoting QR
+//   QR_buff    : Size A->ncol, working buffer for partial pivoting QR
+//   kdim       : Tensor kernel's dimension (column block size)
 // Output parameters:
 //   A : Matrix R: [R11, R12]
 //   p : Matrix A column permutation array, A(:, p) = A * P
 void H2P_ID_QR(
     H2P_dense_mat_t A, const int stop_type, void *stop_param, int *p, 
-    const int nthreads, DTYPE *QR_buff
+    const int nthreads, DTYPE *QR_buff, const int kdim
 )
 {
     // Parse partial QR stop criteria and perform partial QR
@@ -210,7 +393,7 @@ void H2P_ID_QR(
     {
         DTYPE *param = (DTYPE*) stop_param;
         tol_rank = MIN(A->nrow, A->ncol);
-        tol_norm = param[0];
+        tol_norm = param[0] * DSQRT((DTYPE) kdim);
         rel_norm = 1;
     }
     if (stop_type == QR_ABS_NRM)
@@ -220,7 +403,20 @@ void H2P_ID_QR(
         tol_norm = param[0];
         rel_norm = 0;
     }
-    H2P_partial_pivot_QR(A, tol_rank, tol_norm, rel_norm, p, &r, nthreads, QR_buff);
+    // Use H2P_partial_pivot_QR_kdim() for kdim == 1 also works,
+    // but the performance is worse than H2P_partial_pivot_QR()
+    if (kdim == 1)
+    {
+        H2P_partial_pivot_QR(
+            A, tol_rank, tol_norm, rel_norm, 
+            p, &r, nthreads, QR_buff
+        );
+    } else {
+        H2P_partial_pivot_QR_kdim(
+            A, kdim, tol_rank, tol_norm, rel_norm, 
+            p, &r, nthreads, QR_buff
+        );
+    }
     
     // Special case: each column's 2-norm is smaller than the threshold
     if (r == 0)
@@ -233,7 +429,6 @@ void H2P_ID_QR(
     // Truncate R to be [R11, R12] and return
     A->nrow = r;
 }
-
 
 // Quick sort two array in ascending order 
 // Input parameters:
@@ -266,7 +461,7 @@ static void H2P_qsort_key_value(int *key, int *val, const int l, const int r)
 // matrix. Partial pivoting QR may need to be upgraded to SRRQR later. 
 void H2P_ID_compress(
     H2P_dense_mat_t A, const int stop_type, void *stop_param, H2P_dense_mat_t *U_, 
-    H2P_int_vec_t J, const int nthreads, DTYPE *QR_buff, int *ID_buff
+    H2P_int_vec_t J, const int nthreads, DTYPE *QR_buff, int *ID_buff, const int kdim
 )
 {
     // 1. Partial pivoting QR for A^T
@@ -277,7 +472,7 @@ void H2P_ID_compress(
     A->nrow = ncol;
     A->ncol = nrow;
     H2P_int_vec_set_capacity(J, nrow);
-    H2P_ID_QR(A, stop_type, stop_param, J->data, nthreads, QR_buff);
+    H2P_ID_QR(A, stop_type, stop_param, J->data, nthreads, QR_buff, kdim);
     H2P_dense_mat_t R = A; // Note: the output R stored in A is still stored in column major style
     int r = A->nrow;  // Obtained rank
     J->length = r;
@@ -338,6 +533,13 @@ void H2P_ID_compress(
             // (4) Permute U's rows 
             H2P_dense_mat_permute_rows(U, p1);
         }
+    }
+    if (kdim > 1)
+    {
+        J->data[1] /= kdim;
+        for (int i = 1; i < J->length / kdim; i++)
+            J->data[i] = J->data[i * kdim] / kdim;
+        J->length /= kdim;
     }
     
     if (U_ != NULL) *U_ = U;

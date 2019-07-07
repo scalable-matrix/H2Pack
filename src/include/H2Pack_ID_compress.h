@@ -20,15 +20,16 @@ extern "C" {
 //   stop_type  : Partial QR stop criteria: QR_RANK, QR_REL_NRM, or QR_ABS_NRM
 //   stop_param : Pointer to partial QR stop parameter
 //   nthreads   : Number of threads used in this function
-//   QR_buff    : Size 2 * A->nrow, working buffer for partial pivoting QR
+//   QR_buff    : Size A->nrow, working buffer for partial pivoting QR
 //   ID_buff    : Size 4 * A->nrow, working buffer for ID compression
+//   kdim       : Tensor kernel's dimension (column block size)
 // Output parameters:
 //   U_ : Projection matrix, will be initialized in this function. If U_ == NULL,
 //        the projection matrix will not be calculated.
 //   J  : Row indices of the skeleton A
 void H2P_ID_compress(
     H2P_dense_mat_t A, const int stop_type, void *stop_param, H2P_dense_mat_t *U_, 
-    H2P_int_vec_t J, const int nthreads, DTYPE *QR_buff, int *ID_buff
+    H2P_int_vec_t J, const int nthreads, DTYPE *QR_buff, int *ID_buff, const int kdim
 );
 
 #ifdef __cplusplus

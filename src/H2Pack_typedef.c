@@ -10,13 +10,14 @@
 #include "H2Pack_aux_structs.h"
 
 // Initialize a H2Pack structure
-void H2P_init(H2Pack_t *h2pack_, const int dim, const int QR_stop_type, void *QR_stop_param)
+void H2P_init(H2Pack_t *h2pack_, const int dim, const int krnl_dim, const int QR_stop_type, void *QR_stop_param)
 {
     H2Pack_t h2pack = (H2Pack_t) malloc(sizeof(struct H2Pack));
     assert(h2pack != NULL);
     
     h2pack->n_thread  = omp_get_max_threads();
     h2pack->dim       = dim;
+    h2pack->krnl_dim  = krnl_dim;
     h2pack->max_child = 1 << dim;
     h2pack->n_matvec  = 0;
     memset(h2pack->timers,   0, sizeof(double) * 9);

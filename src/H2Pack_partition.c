@@ -521,9 +521,13 @@ void H2P_partition_points(
     h2pack->parent[h2pack->root_idx] = -1;  // Root node doesn't have parent
     H2P_tree_node_destroy(root);  // We don't need the linked list H2 tree anymore
     
-    h2pack->krnl_dim = 1;
-    for (int i = 0; i < n_node * 2; i++)
-        h2pack->mat_cluster[i] = h2pack->krnl_dim * h2pack->cluster[i];
+    for (int i = 0; i < n_node; i++)
+    {
+        int i20 = i * 2;
+        int i21 = i * 2 + 1;
+        h2pack->mat_cluster[i20] = h2pack->krnl_dim * h2pack->cluster[i20];
+        h2pack->mat_cluster[i21] = h2pack->krnl_dim * (h2pack->cluster[i21] + 1) - 1;
+    }
     h2pack->krnl_mat_size = h2pack->krnl_dim * h2pack->n_point;
     
     // 4. Calculate reduced (in)admissible pairs

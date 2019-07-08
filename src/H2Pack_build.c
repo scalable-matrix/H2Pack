@@ -61,35 +61,36 @@ void H2P_copy_matrix_block(
 
 // Evaluate a kernel matrix with OpenMP parallelization
 // Input parameters:
-//   kernel  : Kernel matrix evaluation function
-//   dim     : Dimension of point coordinate
-//   x_coord : X point set coordinates, size nx-by-dim
-//   y_coord : Y point set coordinates, size ny-by-dim
+//   kernel   : Kernel matrix evaluation function
+//   dim      : Dimension of point coordinate
+//   krnl_dim : Dimension of tensor kernel's return
+//   x_coord  : X point set coordinates, size nx-by-dim
+//   y_coord  : Y point set coordinates, size ny-by-dim
 // Output parameter:
 //   kernel_mat : Obtained kernel matrix, nx-by-ny
-void H2P_eval_kernel_matrix_direct(
-    kernel_func_ptr kernel, const int dim, H2P_dense_mat_t x_coord, 
-    H2P_dense_mat_t y_coord, H2P_dense_mat_t kernel_mat
+void H2P_eval_kernel_matrix_OMP(
+    kernel_func_ptr kernel, const int dim, const int krnl_dim, 
+    H2P_dense_mat_t x_coord, H2P_dense_mat_t y_coord, H2P_dense_mat_t kernel_mat
 )
 {
-    const int nrow = x_coord->ncol;
-    const int ncol = y_coord->ncol;
-    int ncol_64B = (ncol + N_DTYPE_64B - 1) / N_DTYPE_64B * N_DTYPE_64B;
-    H2P_dense_mat_resize(kernel_mat, nrow, ncol_64B);
-    kernel_mat->ncol = ncol;
+    const int nx = x_coord->ncol;
+    const int ny = y_coord->ncol;
+    const int nrow = nx * krnl_dim;
+    const int ncol = ny * krnl_dim;
+    H2P_dense_mat_resize(kernel_mat, nrow, ncol);
     #pragma omp parallel
     {
         int tid = omp_get_thread_num();
         int nt  = omp_get_num_threads();
-        int x_blk_srow, x_blk_nrow;
-        H2P_block_partition(nrow, nt, tid, &x_blk_srow, &x_blk_nrow);
+        int nx_blk_start, nx_blk_len;
+        H2P_block_partition(nx, nt, tid, &nx_blk_start, &nx_blk_len);
         
-        DTYPE *kernel_mat_srow = kernel_mat->data + x_blk_srow * kernel_mat->ld;
-        DTYPE *x_coord_spos = x_coord->data + x_blk_srow;
+        DTYPE *kernel_mat_srow = kernel_mat->data + nx_blk_start * krnl_dim * kernel_mat->ld;
+        DTYPE *x_coord_spos = x_coord->data + nx_blk_start;
         
         kernel(
-            x_coord_spos, x_coord->ncol, x_blk_nrow, 
-            y_coord->data, ncol, ncol, 
+            x_coord_spos,  x_coord->ncol, nx_blk_len, 
+            y_coord->data, y_coord->ncol, ny, 
             dim, kernel_mat_srow, kernel_mat->ld
         );
     }
@@ -120,7 +121,7 @@ int point_in_box(const int dim, DTYPE *coord, DTYPE L)
 
 // Generate proxy points for constructing H2 projection and skeleton matrices
 void H2P_generate_proxy_point(
-    const int dim, const int max_level, const int start_level,
+    const int dim, const int krnl_dim, const int max_level, const int start_level,
     DTYPE max_L, kernel_func_ptr kernel, H2P_dense_mat_t **pp_
 )
 {   
@@ -130,8 +131,8 @@ void H2P_generate_proxy_point(
     for (int i = 0; i <= max_level; i++) pp[i] = NULL;
     
     // 2. Initialize temporary arrays. The numbers of Nx and Ny points are empirical values
-    int Nx_size = 1500;
-    int Ny_size = 10000;
+    int Nx_size = 800;
+    int Ny_size = 8000;
     H2P_dense_mat_t tmpA, Nx_points, Ny_points, min_dist;
     H2P_int_vec_t skel_idx;
     H2P_dense_mat_init(&Nx_points, dim, Nx_size);
@@ -187,27 +188,26 @@ void H2P_generate_proxy_point(
             for (int j = 0; j < dim; j++)
                 Ny_i[j * Ny_size] = tmp_coord[j];
         }
-        
 
         // (3) Use ID to select skeleton points in Nx first, then use the
         //     skeleton Nx points to select skeleton Ny points
         DTYPE rel_tol = 1e-14;
         
-        H2P_eval_kernel_matrix_direct(kernel, dim, Nx_points, Ny_points, tmpA);
+        H2P_eval_kernel_matrix_OMP(kernel, dim, krnl_dim, Nx_points, Ny_points, tmpA);
         H2P_dense_mat_resize(QR_buff, tmpA->nrow, 1);
         H2P_int_vec_set_capacity(ID_buff, 4 * tmpA->nrow);
         H2P_ID_compress(
             tmpA, QR_REL_NRM, &rel_tol, NULL, skel_idx, 
-            nthreads, QR_buff->data, ID_buff->data, 1
+            nthreads, QR_buff->data, ID_buff->data, krnl_dim
         );
         H2P_dense_mat_select_columns(Nx_points, skel_idx);
         
-        H2P_eval_kernel_matrix_direct(kernel, dim, Ny_points, Nx_points, tmpA);
+        H2P_eval_kernel_matrix_OMP(kernel, dim, krnl_dim, Ny_points, Nx_points, tmpA);
         H2P_dense_mat_resize(QR_buff, tmpA->nrow, 1);
         H2P_int_vec_set_capacity(ID_buff, 4 * tmpA->nrow);
         H2P_ID_compress(
             tmpA, QR_REL_NRM, &rel_tol, NULL, skel_idx, 
-            nthreads, QR_buff->data, ID_buff->data, 1
+            nthreads, QR_buff->data, ID_buff->data, krnl_dim
         );
         H2P_dense_mat_select_columns(Ny_points, skel_idx);
         
@@ -295,6 +295,7 @@ void H2P_generate_proxy_point(
 void H2P_build_UJ_proxy(H2Pack_t h2pack)
 {
     int   dim            = h2pack->dim;
+    int   krnl_dim       = h2pack->krnl_dim;
     int   n_node         = h2pack->n_node;
     int   n_point        = h2pack->n_point;
     int   n_leaf_node    = h2pack->n_leaf_node;
@@ -425,9 +426,9 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                 int ncol = pp[level]->nrow;
                 H2P_dense_mat_resize(tmp_x, dim, J[node]->length);
                 
-                int ncol_64B = (ncol + N_DTYPE_64B - 1) / N_DTYPE_64B * N_DTYPE_64B;
-                H2P_dense_mat_resize(A_block, nrow, ncol_64B);
-                A_block->ncol = ncol;
+                int A_blk_nrow = nrow * krnl_dim;
+                int A_blk_ncol = ncol * krnl_dim;
+                H2P_dense_mat_resize(A_block, A_blk_nrow, A_blk_ncol);
 
                 // Gather coordinates of this node's points (== all children nodes' skeleton points)
                 if (i == 0)
@@ -459,7 +460,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                         tmp_x_row_k[l] -= box_center_k;
                 }
                 kernel(
-                    tmp_x->data, nrow, nrow,
+                    tmp_x->data,     nrow, nrow,
                     pp[level]->data, ncol, ncol, 
                     dim, A_block->data, A_block->ld
                 );
@@ -469,14 +470,14 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                 H2P_int_vec_set_capacity(ID_buff, 4 * A_block->nrow);
                 H2P_ID_compress(
                     A_block, stop_type, stop_param, &U[node], sub_idx, 
-                    1, QR_buff->data, ID_buff->data, 1
+                    1, QR_buff->data, ID_buff->data, krnl_dim
                 );
                 
                 // Choose the skeleton points of this node
-                for (int k = 0; k < U[node]->ncol; k++)
+                for (int k = 0; k < sub_idx->length; k++)
                     J[node]->data[k] = J[node]->data[sub_idx->data[k]];
-                J[node]->length = U[node]->ncol;
-                H2P_dense_mat_init(&J_coord[node], dim, U[node]->ncol);
+                J[node]->length = sub_idx->length;
+                H2P_dense_mat_init(&J_coord[node], dim, sub_idx->length);
                 H2P_copy_matrix_columns(
                     coord, n_point, J_coord[node]->data, J[node]->length, 
                     dim, J[node]->data, J[node]->length
@@ -524,6 +525,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
             J_coord[i]->ncol = 0;
             J_coord[i]->ld   = 0;
         }
+        //printf("Node %3d: %d skeleton points\n", i, J[i]->length);
     }
 }
 
@@ -566,6 +568,7 @@ void H2P_partition_workload(
 void H2P_build_B(H2Pack_t h2pack)
 {
     int   dim          = h2pack->dim;
+    int   krnl_dim     = h2pack->krnl_dim;
     int   n_node       = h2pack->n_node;
     int   n_point      = h2pack->n_point;
     int   n_thread     = h2pack->n_thread;
@@ -628,10 +631,10 @@ void H2P_build_B(H2Pack_t h2pack)
             node0_npts = e_index0 - s_index0 + 1;
             node1_npts = J[node1]->length;
         }
-        B_nrow[i] = node0_npts;
-        B_ncol[i] = node1_npts;
-        size_t Bi_size = (size_t) node0_npts * (size_t) node1_npts;
-        Bi_size = (Bi_size + N_DTYPE_64B - 1) / N_DTYPE_64B * N_DTYPE_64B;
+        B_nrow[i] = node0_npts * krnl_dim;
+        B_ncol[i] = node1_npts * krnl_dim;
+        size_t Bi_size = (size_t) B_nrow[i] * (size_t) B_ncol[i];
+        //Bi_size = (Bi_size + N_DTYPE_64B - 1) / N_DTYPE_64B * N_DTYPE_64B;
         B_total_size += Bi_size;
         B_ptr[i + 1] = Bi_size;
         // Add Statistic info
@@ -673,7 +676,7 @@ void H2P_build_B(H2Pack_t h2pack)
                     kernel(
                         J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
                         J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                        dim, Bi, J_coord[node1]->ncol
+                        dim, Bi, J_coord[node1]->ncol * krnl_dim
                     );
                 }
                 
@@ -687,7 +690,7 @@ void H2P_build_B(H2Pack_t h2pack)
                     kernel(
                         J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
                         coord + s_index1, n_point, node1_npts, 
-                        dim, Bi, node1_npts
+                        dim, Bi, node1_npts * krnl_dim
                     );
                 }
                 
@@ -701,7 +704,7 @@ void H2P_build_B(H2Pack_t h2pack)
                     kernel(
                         coord + s_index0, n_point, node0_npts, 
                         J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                        dim, Bi, J_coord[node1]->ncol
+                        dim, Bi, J_coord[node1]->ncol * krnl_dim
                     );
                 }
             }  // End of i loop
@@ -731,6 +734,7 @@ void H2P_build_B(H2Pack_t h2pack)
 void H2P_build_D(H2Pack_t h2pack)
 {
     int   dim            = h2pack->dim;
+    int   krnl_dim       = h2pack->krnl_dim;
     int   n_thread       = h2pack->n_thread;
     int   n_point        = h2pack->n_point;
     int   n_leaf_node    = h2pack->n_leaf_node;
@@ -762,21 +766,22 @@ void H2P_build_D(H2Pack_t h2pack)
         int node = leaf_nodes[i];
         int s_index = cluster[2 * node];
         int e_index = cluster[2 * node + 1];
-        int node_npts  = e_index - s_index + 1;
-        size_t Di_size = (size_t) node_npts * (size_t) node_npts;
-        D_nrow[i] = node_npts;
-        D_ncol[i] = node_npts;
-        Di_size = (Di_size + N_DTYPE_64B - 1) / N_DTYPE_64B * N_DTYPE_64B;
+        int node_npts = e_index - s_index + 1;
+        D_nrow[i] = node_npts * krnl_dim;
+        D_ncol[i] = node_npts * krnl_dim;
+        size_t Di_size = (size_t) D_nrow[i] * (size_t) D_ncol[i];
+        //Di_size = (Di_size + N_DTYPE_64B - 1) / N_DTYPE_64B * N_DTYPE_64B;
         D_ptr[i + 1] = Di_size;
         D0_total_size += Di_size;
         // Add statistic info
-        h2pack->mat_size[6] += node_npts * node_npts;
-        h2pack->mat_size[6] += node_npts + node_npts;
+        h2pack->mat_size[6] += D_nrow[i] * D_ncol[i];
+        h2pack->mat_size[6] += D_nrow[i] + D_ncol[i];
     }
     H2P_partition_workload(n_leaf_node, D_ptr + 1, D0_total_size, n_thread * BD_NTASK_THREAD, D_blk0);
     size_t D1_total_size = 0;
     for (int i = 0; i < n_r_inadm_pair; i++)
     {
+        int ii = i + n_leaf_node;
         int node0 = r_inadm_pairs[2 * i];
         int node1 = r_inadm_pairs[2 * i + 1];
         int s_index0 = cluster[2 * node0];
@@ -785,15 +790,15 @@ void H2P_build_D(H2Pack_t h2pack)
         int e_index1 = cluster[2 * node1 + 1];
         int node0_npts = e_index0 - s_index0 + 1;
         int node1_npts = e_index1 - s_index1 + 1;
-        size_t Di_size = (size_t) node0_npts * (size_t) node1_npts;
-        D_nrow[i + n_leaf_node] = node0_npts;
-        D_ncol[i + n_leaf_node] = node1_npts;
-        Di_size = (Di_size + N_DTYPE_64B - 1) / N_DTYPE_64B * N_DTYPE_64B;
-        D_ptr[n_leaf_node + 1 + i] = Di_size;
+        D_nrow[ii] = node0_npts * krnl_dim;
+        D_ncol[ii] = node1_npts * krnl_dim;
+        size_t Di_size = (size_t) D_nrow[ii] * (size_t) D_ncol[ii];
+        //Di_size = (Di_size + N_DTYPE_64B - 1) / N_DTYPE_64B * N_DTYPE_64B;
+        D_ptr[ii + 1] = Di_size;
         D1_total_size += Di_size;
         // Add statistic info
-        h2pack->mat_size[6] += 2 * (node0_npts * node1_npts);
-        h2pack->mat_size[6] += 2 * (node0_npts + node1_npts);
+        h2pack->mat_size[6] += 2 * (D_nrow[ii] * D_ncol[ii]);
+        h2pack->mat_size[6] += 2 * (D_nrow[ii] + D_ncol[ii]);
     }
     H2P_partition_workload(n_r_inadm_pair, D_ptr + n_leaf_node + 1, D1_total_size, n_thread * BD_NTASK_THREAD, D_blk1);
     for (int i = 1; i <= n_leaf_node + n_r_inadm_pair; i++) D_ptr[i] += D_ptr[i - 1];
@@ -828,7 +833,7 @@ void H2P_build_D(H2Pack_t h2pack)
                 kernel(
                     coord + s_index, n_point, node_npts,
                     coord + s_index, n_point, node_npts,
-                    dim, Di, node_npts
+                    dim, Di, node_npts * krnl_dim
                 );
             }
         }  // End of i_blk0 loop
@@ -853,7 +858,7 @@ void H2P_build_D(H2Pack_t h2pack)
                 kernel(
                     coord + s_index0, n_point, node0_npts,
                     coord + s_index1, n_point, node1_npts,
-                    dim, Di, node1_npts
+                    dim, Di, node1_npts * krnl_dim
                 );
             }
         }  // End of i_blk1 loop

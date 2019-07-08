@@ -12,11 +12,13 @@
 #include "H2Pack_aux_structs.h"
 #include "H2Pack_ID_compress.h"
 
-void RPY(
-    int np0, const DTYPE *pos0, int np1, const DTYPE *pos1, 
-    const DTYPE a, const DTYPE eta, DTYPE *A, const int ldA
+void RPY_kernel_3d(
+    const DTYPE *coord0, const int ld0, const int n0,
+    const DTYPE *coord1, const int ld1, const int n1,
+    const int dim, DTYPE *mat, const int ldm
 )
 {
+    const DTYPE a = 1.0, eta = 1.0;
     const DTYPE C   = 1.0 / (6.0 * M_PI * a * eta);
     const DTYPE aa  = a * a;
     const DTYPE a2  = 2.0 * a;
@@ -25,16 +27,16 @@ void RPY(
     const DTYPE C_075    = C * 0.75;
     const DTYPE C_9o32oa = C * 9.0 / 32.0 / a;
     const DTYPE C_3o32oa = C * 3.0 / 32.0 / a;
-    for (int i = 0; i < np0; i++)
+    for (int i = 0; i < n0; i++)
     {
-        DTYPE pos_i0 = pos0[i];
-        DTYPE pos_i1 = pos0[i + np0];
-        DTYPE pos_i2 = pos0[i + np0 * 2];
-        for (int j = 0; j < np1; j++)
+        DTYPE x0 = coord0[i];
+        DTYPE y0 = coord0[i + ld0];
+        DTYPE z0 = coord0[i + ld0 * 2];
+        for (int j = 0; j < n1; j++)
         {
-            DTYPE r0 = pos_i0 - pos1[j];
-            DTYPE r1 = pos_i1 - pos1[j + np1];
-            DTYPE r2 = pos_i2 - pos1[j + np1 * 2];
+            DTYPE r0 = x0 - coord1[j];
+            DTYPE r1 = y0 - coord1[j + ld1];
+            DTYPE r2 = z0 - coord1[j + ld1 * 2];
             DTYPE s2 = r0 * r0 + r1 * r1 + r2 * r2;
             DTYPE s  = sqrt(s2);
             DTYPE inv_s = 1.0 / s;
@@ -50,8 +52,8 @@ void RPY(
                 t1 = C_075 / s * (1 + aa_2o3 / s2);
                 t2 = C_075 / s * (1 - aa2 / s2); 
             }
-            int base = 3 * i * ldA + 3 * j;
-            #define krnl(k, l) A[base + k * ldA + l]
+            int base = 3 * i * ldm + 3 * j;
+            #define krnl(k, l) mat[base + k * ldm + l]
             krnl(0, 0) = t2 * r0 * r0 + t1;
             krnl(0, 1) = t2 * r0 * r1;
             krnl(0, 2) = t2 * r0 * r2;
@@ -64,6 +66,7 @@ void RPY(
         }
     }
 }
+
 
 int main()
 {
@@ -101,7 +104,11 @@ int main()
         z1[i] = drand48() + 0.64;
     }
     
-    RPY(nrow, coord0, ncol, coord1, 1.0, 1.0, A->data, A_ncol);
+    RPY_kernel_3d(
+        coord0, nrow, nrow, 
+        coord1, ncol, ncol, 
+        1, A->data, A_ncol
+    );
     memcpy(A0->data, A->data, sizeof(DTYPE) * A_nrow * A_ncol);
     DTYPE A0_fnorm = 0.0;
     for (int i = 0; i < A_nrow * A_ncol; i++)

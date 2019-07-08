@@ -13,7 +13,7 @@ all: $(EXES)
 %.o: %.c
 	$(HOSTCC) $(CFLAGS) -I../ -c $^ 
 	
-%.x: %.o
+%.x: %.o $(LIB)
 	$(HOSTCC) $(CFLAGS) -o $@ $^ $(LIB)
 	
 clean:

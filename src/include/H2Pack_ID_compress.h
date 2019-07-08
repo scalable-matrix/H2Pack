@@ -22,7 +22,7 @@ extern "C" {
 //   nthreads   : Number of threads used in this function
 //   QR_buff    : Size A->nrow, working buffer for partial pivoting QR
 //   ID_buff    : Size 4 * A->nrow, working buffer for ID compression
-//   kdim       : Tensor kernel's dimension (column block size)
+//   kdim       : Dimension of tensor kernel's return (column block size)
 // Output parameters:
 //   U_ : Projection matrix, will be initialized in this function. If U_ == NULL,
 //        the projection matrix will not be calculated.

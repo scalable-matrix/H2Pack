@@ -370,7 +370,7 @@ void H2P_partial_pivot_QR_kdim(
 //   stop_param : Pointer to partial QR stop parameter
 //   nthreads   : Number of threads used in this function
 //   QR_buff    : Size A->ncol, working buffer for partial pivoting QR
-//   kdim       : Tensor kernel's dimension (column block size)
+//   kdim       : Dimension of tensor kernel's return (column block size)
 // Output parameters:
 //   A : Matrix R: [R11, R12]
 //   p : Matrix A column permutation array, A(:, p) = A * P
@@ -536,7 +536,7 @@ void H2P_ID_compress(
     }
     if (kdim > 1)
     {
-        J->data[1] /= kdim;
+        J->data[0] /= kdim;
         for (int i = 1; i < J->length / kdim; i++)
             J->data[i] = J->data[i * kdim] / kdim;
         J->length /= kdim;

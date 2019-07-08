@@ -388,7 +388,7 @@ int main(int argc, char **argv)
     H2P_dense_mat_t *pp;
     DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * test_params.dim + test_params.dim];
     st = H2P_get_wtime_sec();
-    H2P_generate_proxy_point(
+    H2P_generate_proxy_point_ID(
         test_params.dim, test_params.krnl_dim, h2pack->max_level, 
         2, max_L, test_params.kernel, &pp
     );

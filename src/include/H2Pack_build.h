@@ -7,7 +7,8 @@
 extern "C" {
 #endif
 
-// Generate proxy points for constructing H2 projection and skeleton matrices.
+// Generate proxy points for constructing H2 projection and skeleton matrices
+// using ID compress for any kernel function. 
 // This function is isolated because if the enclosing box for all points are fixed,
 // we only need to generate proxy points once and use them repeatedly.
 // Input parameter:
@@ -19,8 +20,26 @@ extern "C" {
 //   kernel      : Kernel function pointer
 // Output parameter:
 //   pp_  : Array of proxy points for each level
-void H2P_generate_proxy_point(
+void H2P_generate_proxy_point_ID(
     const int dim, const int krnl_dim, const int max_level, const int start_level,
+    DTYPE max_L, kernel_func_ptr kernel, H2P_dense_mat_t **pp_
+);
+
+// Generate uniformly distributed proxy points on a box surface for constructing
+// H2 projection and skeleton matrices for SOME kernel function.
+// This function is isolated because if the enclosing box for all points are fixed,
+// we only need to generate proxy points once and use them repeatedly.
+// Input parameter:
+//   dim         : Dimension of coordinate
+//   min_npts    : Minimum number of proxy points on the box surface
+//   max_level   : Maximum level (included) of a H2 tree, (root level == 0)
+//   start_level : Minimum level that needs proxy points
+//   max_L       : The size of the root node's enclosing box
+//   kernel      : Kernel function pointer
+// Output parameter:
+//   pp_  : Array of proxy points for each level
+void H2P_generate_proxy_point_surface(
+    const int dim, const int min_npts, const int max_level, const int start_level,
     DTYPE max_L, kernel_func_ptr kernel, H2P_dense_mat_t **pp_
 );
 

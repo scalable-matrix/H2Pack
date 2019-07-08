@@ -120,7 +120,8 @@ int point_in_box(const int dim, DTYPE *coord, DTYPE L)
 }
 
 // Generate proxy points for constructing H2 projection and skeleton matrices
-void H2P_generate_proxy_point(
+// using ID compress for any kernel function
+void H2P_generate_proxy_point_ID(
     const int dim, const int krnl_dim, const int max_level, const int start_level,
     DTYPE max_L, kernel_func_ptr kernel, H2P_dense_mat_t **pp_
 )
@@ -236,7 +237,7 @@ void H2P_generate_proxy_point(
             }
         }
         const int Ny_size2 = 2 * ny;
-        H2P_dense_mat_init(&pp[level], Ny_size2, dim);
+        H2P_dense_mat_init(&pp[level], dim, Ny_size2);
         H2P_dense_mat_t pp_level = pp[level];
         // Also transpose the coordinate array for vectorizing kernel evaluation here
         for (int i = 0; i < ny; i++)
@@ -285,6 +286,121 @@ void H2P_generate_proxy_point(
     H2P_dense_mat_destroy(Nx_points);
     H2P_dense_mat_destroy(Ny_points);
     H2P_dense_mat_destroy(min_dist);
+}
+
+// Generate uniformly distributed proxy points on a box surface for constructing
+// H2 projection and skeleton matrices for SOME kernel function
+void H2P_generate_proxy_point_surface(
+    const int dim, const int min_npts, const int max_level, const int start_level,
+    DTYPE max_L, kernel_func_ptr kernel, H2P_dense_mat_t **pp_
+)
+{
+    if (dim < 2 || dim > 3)
+    {
+        printf("[FATAL] H2P_generate_proxy_point_surface() need dim = 2 or 3\n");
+        assert(dim == 2 || dim == 3);
+    }
+    
+    H2P_dense_mat_t *pp = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * (max_level + 1));
+    assert(pp != NULL);
+    for (int i = 0; i <= max_level; i++) pp[i] = NULL;
+    
+    int npts_axis, npts;
+    if (dim == 2)
+    {
+        npts_axis = (min_npts + 3) / 4;
+        npts = npts_axis * 4;
+    } else {
+        double n_point_face = (double) min_npts / 6.0;
+        npts_axis = (int) ceil(sqrt(n_point_face));
+        npts = npts_axis * npts_axis * 6;
+    }
+    double h = 2.0 / (double) (npts_axis + 1);
+    
+    // Generate proxy points on the surface of [-1,1]^dim box
+    H2P_dense_mat_t unit_pp;
+    H2P_dense_mat_init(&unit_pp, dim, npts);
+    int index = 0;
+    if (dim == 3)
+    {
+        DTYPE *x = unit_pp->data;
+        DTYPE *y = unit_pp->data + npts;
+        DTYPE *z = unit_pp->data + npts * 2;
+        for (int i = 0; i < npts_axis; i++)
+        {
+            double h_i = h * (i + 1) - 1.0;
+            for (int j = 0; j < npts_axis; j++)
+            {
+                double h_j = h * (j + 1) - 1.0;
+                
+                x[index + 0] = h_i;
+                y[index + 0] = h_j;
+                z[index + 0] = -1.0;
+                
+                x[index + 1] = h_i;
+                y[index + 1] = h_j;
+                z[index + 1] = 1.0;
+                
+                x[index + 2] = h_i;
+                y[index + 2] = -1.0;
+                z[index + 2] = h_j;
+                
+                x[index + 3] = h_i;
+                y[index + 3] = 1.0;
+                z[index + 3] = h_j;
+                
+                x[index + 4] = -1.0;
+                y[index + 4] = h_i;
+                z[index + 4] = h_j;
+                
+                x[index + 5] = 1.0;
+                y[index + 5] = h_i;
+                z[index + 5] = h_j;
+                
+                index += 6;
+            }
+        }
+    }
+    if (dim == 2)
+    {
+        DTYPE *x = unit_pp->data;
+        DTYPE *y = unit_pp->data + npts;
+        for (int i = 0; i < npts_axis; i++)
+        {
+            double h_i = h * (i + 1) - 1.0;
+            
+            x[index + 0] = h_i;
+            y[index + 0] = -1.0;
+            
+            x[index + 1] = h_i;
+            y[index + 1] = 1.0;
+            
+            x[index + 2] = -1.0;
+            y[index + 2] = h_i;
+            
+            x[index + 3] = 1.0;
+            y[index + 3] = h_i;
+        }
+    } 
+    
+    // Scale proxy points on unit box surface to different size as
+    // proxy points on different levels
+    DTYPE pow_2_level = 0.5;
+    for (int level = 0; level < start_level; level++) pow_2_level *= 2.0;
+    for (int level = start_level; level <= max_level; level++)
+    {
+        pow_2_level *= 2.0;
+        H2P_dense_mat_init(&pp[level], dim, npts);
+        DTYPE box_width = max_L / pow_2_level * 0.5;
+        DTYPE adm_width = (1.0 + 2.0 * ALPHA_H2) * box_width;
+        DTYPE *pp_level = pp[level]->data;
+        #pragma omp simd
+        for (int i = 0; i < dim * npts; i++)
+            pp_level[i] = adm_width * unit_pp->data[i];
+    }
+    
+    H2P_dense_mat_destroy(unit_pp);
+    *pp_ = pp;
 }
 
 // Build H2 projection matrices using proxy points
@@ -421,16 +537,8 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                 int level = node_level[node];
                 if (level < min_adm_level) continue;
                 
-                DTYPE *node_box = enbox + node * 2 * dim;
-                int nrow = J[node]->length;
-                int ncol = pp[level]->nrow;
-                H2P_dense_mat_resize(tmp_x, dim, J[node]->length);
-                
-                int A_blk_nrow = nrow * krnl_dim;
-                int A_blk_ncol = ncol * krnl_dim;
-                H2P_dense_mat_resize(A_block, A_blk_nrow, A_blk_ncol);
-
                 // Gather coordinates of this node's points (== all children nodes' skeleton points)
+                H2P_dense_mat_resize(tmp_x, dim, J[node]->length);
                 if (i == 0)
                 {
                     tmp_x = J_coord[node];
@@ -451,6 +559,9 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                 }
                 
                 // Shift points in this node so their center is at the original point
+                DTYPE *node_box = enbox + node * 2 * dim;
+                int nrow = J[node]->length;
+                int ncol = pp[level]->ncol;
                 for (int k = 0; k < dim; k++)
                 {
                     DTYPE box_center_k = node_box[k] + 0.5 * node_box[dim + k];
@@ -459,6 +570,9 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                     for (int l = 0; l < nrow; l++)
                         tmp_x_row_k[l] -= box_center_k;
                 }
+                int A_blk_nrow = nrow * krnl_dim;
+                int A_blk_ncol = ncol * krnl_dim;
+                H2P_dense_mat_resize(A_block, A_blk_nrow, A_blk_ncol);
                 kernel(
                     tmp_x->data,     nrow, nrow,
                     pp[level]->data, ncol, ncol, 
@@ -541,7 +655,7 @@ void H2P_partition_workload(
         blk_displs->data[i] = n_work;
     size_t blk_size = total_size / n_block + 1;
     size_t curr_blk_size = 0;
-    int    idx = 1;
+    int idx = 1;
     for (int i = 0; i < n_work; i++)
     {
         curr_blk_size += work_sizes[i];

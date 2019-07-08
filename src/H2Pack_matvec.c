@@ -357,6 +357,7 @@ void H2P_matvec_intermediate_sweep_AOT(H2Pack_t h2pack, const DTYPE *x)
 void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
 {
     int    dim           = h2pack->dim;
+    int    krnl_dim      = h2pack->krnl_dim;
     int    n_node        = h2pack->n_node;
     int    n_point       = h2pack->n_point;
     int    n_thread      = h2pack->n_thread;
@@ -364,6 +365,7 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
     int    *r_adm_pairs  = h2pack->r_adm_pairs;
     int    *node_level   = h2pack->node_level;
     int    *cluster      = h2pack->cluster;
+    int    *mat_cluster  = h2pack->mat_cluster;
     int    *node_n_r_adm = h2pack->node_n_r_adm;
     int    *B_nrow       = h2pack->B_nrow;
     int    *B_ncol       = h2pack->B_ncol;
@@ -415,6 +417,8 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                 int Bi_nrow = B_nrow[i];
                 int Bi_ncol = B_ncol[i];
                 int Bi_nrow_128KB = (128 * 1024) / (sizeof(DTYPE) * Bi_ncol);
+                int Bi_blk_npt = Bi_nrow_128KB / krnl_dim;
+                Bi_nrow_128KB = Bi_blk_npt * krnl_dim;
                 H2P_dense_mat_resize(Bi, Bi_nrow_128KB, Bi_ncol);
                 
                 // (1) Two nodes are of the same level, compress on both sides
@@ -428,13 +432,17 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                     DTYPE beta1 = y1_dst_1[ncol1 - 1];
                     y1_dst_0[ncol0 - 1] = 1.0;
                     y1_dst_1[ncol1 - 1] = 1.0;
-                    for (int blk_srow = 0; blk_srow < Bi_nrow; blk_srow += Bi_nrow_128KB)
+                    
+                    int Bi_npt_row = J_coord[node0]->ncol;
+                    for (int blk_pt_s = 0; blk_pt_s < Bi_npt_row; blk_pt_s += Bi_blk_npt)
                     {
-                        int blk_nrow = (blk_srow + Bi_nrow_128KB > Bi_nrow) ? Bi_nrow - blk_srow : Bi_nrow_128KB;
+                        int blk_npt = (blk_pt_s + Bi_blk_npt) > Bi_npt_row ? Bi_npt_row - blk_pt_s : Bi_blk_npt;
+                        int blk_srow = blk_pt_s * krnl_dim;
+                        int blk_nrow = blk_npt * krnl_dim;
                         kernel(
-                            J_coord[node0]->data + blk_srow, J_coord[node0]->ncol, blk_nrow,
+                            J_coord[node0]->data + blk_pt_s, J_coord[node0]->ncol, blk_npt,
                             J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                            dim, Bi->data, J_coord[node1]->ncol
+                            dim, Bi->data, Bi_ncol
                         );
                         CBLAS_GEMV(
                             CblasRowMajor, CblasNoTrans, blk_nrow, Bi_ncol, 
@@ -455,19 +463,27 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                 //     downward sweep and can directly accumulate result to output vector
                 if (level0 > level1)
                 {
-                    int s_index1 = cluster[node1 * 2];
-                    int ncol0    = y1[node0]->ncol;
-                    DTYPE *y_spos   = y + s_index1;
-                    DTYPE *y1_dst_0 = y1[node0]->data + tid * ncol0;
-                    DTYPE beta0     = y1_dst_0[ncol0 - 1];
-                    const DTYPE *x_spos = x + s_index1;
+                    int pt_s1   = cluster[node1 * 2];
+                    int num_pt1 = cluster[node1 * 2 + 1] - pt_s1 + 1;
+                    
+                    int vec_s1  = mat_cluster[node1 * 2];
+                    const DTYPE *x_spos = x + vec_s1;
+                    DTYPE       *y_spos = y + vec_s1;
+                    
+                    int ncol0 = y1[node0]->ncol;
+                    DTYPE *y1_dst_0     = y1[node0]->data + tid * ncol0;
+                    DTYPE beta0         = y1_dst_0[ncol0 - 1];
                     y1_dst_0[ncol0 - 1] = 1.0;
-                    for (int blk_srow = 0; blk_srow < Bi_nrow; blk_srow += Bi_nrow_128KB)
+                    
+                    int Bi_npt_row = J_coord[node0]->ncol;
+                    for (int blk_pt_s = 0; blk_pt_s < Bi_npt_row; blk_pt_s += Bi_blk_npt)
                     {
-                        int blk_nrow = (blk_srow + Bi_nrow_128KB > Bi_nrow) ? Bi_nrow - blk_srow : Bi_nrow_128KB;
+                        int blk_npt = (blk_pt_s + Bi_blk_npt) > Bi_npt_row ? Bi_npt_row - blk_pt_s : Bi_blk_npt;
+                        int blk_srow = blk_pt_s * krnl_dim;
+                        int blk_nrow = blk_npt * krnl_dim;
                         kernel(
-                            J_coord[node0]->data + blk_srow, J_coord[node0]->ncol, blk_nrow,
-                            coord + s_index1, n_point, Bi_ncol, 
+                            J_coord[node0]->data + blk_pt_s, J_coord[node0]->ncol, blk_npt,
+                            coord + pt_s1, n_point, num_pt1, 
                             dim, Bi->data, Bi_ncol
                         );
                         CBLAS_GEMV(
@@ -488,20 +504,28 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                 //     downward sweep and can directly accumulate result to output vector
                 if (level0 < level1)
                 {
-                    int s_index0 = cluster[2 * node0];
-                    int ncol1    = y1[node1]->ncol;
-                    DTYPE *y_spos   = y + s_index0;
-                    DTYPE *y1_dst_1 = y1[node1]->data + tid * ncol1;
-                    DTYPE beta1     = y1_dst_1[ncol1 - 1];
-                    const DTYPE *x_spos = x + s_index0;
+                    int pt_s0   = cluster[node0 * 2];
+                    int num_pt0 = cluster[node0 * 2 + 1] - pt_s0 + 1;
+                    
+                    int vec_s0  = mat_cluster[node0 * 2];
+                    const DTYPE *x_spos = x + vec_s0;
+                    DTYPE       *y_spos = y + vec_s0;
+                    
+                    int ncol1 = y1[node1]->ncol;
+                    DTYPE *y1_dst_1     = y1[node1]->data + tid * ncol1;
+                    DTYPE beta1         = y1_dst_1[ncol1 - 1];
                     y1_dst_1[ncol1 - 1] = 1.0;
-                    for (int blk_srow = 0; blk_srow < Bi_nrow; blk_srow += Bi_nrow_128KB)
+                    
+                    int Bi_npt_row = num_pt0;
+                    for (int blk_pt_s = 0; blk_pt_s < Bi_npt_row; blk_pt_s += Bi_blk_npt)
                     {
-                        int blk_nrow = (blk_srow + Bi_nrow_128KB > Bi_nrow) ? Bi_nrow - blk_srow : Bi_nrow_128KB;
+                        int blk_npt = (blk_pt_s + Bi_blk_npt) > Bi_npt_row ? Bi_npt_row - blk_pt_s : Bi_blk_npt;
+                        int blk_srow = blk_pt_s * krnl_dim;
+                        int blk_nrow = blk_npt * krnl_dim;
                         kernel(
-                            coord + s_index0 + blk_srow, n_point, blk_nrow, 
+                            coord + pt_s0 + blk_pt_s, n_point, blk_npt, 
                             J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                            dim, Bi->data, J_coord[node1]->ncol
+                            dim, Bi->data, Bi_ncol
                         );
                         CBLAS_GEMV(
                             CblasRowMajor, CblasNoTrans, blk_nrow, Bi_ncol, 
@@ -742,12 +766,14 @@ void H2P_matvec_dense_blocks_AOT(H2Pack_t h2pack, const DTYPE *x)
 void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
 {
     int    dim             = h2pack->dim;
+    int    krnl_dim        = h2pack->krnl_dim;
     int    n_point         = h2pack->n_point;
     int    n_leaf_node     = h2pack->n_leaf_node;
     int    n_r_inadm_pair  = h2pack->n_r_inadm_pair;
     int    *r_inadm_pairs  = h2pack->r_inadm_pairs;
     int    *leaf_nodes     = h2pack->height_nodes;
     int    *cluster        = h2pack->cluster;
+    int    *mat_cluster    = h2pack->mat_cluster;
     int    *D_nrow         = h2pack->D_nrow;
     int    *D_ncol         = h2pack->D_ncol;
     DTYPE  *coord          = h2pack->coord;
@@ -773,20 +799,27 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
             for (int i = D_blk0_s; i < D_blk0_e; i++)
             {
                 int node    = leaf_nodes[i];
-                int s_index = cluster[node * 2];
+                int pt_s    = cluster[node * 2];
+                int num_pt  = cluster[node * 2 + 1] - pt_s + 1;
+                int vec_s   = mat_cluster[node * 2];
                 int Di_nrow = D_nrow[i];
                 int Di_ncol = D_ncol[i];
-                DTYPE *y_spos = y + s_index;
-                const DTYPE *x_spos = x + s_index;
+                DTYPE *y_spos = y + vec_s;
+                const DTYPE *x_spos = x + vec_s;
                 int Di_nrow_128KB = (128 * 1024) / (sizeof(DTYPE) * Di_ncol);
+                int Di_blk_npt = Di_nrow_128KB / krnl_dim;
+                Di_nrow_128KB = Di_blk_npt * krnl_dim;
                 H2P_dense_mat_resize(Di, Di_nrow_128KB, Di_ncol);
                 
-                for (int blk_srow = 0; blk_srow < Di_nrow; blk_srow += Di_nrow_128KB)
+                int Di_npt_row = num_pt;
+                for (int blk_pt_s = 0; blk_pt_s < Di_npt_row; blk_pt_s += Di_blk_npt)
                 {
-                    int blk_nrow = (blk_srow + Di_nrow_128KB > Di_nrow) ? Di_nrow - blk_srow : Di_nrow_128KB;
+                    int blk_npt = (blk_pt_s + Di_blk_npt) > Di_npt_row ? Di_npt_row - blk_pt_s : Di_blk_npt;
+                    int blk_srow = blk_pt_s * krnl_dim;
+                    int blk_nrow = blk_npt * krnl_dim;
                     kernel(
-                        coord + s_index + blk_srow, n_point, blk_nrow,
-                        coord + s_index, n_point, Di_ncol,
+                        coord + pt_s + blk_pt_s, n_point, blk_npt,
+                        coord + pt_s, n_point, num_pt,
                         dim, Di->data, Di_ncol
                     );
                     CBLAS_GEMV(
@@ -806,25 +839,34 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
             int D_blk1_e = D_blk1->data[i_blk1 + 1];
             for (int i = D_blk1_s; i < D_blk1_e; i++)
             {
-                int node0    = r_inadm_pairs[2 * i];
-                int node1    = r_inadm_pairs[2 * i + 1];
-                int s_index0 = cluster[2 * node0];
-                int s_index1 = cluster[2 * node1];
-                int Di_nrow  = D_nrow[n_leaf_node + i];
-                int Di_ncol  = D_ncol[n_leaf_node + i];
-                DTYPE *y_spos0 = y + s_index0;
-                DTYPE *y_spos1 = y + s_index1;
-                const DTYPE *x_spos0 = x + s_index0;
-                const DTYPE *x_spos1 = x + s_index1;
+                int node0   = r_inadm_pairs[2 * i];
+                int node1   = r_inadm_pairs[2 * i + 1];
+                int pt_s0   = cluster[2 * node0];
+                int pt_s1   = cluster[2 * node1];
+                int num_pt0 = cluster[2 * node0 + 1] - pt_s0 + 1;
+                int num_pt1 = cluster[2 * node1 + 1] - pt_s1 + 1;
+                int vec_s0  = mat_cluster[2 * node0];
+                int vec_s1  = mat_cluster[2 * node1];
+                int Di_nrow = D_nrow[n_leaf_node + i];
+                int Di_ncol = D_ncol[n_leaf_node + i];
+                DTYPE *y_spos0 = y + vec_s0;
+                DTYPE *y_spos1 = y + vec_s1;
+                const DTYPE *x_spos0 = x + vec_s0;
+                const DTYPE *x_spos1 = x + vec_s1;
                 int Di_nrow_128KB = (128 * 1024) / (sizeof(DTYPE) * Di_ncol);
+                int Di_blk_npt = Di_nrow_128KB / krnl_dim;
+                Di_nrow_128KB = Di_blk_npt * krnl_dim;
                 H2P_dense_mat_resize(Di, Di_nrow_128KB, Di_ncol);
                 
-                for (int blk_srow = 0; blk_srow < Di_nrow; blk_srow += Di_nrow_128KB)
+                int Di_npt_row = num_pt0;
+                for (int blk_pt_s = 0; blk_pt_s < Di_npt_row; blk_pt_s += Di_blk_npt)
                 {
-                    int blk_nrow = (blk_srow + Di_nrow_128KB > Di_nrow) ? Di_nrow - blk_srow : Di_nrow_128KB;
+                    int blk_npt = (blk_pt_s + Di_blk_npt) > Di_npt_row ? Di_npt_row - blk_pt_s : Di_blk_npt;
+                    int blk_srow = blk_pt_s * krnl_dim;
+                    int blk_nrow = blk_npt * krnl_dim;
                     kernel(
-                        coord + s_index0 + blk_srow, n_point, blk_nrow,
-                        coord + s_index1, n_point, Di_ncol,
+                        coord + pt_s0 + blk_pt_s, n_point, blk_npt,
+                        coord + pt_s1, n_point, num_pt1,
                         dim, Di->data, Di_ncol
                     );
                     CBLAS_GEMV(

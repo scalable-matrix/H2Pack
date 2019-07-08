@@ -126,7 +126,6 @@ void parse_params(int argc, char **argv)
         test_params.BD_JIT = atoi(argv[3]);
         printf("Just-In-Time B & D = %d\n", test_params.BD_JIT);
     }
-    test_params.BD_JIT = 0;
     
     test_params.coord = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * test_params.n_point * test_params.dim);
     assert(test_params.coord != NULL);

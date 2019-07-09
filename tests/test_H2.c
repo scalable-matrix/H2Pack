@@ -27,7 +27,7 @@ struct H2P_test_params test_params;
 void Coulomb_kernel_3d(
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
-    const int dim, DTYPE *mat, const int ldm
+    DTYPE *mat, const int ldm
 )
 {
     const DTYPE *x0 = coord0 + ld0 * 0;
@@ -58,7 +58,7 @@ void Coulomb_kernel_3d(
 void Laplace_kernel_3d(
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
-    const int dim, DTYPE *mat, const int ldm
+    DTYPE *mat, const int ldm
 )
 {
     const DTYPE *x0 = coord0 + ld0 * 0;
@@ -90,7 +90,7 @@ void Laplace_kernel_3d(
 void Gaussian_kernel_3d(
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
-    const int dim, DTYPE *mat, const int ldm
+    DTYPE *mat, const int ldm
 )
 {
     const DTYPE *x0 = coord0 + ld0 * 0;
@@ -120,7 +120,7 @@ void Gaussian_kernel_3d(
 void Coulomb_kernel_2d(
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
-    const int dim, DTYPE *mat, const int ldm
+    DTYPE *mat, const int ldm
 )
 {
     const DTYPE *x0 = coord0 + ld0 * 0;
@@ -147,7 +147,7 @@ void Coulomb_kernel_2d(
 void Laplace_kernel_2d(
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
-    const int dim, DTYPE *mat, const int ldm
+    DTYPE *mat, const int ldm
 )
 {
     const DTYPE *x0 = coord0 + ld0 * 0;
@@ -175,7 +175,7 @@ void Laplace_kernel_2d(
 void Gaussian_kernel_2d(
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
-    const int dim, DTYPE *mat, const int ldm
+    DTYPE *mat, const int ldm
 )
 {
     const DTYPE *x0 = coord0 + ld0 * 0;
@@ -312,8 +312,8 @@ void parse_params(int argc, char **argv)
 }
 
 void direct_nbody(
-    kernel_func_ptr kernel, const int pt_dim, const int krnl_dim, 
-    const int n_point, const DTYPE *coord, const DTYPE *x, DTYPE *y
+    kernel_func_ptr kernel, const int krnl_dim, const int n_point, 
+    const DTYPE *coord, const DTYPE *x, DTYPE *y
 )
 {
     int nx_blk_size = 64;
@@ -342,7 +342,7 @@ void direct_nbody(
                 kernel(
                     coord + ix, n_point, blk_nx,
                     coord + iy, n_point, blk_ny,
-                    pt_dim, thread_A_blk, blk_ny * krnl_dim
+                    thread_A_blk, blk_ny * krnl_dim
                 );
                 CBLAS_GEMV(
                     CblasRowMajor, CblasNoTrans, blk_nx * krnl_dim, blk_ny * krnl_dim,
@@ -407,7 +407,7 @@ int main(int argc, char **argv)
     
     // Get reference results
     direct_nbody(
-        test_params.kernel, test_params.pt_dim, test_params.krnl_dim, 
+        test_params.kernel, test_params.krnl_dim, 
         test_params.n_point, h2pack->coord, x, y0
     );
     

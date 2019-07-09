@@ -62,15 +62,14 @@ void H2P_copy_matrix_block(
 // Evaluate a kernel matrix with OpenMP parallelization
 // Input parameters:
 //   kernel   : Kernel matrix evaluation function
-//   pt_dim   : Dimension of point coordinate
 //   krnl_dim : Dimension of tensor kernel's return
 //   x_coord  : X point set coordinates, size nx-by-pt_dim
 //   y_coord  : Y point set coordinates, size ny-by-pt_dim
 // Output parameter:
 //   kernel_mat : Obtained kernel matrix, nx-by-ny
 void H2P_eval_kernel_matrix_OMP(
-    kernel_func_ptr kernel, const int pt_dim, const int krnl_dim, 
-    H2P_dense_mat_t x_coord, H2P_dense_mat_t y_coord, H2P_dense_mat_t kernel_mat
+    kernel_func_ptr kernel, const int krnl_dim, H2P_dense_mat_t x_coord, 
+    H2P_dense_mat_t y_coord, H2P_dense_mat_t kernel_mat
 )
 {
     const int nx = x_coord->ncol;
@@ -91,7 +90,7 @@ void H2P_eval_kernel_matrix_OMP(
         kernel(
             x_coord_spos,  x_coord->ncol, nx_blk_len, 
             y_coord->data, y_coord->ncol, ny, 
-            pt_dim, kernel_mat_srow, kernel_mat->ld
+            kernel_mat_srow, kernel_mat->ld
         );
     }
 }
@@ -194,7 +193,7 @@ void H2P_generate_proxy_point_ID(
         //     skeleton Nx points to select skeleton Ny points
         DTYPE rel_tol = 1e-14;
         
-        H2P_eval_kernel_matrix_OMP(kernel, pt_dim, krnl_dim, Nx_points, Ny_points, tmpA);
+        H2P_eval_kernel_matrix_OMP(kernel, krnl_dim, Nx_points, Ny_points, tmpA);
         H2P_dense_mat_resize(QR_buff, tmpA->nrow, 1);
         H2P_int_vec_set_capacity(ID_buff, 4 * tmpA->nrow);
         H2P_ID_compress(
@@ -203,7 +202,7 @@ void H2P_generate_proxy_point_ID(
         );
         H2P_dense_mat_select_columns(Nx_points, skel_idx);
         
-        H2P_eval_kernel_matrix_OMP(kernel, pt_dim, krnl_dim, Ny_points, Nx_points, tmpA);
+        H2P_eval_kernel_matrix_OMP(kernel, krnl_dim, Ny_points, Nx_points, tmpA);
         H2P_dense_mat_resize(QR_buff, tmpA->nrow, 1);
         H2P_int_vec_set_capacity(ID_buff, 4 * tmpA->nrow);
         H2P_ID_compress(
@@ -576,7 +575,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                 kernel(
                     tmp_x->data,     nrow, nrow,
                     pp[level]->data, ncol, ncol, 
-                    pt_dim, A_block->data, A_block->ld
+                    A_block->data, A_block->ld
                 );
 
                 // ID compress
@@ -681,7 +680,6 @@ void H2P_partition_workload(
 //   h2pack : H2Pack structure with H2 generator matrices
 void H2P_build_B(H2Pack_t h2pack)
 {
-    int   pt_dim       = h2pack->pt_dim;
     int   krnl_dim     = h2pack->krnl_dim;
     int   n_node       = h2pack->n_node;
     int   n_point      = h2pack->n_point;
@@ -790,7 +788,7 @@ void H2P_build_B(H2Pack_t h2pack)
                     kernel(
                         J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
                         J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                        pt_dim, Bi, J_coord[node1]->ncol * krnl_dim
+                        Bi, J_coord[node1]->ncol * krnl_dim
                     );
                 }
                 
@@ -804,7 +802,7 @@ void H2P_build_B(H2Pack_t h2pack)
                     kernel(
                         J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
                         coord + pt_s1, n_point, node1_npt, 
-                        pt_dim, Bi, node1_npt * krnl_dim
+                        Bi, node1_npt * krnl_dim
                     );
                 }
                 
@@ -818,7 +816,7 @@ void H2P_build_B(H2Pack_t h2pack)
                     kernel(
                         coord + pt_s0, n_point, node0_npt, 
                         J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                        pt_dim, Bi, J_coord[node1]->ncol * krnl_dim
+                        Bi, J_coord[node1]->ncol * krnl_dim
                     );
                 }
             }  // End of i loop
@@ -847,7 +845,6 @@ void H2P_build_B(H2Pack_t h2pack)
 //   h2pack : H2Pack structure with dense blocks
 void H2P_build_D(H2Pack_t h2pack)
 {
-    int   pt_dim         = h2pack->pt_dim;
     int   krnl_dim       = h2pack->krnl_dim;
     int   n_thread       = h2pack->n_thread;
     int   n_point        = h2pack->n_point;
@@ -947,7 +944,7 @@ void H2P_build_D(H2Pack_t h2pack)
                 kernel(
                     coord + pt_s, n_point, node_npt,
                     coord + pt_s, n_point, node_npt,
-                    pt_dim, Di, node_npt * krnl_dim
+                    Di, node_npt * krnl_dim
                 );
             }
         }  // End of i_blk0 loop
@@ -972,7 +969,7 @@ void H2P_build_D(H2Pack_t h2pack)
                 kernel(
                     coord + pt_s0, n_point, node0_npt,
                     coord + pt_s1, n_point, node1_npt,
-                    pt_dim, Di, node1_npt * krnl_dim
+                    Di, node1_npt * krnl_dim
                 );
             }
         }  // End of i_blk1 loop

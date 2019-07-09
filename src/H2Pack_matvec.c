@@ -358,7 +358,6 @@ void H2P_matvec_intermediate_sweep_AOT(H2Pack_t h2pack, const DTYPE *x)
 // Need to calculate all B_{ij} matrices before using it
 void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
 {
-    int    pt_dim        = h2pack->pt_dim;
     int    krnl_dim      = h2pack->krnl_dim;
     int    n_node        = h2pack->n_node;
     int    n_point       = h2pack->n_point;
@@ -444,7 +443,7 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                         kernel(
                             J_coord[node0]->data + blk_pt_s, J_coord[node0]->ncol, blk_npt,
                             J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                            pt_dim, Bi->data, Bi_ncol
+                            Bi->data, Bi_ncol
                         );
                         CBLAS_GEMV(
                             CblasRowMajor, CblasNoTrans, blk_nrow, Bi_ncol, 
@@ -486,7 +485,7 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                         kernel(
                             J_coord[node0]->data + blk_pt_s, J_coord[node0]->ncol, blk_npt,
                             coord + pt_s1, n_point, node1_npt, 
-                            pt_dim, Bi->data, Bi_ncol
+                            Bi->data, Bi_ncol
                         );
                         CBLAS_GEMV(
                             CblasRowMajor, CblasNoTrans, blk_nrow, Bi_ncol, 
@@ -527,7 +526,7 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                         kernel(
                             coord + pt_s0 + blk_pt_s, n_point, blk_npt, 
                             J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                            pt_dim, Bi->data, Bi_ncol
+                            Bi->data, Bi_ncol
                         );
                         CBLAS_GEMV(
                             CblasRowMajor, CblasNoTrans, blk_nrow, Bi_ncol, 
@@ -769,7 +768,6 @@ void H2P_matvec_dense_blocks_AOT(H2Pack_t h2pack, const DTYPE *x)
 // Need to calculate all D_{ij} matrices before using it
 void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
 {
-    int    pt_dim          = h2pack->pt_dim;
     int    krnl_dim        = h2pack->krnl_dim;
     int    n_point         = h2pack->n_point;
     int    n_leaf_node     = h2pack->n_leaf_node;
@@ -825,7 +823,7 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
                     kernel(
                         coord + pt_s + blk_pt_s, n_point, blk_npt,
                         coord + pt_s, n_point, node_npt,
-                        pt_dim, Di->data, Di_ncol
+                        Di->data, Di_ncol
                     );
                     CBLAS_GEMV(
                         CblasRowMajor, CblasNoTrans, blk_nrow, Di_ncol,
@@ -873,7 +871,7 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
                     kernel(
                         coord + pt_s0 + blk_pt_s, n_point, blk_npt,
                         coord + pt_s1, n_point, node1_npt,
-                        pt_dim, Di->data, Di_ncol
+                        Di->data, Di_ncol
                     );
                     CBLAS_GEMV(
                         CblasRowMajor, CblasNoTrans, blk_nrow, Di_ncol,

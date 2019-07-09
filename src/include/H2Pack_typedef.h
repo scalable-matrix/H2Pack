@@ -17,14 +17,13 @@ extern "C" {
 //   coord1 : Matrix, size dim-by-ld1, coordinates of the 2nd point set
 //   ld1    : Leading dimension of coord1, should be >= n1
 //   n1     : Number of points in coord1 (each column in coord0 is a coordinate)
-//   dim    : Dimension of point coordinate
 //   ldm    : Leading dimension of the kernel matrix
 // Output parameter:
 //   mat : Obtained kernel matrix, size n0-by-ld1
 typedef void (*kernel_func_ptr) (
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
-    const int dim, DTYPE *mat, const int ldm
+    DTYPE *mat, const int ldm
 );
 
 // Structure of H2 matrix tree flatten representation

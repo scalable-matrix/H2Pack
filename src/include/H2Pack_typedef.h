@@ -32,7 +32,7 @@ struct H2Pack
 {
     // H2 matrix tree flatten representation
     int    n_thread;            // Number of threads
-    int    dim;                 // Dimension of point coordinate
+    int    pt_dim;              // Dimension of point coordinate
     int    krnl_dim;            // Dimension of tensor kernel's return
     int    QR_stop_type;        // Partial QR stop criteria
     int    QR_stop_rank;        // Partial QR maximum rank
@@ -54,7 +54,7 @@ struct H2Pack
     int    BD_JIT;              // If B and D matrices are computed just-in-time in matvec
     int    *parent;             // Size n_node, parent index of each node
     int    *children;           // Size n_node * max_child, indices of a node's children nodes
-    int    *cluster;            // Size n_node * 2, start and end (included) indices of points belong to each node
+    int    *pt_cluster;         // Size n_node * 2, start and end (included) indices of points belong to each node
     int    *mat_cluster;        // Size n_node * 2, start and end (included) indices of matvec vector elements belong to each node
     int    *n_child;            // Size n_node, number of children nodes of each node
     int    *node_level;         // Size n_node, level of each node
@@ -100,13 +100,16 @@ typedef struct H2Pack* H2Pack_t;
 
 // Initialize a H2Pack structure
 // Input parameters:
-//   dim           : Dimension of point coordinate
+//   pt_dim        : Dimension of point coordinate
 //   krnl_dim      : Dimension of tensor kernel's return
 //   QR_stop_rank  : Partial QR stop criteria: QR_RANK, QR_REL_NRM, or QR_ABS_NRM
 //   QR_stop_param : Pointer to partial QR stop parameter
 // Output parameter:
 //   h2pack_ : Initialized H2Pack structure
-void H2P_init(H2Pack_t *h2pack_, const int dim, const int krnl_dim, const int QR_stop_type, void *QR_stop_param);
+void H2P_init(
+    H2Pack_t *h2pack_, const int pt_dim, const int krnl_dim, 
+    const int QR_stop_type, void *QR_stop_param
+);
 
 // Destroy a H2Pack structure
 // Input parameter:

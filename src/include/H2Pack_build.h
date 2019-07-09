@@ -12,7 +12,7 @@ extern "C" {
 // This function is isolated because if the enclosing box for all points are fixed,
 // we only need to generate proxy points once and use them repeatedly.
 // Input parameter:
-//   dim         : Dimension of coordinate
+//   pt_dim      : Dimension of point coordinate
 //   krnl_dim    : Dimension of tensor kernel's return
 //   max_level   : Maximum level (included) of a H2 tree, (root level == 0)
 //   start_level : Minimum level that needs proxy points
@@ -21,7 +21,7 @@ extern "C" {
 // Output parameter:
 //   pp_  : Array of proxy points for each level
 void H2P_generate_proxy_point_ID(
-    const int dim, const int krnl_dim, const int max_level, const int start_level,
+    const int pt_dim, const int krnl_dim, const int max_level, const int start_level,
     DTYPE max_L, kernel_func_ptr kernel, H2P_dense_mat_t **pp_
 );
 
@@ -30,7 +30,7 @@ void H2P_generate_proxy_point_ID(
 // This function is isolated because if the enclosing box for all points are fixed,
 // we only need to generate proxy points once and use them repeatedly.
 // Input parameter:
-//   dim         : Dimension of coordinate
+//   pt_dim      : Dimension of point coordinate
 //   min_npts    : Minimum number of proxy points on the box surface
 //   max_level   : Maximum level (included) of a H2 tree, (root level == 0)
 //   start_level : Minimum level that needs proxy points
@@ -39,7 +39,7 @@ void H2P_generate_proxy_point_ID(
 // Output parameter:
 //   pp_  : Array of proxy points for each level
 void H2P_generate_proxy_point_surface(
-    const int dim, const int min_npts, const int max_level, const int start_level,
+    const int pt_dim, const int min_npts, const int max_level, const int start_level,
     DTYPE max_L, kernel_func_ptr kernel, H2P_dense_mat_t **pp_
 );
 

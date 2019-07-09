@@ -154,7 +154,7 @@ void H2P_matvec_init_y1(H2Pack_t h2pack)
 // Sum thread-local buffers to obtain final y1 results
 void H2P_matvec_sum_y1_thread(H2Pack_t h2pack)
 {
-    int n_node   = h2pack->n_node;
+    int n_node = h2pack->n_node;
     int n_thread = h2pack->n_thread;
     H2P_dense_mat_t *y1 = h2pack->y1;
     #pragma omp parallel num_threads(n_thread)
@@ -356,7 +356,7 @@ void H2P_matvec_intermediate_sweep_AOT(H2Pack_t h2pack, const DTYPE *x)
 // Need to calculate all B_{ij} matrices before using it
 void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
 {
-    int    dim           = h2pack->dim;
+    int    pt_dim        = h2pack->pt_dim;
     int    krnl_dim      = h2pack->krnl_dim;
     int    n_node        = h2pack->n_node;
     int    n_point       = h2pack->n_point;
@@ -364,7 +364,7 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
     int    n_r_adm_pair  = h2pack->n_r_adm_pair;
     int    *r_adm_pairs  = h2pack->r_adm_pairs;
     int    *node_level   = h2pack->node_level;
-    int    *cluster      = h2pack->cluster;
+    int    *pt_cluster   = h2pack->pt_cluster;
     int    *mat_cluster  = h2pack->mat_cluster;
     int    *node_n_r_adm = h2pack->node_n_r_adm;
     int    *B_nrow       = h2pack->B_nrow;
@@ -442,7 +442,7 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                         kernel(
                             J_coord[node0]->data + blk_pt_s, J_coord[node0]->ncol, blk_npt,
                             J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                            dim, Bi->data, Bi_ncol
+                            pt_dim, Bi->data, Bi_ncol
                         );
                         CBLAS_GEMV(
                             CblasRowMajor, CblasNoTrans, blk_nrow, Bi_ncol, 
@@ -463,8 +463,8 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                 //     downward sweep and can directly accumulate result to output vector
                 if (level0 > level1)
                 {
-                    int pt_s1   = cluster[node1 * 2];
-                    int num_pt1 = cluster[node1 * 2 + 1] - pt_s1 + 1;
+                    int pt_s1   = pt_cluster[node1 * 2];
+                    int num_pt1 = pt_cluster[node1 * 2 + 1] - pt_s1 + 1;
                     
                     int vec_s1  = mat_cluster[node1 * 2];
                     const DTYPE *x_spos = x + vec_s1;
@@ -484,7 +484,7 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                         kernel(
                             J_coord[node0]->data + blk_pt_s, J_coord[node0]->ncol, blk_npt,
                             coord + pt_s1, n_point, num_pt1, 
-                            dim, Bi->data, Bi_ncol
+                            pt_dim, Bi->data, Bi_ncol
                         );
                         CBLAS_GEMV(
                             CblasRowMajor, CblasNoTrans, blk_nrow, Bi_ncol, 
@@ -504,8 +504,8 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                 //     downward sweep and can directly accumulate result to output vector
                 if (level0 < level1)
                 {
-                    int pt_s0   = cluster[node0 * 2];
-                    int num_pt0 = cluster[node0 * 2 + 1] - pt_s0 + 1;
+                    int pt_s0   = pt_cluster[node0 * 2];
+                    int num_pt0 = pt_cluster[node0 * 2 + 1] - pt_s0 + 1;
                     
                     int vec_s0  = mat_cluster[node0 * 2];
                     const DTYPE *x_spos = x + vec_s0;
@@ -525,7 +525,7 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                         kernel(
                             coord + pt_s0 + blk_pt_s, n_point, blk_npt, 
                             J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                            dim, Bi->data, Bi_ncol
+                            pt_dim, Bi->data, Bi_ncol
                         );
                         CBLAS_GEMV(
                             CblasRowMajor, CblasNoTrans, blk_nrow, Bi_ncol, 
@@ -765,14 +765,14 @@ void H2P_matvec_dense_blocks_AOT(H2Pack_t h2pack, const DTYPE *x)
 // Need to calculate all D_{ij} matrices before using it
 void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
 {
-    int    dim             = h2pack->dim;
+    int    pt_dim          = h2pack->pt_dim;
     int    krnl_dim        = h2pack->krnl_dim;
     int    n_point         = h2pack->n_point;
     int    n_leaf_node     = h2pack->n_leaf_node;
     int    n_r_inadm_pair  = h2pack->n_r_inadm_pair;
     int    *r_inadm_pairs  = h2pack->r_inadm_pairs;
     int    *leaf_nodes     = h2pack->height_nodes;
-    int    *cluster        = h2pack->cluster;
+    int    *pt_cluster     = h2pack->pt_cluster;
     int    *mat_cluster    = h2pack->mat_cluster;
     int    *D_nrow         = h2pack->D_nrow;
     int    *D_ncol         = h2pack->D_ncol;
@@ -799,8 +799,8 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
             for (int i = D_blk0_s; i < D_blk0_e; i++)
             {
                 int node    = leaf_nodes[i];
-                int pt_s    = cluster[node * 2];
-                int num_pt  = cluster[node * 2 + 1] - pt_s + 1;
+                int pt_s    = pt_cluster[node * 2];
+                int num_pt  = pt_cluster[node * 2 + 1] - pt_s + 1;
                 int vec_s   = mat_cluster[node * 2];
                 int Di_nrow = D_nrow[i];
                 int Di_ncol = D_ncol[i];
@@ -820,7 +820,7 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
                     kernel(
                         coord + pt_s + blk_pt_s, n_point, blk_npt,
                         coord + pt_s, n_point, num_pt,
-                        dim, Di->data, Di_ncol
+                        pt_dim, Di->data, Di_ncol
                     );
                     CBLAS_GEMV(
                         CblasRowMajor, CblasNoTrans, blk_nrow, Di_ncol,
@@ -841,10 +841,10 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
             {
                 int node0   = r_inadm_pairs[2 * i];
                 int node1   = r_inadm_pairs[2 * i + 1];
-                int pt_s0   = cluster[2 * node0];
-                int pt_s1   = cluster[2 * node1];
-                int num_pt0 = cluster[2 * node0 + 1] - pt_s0 + 1;
-                int num_pt1 = cluster[2 * node1 + 1] - pt_s1 + 1;
+                int pt_s0   = pt_cluster[2 * node0];
+                int pt_s1   = pt_cluster[2 * node1];
+                int num_pt0 = pt_cluster[2 * node0 + 1] - pt_s0 + 1;
+                int num_pt1 = pt_cluster[2 * node1 + 1] - pt_s1 + 1;
                 int vec_s0  = mat_cluster[2 * node0];
                 int vec_s1  = mat_cluster[2 * node1];
                 int Di_nrow = D_nrow[n_leaf_node + i];
@@ -867,7 +867,7 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
                     kernel(
                         coord + pt_s0 + blk_pt_s, n_point, blk_npt,
                         coord + pt_s1, n_point, num_pt1,
-                        dim, Di->data, Di_ncol
+                        pt_dim, Di->data, Di_ncol
                     );
                     CBLAS_GEMV(
                         CblasRowMajor, CblasNoTrans, blk_nrow, Di_ncol,
@@ -905,7 +905,7 @@ void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
     double st, et;
     int krnl_mat_size = h2pack->krnl_mat_size;
     int n_thread = h2pack->n_thread;
-    int BD_JIT   = h2pack->BD_JIT;
+    int BD_JIT = h2pack->BD_JIT;
     
     // 1. Reset partial y result in each thread-local buffer to 0
     st = H2P_get_wtime_sec();

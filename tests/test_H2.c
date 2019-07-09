@@ -12,7 +12,7 @@
 
 struct H2P_test_params
 {
-    int   dim;
+    int   pt_dim;
     int   krnl_dim;
     int   n_point;
     int   krnl_mat_size;
@@ -203,10 +203,10 @@ void parse_params(int argc, char **argv)
     if (argc < 2)
     {
         printf("Kernel dimension   = ");
-        scanf("%d", &test_params.dim);
+        scanf("%d", &test_params.pt_dim);
     } else {
-        test_params.dim = atoi(argv[1]);
-        printf("Kernel dimension   = %d\n", test_params.dim);
+        test_params.pt_dim = atoi(argv[1]);
+        printf("Kernel dimension   = %d\n", test_params.pt_dim);
     }
     test_params.krnl_dim = 1;
     
@@ -253,19 +253,19 @@ void parse_params(int argc, char **argv)
         case 2: printf("Using Gaussian kernel : k(x, y) = exp(-||x - y||^2) \n"); break;
     }
     
-    test_params.coord = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * test_params.n_point * test_params.dim);
+    test_params.coord = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * test_params.n_point * test_params.pt_dim);
     assert(test_params.coord != NULL);
     
     // Note: coordinates need to be stored in column-major style, i.e. test_params.coord 
     // is row-major and each column stores the coordinate of a point. 
     if (argc < 7)
     {
-        DTYPE k = pow((DTYPE) test_params.n_point, 1.0 / (DTYPE) test_params.dim);
+        DTYPE k = pow((DTYPE) test_params.n_point, 1.0 / (DTYPE) test_params.pt_dim);
         if (test_params.kernel_id == 2) k = 1.0;
         for (int i = 0; i < test_params.n_point; i++)
         {
-            DTYPE *coord_i = test_params.coord + i * test_params.dim;
-            for (int j = 0; j < test_params.dim; j++)
+            DTYPE *coord_i = test_params.coord + i * test_params.pt_dim;
+            for (int j = 0; j < test_params.pt_dim; j++)
                 coord_i[j] = k * drand48();
         }
         /*
@@ -273,9 +273,9 @@ void parse_params(int argc, char **argv)
         for (int i = 0; i < test_params.n_point; i++)
         {
             DTYPE *coord_i = test_params.coord + i;
-            for (int j = 0; j < test_params.dim-1; j++) 
+            for (int j = 0; j < test_params.pt_dim-1; j++) 
                 fprintf(ouf, "% .15lf, ", coord_i[j * test_params.n_point]]);
-            fprintf(ouf, "% .15lf\n", coord_i[(test_params.dim-1) * test_params.n_point]);
+            fprintf(ouf, "% .15lf\n", coord_i[(test_params.pt_dim-1) * test_params.n_point]);
         }
         fclose(ouf);
         */
@@ -284,14 +284,14 @@ void parse_params(int argc, char **argv)
         for (int i = 0; i < test_params.n_point; i++)
         {
             DTYPE *coord_i = test_params.coord + i;
-            for (int j = 0; j < test_params.dim-1; j++) 
+            for (int j = 0; j < test_params.pt_dim-1; j++) 
                 fscanf(inf, "%lf,", &coord_i[j * test_params.n_point]);
-            fscanf(inf, "%lf\n", &coord_i[(test_params.dim-1) * test_params.n_point]);
+            fscanf(inf, "%lf\n", &coord_i[(test_params.pt_dim-1) * test_params.n_point]);
         }
         fclose(inf);
     }
     
-    if (test_params.dim == 3) 
+    if (test_params.pt_dim == 3) 
     {
         switch (test_params.kernel_id)
         {
@@ -300,7 +300,7 @@ void parse_params(int argc, char **argv)
             case 2: test_params.kernel = Gaussian_kernel_3d; break;
         }
     }
-    if (test_params.dim == 2) 
+    if (test_params.pt_dim == 2) 
     {
         switch (test_params.kernel_id)
         {
@@ -312,7 +312,7 @@ void parse_params(int argc, char **argv)
 }
 
 void direct_nbody(
-    kernel_func_ptr kernel, const int dim, const int krnl_dim, 
+    kernel_func_ptr kernel, const int pt_dim, const int krnl_dim, 
     const int n_point, const DTYPE *coord, const DTYPE *x, DTYPE *y
 )
 {
@@ -342,7 +342,7 @@ void direct_nbody(
                 kernel(
                     coord + ix, n_point, blk_nx,
                     coord + iy, n_point, blk_ny,
-                    dim, thread_A_blk, blk_ny * krnl_dim
+                    pt_dim, thread_A_blk, blk_ny * krnl_dim
                 );
                 CBLAS_GEMV(
                     CblasRowMajor, CblasNoTrans, blk_nx * krnl_dim, blk_ny * krnl_dim,
@@ -367,7 +367,7 @@ int main(int argc, char **argv)
 
     H2Pack_t h2pack;
     
-    H2P_init(&h2pack, test_params.dim, test_params.krnl_dim, QR_REL_NRM, &test_params.rel_tol);
+    H2P_init(&h2pack, test_params.pt_dim, test_params.krnl_dim, QR_REL_NRM, &test_params.rel_tol);
     
     H2P_partition_points(h2pack, test_params.n_point, test_params.coord, 0, 0);
     
@@ -377,7 +377,7 @@ int main(int argc, char **argv)
     {
         DTYPE *coord_s_i = h2pack->coord + i;
         DTYPE *coord_i   = test_params.coord + h2pack->coord_idx[i];
-        for (int j = 0; j < test_params.dim; j++)
+        for (int j = 0; j < test_params.pt_dim; j++)
         {
             int idx_j = j * test_params.n_point;
             coord_diff_sum += DABS(coord_s_i[idx_j] - coord_i[idx_j]);
@@ -386,10 +386,10 @@ int main(int argc, char **argv)
     printf("Point index permutation results %s", coord_diff_sum < 1e-15 ? "are correct\n" : "are wrong\n");
 
     H2P_dense_mat_t *pp;
-    DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * test_params.dim + test_params.dim];
+    DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * test_params.pt_dim + test_params.pt_dim];
     st = H2P_get_wtime_sec();
     H2P_generate_proxy_point_ID(
-        test_params.dim, test_params.krnl_dim, h2pack->max_level, 
+        test_params.pt_dim, test_params.krnl_dim, h2pack->max_level, 
         2, max_L, test_params.kernel, &pp
     );
     et = H2P_get_wtime_sec();
@@ -407,7 +407,7 @@ int main(int argc, char **argv)
     
     // Get reference results
     direct_nbody(
-        test_params.kernel, test_params.dim, test_params.krnl_dim, 
+        test_params.kernel, test_params.pt_dim, test_params.krnl_dim, 
         test_params.n_point, h2pack->coord, x, y0
     );
     

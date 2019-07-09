@@ -11,16 +11,16 @@ extern "C" {
 // ========================== H2 tree linked list node ========================== //
 struct H2P_tree_node
 {
-    int   n_child;     // Number of children nodes 
-    int   n_node;      // Number of nodes this sub-tree has
-    int   po_idx;      // Post-order traversal index of this node
-    int   level;       // Level of this node on the tree (root == 0)
-    int   height;      // Height of this node on the tree (leaf node == 0)
-    int   cluster[2];  // The start and end indices of points belong to this node
-    void  **children;  // Size 2^dim, all children nodes of this node
-    DTYPE *enbox;      // Size 2*dim, box that encloses all points of this node. 
-                       // enbox[0 : dim-1] are the smallest corner coordinate,
-                       // enbox[dim : 2*dim-1] are the size of this box.
+    int   n_child;        // Number of children nodes 
+    int   n_node;         // Number of nodes this sub-tree has
+    int   po_idx;         // Post-order traversal index of this node
+    int   level;          // Level of this node on the tree (root == 0)
+    int   height;         // Height of this node on the tree (leaf node == 0)
+    int   pt_cluster[2];  // The start and end indices of points belong to this node
+    void  **children;     // Size 2^dim, all children nodes of this node
+    DTYPE *enbox;         // Size 2*dim, box that encloses all points of this node. 
+                          // enbox[0 : dim-1] are the smallest corner coordinate,
+                          // enbox[dim : 2*dim-1] are the size of this box.
 };
 typedef struct H2P_tree_node* H2P_tree_node_t;
 

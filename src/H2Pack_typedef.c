@@ -10,15 +10,18 @@
 #include "H2Pack_aux_structs.h"
 
 // Initialize a H2Pack structure
-void H2P_init(H2Pack_t *h2pack_, const int dim, const int krnl_dim, const int QR_stop_type, void *QR_stop_param)
+void H2P_init(
+    H2Pack_t *h2pack_, const int pt_dim, const int krnl_dim, 
+    const int QR_stop_type, void *QR_stop_param
+)
 {
     H2Pack_t h2pack = (H2Pack_t) malloc(sizeof(struct H2Pack));
     assert(h2pack != NULL);
     
     h2pack->n_thread  = omp_get_max_threads();
-    h2pack->dim       = dim;
+    h2pack->pt_dim    = pt_dim;
     h2pack->krnl_dim  = krnl_dim;
-    h2pack->max_child = 1 << dim;
+    h2pack->max_child = 1 << pt_dim;
     h2pack->n_matvec  = 0;
     memset(h2pack->timers,   0, sizeof(double) * 9);
     memset(h2pack->mat_size, 0, sizeof(size_t) * 8);
@@ -31,7 +34,7 @@ void H2P_init(H2Pack_t *h2pack_, const int dim, const int krnl_dim, const int QR
     
     h2pack->parent        = NULL;
     h2pack->children      = NULL;
-    h2pack->cluster       = NULL;
+    h2pack->pt_cluster    = NULL;
     h2pack->mat_cluster   = NULL;
     h2pack->n_child       = NULL;
     h2pack->node_level    = NULL;
@@ -74,7 +77,7 @@ void H2P_destroy(H2Pack_t h2pack)
 {
     free(h2pack->parent);
     free(h2pack->children);
-    free(h2pack->cluster);
+    free(h2pack->pt_cluster);
     free(h2pack->mat_cluster);
     free(h2pack->n_child);
     free(h2pack->node_level);

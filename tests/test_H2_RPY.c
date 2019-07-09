@@ -12,7 +12,7 @@
 
 struct H2P_test_params
 {
-    int   dim;
+    int   pt_dim;
     int   krnl_dim;
     int   n_point;
     int   krnl_mat_size;
@@ -95,7 +95,7 @@ void RPY_kernel_3d(
 
 void parse_params(int argc, char **argv)
 {
-    test_params.dim = 3;
+    test_params.pt_dim = 3;
     test_params.krnl_dim = 3;
     
     printf("Using 3D RPY kernel\n");
@@ -127,18 +127,18 @@ void parse_params(int argc, char **argv)
         printf("Just-In-Time B & D = %d\n", test_params.BD_JIT);
     }
     
-    test_params.coord = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * test_params.n_point * test_params.dim);
+    test_params.coord = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * test_params.n_point * test_params.pt_dim);
     assert(test_params.coord != NULL);
     
     // Note: coordinates need to be stored in column-major style, i.e. test_params.coord 
     // is row-major and each column stores the coordinate of a point. 
     if (argc < 5)
     {
-        DTYPE k = pow((DTYPE) test_params.n_point, 1.0 / (DTYPE) test_params.dim);
+        DTYPE k = pow((DTYPE) test_params.n_point, 1.0 / (DTYPE) test_params.pt_dim);
         for (int i = 0; i < test_params.n_point; i++)
         {
-            DTYPE *coord_i = test_params.coord + i * test_params.dim;
-            for (int j = 0; j < test_params.dim; j++)
+            DTYPE *coord_i = test_params.coord + i * test_params.pt_dim;
+            for (int j = 0; j < test_params.pt_dim; j++)
                 coord_i[j] = k * drand48();
         }
         /*
@@ -146,9 +146,9 @@ void parse_params(int argc, char **argv)
         for (int i = 0; i < test_params.n_point; i++)
         {
             DTYPE *coord_i = test_params.coord + i;
-            for (int j = 0; j < test_params.dim-1; j++) 
+            for (int j = 0; j < test_params.pt_dim-1; j++) 
                 fprintf(ouf, "% .15lf, ", coord_i[j * test_params.n_point]]);
-            fprintf(ouf, "% .15lf\n", coord_i[(test_params.dim-1) * test_params.n_point]);
+            fprintf(ouf, "% .15lf\n", coord_i[(test_params.pt_dim-1) * test_params.n_point]);
         }
         fclose(ouf);
         */
@@ -157,9 +157,9 @@ void parse_params(int argc, char **argv)
         for (int i = 0; i < test_params.n_point; i++)
         {
             DTYPE *coord_i = test_params.coord + i;
-            for (int j = 0; j < test_params.dim-1; j++) 
+            for (int j = 0; j < test_params.pt_dim-1; j++) 
                 fscanf(inf, "%lf,", &coord_i[j * test_params.n_point]);
-            fscanf(inf, "%lf\n", &coord_i[(test_params.dim-1) * test_params.n_point]);
+            fscanf(inf, "%lf\n", &coord_i[(test_params.pt_dim-1) * test_params.n_point]);
         }
         fclose(inf);
     }
@@ -168,7 +168,7 @@ void parse_params(int argc, char **argv)
 }
 
 void direct_nbody(
-    kernel_func_ptr kernel, const int dim, const int krnl_dim, 
+    kernel_func_ptr kernel, const int pt_dim, const int krnl_dim, 
     const int n_point, const DTYPE *coord, const DTYPE *x, DTYPE *y
 )
 {
@@ -198,7 +198,7 @@ void direct_nbody(
                 kernel(
                     coord + ix, n_point, blk_nx,
                     coord + iy, n_point, blk_ny,
-                    dim, thread_A_blk, blk_ny * krnl_dim
+                    pt_dim, thread_A_blk, blk_ny * krnl_dim
                 );
                 CBLAS_GEMV(
                     CblasRowMajor, CblasNoTrans, blk_nx * krnl_dim, blk_ny * krnl_dim,
@@ -224,7 +224,7 @@ int main(int argc, char **argv)
 
     H2Pack_t h2pack;
     
-    H2P_init(&h2pack, test_params.dim, test_params.krnl_dim, QR_REL_NRM, &test_params.rel_tol);
+    H2P_init(&h2pack, test_params.pt_dim, test_params.krnl_dim, QR_REL_NRM, &test_params.rel_tol);
     
     H2P_partition_points(h2pack, test_params.n_point, test_params.coord, 0, 0);
     
@@ -234,7 +234,7 @@ int main(int argc, char **argv)
     {
         DTYPE *coord_s_i = h2pack->coord + i;
         DTYPE *coord_i   = test_params.coord + h2pack->coord_idx[i];
-        for (int j = 0; j < test_params.dim; j++)
+        for (int j = 0; j < test_params.pt_dim; j++)
         {
             int idx_j = j * test_params.n_point;
             coord_diff_sum += DABS(coord_s_i[idx_j] - coord_i[idx_j]);
@@ -243,41 +243,14 @@ int main(int argc, char **argv)
     printf("Point index permutation results %s", coord_diff_sum < 1e-15 ? "are correct\n" : "are wrong\n");
 
     H2P_dense_mat_t *pp;
-    DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * test_params.dim + test_params.dim];
+    DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * test_params.pt_dim + test_params.pt_dim];
     st = H2P_get_wtime_sec();
     H2P_generate_proxy_point_surface(
-        test_params.dim, 600, h2pack->max_level, 
+        test_params.pt_dim, 600, h2pack->max_level, 
         2, max_L, test_params.kernel, &pp
     );
-    /*
-    pp = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * (h2pack->max_level + 1));
-    assert(pp != NULL);
-    for (int i = 0; i <= h2pack->max_level; i++) pp[i] = NULL;
-    H2P_dense_mat_init(&pp[2], 600, 3);
-    H2P_dense_mat_t pp2 = pp[2];
-    DTYPE *pp2_x = pp2->data;
-    DTYPE *pp2_y = pp2->data + pp2->nrow;
-    DTYPE *pp2_z = pp2->data + pp2->nrow * 2;
-    FILE *inf = fopen("m_pp2.txt", "r");
-    for (int i = 0; i < 600; i++)
-        fscanf(inf, "%lf, %lf, %lf\n", pp2_x + i, pp2_y + i, pp2_z + i);
-    fclose(inf);
-    */
     et = H2P_get_wtime_sec();
-    printf("Proxy point generation used %.3lf (s)\n", et - st);
-    
-    /*
-    H2P_dense_mat_t pp2 = pp[2];
-    ouf = fopen("add_c_pp.m", "w");
-    fprintf(ouf, "c_pp = [\n");
-    DTYPE *pp2_x = pp2->data;
-    DTYPE *pp2_y = pp2->data + pp2->nrow;
-    DTYPE *pp2_z = pp2->data + pp2->nrow * 2;
-    for (int i = 0; i < pp2->nrow; i++) 
-        fprintf(ouf, "% .15lf % .15lf % .15lf\n", pp2_x[i], pp2_y[i], pp2_z[i]);
-    fprintf(ouf, "];\n");
-    fclose(ouf);
-    */
+    //printf("Proxy point generation used %.3lf (s)\n", et - st);
     
     H2P_build(h2pack, test_params.kernel, pp, test_params.BD_JIT);
     
@@ -291,16 +264,16 @@ int main(int argc, char **argv)
     
     // Get reference results
     direct_nbody(
-        test_params.kernel, test_params.dim, test_params.krnl_dim, 
+        test_params.kernel, test_params.pt_dim, test_params.krnl_dim, 
         test_params.n_point, h2pack->coord, x, y0
     );
     
     // Warm up, reset timers, and test the matvec performance
     H2P_matvec(h2pack, x, y1); 
-    //h2pack->n_matvec = 0;
-    //memset(h2pack->timers + 4, 0, sizeof(double) * 5);
-    //for (int i = 0; i < 10; i++) 
-    //    H2P_matvec(h2pack, x, y1);
+    h2pack->n_matvec = 0;
+    memset(h2pack->timers + 4, 0, sizeof(double) * 5);
+    for (int i = 0; i < 10; i++) 
+        H2P_matvec(h2pack, x, y1);
 
     H2P_print_statistic(h2pack);
     

@@ -57,33 +57,33 @@ void Coulomb_kernel_3d(
 }
 
 void Coulomb_kernel_3d_matvec(
-    const double *coord0, const int ld0, const int n0,
-    const double *coord1, const int ld1, const int n1,
-    const double *x_in_0, const double *x_in_1, 
-    double *x_out_0, double *x_out_1
+    const DTYPE *coord0, const int ld0, const int n0,
+    const DTYPE *coord1, const int ld1, const int n1,
+    const DTYPE *x_in_0, const DTYPE *x_in_1, 
+    DTYPE *x_out_0, DTYPE *x_out_1
 )
 {
-    const double *x0 = coord0 + ld0 * 0;
-    const double *y0 = coord0 + ld0 * 1;
-    const double *z0 = coord0 + ld0 * 2;
-    const double *x1 = coord1 + ld1 * 0;
-    const double *y1 = coord1 + ld1 * 1;
-    const double *z1 = coord1 + ld1 * 2;
+    const DTYPE *x0 = coord0 + ld0 * 0;
+    const DTYPE *y0 = coord0 + ld0 * 1;
+    const DTYPE *z0 = coord0 + ld0 * 2;
+    const DTYPE *x1 = coord1 + ld1 * 0;
+    const DTYPE *y1 = coord1 + ld1 * 1;
+    const DTYPE *z1 = coord1 + ld1 * 2;
     if (x_in_1 == NULL)
     {
         for (int i = 0; i < n0; i++)
         {
-            const double x0_i = x0[i];
-            const double y0_i = y0[i];
-            const double z0_i = z0[i];
-            double sum = 0.0;
+            const DTYPE x0_i = x0[i];
+            const DTYPE y0_i = y0[i];
+            const DTYPE z0_i = z0[i];
+            DTYPE sum = 0.0;
             #pragma omp simd
             for (int j = 0; j < n1; j++)
             {
-                double dx = x0_i - x1[j];
-                double dy = y0_i - y1[j];
-                double dz = z0_i - z1[j];
-                double r2 = dx * dx + dy * dy + dz * dz;
+                DTYPE dx = x0_i - x1[j];
+                DTYPE dy = y0_i - y1[j];
+                DTYPE dz = z0_i - z1[j];
+                DTYPE r2 = dx * dx + dy * dy + dz * dz;
                 if (r2 < 1e-20) r2 = 1.0;
                 sum += x_in_0[j] / DSQRT(r2);
             }
@@ -92,20 +92,20 @@ void Coulomb_kernel_3d_matvec(
     } else {
         for (int i = 0; i < n0; i++)
         {
-            const double x0_i = x0[i];
-            const double y0_i = y0[i];
-            const double z0_i = z0[i];
-            const double x_in_1_i = x_in_1[i];
-            double sum = 0.0;
+            const DTYPE x0_i = x0[i];
+            const DTYPE y0_i = y0[i];
+            const DTYPE z0_i = z0[i];
+            const DTYPE x_in_1_i = x_in_1[i];
+            DTYPE sum = 0.0;
             #pragma omp simd
             for (int j = 0; j < n1; j++)
             {
-                double dx = x0_i - x1[j];
-                double dy = y0_i - y1[j];
-                double dz = z0_i - z1[j];
-                double r2 = dx * dx + dy * dy + dz * dz;
+                DTYPE dx = x0_i - x1[j];
+                DTYPE dy = y0_i - y1[j];
+                DTYPE dz = z0_i - z1[j];
+                DTYPE r2 = dx * dx + dy * dy + dz * dz;
                 if (r2 < 1e-20) r2 = 1.0;
-                double inv_d = 1.0 / DSQRT(r2);
+                DTYPE inv_d = 1.0 / DSQRT(r2);
                 sum += x_in_0[j] * inv_d;
                 x_out_1[j] += x_in_1_i * inv_d;
             }
@@ -204,29 +204,29 @@ void Coulomb_kernel_2d(
 }
 
 void Coulomb_kernel_2d_matvec(
-    const double *coord0, const int ld0, const int n0,
-    const double *coord1, const int ld1, const int n1,
-    const double *x_in_0, const double *x_in_1, 
-    double *x_out_0, double *x_out_1
+    const DTYPE *coord0, const int ld0, const int n0,
+    const DTYPE *coord1, const int ld1, const int n1,
+    const DTYPE *x_in_0, const DTYPE *x_in_1, 
+    DTYPE *x_out_0, DTYPE *x_out_1
 )
 {
-    const double *x0 = coord0 + ld0 * 0;
-    const double *y0 = coord0 + ld0 * 1;
-    const double *x1 = coord1 + ld1 * 0;
-    const double *y1 = coord1 + ld1 * 1;
+    const DTYPE *x0 = coord0 + ld0 * 0;
+    const DTYPE *y0 = coord0 + ld0 * 1;
+    const DTYPE *x1 = coord1 + ld1 * 0;
+    const DTYPE *y1 = coord1 + ld1 * 1;
     if (x_in_1 == NULL)
     {
         for (int i = 0; i < n0; i++)
         {
-            const double x0_i = x0[i];
-            const double y0_i = y0[i];
-            double sum = 0.0;
+            const DTYPE x0_i = x0[i];
+            const DTYPE y0_i = y0[i];
+            DTYPE sum = 0.0;
             #pragma omp simd
             for (int j = 0; j < n1; j++)
             {
-                double dx = x0_i - x1[j];
-                double dy = y0_i - y1[j];
-                double r2 = dx * dx + dy * dy;
+                DTYPE dx = x0_i - x1[j];
+                DTYPE dy = y0_i - y1[j];
+                DTYPE r2 = dx * dx + dy * dy;
                 if (r2 < 1e-20) r2 = 1.0;
                 sum += x_in_0[j] / DSQRT(r2);
             }
@@ -235,18 +235,18 @@ void Coulomb_kernel_2d_matvec(
     } else {
         for (int i = 0; i < n0; i++)
         {
-            const double x0_i = x0[i];
-            const double y0_i = y0[i];
-            const double x_in_1_i = x_in_1[i];
-            double sum = 0.0;
+            const DTYPE x0_i = x0[i];
+            const DTYPE y0_i = y0[i];
+            const DTYPE x_in_1_i = x_in_1[i];
+            DTYPE sum = 0.0;
             #pragma omp simd
             for (int j = 0; j < n1; j++)
             {
-                double dx = x0_i - x1[j];
-                double dy = y0_i - y1[j];
-                double r2 = dx * dx + dy * dy;
+                DTYPE dx = x0_i - x1[j];
+                DTYPE dy = y0_i - y1[j];
+                DTYPE r2 = dx * dx + dy * dy;
                 if (r2 < 1e-20) r2 = 1.0;
-                double inv_d = 1.0 / DSQRT(r2);
+                DTYPE inv_d = 1.0 / DSQRT(r2);
                 sum += x_in_0[j] * inv_d;
                 x_out_1[j] += x_in_1_i * inv_d;
             }
@@ -474,7 +474,7 @@ void direct_nbody(
         nx_blk_end = nx_blk_start + nx_blk_len;
         DTYPE *thread_A_blk = thread_buffs + tid * thread_blk_size;
 
-        memset(y + nx_blk_start, 0, sizeof(DTYPE) * nx_blk_len);
+        memset(y + nx_blk_start * krnl_dim, 0, sizeof(DTYPE) * nx_blk_len * krnl_dim);
         
         for (int ix = nx_blk_start; ix < nx_blk_end; ix += nx_blk_size)
         {

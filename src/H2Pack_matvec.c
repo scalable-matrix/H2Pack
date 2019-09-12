@@ -375,7 +375,7 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
     H2P_dense_mat_t *y0  = h2pack->y0;
     H2P_dense_mat_t *U   = h2pack->U;
     H2P_dense_mat_t *J_coord = h2pack->J_coord;
-    kernel_func_ptr kernel   = h2pack->kernel;
+    kernel_eval_fptr krnl_eval = h2pack->krnl_eval;
 
     // 1. Initialize y1 
     H2P_matvec_init_y1(h2pack);
@@ -440,7 +440,7 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                         int blk_npt = (blk_pt_s + Bi_blk_npt) > Bi_npt_row ? Bi_npt_row - blk_pt_s : Bi_blk_npt;
                         int blk_srow = blk_pt_s * krnl_dim;
                         int blk_nrow = blk_npt * krnl_dim;
-                        kernel(
+                        krnl_eval(
                             J_coord[node0]->data + blk_pt_s, J_coord[node0]->ncol, blk_npt,
                             J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
                             Bi->data, Bi_ncol
@@ -482,7 +482,7 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                         int blk_npt = (blk_pt_s + Bi_blk_npt) > Bi_npt_row ? Bi_npt_row - blk_pt_s : Bi_blk_npt;
                         int blk_srow = blk_pt_s * krnl_dim;
                         int blk_nrow = blk_npt * krnl_dim;
-                        kernel(
+                        krnl_eval(
                             J_coord[node0]->data + blk_pt_s, J_coord[node0]->ncol, blk_npt,
                             coord + pt_s1, n_point, node1_npt, 
                             Bi->data, Bi_ncol
@@ -523,7 +523,7 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                         int blk_npt = (blk_pt_s + Bi_blk_npt) > Bi_npt_row ? Bi_npt_row - blk_pt_s : Bi_blk_npt;
                         int blk_srow = blk_pt_s * krnl_dim;
                         int blk_nrow = blk_npt * krnl_dim;
-                        kernel(
+                        krnl_eval(
                             coord + pt_s0 + blk_pt_s, n_point, blk_npt, 
                             J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
                             Bi->data, Bi_ncol
@@ -779,9 +779,9 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
     int    *D_nrow         = h2pack->D_nrow;
     int    *D_ncol         = h2pack->D_ncol;
     DTYPE  *coord          = h2pack->coord;
-    H2P_int_vec_t   D_blk0 = h2pack->D_blk0;
-    H2P_int_vec_t   D_blk1 = h2pack->D_blk1;
-    kernel_func_ptr kernel = h2pack->kernel;
+    H2P_int_vec_t    D_blk0 = h2pack->D_blk0;
+    H2P_int_vec_t    D_blk1 = h2pack->D_blk1;
+    kernel_eval_fptr krnl_eval = h2pack->krnl_eval;
     
     const int n_D0_blk = D_blk0->length;
     const int n_D1_blk = D_blk1->length;
@@ -820,7 +820,7 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
                     int blk_npt = (blk_pt_s + Di_blk_npt) > Di_npt_row ? Di_npt_row - blk_pt_s : Di_blk_npt;
                     int blk_srow = blk_pt_s * krnl_dim;
                     int blk_nrow = blk_npt * krnl_dim;
-                    kernel(
+                    krnl_eval(
                         coord + pt_s + blk_pt_s, n_point, blk_npt,
                         coord + pt_s, n_point, node_npt,
                         Di->data, Di_ncol
@@ -868,7 +868,7 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
                     int blk_npt = (blk_pt_s + Di_blk_npt) > Di_npt_row ? Di_npt_row - blk_pt_s : Di_blk_npt;
                     int blk_srow = blk_pt_s * krnl_dim;
                     int blk_nrow = blk_npt * krnl_dim;
-                    kernel(
+                    krnl_eval(
                         coord + pt_s0 + blk_pt_s, n_point, blk_npt,
                         coord + pt_s1, n_point, node1_npt,
                         Di->data, Di_ncol

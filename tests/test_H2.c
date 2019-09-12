@@ -20,7 +20,7 @@ struct H2P_test_params
     int   kernel_id;
     DTYPE rel_tol;
     DTYPE *coord;
-    kernel_func_ptr kernel;
+    kernel_eval_fptr krnl_eval;
 };
 struct H2P_test_params test_params;
 
@@ -295,24 +295,24 @@ void parse_params(int argc, char **argv)
     {
         switch (test_params.kernel_id)
         {
-            case 0: test_params.kernel =  Coulomb_kernel_3d; break;
-            case 1: test_params.kernel =  Laplace_kernel_3d; break;
-            case 2: test_params.kernel = Gaussian_kernel_3d; break;
+            case 0: test_params.krnl_eval =  Coulomb_kernel_3d; break;
+            case 1: test_params.krnl_eval =  Laplace_kernel_3d; break;
+            case 2: test_params.krnl_eval = Gaussian_kernel_3d; break;
         }
     }
     if (test_params.pt_dim == 2) 
     {
         switch (test_params.kernel_id)
         {
-            case 0: test_params.kernel =  Coulomb_kernel_2d; break;
-            case 1: test_params.kernel =  Laplace_kernel_2d; break;
-            case 2: test_params.kernel = Gaussian_kernel_2d; break;
+            case 0: test_params.krnl_eval =  Coulomb_kernel_2d; break;
+            case 1: test_params.krnl_eval =  Laplace_kernel_2d; break;
+            case 2: test_params.krnl_eval = Gaussian_kernel_2d; break;
         }
     }
 }
 
 void direct_nbody(
-    kernel_func_ptr kernel, const int krnl_dim, const int n_point, 
+    kernel_eval_fptr krnl_eval, const int krnl_dim, const int n_point, 
     const DTYPE *coord, const DTYPE *x, DTYPE *y
 )
 {
@@ -339,7 +339,7 @@ void direct_nbody(
             {
                 DTYPE beta = (iy > 0) ? 1.0 : 0.0;
                 int blk_ny = (iy + ny_blk_size > n_point) ? n_point - iy : ny_blk_size;
-                kernel(
+                krnl_eval(
                     coord + ix, n_point, blk_nx,
                     coord + iy, n_point, blk_ny,
                     thread_A_blk, blk_ny * krnl_dim
@@ -390,12 +390,12 @@ int main(int argc, char **argv)
     st = H2P_get_wtime_sec();
     H2P_generate_proxy_point_ID(
         test_params.pt_dim, test_params.krnl_dim, h2pack->max_level, 
-        2, max_L, test_params.kernel, &pp
+        2, max_L, test_params.krnl_eval, &pp
     );
     et = H2P_get_wtime_sec();
     printf("H2Pack generate proxy point used %.3lf (s)\n", et - st);
     
-    H2P_build(h2pack, test_params.kernel, pp, test_params.BD_JIT);
+    H2P_build(h2pack, test_params.krnl_eval, pp, test_params.BD_JIT);
     
     int nthreads = omp_get_max_threads();
     DTYPE *x, *y0, *y1, *tb;
@@ -407,7 +407,7 @@ int main(int argc, char **argv)
     
     // Get reference results
     direct_nbody(
-        test_params.kernel, test_params.krnl_dim, 
+        test_params.krnl_eval, test_params.krnl_dim, 
         test_params.n_point, h2pack->coord, x, y0
     );
     

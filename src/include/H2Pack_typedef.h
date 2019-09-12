@@ -9,7 +9,8 @@
 extern "C" {
 #endif
 
-// Pointer to a symmetry kernel function
+// Pointer to function that evaluates a kernel matrix using giving sets of points.
+// The kernel function must by stmmetric.
 // Input parameters:
 //   coord0 : Matrix, size dim-by-ld0, coordinates of the 1st point set
 //   ld0    : Leading dimension of coord0, should be >= n0
@@ -20,7 +21,7 @@ extern "C" {
 //   ldm    : Leading dimension of the kernel matrix
 // Output parameter:
 //   mat : Obtained kernel matrix, size n0-by-ld1
-typedef void (*kernel_func_ptr) (
+typedef void (*kernel_eval_fptr) (
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
     DTYPE *mat, const int ldm
@@ -88,7 +89,7 @@ struct H2Pack
     H2P_dense_mat_t  *y0;       // Size n_node, temporary arrays used in matvec
     H2P_dense_mat_t  *y1;       // Size n_node, temporary arrays used in matvec
     H2P_thread_buf_t *tb;       // Size n_thread, thread-local buffer
-    kernel_func_ptr  kernel;    // Pointer to the kernel function
+    kernel_eval_fptr krnl_eval; // Pointer to the kernel function
 
     // Statistic data
     int    n_matvec;            // Number of performed matvec

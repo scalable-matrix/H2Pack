@@ -992,13 +992,22 @@ void H2P_build_D(H2Pack_t h2pack)
 }
 
 // Build H2 representation with a kernel function
-void H2P_build(H2Pack_t h2pack, kernel_eval_fptr krnl_eval, H2P_dense_mat_t *pp, const int BD_JIT)
+void H2P_build(
+    H2Pack_t h2pack, kernel_eval_fptr krnl_eval, H2P_dense_mat_t *pp, 
+    const int BD_JIT, kernel_matvec_fptr krnl_matvec
+)
 {
     double st, et;
 
-    h2pack->krnl_eval = krnl_eval;
-    h2pack->pp        = pp;
-    h2pack->BD_JIT    = BD_JIT;
+    h2pack->krnl_eval   = krnl_eval;
+    h2pack->pp          = pp;
+    h2pack->BD_JIT      = BD_JIT;
+    h2pack->krnl_matvec = krnl_matvec;
+    if (BD_JIT == 1 && krnl_matvec == NULL) 
+    {
+        printf("[FATAL] Must provide a kernel_matvec_fptr for using BD_JIT in matvec!\n");
+        assert(krnl_matvec != NULL);
+    }
 
     // 1. Build projection matrices and skeleton row sets
     st = H2P_get_wtime_sec();

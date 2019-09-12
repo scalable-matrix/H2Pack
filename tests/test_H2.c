@@ -20,7 +20,8 @@ struct H2P_test_params
     int   kernel_id;
     DTYPE rel_tol;
     DTYPE *coord;
-    kernel_eval_fptr krnl_eval;
+    kernel_eval_fptr   krnl_eval;
+    kernel_matvec_fptr krnl_matvec;
 };
 struct H2P_test_params test_params;
 
@@ -51,6 +52,64 @@ void Coulomb_kernel_3d(
             DTYPE r2 = dx * dx + dy * dy + dz * dz;
             if (r2 < 1e-20) r2 = 1.0;
             mat_i_row[j] = 1.0 / DSQRT(r2);
+        }
+    }
+}
+
+void Coulomb_kernel_3d_matvec(
+    const double *coord0, const int ld0, const int n0,
+    const double *coord1, const int ld1, const int n1,
+    const double *x_in_0, const double *x_in_1, 
+    double *x_out_0, double *x_out_1
+)
+{
+    const double *x0 = coord0 + ld0 * 0;
+    const double *y0 = coord0 + ld0 * 1;
+    const double *z0 = coord0 + ld0 * 2;
+    const double *x1 = coord1 + ld1 * 0;
+    const double *y1 = coord1 + ld1 * 1;
+    const double *z1 = coord1 + ld1 * 2;
+    if (x_in_1 == NULL)
+    {
+        for (int i = 0; i < n0; i++)
+        {
+            const double x0_i = x0[i];
+            const double y0_i = y0[i];
+            const double z0_i = z0[i];
+            double sum = 0.0;
+            #pragma omp simd
+            for (int j = 0; j < n1; j++)
+            {
+                double dx = x0_i - x1[j];
+                double dy = y0_i - y1[j];
+                double dz = z0_i - z1[j];
+                double r2 = dx * dx + dy * dy + dz * dz;
+                if (r2 < 1e-20) r2 = 1.0;
+                sum += x_in_0[j] / DSQRT(r2);
+            }
+            x_out_0[i] += sum;
+        }
+    } else {
+        for (int i = 0; i < n0; i++)
+        {
+            const double x0_i = x0[i];
+            const double y0_i = y0[i];
+            const double z0_i = z0[i];
+            const double x_in_1_i = x_in_1[i];
+            double sum = 0.0;
+            #pragma omp simd
+            for (int j = 0; j < n1; j++)
+            {
+                double dx = x0_i - x1[j];
+                double dy = y0_i - y1[j];
+                double dz = z0_i - z1[j];
+                double r2 = dx * dx + dy * dy + dz * dz;
+                if (r2 < 1e-20) r2 = 1.0;
+                double inv_d = 1.0 / DSQRT(r2);
+                sum += x_in_0[j] * inv_d;
+                x_out_1[j] += x_in_1_i * inv_d;
+            }
+            x_out_0[i] += sum;
         }
     }
 }
@@ -140,6 +199,58 @@ void Coulomb_kernel_2d(
             DTYPE r2 = dx * dx + dy * dy;
             if (r2 < 1e-20) r2 = 1.0;
             mat_i_row[j] = 1.0 / DSQRT(r2);
+        }
+    }
+}
+
+void Coulomb_kernel_2d_matvec(
+    const double *coord0, const int ld0, const int n0,
+    const double *coord1, const int ld1, const int n1,
+    const double *x_in_0, const double *x_in_1, 
+    double *x_out_0, double *x_out_1
+)
+{
+    const double *x0 = coord0 + ld0 * 0;
+    const double *y0 = coord0 + ld0 * 1;
+    const double *x1 = coord1 + ld1 * 0;
+    const double *y1 = coord1 + ld1 * 1;
+    if (x_in_1 == NULL)
+    {
+        for (int i = 0; i < n0; i++)
+        {
+            const double x0_i = x0[i];
+            const double y0_i = y0[i];
+            double sum = 0.0;
+            #pragma omp simd
+            for (int j = 0; j < n1; j++)
+            {
+                double dx = x0_i - x1[j];
+                double dy = y0_i - y1[j];
+                double r2 = dx * dx + dy * dy;
+                if (r2 < 1e-20) r2 = 1.0;
+                sum += x_in_0[j] / DSQRT(r2);
+            }
+            x_out_0[i] += sum;
+        }
+    } else {
+        for (int i = 0; i < n0; i++)
+        {
+            const double x0_i = x0[i];
+            const double y0_i = y0[i];
+            const double x_in_1_i = x_in_1[i];
+            double sum = 0.0;
+            #pragma omp simd
+            for (int j = 0; j < n1; j++)
+            {
+                double dx = x0_i - x1[j];
+                double dy = y0_i - y1[j];
+                double r2 = dx * dx + dy * dy;
+                if (r2 < 1e-20) r2 = 1.0;
+                double inv_d = 1.0 / DSQRT(r2);
+                sum += x_in_0[j] * inv_d;
+                x_out_1[j] += x_in_1_i * inv_d;
+            }
+            x_out_0[i] += sum;
         }
     }
 }
@@ -295,24 +406,55 @@ void parse_params(int argc, char **argv)
     {
         switch (test_params.kernel_id)
         {
-            case 0: test_params.krnl_eval =  Coulomb_kernel_3d; break;
-            case 1: test_params.krnl_eval =  Laplace_kernel_3d; break;
-            case 2: test_params.krnl_eval = Gaussian_kernel_3d; break;
+            case 0: 
+            { 
+                test_params.krnl_eval   = Coulomb_kernel_3d; 
+                test_params.krnl_matvec = Coulomb_kernel_3d_matvec; 
+                break;
+            }
+            case 1: 
+            {
+                test_params.krnl_eval   = Laplace_kernel_3d; 
+                test_params.krnl_matvec = NULL; 
+                break;
+            }
+            case 2: 
+            {
+                test_params.krnl_eval   = Gaussian_kernel_3d; 
+                test_params.krnl_matvec = NULL; 
+                break;
+            }
         }
     }
     if (test_params.pt_dim == 2) 
     {
         switch (test_params.kernel_id)
         {
-            case 0: test_params.krnl_eval =  Coulomb_kernel_2d; break;
-            case 1: test_params.krnl_eval =  Laplace_kernel_2d; break;
-            case 2: test_params.krnl_eval = Gaussian_kernel_2d; break;
+            case 0: 
+            {
+                test_params.krnl_eval   = Coulomb_kernel_2d; 
+                test_params.krnl_matvec = Coulomb_kernel_2d_matvec; 
+                break;
+            }
+            case 1: 
+            {
+                test_params.krnl_eval   = Laplace_kernel_2d; 
+                test_params.krnl_matvec = NULL; 
+                break;
+            }
+            case 2: 
+            {
+                test_params.krnl_eval   = Gaussian_kernel_2d; 
+                test_params.krnl_matvec = NULL; 
+                break;
+            }
         }
     }
 }
 
 void direct_nbody(
-    kernel_eval_fptr krnl_eval, const int krnl_dim, const int n_point, 
+    //kernel_eval_fptr krnl_eval, 
+    kernel_matvec_fptr krnl_matvec, const int krnl_dim, const int n_point, 
     const DTYPE *coord, const DTYPE *x, DTYPE *y
 )
 {
@@ -331,6 +473,8 @@ void direct_nbody(
         H2P_block_partition(n_point, nthreads, tid, &nx_blk_start, &nx_blk_len);
         nx_blk_end = nx_blk_start + nx_blk_len;
         DTYPE *thread_A_blk = thread_buffs + tid * thread_blk_size;
+
+        memset(y + nx_blk_start, 0, sizeof(DTYPE) * nx_blk_len);
         
         for (int ix = nx_blk_start; ix < nx_blk_end; ix += nx_blk_size)
         {
@@ -339,6 +483,12 @@ void direct_nbody(
             {
                 DTYPE beta = (iy > 0) ? 1.0 : 0.0;
                 int blk_ny = (iy + ny_blk_size > n_point) ? n_point - iy : ny_blk_size;
+                krnl_matvec(
+                    coord + ix, n_point, blk_nx,
+                    coord + iy, n_point, blk_ny,
+                    x + iy * krnl_dim, NULL, y + ix * krnl_dim, NULL
+                );
+                /*
                 krnl_eval(
                     coord + ix, n_point, blk_nx,
                     coord + iy, n_point, blk_ny,
@@ -349,6 +499,7 @@ void direct_nbody(
                     1.0, thread_A_blk, blk_ny * krnl_dim,
                     x + iy * krnl_dim, 1, beta, y + ix * krnl_dim, 1
                 );
+                */
             }
         }
     }
@@ -395,7 +546,7 @@ int main(int argc, char **argv)
     et = H2P_get_wtime_sec();
     printf("H2Pack generate proxy point used %.3lf (s)\n", et - st);
     
-    H2P_build(h2pack, test_params.krnl_eval, pp, test_params.BD_JIT);
+    H2P_build(h2pack, test_params.krnl_eval, pp, test_params.BD_JIT, test_params.krnl_matvec);
     
     int nthreads = omp_get_max_threads();
     DTYPE *x, *y0, *y1, *tb;
@@ -407,7 +558,7 @@ int main(int argc, char **argv)
     
     // Get reference results
     direct_nbody(
-        test_params.krnl_eval, test_params.krnl_dim, 
+        test_params.krnl_matvec, test_params.krnl_dim, 
         test_params.n_point, h2pack->coord, x, y0
     );
     

@@ -17,7 +17,7 @@ extern "C" {
 //   max_level   : Maximum level (included) of a H2 tree, (root level == 0)
 //   start_level : Minimum level that needs proxy points
 //   max_L       : The size of the root node's enclosing box
-//   krnl_eval   : Kernel function pointer
+//   krnl_eval   : Pointer to kernel matrix evaluation function
 // Output parameter:
 //   pp_  : Array of proxy points for each level
 void H2P_generate_proxy_point_ID(
@@ -35,7 +35,7 @@ void H2P_generate_proxy_point_ID(
 //   max_level   : Maximum level (included) of a H2 tree, (root level == 0)
 //   start_level : Minimum level that needs proxy points
 //   max_L       : The size of the root node's enclosing box
-//   krnl_eval   : Kernel function pointer
+//   krnl_eval   : Pointer to kernel matrix evaluation function
 // Output parameter:
 //   pp_  : Array of proxy points for each level
 void H2P_generate_proxy_point_surface(
@@ -60,13 +60,17 @@ void H2P_partition_workload(
 
 // Build H2 representation with a kernel function
 // Input parameter:
-//   h2pack    : H2Pack structure with point partitioning info
-//   krnl_eval : Kernel function pointer
-//   pp        : Array of proxy points for each level
-//   BD_JIT    : 0 or 1, if B and D matrices are computed just-in-time in matvec
+//   h2pack      : H2Pack structure with point partitioning info
+//   krnl_eval   : Pointer to kernel matrix evaluation function
+//   pp          : Array of proxy points for each level
+//   BD_JIT      : 0 or 1, if B and D matrices are computed just-in-time in matvec
+//   krnl_matvec : Pointer to kernel matrix matvec function
 // Output parameter:
 //   h2pack : H2Pack structure with H2 representation matrices
-void H2P_build(H2Pack_t h2pack, kernel_eval_fptr krnl_eval, H2P_dense_mat_t *pp, const int BD_JIT);
+void H2P_build(
+    H2Pack_t h2pack, kernel_eval_fptr krnl_eval, H2P_dense_mat_t *pp, 
+    const int BD_JIT, kernel_matvec_fptr krnl_matvec
+);
 
 #ifdef __cplusplus
 }

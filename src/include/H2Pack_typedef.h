@@ -27,8 +27,8 @@ typedef void (*kernel_eval_fptr) (
     DTYPE *mat, const int ldm
 );
 
-// Pointer to function that one or two kernel matrix matvec(s) using given sets of 
-// points and given input vector(s). The kernel matrix must be symmetric.
+// Pointer to function that performs one or two kernel matrix matvec(s) using given
+// sets of points and given input vector(s). The kernel function must be symmetric.
 // This function computes:
 //   (1) x_out_0 = kernel_matrix(coord0, coord1) * x_in_0
 //   (2) x_out_1 = kernel_matrix(coord0, coord1)^T * x_in_1 (optional)

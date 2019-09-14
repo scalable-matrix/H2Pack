@@ -20,7 +20,8 @@ struct H2P_test_params
     int   kernel_id;
     DTYPE rel_tol;
     DTYPE *coord;
-    kernel_func_ptr kernel;
+    kernel_eval_fptr   krnl_eval;
+    kernel_matvec_fptr krnl_matvec;
 };
 struct H2P_test_params test_params;
 
@@ -50,7 +51,7 @@ void RPY_kernel_3d(
             DTYPE r1 = y0 - coord1[j + ld1];
             DTYPE r2 = z0 - coord1[j + ld1 * 2];
             DTYPE s2 = r0 * r0 + r1 * r1 + r2 * r2;
-            DTYPE s  = sqrt(s2);
+            DTYPE s  = DSQRT(s2);
             int base = 3 * i * ldm + 3 * j;
             #define krnl(k, l) mat[base + k * ldm + l]
             if (s < 1e-15)
@@ -89,6 +90,158 @@ void RPY_kernel_3d(
             krnl(2, 0) = t2 * r2 * r0;
             krnl(2, 1) = t2 * r2 * r1;
             krnl(2, 2) = t2 * r2 * r2 + t1;
+            #undef krnl
+        }
+    }
+}
+
+void RPY_kernel_3d_matvec(
+    const DTYPE *coord0, const int ld0, const int n0,
+    const DTYPE *coord1, const int ld1, const int n1,
+    const DTYPE *x_in_0, const DTYPE *x_in_1, 
+    DTYPE *x_out_0, DTYPE *x_out_1
+)
+{
+    const DTYPE a = 1.0, eta = 1.0;
+    const DTYPE C   = 1.0 / (6.0 * M_PI * a * eta);
+    const DTYPE aa  = a * a;
+    const DTYPE a2  = 2.0 * a;
+    const DTYPE aa2 = aa * 2.0;
+    const DTYPE aa_2o3   = aa2 / 3.0;
+    const DTYPE C_075    = C * 0.75;
+    const DTYPE C_9o32oa = C * 9.0 / 32.0 / a;
+    const DTYPE C_3o32oa = C * 3.0 / 32.0 / a;
+
+    if (x_in_1 == NULL)
+    {
+        for (int i = 0; i < n0; i++)
+        {
+            DTYPE x0 = coord0[i];
+            DTYPE y0 = coord0[i + ld0];
+            DTYPE z0 = coord0[i + ld0 * 2];
+            DTYPE res[3] = {0.0, 0.0, 0.0};
+            for (int j = 0; j < n1; j++)
+            {
+                DTYPE r0 = x0 - coord1[j];
+                DTYPE r1 = y0 - coord1[j + ld1];
+                DTYPE r2 = z0 - coord1[j + ld1 * 2];
+                DTYPE s2 = r0 * r0 + r1 * r1 + r2 * r2;
+                DTYPE s  = DSQRT(s2);
+                DTYPE x_in_0_j[3];
+                x_in_0_j[0] = x_in_0[j * 3 + 0];
+                x_in_0_j[1] = x_in_0[j * 3 + 1];
+                x_in_0_j[2] = x_in_0[j * 3 + 2];
+
+                if (s < 1e-15)
+                {
+                    res[0] += C * x_in_0_j[0];
+                    res[1] += C * x_in_0_j[1];
+                    res[2] += C * x_in_0_j[2];
+                    continue;
+                }
+                
+                DTYPE inv_s = 1.0 / s;
+                r0 *= inv_s;
+                r1 *= inv_s;
+                r2 *= inv_s;
+                DTYPE t1, t2;
+                if (s < a2)
+                {
+                    t1 = C - C_9o32oa * s;
+                    t2 = C_3o32oa * s;
+                } else {
+                    t1 = C_075 / s * (1 + aa_2o3 / s2);
+                    t2 = C_075 / s * (1 - aa2 / s2); 
+                }
+
+                res[0] += (t2 * r0 * r0 + t1) * x_in_0_j[0];
+                res[0] += (t2 * r0 * r1)      * x_in_0_j[1];
+                res[0] += (t2 * r0 * r2)      * x_in_0_j[2];
+                res[1] += (t2 * r1 * r0)      * x_in_0_j[0];
+                res[1] += (t2 * r1 * r1 + t1) * x_in_0_j[1];
+                res[1] += (t2 * r1 * r2)      * x_in_0_j[2];
+                res[2] += (t2 * r2 * r0)      * x_in_0_j[0];
+                res[2] += (t2 * r2 * r1)      * x_in_0_j[1];
+                res[2] += (t2 * r2 * r2 + t1) * x_in_0_j[2];
+            }
+            x_out_0[i * 3 + 0] += res[0];
+            x_out_0[i * 3 + 1] += res[1];
+            x_out_0[i * 3 + 2] += res[2];
+        }
+    } else {
+        for (int i = 0; i < n0; i++)
+        {
+            DTYPE x0 = coord0[i];
+            DTYPE y0 = coord0[i + ld0];
+            DTYPE z0 = coord0[i + ld0 * 2];
+            DTYPE res[3] = {0.0, 0.0, 0.0};
+            DTYPE x_in_1_i[3];
+            int i3 = i * 3;
+            x_in_1_i[0] = x_in_1[i3 + 0];
+            x_in_1_i[1] = x_in_1[i3 + 1];
+            x_in_1_i[2] = x_in_1[i3 + 2];
+
+            for (int j = 0; j < n1; j++)
+            {
+                DTYPE r0 = x0 - coord1[j];
+                DTYPE r1 = y0 - coord1[j + ld1];
+                DTYPE r2 = z0 - coord1[j + ld1 * 2];
+                DTYPE s2 = r0 * r0 + r1 * r1 + r2 * r2;
+                DTYPE s  = DSQRT(s2);
+                DTYPE x_in_0_j[3];
+                int j3 = j * 3;
+                x_in_0_j[0] = x_in_0[j3 + 0];
+                x_in_0_j[1] = x_in_0[j3 + 1];
+                x_in_0_j[2] = x_in_0[j3 + 2];
+
+                if (s < 1e-15)
+                {
+                    res[0] += C * x_in_0_j[0];
+                    res[1] += C * x_in_0_j[1];
+                    res[2] += C * x_in_0_j[2];
+                    x_out_1[j3 + 0] += C * x_in_1_i[0];
+                    x_out_1[j3 + 1] += C * x_in_1_i[1];
+                    x_out_1[j3 + 2] += C * x_in_1_i[2];
+                    continue;
+                }
+                
+                DTYPE inv_s = 1.0 / s;
+                r0 *= inv_s;
+                r1 *= inv_s;
+                r2 *= inv_s;
+                DTYPE t1, t2;
+                if (s < a2)
+                {
+                    t1 = C - C_9o32oa * s;
+                    t2 = C_3o32oa * s;
+                } else {
+                    t1 = C_075 / s * (1 + aa_2o3 / s2);
+                    t2 = C_075 / s * (1 - aa2 / s2); 
+                }
+
+                res[0] += (t2 * r0 * r0 + t1) * x_in_0_j[0];
+                res[0] += (t2 * r0 * r1)      * x_in_0_j[1];
+                res[0] += (t2 * r0 * r2)      * x_in_0_j[2];
+                res[1] += (t2 * r1 * r0)      * x_in_0_j[0];
+                res[1] += (t2 * r1 * r1 + t1) * x_in_0_j[1];
+                res[1] += (t2 * r1 * r2)      * x_in_0_j[2];
+                res[2] += (t2 * r2 * r0)      * x_in_0_j[0];
+                res[2] += (t2 * r2 * r1)      * x_in_0_j[1];
+                res[2] += (t2 * r2 * r2 + t1) * x_in_0_j[2];
+
+                x_out_1[j3 + 0] += (t2 * r0 * r0 + t1) * x_in_1_i[0];
+                x_out_1[j3 + 0] += (t2 * r1 * r0)      * x_in_1_i[1];
+                x_out_1[j3 + 0] += (t2 * r2 * r0)      * x_in_1_i[2];
+                x_out_1[j3 + 1] += (t2 * r0 * r1)      * x_in_1_i[0];
+                x_out_1[j3 + 1] += (t2 * r1 * r1 + t1) * x_in_1_i[1];
+                x_out_1[j3 + 1] += (t2 * r2 * r1)      * x_in_1_i[2];
+                x_out_1[j3 + 2] += (t2 * r0 * r2)      * x_in_1_i[0];
+                x_out_1[j3 + 2] += (t2 * r1 * r2)      * x_in_1_i[1];
+                x_out_1[j3 + 2] += (t2 * r2 * r2 + t1) * x_in_1_i[2];
+            }
+            x_out_0[i3 + 0] += res[0];
+            x_out_0[i3 + 1] += res[1];
+            x_out_0[i3 + 2] += res[2];
         }
     }
 }
@@ -164,11 +317,13 @@ void parse_params(int argc, char **argv)
         fclose(inf);
     }
     
-    test_params.kernel = RPY_kernel_3d;
+    test_params.krnl_eval   = RPY_kernel_3d;
+    test_params.krnl_matvec = RPY_kernel_3d_matvec;
 }
 
 void direct_nbody(
-    kernel_func_ptr kernel, const int krnl_dim, const int n_point, 
+    //kernel_eval_fptr krnl_eval, 
+    kernel_matvec_fptr krnl_matvec, const int krnl_dim, const int n_point, 
     const DTYPE *coord, const DTYPE *x, DTYPE *y
 )
 {
@@ -188,6 +343,8 @@ void direct_nbody(
         nx_blk_end = nx_blk_start + nx_blk_len;
         DTYPE *thread_A_blk = thread_buffs + tid * thread_blk_size;
         
+        memset(y + nx_blk_start * krnl_dim, 0, sizeof(DTYPE) * nx_blk_len * krnl_dim);
+
         for (int ix = nx_blk_start; ix < nx_blk_end; ix += nx_blk_size)
         {
             int blk_nx = (ix + nx_blk_size > nx_blk_end) ? nx_blk_end - ix : nx_blk_size;
@@ -195,7 +352,13 @@ void direct_nbody(
             {
                 DTYPE beta = (iy > 0) ? 1.0 : 0.0;
                 int blk_ny = (iy + ny_blk_size > n_point) ? n_point - iy : ny_blk_size;
-                kernel(
+                krnl_matvec(
+                    coord + ix, n_point, blk_nx,
+                    coord + iy, n_point, blk_ny,
+                    x + iy * krnl_dim, NULL, y + ix * krnl_dim, NULL
+                );
+                /*
+                krnl_eval(
                     coord + ix, n_point, blk_nx,
                     coord + iy, n_point, blk_ny,
                     thread_A_blk, blk_ny * krnl_dim
@@ -205,6 +368,7 @@ void direct_nbody(
                     1.0, thread_A_blk, blk_ny * krnl_dim,
                     x + iy * krnl_dim, 1, beta, y + ix * krnl_dim, 1
                 );
+                */
             }
         }
     }
@@ -247,12 +411,12 @@ int main(int argc, char **argv)
     st = H2P_get_wtime_sec();
     H2P_generate_proxy_point_surface(
         test_params.pt_dim, 600, h2pack->max_level, 
-        2, max_L, test_params.kernel, &pp
+        2, max_L, test_params.krnl_eval, &pp
     );
     et = H2P_get_wtime_sec();
     //printf("Proxy point generation used %.3lf (s)\n", et - st);
     
-    H2P_build(h2pack, test_params.kernel, pp, test_params.BD_JIT);
+    H2P_build(h2pack, test_params.krnl_eval, pp, test_params.BD_JIT, test_params.krnl_matvec);
     
     int nthreads = omp_get_max_threads();
     DTYPE *x, *y0, *y1, *tb;
@@ -264,7 +428,7 @@ int main(int argc, char **argv)
     
     // Get reference results
     direct_nbody(
-        test_params.kernel, test_params.krnl_dim, 
+        test_params.krnl_matvec, test_params.krnl_dim, 
         test_params.n_point, h2pack->coord, x, y0
     );
     

@@ -61,14 +61,14 @@ void H2P_copy_matrix_block(
 
 // Evaluate a kernel matrix with OpenMP parallelization
 // Input parameters:
-//   kernel   : Kernel matrix evaluation function
-//   krnl_dim : Dimension of tensor kernel's return
-//   x_coord  : X point set coordinates, size nx-by-pt_dim
-//   y_coord  : Y point set coordinates, size ny-by-pt_dim
+//   krnl_eval : Kernel matrix evaluation function
+//   krnl_dim  : Dimension of tensor kernel's return
+//   x_coord   : X point set coordinates, size nx-by-pt_dim
+//   y_coord   : Y point set coordinates, size ny-by-pt_dim
 // Output parameter:
 //   kernel_mat : Obtained kernel matrix, nx-by-ny
 void H2P_eval_kernel_matrix_OMP(
-    kernel_func_ptr kernel, const int krnl_dim, H2P_dense_mat_t x_coord, 
+    kernel_eval_fptr krnl_eval, const int krnl_dim, H2P_dense_mat_t x_coord, 
     H2P_dense_mat_t y_coord, H2P_dense_mat_t kernel_mat
 )
 {
@@ -87,7 +87,7 @@ void H2P_eval_kernel_matrix_OMP(
         DTYPE *kernel_mat_srow = kernel_mat->data + nx_blk_start * krnl_dim * kernel_mat->ld;
         DTYPE *x_coord_spos = x_coord->data + nx_blk_start;
         
-        kernel(
+        krnl_eval(
             x_coord_spos,  x_coord->ncol, nx_blk_len, 
             y_coord->data, y_coord->ncol, ny, 
             kernel_mat_srow, kernel_mat->ld
@@ -122,7 +122,7 @@ int point_in_box(const int pt_dim, DTYPE *coord, DTYPE L)
 // using ID compress for any kernel function
 void H2P_generate_proxy_point_ID(
     const int pt_dim, const int krnl_dim, const int max_level, const int start_level,
-    DTYPE max_L, kernel_func_ptr kernel, H2P_dense_mat_t **pp_
+    DTYPE max_L, kernel_eval_fptr krnl_eval, H2P_dense_mat_t **pp_
 )
 {   
     // 1. Initialize proxy point arrays
@@ -193,7 +193,7 @@ void H2P_generate_proxy_point_ID(
         //     skeleton Nx points to select skeleton Ny points
         DTYPE rel_tol = 1e-14;
         
-        H2P_eval_kernel_matrix_OMP(kernel, krnl_dim, Nx_points, Ny_points, tmpA);
+        H2P_eval_kernel_matrix_OMP(krnl_eval, krnl_dim, Nx_points, Ny_points, tmpA);
         H2P_dense_mat_resize(QR_buff, tmpA->nrow, 1);
         H2P_int_vec_set_capacity(ID_buff, 4 * tmpA->nrow);
         H2P_ID_compress(
@@ -202,7 +202,7 @@ void H2P_generate_proxy_point_ID(
         );
         H2P_dense_mat_select_columns(Nx_points, skel_idx);
         
-        H2P_eval_kernel_matrix_OMP(kernel, krnl_dim, Ny_points, Nx_points, tmpA);
+        H2P_eval_kernel_matrix_OMP(krnl_eval, krnl_dim, Ny_points, Nx_points, tmpA);
         H2P_dense_mat_resize(QR_buff, tmpA->nrow, 1);
         H2P_int_vec_set_capacity(ID_buff, 4 * tmpA->nrow);
         H2P_ID_compress(
@@ -291,7 +291,7 @@ void H2P_generate_proxy_point_ID(
 // H2 projection and skeleton matrices for SOME kernel function
 void H2P_generate_proxy_point_surface(
     const int pt_dim, const int min_npts, const int max_level, const int start_level,
-    DTYPE max_L, kernel_func_ptr kernel, H2P_dense_mat_t **pp_
+    DTYPE max_L, kernel_eval_fptr krnl_eval, H2P_dense_mat_t **pp_
 )
 {
     if (pt_dim < 2 || pt_dim > 3)
@@ -429,7 +429,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     DTYPE *coord         = h2pack->coord;
     DTYPE *enbox         = h2pack->enbox;
     H2P_dense_mat_t *pp  = h2pack->pp;
-    kernel_func_ptr kernel = h2pack->kernel;
+    kernel_eval_fptr krnl_eval = h2pack->krnl_eval;
     void  *stop_param;
     if (stop_type == QR_RANK) 
         stop_param = &h2pack->QR_stop_rank;
@@ -572,7 +572,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                 int A_blk_nrow = nrow * krnl_dim;
                 int A_blk_ncol = ncol * krnl_dim;
                 H2P_dense_mat_resize(A_block, A_blk_nrow, A_blk_ncol);
-                kernel(
+                krnl_eval(
                     tmp_x->data,     nrow, nrow,
                     pp[level]->data, ncol, ncol, 
                     A_block->data, A_block->ld
@@ -689,9 +689,9 @@ void H2P_build_B(H2Pack_t h2pack)
     int   *node_level  = h2pack->node_level;
     int   *pt_cluster  = h2pack->pt_cluster;
     DTYPE *coord       = h2pack->coord;
-    kernel_func_ptr kernel   = h2pack->kernel;
-    H2P_int_vec_t   B_blk    = h2pack->B_blk;
-    H2P_dense_mat_t *J_coord = h2pack->J_coord;
+    kernel_eval_fptr krnl_eval = h2pack->krnl_eval;
+    H2P_int_vec_t    B_blk     = h2pack->B_blk;
+    H2P_dense_mat_t  *J_coord  = h2pack->J_coord;
 
     double st, et;
     st = H2P_get_wtime_sec();
@@ -785,7 +785,7 @@ void H2P_build_B(H2Pack_t h2pack)
                 // (1) Two nodes are of the same level, compress on both sides
                 if (level0 == level1)
                 {
-                    kernel(
+                    krnl_eval(
                         J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
                         J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
                         Bi, J_coord[node1]->ncol * krnl_dim
@@ -799,7 +799,7 @@ void H2P_build_B(H2Pack_t h2pack)
                     int pt_s1 = pt_cluster[2 * node1];
                     int pt_e1 = pt_cluster[2 * node1 + 1];
                     int node1_npt = pt_e1 - pt_s1 + 1;
-                    kernel(
+                    krnl_eval(
                         J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
                         coord + pt_s1, n_point, node1_npt, 
                         Bi, node1_npt * krnl_dim
@@ -813,7 +813,7 @@ void H2P_build_B(H2Pack_t h2pack)
                     int pt_s0 = pt_cluster[2 * node0];
                     int pt_e0 = pt_cluster[2 * node0 + 1];
                     int node0_npt = pt_e0 - pt_s0 + 1;
-                    kernel(
+                    krnl_eval(
                         coord + pt_s0, n_point, node0_npt, 
                         J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
                         Bi, J_coord[node1]->ncol * krnl_dim
@@ -854,9 +854,9 @@ void H2P_build_D(H2Pack_t h2pack)
     int   *pt_cluster    = h2pack->pt_cluster;
     int   *r_inadm_pairs = h2pack->r_inadm_pairs;
     DTYPE *coord         = h2pack->coord;
-    kernel_func_ptr kernel = h2pack->kernel;
-    H2P_int_vec_t   D_blk0 = h2pack->D_blk0;
-    H2P_int_vec_t   D_blk1 = h2pack->D_blk1;
+    kernel_eval_fptr krnl_eval = h2pack->krnl_eval;
+    H2P_int_vec_t    D_blk0    = h2pack->D_blk0;
+    H2P_int_vec_t    D_blk1    = h2pack->D_blk1;
     
     // 1. Allocate D
     h2pack->n_D = n_leaf_node + n_r_inadm_pair;
@@ -941,7 +941,7 @@ void H2P_build_D(H2Pack_t h2pack)
                 int pt_e = pt_cluster[2 * node + 1];
                 int node_npt = pt_e - pt_s + 1;
                 DTYPE *Di = D_data + D_ptr[i];
-                kernel(
+                krnl_eval(
                     coord + pt_s, n_point, node_npt,
                     coord + pt_s, n_point, node_npt,
                     Di, node_npt * krnl_dim
@@ -966,7 +966,7 @@ void H2P_build_D(H2Pack_t h2pack)
                 int node0_npt = pt_e0 - pt_s0 + 1;
                 int node1_npt = pt_e1 - pt_s1 + 1;
                 DTYPE *Di = D_data + D_ptr[i + n_leaf_node];
-                kernel(
+                krnl_eval(
                     coord + pt_s0, n_point, node0_npt,
                     coord + pt_s1, n_point, node1_npt,
                     Di, node1_npt * krnl_dim
@@ -992,13 +992,22 @@ void H2P_build_D(H2Pack_t h2pack)
 }
 
 // Build H2 representation with a kernel function
-void H2P_build(H2Pack_t h2pack, kernel_func_ptr kernel, H2P_dense_mat_t *pp, const int BD_JIT)
+void H2P_build(
+    H2Pack_t h2pack, kernel_eval_fptr krnl_eval, H2P_dense_mat_t *pp, 
+    const int BD_JIT, kernel_matvec_fptr krnl_matvec
+)
 {
     double st, et;
 
-    h2pack->kernel = kernel;
-    h2pack->pp     = pp;
-    h2pack->BD_JIT = BD_JIT;
+    h2pack->krnl_eval   = krnl_eval;
+    h2pack->pp          = pp;
+    h2pack->BD_JIT      = BD_JIT;
+    h2pack->krnl_matvec = krnl_matvec;
+    if (BD_JIT == 1 && krnl_matvec == NULL) 
+    {
+        printf("[FATAL] Must provide a kernel_matvec_fptr for using BD_JIT in matvec!\n");
+        assert(krnl_matvec != NULL);
+    }
 
     // 1. Build projection matrices and skeleton row sets
     st = H2P_get_wtime_sec();

@@ -375,7 +375,8 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
     H2P_dense_mat_t *y0  = h2pack->y0;
     H2P_dense_mat_t *U   = h2pack->U;
     H2P_dense_mat_t *J_coord = h2pack->J_coord;
-    kernel_func_ptr kernel   = h2pack->kernel;
+    //kernel_eval_fptr krnl_eval = h2pack->krnl_eval;
+    kernel_matvec_fptr krnl_matvec = h2pack->krnl_matvec;
 
     // 1. Initialize y1 
     H2P_matvec_init_y1(h2pack);
@@ -417,10 +418,13 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                 int level1  = node_level[node1];
                 int Bi_nrow = B_nrow[i];
                 int Bi_ncol = B_ncol[i];
+
+                /*
                 int Bi_nrow_128KB = (128 * 1024) / (sizeof(DTYPE) * Bi_ncol);
                 int Bi_blk_npt = Bi_nrow_128KB / krnl_dim;
                 Bi_nrow_128KB = Bi_blk_npt * krnl_dim;
                 H2P_dense_mat_resize(Bi, Bi_nrow_128KB, Bi_ncol);
+                */
                 
                 // (1) Two nodes are of the same level, compress on both sides
                 if (level0 == level1)
@@ -433,14 +437,23 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                     DTYPE beta1 = y1_dst_1[ncol1 - 1];
                     y1_dst_0[ncol0 - 1] = 1.0;
                     y1_dst_1[ncol1 - 1] = 1.0;
+
+                    if (beta0 == 0.0) memset(y1_dst_0, 0, sizeof(DTYPE) * Bi_nrow);
+                    if (beta1 == 0.0) memset(y1_dst_1, 0, sizeof(DTYPE) * Bi_ncol);
+                    krnl_matvec(
+                        J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
+                        J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
+                        y0[node1]->data, y0[node0]->data, y1_dst_0, y1_dst_1
+                    );
                     
+                    /*
                     int Bi_npt_row = J_coord[node0]->ncol;
                     for (int blk_pt_s = 0; blk_pt_s < Bi_npt_row; blk_pt_s += Bi_blk_npt)
                     {
                         int blk_npt = (blk_pt_s + Bi_blk_npt) > Bi_npt_row ? Bi_npt_row - blk_pt_s : Bi_blk_npt;
                         int blk_srow = blk_pt_s * krnl_dim;
                         int blk_nrow = blk_npt * krnl_dim;
-                        kernel(
+                        krnl_eval(
                             J_coord[node0]->data + blk_pt_s, J_coord[node0]->ncol, blk_npt,
                             J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
                             Bi->data, Bi_ncol
@@ -457,6 +470,7 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                         );
                         beta1 = 1.0;
                     }
+                    */
                 }
                 
                 // (2) node1 is a leaf node and its level is higher than node0's level, 
@@ -476,13 +490,21 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                     DTYPE beta0         = y1_dst_0[ncol0 - 1];
                     y1_dst_0[ncol0 - 1] = 1.0;
                     
+                    if (beta0 == 0.0) memset(y1_dst_0, 0, sizeof(DTYPE) * Bi_nrow);
+                    krnl_matvec(
+                        J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
+                        coord + pt_s1, n_point, node1_npt,
+                        x_spos, y0[node0]->data, y1_dst_0, y_spos
+                    );
+
+                    /*
                     int Bi_npt_row = J_coord[node0]->ncol;
                     for (int blk_pt_s = 0; blk_pt_s < Bi_npt_row; blk_pt_s += Bi_blk_npt)
                     {
                         int blk_npt = (blk_pt_s + Bi_blk_npt) > Bi_npt_row ? Bi_npt_row - blk_pt_s : Bi_blk_npt;
                         int blk_srow = blk_pt_s * krnl_dim;
                         int blk_nrow = blk_npt * krnl_dim;
-                        kernel(
+                        krnl_eval(
                             J_coord[node0]->data + blk_pt_s, J_coord[node0]->ncol, blk_npt,
                             coord + pt_s1, n_point, node1_npt, 
                             Bi->data, Bi_ncol
@@ -498,6 +520,7 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                             y0[node0]->data + blk_srow, 1, 1.0, y_spos, 1
                         );
                     }
+                    */
                 }
                 
                 // (3) node0 is a leaf node and its level is higher than node1's level, 
@@ -517,13 +540,21 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                     DTYPE beta1         = y1_dst_1[ncol1 - 1];
                     y1_dst_1[ncol1 - 1] = 1.0;
                     
+                    if (beta1 == 0.0) memset(y1_dst_1, 0, sizeof(DTYPE) * Bi_ncol);
+                    krnl_matvec(
+                        coord + pt_s0, n_point, node0_npt,
+                        J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
+                        y0[node1]->data, x_spos, y_spos, y1_dst_1
+                    );
+
+                    /*
                     int Bi_npt_row = node0_npt;
                     for (int blk_pt_s = 0; blk_pt_s < Bi_npt_row; blk_pt_s += Bi_blk_npt)
                     {
                         int blk_npt = (blk_pt_s + Bi_blk_npt) > Bi_npt_row ? Bi_npt_row - blk_pt_s : Bi_blk_npt;
                         int blk_srow = blk_pt_s * krnl_dim;
                         int blk_nrow = blk_npt * krnl_dim;
-                        kernel(
+                        krnl_eval(
                             coord + pt_s0 + blk_pt_s, n_point, blk_npt, 
                             J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
                             Bi->data, Bi_ncol
@@ -540,6 +571,7 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                         );
                         beta1 = 1.0;
                     }
+                    */
                 }
             }  // End of i loop
         }  // End of i_blk loop
@@ -779,9 +811,10 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
     int    *D_nrow         = h2pack->D_nrow;
     int    *D_ncol         = h2pack->D_ncol;
     DTYPE  *coord          = h2pack->coord;
-    H2P_int_vec_t   D_blk0 = h2pack->D_blk0;
-    H2P_int_vec_t   D_blk1 = h2pack->D_blk1;
-    kernel_func_ptr kernel = h2pack->kernel;
+    H2P_int_vec_t    D_blk0 = h2pack->D_blk0;
+    H2P_int_vec_t    D_blk1 = h2pack->D_blk1;
+    //kernel_eval_fptr krnl_eval = h2pack->krnl_eval;
+    kernel_matvec_fptr krnl_matvec = h2pack->krnl_matvec;
     
     const int n_D0_blk = D_blk0->length;
     const int n_D1_blk = D_blk1->length;
@@ -807,20 +840,27 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
                 DTYPE       *y_spos = y + vec_s;
                 const DTYPE *x_spos = x + vec_s;
                 
+                krnl_matvec(
+                    coord + pt_s, n_point, node_npt,
+                    coord + pt_s, n_point, node_npt,
+                    x_spos, NULL, y_spos, NULL
+                );
+
+                /*
                 int Di_nrow = D_nrow[i];
                 int Di_ncol = D_ncol[i];
                 int Di_nrow_128KB = (128 * 1024) / (sizeof(DTYPE) * Di_ncol);
                 int Di_blk_npt = Di_nrow_128KB / krnl_dim;
                 Di_nrow_128KB = Di_blk_npt * krnl_dim;
                 H2P_dense_mat_resize(Di, Di_nrow_128KB, Di_ncol);
-                
+
                 int Di_npt_row = node_npt;
                 for (int blk_pt_s = 0; blk_pt_s < Di_npt_row; blk_pt_s += Di_blk_npt)
                 {
                     int blk_npt = (blk_pt_s + Di_blk_npt) > Di_npt_row ? Di_npt_row - blk_pt_s : Di_blk_npt;
                     int blk_srow = blk_pt_s * krnl_dim;
                     int blk_nrow = blk_npt * krnl_dim;
-                    kernel(
+                    krnl_eval(
                         coord + pt_s + blk_pt_s, n_point, blk_npt,
                         coord + pt_s, n_point, node_npt,
                         Di->data, Di_ncol
@@ -831,6 +871,7 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
                         x_spos, 1, 1.0, y_spos + blk_srow, 1
                     );
                 }
+                */
             }
         }  // End of i_blk0 loop 
         
@@ -855,6 +896,13 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
                 const DTYPE *x_spos0 = x + vec_s0;
                 const DTYPE *x_spos1 = x + vec_s1;
                 
+                krnl_matvec(
+                    coord + pt_s0, n_point, node0_npt,
+                    coord + pt_s1, n_point, node1_npt,
+                    x_spos1, x_spos0, y_spos0, y_spos1
+                );
+
+                /*
                 int Di_nrow = D_nrow[n_leaf_node + i];
                 int Di_ncol = D_ncol[n_leaf_node + i];
                 int Di_nrow_128KB = (128 * 1024) / (sizeof(DTYPE) * Di_ncol);
@@ -868,7 +916,7 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
                     int blk_npt = (blk_pt_s + Di_blk_npt) > Di_npt_row ? Di_npt_row - blk_pt_s : Di_blk_npt;
                     int blk_srow = blk_pt_s * krnl_dim;
                     int blk_nrow = blk_npt * krnl_dim;
-                    kernel(
+                    krnl_eval(
                         coord + pt_s0 + blk_pt_s, n_point, blk_npt,
                         coord + pt_s1, n_point, node1_npt,
                         Di->data, Di_ncol
@@ -884,6 +932,7 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
                         x_spos0 + blk_srow, 1, 1.0, y_spos1, 1
                     );
                 }
+                */
             }
         }  // End of i_blk1 loop 
         h2pack->tb[tid]->timer += H2P_get_wtime_sec();

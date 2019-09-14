@@ -186,7 +186,7 @@ void H2P_print_statistic(H2Pack_t h2pack)
     }
     y0y1_MB /= 1048576.0;
     tb_MB   /= 1048576.0;
-    printf("  * Just-In-Time B & D build  : %s\n", h2pack->BD_JIT ? "Yes" : "No");
+    printf("  * Just-In-Time B & D build  : %s\n", h2pack->BD_JIT ? "Yes (B & D not allocated)" : "No");
     printf("  * H2 representation U, B, D : %.2lf, %.2lf, %.2lf (MB) \n", U_MB, B_MB, D_MB);
     printf("  * Matvec auxiliary arrays   : %.2lf (MB) \n", y0y1_MB);
     printf("  * Thread-local buffers      : %.2lf (MB) \n", tb_MB);

@@ -186,10 +186,23 @@ void H2P_print_statistic(H2Pack_t h2pack)
     }
     y0y1_MB /= 1048576.0;
     tb_MB   /= 1048576.0;
+    int max_node_rank = 0;
+    double sum_node_rank = 0.0, non_empty_node = 0.0;
+    for (int i = 0; i < h2pack->n_UJ; i++)
+    {
+        int rank_i = h2pack->J[i]->length;
+        if (rank_i > 0)
+        {
+            sum_node_rank  += (double) rank_i;
+            non_empty_node += 1.0;
+            max_node_rank   = (rank_i > max_node_rank) ? rank_i : max_node_rank;
+        }
+    }
     printf("  * Just-In-Time B & D build  : %s\n", h2pack->BD_JIT ? "Yes (B & D not allocated)" : "No");
     printf("  * H2 representation U, B, D : %.2lf, %.2lf, %.2lf (MB) \n", U_MB, B_MB, D_MB);
     printf("  * Matvec auxiliary arrays   : %.2lf (MB) \n", y0y1_MB);
     printf("  * Thread-local buffers      : %.2lf (MB) \n", tb_MB);
+    printf("  * Max / Avg compressed rank : %d, %.0lf \n", max_node_rank, sum_node_rank / non_empty_node);
     printf("  * sizeof(U + B + D) / kms   : %.3lf \n", UBD_k);
     
     printf("==================== H2Pack timing info =====================\n");

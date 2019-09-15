@@ -29,6 +29,7 @@
     vec_cmp_le_*     : Return in each lane if a <= b
     vec_cmp_gt_*     : Return in each lane if a >  b
     vec_cmp_ge_*     : Return in each lane if a >= b
+    vec_reduce_add_* : Return the sum of values in an intrinsic vector
     vec_arsqrt_*     : Approximate reverse squart root, returns 0 if r2 == 0
     vec_rsqrt_ntit_* : Newton iteration step for reverse squart root,
                        rsqrt' = 0.5 * rsqrt * (C - r2 * rsqrt^2),
@@ -125,6 +126,29 @@ static inline __m256d vec_cmp_gt_d (const __m256d a, const __m256d b) { return _
 static inline __m256  vec_cmp_ge_s (const __m256  a, const __m256  b) { return _mm256_cmp_ps(a, b, _CMP_GE_OS);  }
 static inline __m256d vec_cmp_ge_d (const __m256d a, const __m256d b) { return _mm256_cmp_pd(a, b, _CMP_GE_OS);  }
 
+union vec256b 
+{
+    __m256  vec_f8;
+    __m256d vec_d4;
+    float   f[8];
+    double  d[4];
+};
+
+static inline float  vec_reduce_add_s(const __m256  a)
+{
+    union vec256b v;
+    v.vec_f8 = a;
+    float res = v.f[0] + v.f[1] + v.f[2] + v.f[3] + 
+                v.f[4] + v.f[5] + v.f[6] + v.f[7];
+    return res;
+}
+static inline double vec_reduce_add_d(const __m256d a) 
+{
+    union vec256b v;
+    v.vec_d4 = a;
+    return (v.d[0] + v.d[1] + v.d[2] + v.d[3]);
+}
+
 static inline __m256  vec_arsqrt_s(const __m256  r2)
 {
     __m256 rsqrt = _mm256_rsqrt_ps(r2);
@@ -217,6 +241,9 @@ static inline __mmask8  vec_cmp_gt_d (const __m512d a, const __m512d b) { return
 
 static inline __mmask16 vec_cmp_ge_s (const __m512  a, const __m512  b) { return _mm512_cmp_ps_mask(a, b, _CMP_GE_OS);  }
 static inline __mmask8  vec_cmp_ge_d (const __m512d a, const __m512d b) { return _mm512_cmp_pd_mask(a, b, _CMP_GE_OS);  }
+
+static inline float  vec_reduce_add_s(const __m512  a) { return _mm512_reduce_add_ps(a); }
+static inline double vec_reduce_add_d(const __m512d a) { return _mm512_reduce_add_pd(a); }
 
 #ifdef __AVX512ER__
 static inline __m512  vec_arsqrt_s(const __m512  r2)

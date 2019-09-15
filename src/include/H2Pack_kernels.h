@@ -209,64 +209,49 @@ static void Coulomb_3d_matvec_intrin_d(
             x_in_0, NULL, x_out_0 + n0_vec, NULL
         );
     } else {
-        for (int i = 0; i < n0_vec; i += SIMD_LEN)
-        {
-            vec_d tx = vec_loadu_d(x0 + i);
-            vec_d ty = vec_loadu_d(y0 + i);
-            vec_d tz = vec_loadu_d(z0 + i);
-            vec_d tv = vec_zero_d();
-            for (int j = 0; j < n1; j++)
-            {
-                vec_d dx = vec_sub_d(tx, vec_bcast_d(x1 + j));
-                vec_d dy = vec_sub_d(ty, vec_bcast_d(y1 + j));
-                vec_d dz = vec_sub_d(tz, vec_bcast_d(z1 + j));
-                
-                vec_d r2 = vec_mul_d(dx, dx);
-                r2 = vec_fmadd_d(dy, dy, r2);
-                r2 = vec_fmadd_d(dz, dz, r2);
-                
-                vec_d sv = vec_mul_d(vec_bcast_d(x_in_0 + j), frsqrt_pf);
-                vec_d rinv = vec_frsqrt_d(r2);
-                tv = vec_fmadd_d(rinv, sv, tv);
-            }
-            vec_d ov0 = vec_loadu_d(x_out_0 + i);
-            vec_storeu_d(x_out_0 + i, vec_add_d(ov0, tv));
-        }
-        Coulomb_3d_matvec_std(
-            coord0 + n0_vec, ld0, n0 - n0_vec,
-            coord1, ld1, n1,
-            x_in_0, NULL, x_out_0 + n0_vec, NULL
-        );
-        
         const int n1_vec = (n1 / SIMD_LEN) * SIMD_LEN;
-        for (int j = 0; j < n1_vec; j += SIMD_LEN)
+        for (int i = 0; i < n0; i++)
         {
-            vec_d tx = vec_loadu_d(x1 + j);
-            vec_d ty = vec_loadu_d(y1 + j);
-            vec_d tz = vec_loadu_d(z1 + j);
-            vec_d tv = vec_zero_d();
-            for (int i = 0; i < n0; i++)
+            vec_d x0_iv = vec_bcast_d(x0 + i);
+            vec_d y0_iv = vec_bcast_d(y0 + i);
+            vec_d z0_iv = vec_bcast_d(z0 + i);
+            vec_d x_in_1_iv = vec_bcast_d(x_in_1 + i);
+            vec_d sum_v = vec_zero_d();
+            for (int j = 0; j < n1_vec; j += SIMD_LEN)
             {
-                vec_d dx = vec_sub_d(tx, vec_bcast_d(x0 + i));
-                vec_d dy = vec_sub_d(ty, vec_bcast_d(y0 + i));
-                vec_d dz = vec_sub_d(tz, vec_bcast_d(z0 + i));
+                vec_d dx = vec_sub_d(x0_iv, vec_loadu_d(x1 + j));
+                vec_d dy = vec_sub_d(y0_iv, vec_loadu_d(y1 + j));
+                vec_d dz = vec_sub_d(z0_iv, vec_loadu_d(z1 + j));
                 
                 vec_d r2 = vec_mul_d(dx, dx);
                 r2 = vec_fmadd_d(dy, dy, r2);
                 r2 = vec_fmadd_d(dz, dz, r2);
                 
-                vec_d sv = vec_mul_d(vec_bcast_d(x_in_1 + i), frsqrt_pf);
-                vec_d rinv = vec_frsqrt_d(r2);
-                tv = vec_fmadd_d(rinv, sv, tv);
+                vec_d rinv = vec_mul_d(frsqrt_pf, vec_frsqrt_d(r2));
+                sum_v = vec_fmadd_d(vec_loadu_d(x_in_0 + j), rinv, sum_v);
+                
+                vec_d ov1 = vec_loadu_d(x_out_1 + j);
+                ov1 = vec_fmadd_d(x_in_1_iv, rinv, ov1);
+                vec_storeu_d(x_out_1 + j, ov1);
             }
-            vec_d ov1 = vec_loadu_d(x_out_1 + j);
-            vec_storeu_d(x_out_1 + j, vec_add_d(ov1, tv));
+            
+            const DTYPE x0_i = x0[i];
+            const DTYPE y0_i = y0[i];
+            const DTYPE z0_i = z0[i];
+            const DTYPE x_in_1_i = x_in_1[i];
+            double sum = vec_reduce_add_d(sum_v);
+            for (int j = n1_vec; j < n1; j++)
+            {
+                DTYPE dx = x0_i - x1[j];
+                DTYPE dy = y0_i - y1[j];
+                DTYPE dz = z0_i - z1[j];
+                DTYPE r2 = dx * dx + dy * dy + dz * dz;
+                DTYPE inv_d = (r2 == 0.0) ? 0.0 : (1.0 / DSQRT(r2));
+                sum += x_in_0[j] * inv_d;
+                x_out_1[j] += x_in_1_i * inv_d;
+            }
+            x_out_0[i] += sum;
         }
-        Coulomb_3d_matvec_std(
-            coord1 + n1_vec, ld1, n1 - n1_vec,
-            coord0, ld0, n0,
-            x_in_1, NULL, x_out_1 + n1_vec, NULL
-        );
     }
 }
 

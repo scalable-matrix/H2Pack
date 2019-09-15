@@ -25,4 +25,10 @@
 // H2Pack H2 representation matrix-vector multiplication
 #include "H2Pack_matvec.h"
 
+// H2Pack optimized kernels
+#include "H2Pack_kernels.h"
+
+// x86 intrinsic function wrapper
+#include "x86_intrin_wrapper.h"
+
 #endif

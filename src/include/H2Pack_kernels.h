@@ -28,6 +28,8 @@ extern "C" {
 #define Coulomb_3d_matvec_intrin Coulomb_3d_matvec_intrin_s
 #endif
 
+const int Coulomb_3d_eval_flop = (3 + 5 + (2 + 4 * NEWTON_ITER));
+
 static void Coulomb_3d_eval_std(
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
@@ -196,12 +198,13 @@ static void Coulomb_3d_matvec_intrin_d(
                 r2 = vec_fmadd_d(dy, dy, r2);
                 r2 = vec_fmadd_d(dz, dz, r2);
                 
-                vec_d sv = vec_mul_d(vec_bcast_d(x_in_0 + j), frsqrt_pf);
+                vec_d sv = vec_bcast_d(x_in_0 + j);
                 vec_d rinv = vec_frsqrt_d(r2);
                 tv = vec_fmadd_d(rinv, sv, tv);
             }
             vec_d ov0 = vec_loadu_d(x_out_0 + i);
-            vec_storeu_d(x_out_0 + i, vec_add_d(ov0, tv));
+            ov0 = vec_fmadd_d(tv, frsqrt_pf, ov0);
+            vec_storeu_d(x_out_0 + i, ov0);
         }
         Coulomb_3d_matvec_std(
             coord0 + n0_vec, ld0, n0 - n0_vec,
@@ -337,6 +340,8 @@ static void Coulomb_3d_matvec_intrin_d(
 // ============================================================ //
 // ======================   RPY Kernel   ====================== //
 // ============================================================ //
+
+const int RPY_3d_eval_flop = 37;  // Not so accurate, the average should be larger
 
 static void RPY_3d_eval_std(
     const DTYPE *coord0, const int ld0, const int n0,

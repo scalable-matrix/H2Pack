@@ -1009,10 +1009,7 @@ void H2P_build(
     h2pack->krnl_matvec = krnl_matvec;
     h2pack->krnl_eval_flops = krnl_eval_flops;
     if (BD_JIT == 1 && krnl_matvec == NULL) 
-    {
-        printf("[FATAL] Must provide a kernel_matvec_fptr for using BD_JIT in matvec!\n");
-        assert(krnl_matvec != NULL);
-    }
+        printf("[WARNING] krnl_eval() will be used in BD_JIT matvec. For better performance, kernel_matvec() should be provided. \n");
 
     // 1. Build projection matrices and skeleton row sets
     st = H2P_get_wtime_sec();

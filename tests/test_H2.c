@@ -269,7 +269,7 @@ int main(int argc, char **argv)
         2, max_L, test_params.krnl_eval, &pp
     );
     et = H2P_get_wtime_sec();
-    printf("H2Pack generate proxy point used %.3lf (s)\n", et - st);
+    printf("H2Pack generate proxy points used %.3lf (s)\n", et - st);
     
     H2P_build(
         h2pack, pp, test_params.BD_JIT, test_params.krnl_eval, 

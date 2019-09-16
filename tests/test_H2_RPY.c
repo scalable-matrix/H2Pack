@@ -65,36 +65,47 @@ void parse_params(int argc, char **argv)
     
     // Note: coordinates need to be stored in column-major style, i.e. test_params.coord 
     // is row-major and each column stores the coordinate of a point. 
-    if (argc < 5)
+    int need_gen = 1;
+    if (argc >= 7)
     {
-        DTYPE k = pow((DTYPE) test_params.n_point, 1.0 / (DTYPE) test_params.pt_dim);
-        for (int i = 0; i < test_params.n_point; i++)
+        DTYPE *tmp = (DTYPE*) malloc(sizeof(DTYPE) * test_params.n_point * test_params.pt_dim);
+        if (strstr(argv[6], ".csv") != NULL)
         {
-            DTYPE *coord_i = test_params.coord + i * test_params.pt_dim;
-            for (int j = 0; j < test_params.pt_dim; j++)
-                coord_i[j] = k * drand48();
+            printf("Reading coordinates from CSV file...");
+            FILE *inf = fopen(argv[6], "r");
+            for (int i = 0; i < test_params.n_point; i++)
+            {
+                for (int j = 0; j < test_params.pt_dim-1; j++) 
+                    fscanf(inf, "%lf,", &tmp[i * test_params.pt_dim + j]);
+                fscanf(inf, "%lf\n", &tmp[i * test_params.pt_dim + test_params.pt_dim-1]);
+            }
+            fclose(inf);
+            printf(" done.\n");
+            need_gen = 0;
         }
-        /*
-        FILE *ouf = fopen("coord.txt", "w");
-        for (int i = 0; i < test_params.n_point; i++)
+        if (strstr(argv[6], ".bin") != NULL)
         {
-            DTYPE *coord_i = test_params.coord + i;
-            for (int j = 0; j < test_params.pt_dim-1; j++) 
-                fprintf(ouf, "% .15lf, ", coord_i[j * test_params.n_point]]);
-            fprintf(ouf, "% .15lf\n", coord_i[(test_params.pt_dim-1) * test_params.n_point]);
+            printf("Reading coordinates from binary file...");
+            FILE *inf = fopen(argv[6], "rb");
+            fread(tmp, sizeof(DTYPE), test_params.n_point * test_params.pt_dim, inf);
+            fclose(inf);
+            printf(" done.\n");
+            need_gen = 0;
         }
-        fclose(ouf);
-        */
-    } else {
-        FILE *inf = fopen(argv[4], "r");
-        for (int i = 0; i < test_params.n_point; i++)
+        if (need_gen == 0)
         {
-            DTYPE *coord_i = test_params.coord + i;
-            for (int j = 0; j < test_params.pt_dim-1; j++) 
-                fscanf(inf, "%lf,", &coord_i[j * test_params.n_point]);
-            fscanf(inf, "%lf\n", &coord_i[(test_params.pt_dim-1) * test_params.n_point]);
+            for (int i = 0; i < test_params.pt_dim; i++)
+                for (int j = 0; j < test_params.n_point; j++)
+                    test_params.coord[i * test_params.n_point + j] = tmp[j * test_params.pt_dim + i];
         }
-        fclose(inf);
+        free(tmp);
+    }
+    if (need_gen == 1)
+    {
+        printf("Binary/CSV coordinate file not provided. Generating random coordinates in unit box...");
+        for (int i = 0; i < test_params.n_point * test_params.pt_dim; i++)
+            test_params.coord[i] = drand48();
+        printf(" done.\n");
     }
     
     test_params.krnl_eval       = RPY_3d_eval_std;

@@ -1,7 +1,7 @@
 LIB     = ../src/libH2Pack.a
 INC     = -I../src/include
 HOSTCC  = icc
-CFLAGS  = $(INC) -Wall -g -std=gnu99 -O3 -qopenmp -xHost -mkl
+CFLAGS  = $(INC) -Wall -g -std=gnu99 -O3 -qopenmp -xHost -mkl -DUSE_AVX
 LDFLAGS = -O3 -xHost -qopenmp 
 
 SRCS = $(wildcard *.c)

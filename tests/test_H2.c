@@ -18,296 +18,13 @@ struct H2P_test_params
     int   krnl_mat_size;
     int   BD_JIT;
     int   kernel_id;
+    int   krnl_eval_flops;
     DTYPE rel_tol;
     DTYPE *coord;
     kernel_eval_fptr   krnl_eval;
     kernel_matvec_fptr krnl_matvec;
 };
 struct H2P_test_params test_params;
-
-void Coulomb_kernel_3d(
-    const DTYPE *coord0, const int ld0, const int n0,
-    const DTYPE *coord1, const int ld1, const int n1,
-    DTYPE *mat, const int ldm
-)
-{
-    const DTYPE *x0 = coord0 + ld0 * 0;
-    const DTYPE *y0 = coord0 + ld0 * 1;
-    const DTYPE *z0 = coord0 + ld0 * 2;
-    const DTYPE *x1 = coord1 + ld1 * 0;
-    const DTYPE *y1 = coord1 + ld1 * 1;
-    const DTYPE *z1 = coord1 + ld1 * 2;
-    for (int i = 0; i < n0; i++)
-    {
-        const DTYPE x0_i = x0[i];
-        const DTYPE y0_i = y0[i];
-        const DTYPE z0_i = z0[i];
-        DTYPE *mat_i_row = mat + i * ldm;
-        #pragma omp simd
-        for (int j = 0; j < n1; j++)
-        {
-            DTYPE dx = x0_i - x1[j];
-            DTYPE dy = y0_i - y1[j];
-            DTYPE dz = z0_i - z1[j];
-            DTYPE r2 = dx * dx + dy * dy + dz * dz;
-            if (r2 < 1e-20) r2 = 1.0;
-            mat_i_row[j] = 1.0 / DSQRT(r2);
-        }
-    }
-}
-
-void Coulomb_kernel_3d_matvec(
-    const DTYPE *coord0, const int ld0, const int n0,
-    const DTYPE *coord1, const int ld1, const int n1,
-    const DTYPE *x_in_0, const DTYPE *x_in_1, 
-    DTYPE *x_out_0, DTYPE *x_out_1
-)
-{
-    const DTYPE *x0 = coord0 + ld0 * 0;
-    const DTYPE *y0 = coord0 + ld0 * 1;
-    const DTYPE *z0 = coord0 + ld0 * 2;
-    const DTYPE *x1 = coord1 + ld1 * 0;
-    const DTYPE *y1 = coord1 + ld1 * 1;
-    const DTYPE *z1 = coord1 + ld1 * 2;
-    if (x_in_1 == NULL)
-    {
-        for (int i = 0; i < n0; i++)
-        {
-            const DTYPE x0_i = x0[i];
-            const DTYPE y0_i = y0[i];
-            const DTYPE z0_i = z0[i];
-            DTYPE sum = 0.0;
-            #pragma omp simd
-            for (int j = 0; j < n1; j++)
-            {
-                DTYPE dx = x0_i - x1[j];
-                DTYPE dy = y0_i - y1[j];
-                DTYPE dz = z0_i - z1[j];
-                DTYPE r2 = dx * dx + dy * dy + dz * dz;
-                if (r2 < 1e-20) r2 = 1.0;
-                sum += x_in_0[j] / DSQRT(r2);
-            }
-            x_out_0[i] += sum;
-        }
-    } else {
-        for (int i = 0; i < n0; i++)
-        {
-            const DTYPE x0_i = x0[i];
-            const DTYPE y0_i = y0[i];
-            const DTYPE z0_i = z0[i];
-            const DTYPE x_in_1_i = x_in_1[i];
-            DTYPE sum = 0.0;
-            #pragma omp simd
-            for (int j = 0; j < n1; j++)
-            {
-                DTYPE dx = x0_i - x1[j];
-                DTYPE dy = y0_i - y1[j];
-                DTYPE dz = z0_i - z1[j];
-                DTYPE r2 = dx * dx + dy * dy + dz * dz;
-                if (r2 < 1e-20) r2 = 1.0;
-                DTYPE inv_d = 1.0 / DSQRT(r2);
-                sum += x_in_0[j] * inv_d;
-                x_out_1[j] += x_in_1_i * inv_d;
-            }
-            x_out_0[i] += sum;
-        }
-    }
-}
-
-void Laplace_kernel_3d(
-    const DTYPE *coord0, const int ld0, const int n0,
-    const DTYPE *coord1, const int ld1, const int n1,
-    DTYPE *mat, const int ldm
-)
-{
-    const DTYPE *x0 = coord0 + ld0 * 0;
-    const DTYPE *y0 = coord0 + ld0 * 1;
-    const DTYPE *z0 = coord0 + ld0 * 2;
-    const DTYPE *x1 = coord1 + ld1 * 0;
-    const DTYPE *y1 = coord1 + ld1 * 1;
-    const DTYPE *z1 = coord1 + ld1 * 2;
-    for (int i = 0; i < n0; i++)
-    {
-        const DTYPE x0_i = x0[i];
-        const DTYPE y0_i = y0[i];
-        const DTYPE z0_i = z0[i];
-        DTYPE *mat_i_row = mat + i * ldm;
-        #pragma omp simd
-        for (int j = 0; j < n1; j++)
-        {
-            DTYPE dx = x0_i - x1[j];
-            DTYPE dy = y0_i - y1[j];
-            DTYPE dz = z0_i - z1[j];
-            DTYPE r2 = dx * dx + dy * dy + dz * dz;
-            if (r2 < 1e-20) r2 = 1.0;
-            r2 = DSQRT(r2);
-            mat_i_row[j] = DLOG(r2);
-        }
-    }
-}
-
-void Gaussian_kernel_3d(
-    const DTYPE *coord0, const int ld0, const int n0,
-    const DTYPE *coord1, const int ld1, const int n1,
-    DTYPE *mat, const int ldm
-)
-{
-    const DTYPE *x0 = coord0 + ld0 * 0;
-    const DTYPE *y0 = coord0 + ld0 * 1;
-    const DTYPE *z0 = coord0 + ld0 * 2;
-    const DTYPE *x1 = coord1 + ld1 * 0;
-    const DTYPE *y1 = coord1 + ld1 * 1;
-    const DTYPE *z1 = coord1 + ld1 * 2;
-    for (int i = 0; i < n0; i++)
-    {
-        const DTYPE x0_i = x0[i];
-        const DTYPE y0_i = y0[i];
-        const DTYPE z0_i = z0[i];
-        DTYPE *mat_i_row = mat + i * ldm;
-        #pragma omp simd
-        for (int j = 0; j < n1; j++)
-        {
-            DTYPE dx = x0_i - x1[j];
-            DTYPE dy = y0_i - y1[j];
-            DTYPE dz = z0_i - z1[j];
-            DTYPE r2 = dx * dx + dy * dy + dz * dz;
-            mat_i_row[j] = DEXP(-r2);
-        }
-    }
-}
-
-void Coulomb_kernel_2d(
-    const DTYPE *coord0, const int ld0, const int n0,
-    const DTYPE *coord1, const int ld1, const int n1,
-    DTYPE *mat, const int ldm
-)
-{
-    const DTYPE *x0 = coord0 + ld0 * 0;
-    const DTYPE *y0 = coord0 + ld0 * 1;
-    const DTYPE *x1 = coord1 + ld1 * 0;
-    const DTYPE *y1 = coord1 + ld1 * 1;
-    for (int i = 0; i < n0; i++)
-    {
-        const DTYPE x0_i = x0[i];
-        const DTYPE y0_i = y0[i];
-        DTYPE *mat_i_row = mat + i * ldm;
-        #pragma omp simd
-        for (int j = 0; j < n1; j++)
-        {
-            DTYPE dx = x0_i - x1[j];
-            DTYPE dy = y0_i - y1[j];
-            DTYPE r2 = dx * dx + dy * dy;
-            if (r2 < 1e-20) r2 = 1.0;
-            mat_i_row[j] = 1.0 / DSQRT(r2);
-        }
-    }
-}
-
-void Coulomb_kernel_2d_matvec(
-    const DTYPE *coord0, const int ld0, const int n0,
-    const DTYPE *coord1, const int ld1, const int n1,
-    const DTYPE *x_in_0, const DTYPE *x_in_1, 
-    DTYPE *x_out_0, DTYPE *x_out_1
-)
-{
-    const DTYPE *x0 = coord0 + ld0 * 0;
-    const DTYPE *y0 = coord0 + ld0 * 1;
-    const DTYPE *x1 = coord1 + ld1 * 0;
-    const DTYPE *y1 = coord1 + ld1 * 1;
-    if (x_in_1 == NULL)
-    {
-        for (int i = 0; i < n0; i++)
-        {
-            const DTYPE x0_i = x0[i];
-            const DTYPE y0_i = y0[i];
-            DTYPE sum = 0.0;
-            #pragma omp simd
-            for (int j = 0; j < n1; j++)
-            {
-                DTYPE dx = x0_i - x1[j];
-                DTYPE dy = y0_i - y1[j];
-                DTYPE r2 = dx * dx + dy * dy;
-                if (r2 < 1e-20) r2 = 1.0;
-                sum += x_in_0[j] / DSQRT(r2);
-            }
-            x_out_0[i] += sum;
-        }
-    } else {
-        for (int i = 0; i < n0; i++)
-        {
-            const DTYPE x0_i = x0[i];
-            const DTYPE y0_i = y0[i];
-            const DTYPE x_in_1_i = x_in_1[i];
-            DTYPE sum = 0.0;
-            #pragma omp simd
-            for (int j = 0; j < n1; j++)
-            {
-                DTYPE dx = x0_i - x1[j];
-                DTYPE dy = y0_i - y1[j];
-                DTYPE r2 = dx * dx + dy * dy;
-                if (r2 < 1e-20) r2 = 1.0;
-                DTYPE inv_d = 1.0 / DSQRT(r2);
-                sum += x_in_0[j] * inv_d;
-                x_out_1[j] += x_in_1_i * inv_d;
-            }
-            x_out_0[i] += sum;
-        }
-    }
-}
-
-void Laplace_kernel_2d(
-    const DTYPE *coord0, const int ld0, const int n0,
-    const DTYPE *coord1, const int ld1, const int n1,
-    DTYPE *mat, const int ldm
-)
-{
-    const DTYPE *x0 = coord0 + ld0 * 0;
-    const DTYPE *y0 = coord0 + ld0 * 1;
-    const DTYPE *x1 = coord1 + ld1 * 0;
-    const DTYPE *y1 = coord1 + ld1 * 1;
-    for (int i = 0; i < n0; i++)
-    {
-        const DTYPE x0_i = x0[i];
-        const DTYPE y0_i = y0[i];
-        DTYPE *mat_i_row = mat + i * ldm;
-        #pragma omp simd
-        for (int j = 0; j < n1; j++)
-        {
-            DTYPE dx = x0_i - x1[j];
-            DTYPE dy = y0_i - y1[j];
-            DTYPE r2 = dx * dx + dy * dy;
-            if (r2 < 1e-20) r2 = 1.0;
-            r2 = DSQRT(r2);
-            mat_i_row[j] = DLOG(r2);
-        }
-    }
-}
-
-void Gaussian_kernel_2d(
-    const DTYPE *coord0, const int ld0, const int n0,
-    const DTYPE *coord1, const int ld1, const int n1,
-    DTYPE *mat, const int ldm
-)
-{
-    const DTYPE *x0 = coord0 + ld0 * 0;
-    const DTYPE *y0 = coord0 + ld0 * 1;
-    const DTYPE *x1 = coord1 + ld1 * 0;
-    const DTYPE *y1 = coord1 + ld1 * 1;
-    for (int i = 0; i < n0; i++)
-    {
-        const DTYPE x0_i = x0[i];
-        const DTYPE y0_i = y0[i];
-        DTYPE *mat_i_row = mat + i * ldm;
-        #pragma omp simd
-        for (int j = 0; j < n1; j++)
-        {
-            DTYPE dx = x0_i - x1[j];
-            DTYPE dy = y0_i - y1[j];
-            DTYPE r2 = dx * dx + dy * dy;
-            mat_i_row[j] = DEXP(-r2);
-        }
-    }
-}
 
 void parse_params(int argc, char **argv)
 {
@@ -369,37 +86,47 @@ void parse_params(int argc, char **argv)
     
     // Note: coordinates need to be stored in column-major style, i.e. test_params.coord 
     // is row-major and each column stores the coordinate of a point. 
-    if (argc < 7)
+    int need_gen = 1;
+    if (argc >= 7)
     {
-        DTYPE k = pow((DTYPE) test_params.n_point, 1.0 / (DTYPE) test_params.pt_dim);
-        if (test_params.kernel_id == 2) k = 1.0;
-        for (int i = 0; i < test_params.n_point; i++)
+        DTYPE *tmp = (DTYPE*) malloc(sizeof(DTYPE) * test_params.n_point * test_params.pt_dim);
+        if (strstr(argv[6], ".csv") != NULL)
         {
-            DTYPE *coord_i = test_params.coord + i * test_params.pt_dim;
-            for (int j = 0; j < test_params.pt_dim; j++)
-                coord_i[j] = k * drand48();
+            printf("Reading coordinates from CSV file...");
+            FILE *inf = fopen(argv[6], "r");
+            for (int i = 0; i < test_params.n_point; i++)
+            {
+                for (int j = 0; j < test_params.pt_dim-1; j++) 
+                    fscanf(inf, "%lf,", &tmp[i * test_params.pt_dim + j]);
+                fscanf(inf, "%lf\n", &tmp[i * test_params.pt_dim + test_params.pt_dim-1]);
+            }
+            fclose(inf);
+            printf(" done.\n");
+            need_gen = 0;
         }
-        /*
-        FILE *ouf = fopen("coord.txt", "w");
-        for (int i = 0; i < test_params.n_point; i++)
+        if (strstr(argv[6], ".bin") != NULL)
         {
-            DTYPE *coord_i = test_params.coord + i;
-            for (int j = 0; j < test_params.pt_dim-1; j++) 
-                fprintf(ouf, "% .15lf, ", coord_i[j * test_params.n_point]]);
-            fprintf(ouf, "% .15lf\n", coord_i[(test_params.pt_dim-1) * test_params.n_point]);
+            printf("Reading coordinates from binary file...");
+            FILE *inf = fopen(argv[6], "rb");
+            fread(tmp, sizeof(DTYPE), test_params.n_point * test_params.pt_dim, inf);
+            fclose(inf);
+            printf(" done.\n");
+            need_gen = 0;
         }
-        fclose(ouf);
-        */
-    } else {
-        FILE *inf = fopen(argv[6], "r");
-        for (int i = 0; i < test_params.n_point; i++)
+        if (need_gen == 0)
         {
-            DTYPE *coord_i = test_params.coord + i;
-            for (int j = 0; j < test_params.pt_dim-1; j++) 
-                fscanf(inf, "%lf,", &coord_i[j * test_params.n_point]);
-            fscanf(inf, "%lf\n", &coord_i[(test_params.pt_dim-1) * test_params.n_point]);
+            for (int i = 0; i < test_params.pt_dim; i++)
+                for (int j = 0; j < test_params.n_point; j++)
+                    test_params.coord[i * test_params.n_point + j] = tmp[j * test_params.pt_dim + i];
         }
-        fclose(inf);
+        free(tmp);
+    }
+    if (need_gen == 1)
+    {
+        printf("Binary/CSV coordinate file not provided. Generating random coordinates in unit box...");
+        for (int i = 0; i < test_params.n_point * test_params.pt_dim; i++)
+            test_params.coord[i] = drand48();
+        printf(" done.\n");
     }
     
     if (test_params.pt_dim == 3) 
@@ -408,20 +135,23 @@ void parse_params(int argc, char **argv)
         {
             case 0: 
             { 
-                test_params.krnl_eval   = Coulomb_kernel_3d; 
-                test_params.krnl_matvec = Coulomb_kernel_3d_matvec; 
+                test_params.krnl_eval       = Coulomb_3d_eval_intrin; 
+                test_params.krnl_matvec     = Coulomb_3d_matvec_intrin; 
+                test_params.krnl_eval_flops = Coulomb_3d_eval_flop;
                 break;
             }
             case 1: 
             {
-                test_params.krnl_eval   = Laplace_kernel_3d; 
-                test_params.krnl_matvec = NULL; 
+                test_params.krnl_eval       = NULL; 
+                test_params.krnl_matvec     = NULL; 
+                test_params.krnl_eval_flops = 0;
                 break;
             }
             case 2: 
             {
-                test_params.krnl_eval   = Gaussian_kernel_3d; 
-                test_params.krnl_matvec = NULL; 
+                test_params.krnl_eval       = NULL; 
+                test_params.krnl_matvec     = NULL; 
+                test_params.krnl_eval_flops = 0;
                 break;
             }
         }
@@ -432,20 +162,23 @@ void parse_params(int argc, char **argv)
         {
             case 0: 
             {
-                test_params.krnl_eval   = Coulomb_kernel_2d; 
-                test_params.krnl_matvec = Coulomb_kernel_2d_matvec; 
+                test_params.krnl_eval       = NULL; 
+                test_params.krnl_matvec     = NULL; 
+                test_params.krnl_eval_flops = 0;
                 break;
             }
             case 1: 
             {
-                test_params.krnl_eval   = Laplace_kernel_2d; 
-                test_params.krnl_matvec = NULL; 
+                test_params.krnl_eval       = NULL; 
+                test_params.krnl_matvec     = NULL; 
+                test_params.krnl_eval_flops = 0;
                 break;
             }
             case 2: 
             {
-                test_params.krnl_eval   = Gaussian_kernel_2d; 
-                test_params.krnl_matvec = NULL; 
+                test_params.krnl_eval       = NULL; 
+                test_params.krnl_matvec     = NULL; 
+                test_params.krnl_eval_flops = 0;
                 break;
             }
         }
@@ -454,8 +187,8 @@ void parse_params(int argc, char **argv)
 
 void direct_nbody(
     //kernel_eval_fptr krnl_eval, 
-    kernel_matvec_fptr krnl_matvec, const int krnl_dim, const int n_point, 
-    const DTYPE *coord, const DTYPE *x, DTYPE *y
+    kernel_matvec_fptr krnl_matvec, const int krnl_eval_flops, 
+    const int krnl_dim, const int n_point, const DTYPE *coord, const DTYPE *x, DTYPE *y
 )
 {
     int nx_blk_size = 64;
@@ -503,8 +236,10 @@ void direct_nbody(
             }
         }
     }
-    double et = H2P_get_wtime_sec();
-    printf("Direct N-body reference result obtained, used time = %.3lf (s)\n", et - st);
+    double ut = H2P_get_wtime_sec() - st;
+    double GFLOPS = (double)(n_point) * (double)(n_point) * (double)(krnl_eval_flops + 2);
+    GFLOPS = GFLOPS / 1000000000.0;
+    printf("Direct N-body reference result obtained, %.3lf s, %.2lf GFLOPS\n", ut, GFLOPS / ut);
     H2P_free_aligned(thread_buffs);
 }
 
@@ -544,9 +279,12 @@ int main(int argc, char **argv)
         2, max_L, test_params.krnl_eval, &pp
     );
     et = H2P_get_wtime_sec();
-    printf("H2Pack generate proxy point used %.3lf (s)\n", et - st);
+    printf("H2Pack generate proxy points used %.3lf (s)\n", et - st);
     
-    H2P_build(h2pack, test_params.krnl_eval, pp, test_params.BD_JIT, test_params.krnl_matvec);
+    H2P_build(
+        h2pack, pp, test_params.BD_JIT, test_params.krnl_eval, 
+        test_params.krnl_matvec, test_params.krnl_eval_flops
+    );
     
     int nthreads = omp_get_max_threads();
     DTYPE *x, *y0, *y1, *tb;
@@ -558,8 +296,8 @@ int main(int argc, char **argv)
     
     // Get reference results
     direct_nbody(
-        test_params.krnl_matvec, test_params.krnl_dim, 
-        test_params.n_point, h2pack->coord, x, y0
+        test_params.krnl_matvec, test_params.krnl_eval_flops,
+        test_params.krnl_dim, test_params.n_point, h2pack->coord, x, y0
     );
     
     // Warm up, reset timers, and test the matvec performance

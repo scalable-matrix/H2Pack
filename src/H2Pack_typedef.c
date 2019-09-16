@@ -23,8 +23,9 @@ void H2P_init(
     h2pack->krnl_dim  = krnl_dim;
     h2pack->max_child = 1 << pt_dim;
     h2pack->n_matvec  = 0;
-    memset(h2pack->timers,   0, sizeof(double) * 9);
-    memset(h2pack->mat_size, 0, sizeof(size_t) * 8);
+    memset(h2pack->mat_size,  0, sizeof(size_t) * 8);
+    memset(h2pack->timers,    0, sizeof(double) * 9);
+    memset(h2pack->JIT_flops, 0, sizeof(double) * 2);
     
     h2pack->QR_stop_type = QR_stop_type;
     if (QR_stop_type == QR_RANK) 
@@ -228,18 +229,36 @@ void H2P_print_statistic(H2Pack_t h2pack)
         "      |----> Upward sweep        = %.3lf, %.2lf GB/s\n", 
         h2pack->timers[4], uw_MB  / h2pack->timers[4] / 1024.0
     );
-    printf(
-        "      |----> Intermediate sweep  = %.3lf, %.2lf GB/s\n", 
-        h2pack->timers[5], mid_MB / h2pack->timers[5] / 1024.0
-    );
+    if (h2pack->BD_JIT == 0)
+    {
+        printf(
+            "      |----> Intermediate sweep  = %.3lf, %.2lf GB/s\n", 
+            h2pack->timers[5], mid_MB / h2pack->timers[5] / 1024.0
+        );
+    } else {
+        double GFLOPS = h2pack->JIT_flops[0] / 1000000000.0;
+        printf(
+            "      |----> Intermediate sweep  = %.3lf, %.2lf GFLOPS\n", 
+            h2pack->timers[5], GFLOPS / h2pack->timers[5]
+        );
+    }
     printf(
         "      |----> Downward sweep      = %.3lf, %.2lf GB/s\n", 
         h2pack->timers[6], dw_MB  / h2pack->timers[6] / 1024.0
     );
-    printf(
-        "      |----> Dense block sweep   = %.3lf, %.2lf GB/s\n", 
-        h2pack->timers[7], db_MB  / h2pack->timers[7] / 1024.0
-    );
+    if (h2pack->BD_JIT == 0)
+    {
+        printf(
+            "      |----> Dense block sweep   = %.3lf, %.2lf GB/s\n", 
+            h2pack->timers[7], db_MB  / h2pack->timers[7] / 1024.0
+        );
+    } else {
+        double GFLOPS = h2pack->JIT_flops[1] / 1000000000.0;
+        printf(
+            "      |----> Dense block sweep   = %.3lf, %.2lf GFLOPS\n", 
+            h2pack->timers[7], GFLOPS / h2pack->timers[7]
+        );
+    }
     printf(
         "      |----> OpenMP reduction    = %.3lf, %.2lf GB/s\n", 
         h2pack->timers[8], rd_MB  / h2pack->timers[8] / 1024.0

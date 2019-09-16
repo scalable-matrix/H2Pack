@@ -63,6 +63,7 @@ struct H2Pack
     int    QR_stop_rank;            // Partial QR maximum rank
     int    n_point;                 // Number of points for the kernel matrix
     int    krnl_mat_size;           // Size of the kernel matrix
+    int    krnl_eval_flops;         // FLOPs needed in evaulating the kernel function for a pair of point
     int    max_leaf_points;         // Maximum point in a leaf node's box
     int    n_node;                  // Number of nodes in this H2 tree
     int    root_idx;                // Index of the root node (== n_node - 1, save it for convenience)
@@ -118,9 +119,10 @@ struct H2Pack
     kernel_matvec_fptr krnl_matvec; // Pointer to kernel matrix matvec function
 
     // Statistic data
-    int    n_matvec;            // Number of performed matvec
-    size_t mat_size[8];         // Total size of U, B, D; matvec memory footprint
-    double timers[9];           // Partition; construct U, B, D; matvec up, down, B, D, reduce
+    int    n_matvec;                // Number of performed matvec
+    size_t mat_size[8];             // Total size of U, B, D; matvec memory footprint
+    double timers[9];               // Partition; construct U, B, D; matvec up, down, B, D, reduce
+    double JIT_flops[2];            // JIT B & D flops
 };
 typedef struct H2Pack* H2Pack_t;
 

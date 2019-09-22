@@ -16,8 +16,9 @@
     vec_sub_*        : Subtract intrinsic vector a by b
     vec_mul_*        : Multiply two intrinsic vectors a * b
     vec_div_*        : Divide intrinsic vector a by b
-    vec_sqrt_*       : Return the square root of an intrisic vector's each lane
+    vec_sqrt_*       : Return the square root of an intrinsic vector's each lane
     vec_fmadd_*      : Fused Multiply-Add intrinsic vectors a * b + c
+    vec_fnmadd_*     : Fused negative Multiply-Add intrinsic vectors -(a * b) + c
     vec_fmsub_*      : Fused Multiply-Sub intrinsic vectors a * b - c
     vec_max_*        : Return each lane's maximum values of two intrinsic vectors 
     vec_min_*        : Return each lane's minimum values of two intrinsic vectors   
@@ -27,6 +28,7 @@
     vec_cmp_le_*     : Return in each lane if a <= b
     vec_cmp_gt_*     : Return in each lane if a >  b
     vec_cmp_ge_*     : Return in each lane if a >= b
+    vec_blend_*      : Blend elements from two intrinsic vectors a, b using mask, mask == 1 --> use b, else use a
     vec_reduce_add_* : Return the sum of values in an intrinsic vector
     vec_arsqrt_*     : Approximate reverse squart root, returns 0 if r2 == 0
     vec_rsqrt_ntit_* : Newton iteration step for reverse squart root,
@@ -52,10 +54,12 @@
 #ifdef USE_AVX
 #ifdef __AVX__
 
-#define SIMD_LEN_S 8
-#define SIMD_LEN_D 4
-#define vec_f __m256
-#define vec_d __m256d
+#define SIMD_LEN_S  8
+#define SIMD_LEN_D  4
+#define vec_f       __m256
+#define vec_d       __m256d
+#define vec_cmp_f   __m256
+#define vec_cmp_d   __m256d
 
 static inline __m256  vec_zero_s() { return _mm256_setzero_ps(); }
 static inline __m256d vec_zero_d() { return _mm256_setzero_pd(); }
@@ -97,11 +101,17 @@ static inline __m256d vec_sqrt_d(const __m256d a) { return _mm256_sqrt_pd(a); }
 static inline __m256  vec_fmadd_s(const __m256  a, const __m256  b, const __m256  c) { return _mm256_fmadd_ps(a, b, c); }
 static inline __m256d vec_fmadd_d(const __m256d a, const __m256d b, const __m256d c) { return _mm256_fmadd_pd(a, b, c); }
 
+static inline __m256  vec_fnmadd_s(const __m256  a, const __m256  b, const __m256  c) { return _mm256_fnmadd_ps(a, b, c); }
+static inline __m256d vec_fnmadd_d(const __m256d a, const __m256d b, const __m256d c) { return _mm256_fnmadd_pd(a, b, c); }
+
 static inline __m256  vec_fmsub_s(const __m256  a, const __m256  b, const __m256  c) { return _mm256_fmsub_ps(a, b, c); }
 static inline __m256d vec_fmsub_d(const __m256d a, const __m256d b, const __m256d c) { return _mm256_fmsub_pd(a, b, c); }
 #else
 static inline __m256  vec_fmadd_s(const __m256  a, const __m256  b, const __m256  c) { return _mm256_add_ps(_mm256_mul_ps(a, b), c); }
 static inline __m256d vec_fmadd_d(const __m256d a, const __m256d b, const __m256d c) { return _mm256_add_pd(_mm256_mul_pd(a, b), c); }
+
+static inline __m256  vec_fnmadd_s(const __m256  a, const __m256  b, const __m256  c) { return _mm256_sub_ps(c, _mm256_mul_ps(a, b)); }
+static inline __m256d vec_fnmadd_d(const __m256d a, const __m256d b, const __m256d c) { return _mm256_sub_pd(c, _mm256_mul_pd(a, b)); }
 
 static inline __m256  vec_fmsub_s(const __m256  a, const __m256  b, const __m256  c) { return _mm256_sub_ps(_mm256_mul_ps(a, b), c); }
 static inline __m256d vec_fmsub_d(const __m256d a, const __m256d b, const __m256d c) { return _mm256_sub_pd(_mm256_mul_pd(a, b), c); }
@@ -130,6 +140,9 @@ static inline __m256d vec_cmp_gt_d (const __m256d a, const __m256d b) { return _
 
 static inline __m256  vec_cmp_ge_s (const __m256  a, const __m256  b) { return _mm256_cmp_ps(a, b, _CMP_GE_OS);  }
 static inline __m256d vec_cmp_ge_d (const __m256d a, const __m256d b) { return _mm256_cmp_pd(a, b, _CMP_GE_OS);  }
+
+static inline __m256  vec_blend_s(const __m256  a, const __m256  b, const __m256  mask) { return _mm256_blendv_ps(a, b, mask); }
+static inline __m256d vec_blend_d(const __m256d a, const __m256d b, const __m256d mask) { return _mm256_blendv_pd(a, b, mask); }
 
 static inline float vec_reduce_add_s(const __m256  a) 
 {
@@ -175,10 +188,12 @@ static inline __m256d vec_arsqrt_d(const __m256d r2)
 #ifdef USE_AVX512
 #ifdef __AVX512F__
 
-#define SIMD_LEN_S 16
-#define SIMD_LEN_D 8
-#define vec_f __m512
-#define vec_d __m512d
+#define SIMD_LEN_S  16
+#define SIMD_LEN_D  8
+#define vec_f       __m512
+#define vec_d       __m512d
+#define vec_cmp_f   __mmask16
+#define vec_cmp_d   __mmask8
 
 static inline __m512  vec_zero_s() { return _mm512_setzero_ps(); }
 static inline __m512d vec_zero_d() { return _mm512_setzero_pd(); }
@@ -219,6 +234,9 @@ static inline __m512d vec_sqrt_d(const __m512d a) { return _mm512_sqrt_pd(a); }
 static inline __m512  vec_fmadd_s(const __m512  a, const __m512  b, const __m512  c) { return _mm512_fmadd_ps(a, b, c); }
 static inline __m512d vec_fmadd_d(const __m512d a, const __m512d b, const __m512d c) { return _mm512_fmadd_pd(a, b, c); }
 
+static inline __m512  vec_fnmadd_s(const __m512  a, const __m512  b, const __m512  c) { return _mm512_fnmadd_ps(a, b, c); }
+static inline __m512d vec_fnmadd_d(const __m512d a, const __m512d b, const __m512d c) { return _mm512_fnmadd_pd(a, b, c); }
+
 static inline __m512  vec_fmsub_s(const __m512  a, const __m512  b, const __m512  c) { return _mm512_fmsub_ps(a, b, c); }
 static inline __m512d vec_fmsub_d(const __m512d a, const __m512d b, const __m512d c) { return _mm512_fmsub_pd(a, b, c); }
 
@@ -245,6 +263,9 @@ static inline __mmask8  vec_cmp_gt_d (const __m512d a, const __m512d b) { return
 
 static inline __mmask16 vec_cmp_ge_s (const __m512  a, const __m512  b) { return _mm512_cmp_ps_mask(a, b, _CMP_GE_OS);  }
 static inline __mmask8  vec_cmp_ge_d (const __m512d a, const __m512d b) { return _mm512_cmp_pd_mask(a, b, _CMP_GE_OS);  }
+
+static inline __m512  vec_blend_s(const __m512  a, const __m512  b, const __mmask16 mask) { return _mm512_mask_blend_ps(mask, a, b); }
+static inline __m512d vec_blend_d(const __m512d a, const __m512d b, const __mmask8  mask) { return _mm512_mask_blend_pd(mask, a, b); }
 
 static inline float  vec_reduce_add_s(const __m512  a) { return _mm512_reduce_add_ps(a); }
 static inline double vec_reduce_add_d(const __m512d a) { return _mm512_reduce_add_pd(a); }

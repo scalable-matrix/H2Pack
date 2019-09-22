@@ -235,7 +235,9 @@ void H2P_generate_proxy_point_ID(
                 min_dist->data[j] = MIN(min_dist->data[j], dist_ij);
             }
         }
-        const int Ny_size2 = 2 * ny;
+        
+        // Disable densification for the moment. Should be enabled when high accuracy is required.
+        const int Ny_size2 = ny;// * 2;
         H2P_dense_mat_init(&pp[level], pt_dim, Ny_size2);
         H2P_dense_mat_t pp_level = pp[level];
         // Also transpose the coordinate array for vectorizing kernel evaluation here
@@ -247,6 +249,7 @@ void H2P_generate_proxy_point_ID(
             for (int j = 0; j < pt_dim; j++)
                 tmp_coord0[j] = Ny_point_i[j * Ny_points->ncol];
             DTYPE radius_i_scale = min_dist->data[i] * 0.33;
+            /*
             int flag = 1;
             while (flag == 1)
             {
@@ -269,10 +272,12 @@ void H2P_generate_proxy_point_ID(
             }
             DTYPE *coord_0 = pp_level->data + (2 * i);
             DTYPE *coord_1 = pp_level->data + (2 * i + 1);
+            */
+            DTYPE *coord_0 = pp_level->data + i;
             for (int j = 0; j < pt_dim; j++)
             {
                 coord_0[j * Ny_size2] = tmp_coord0[j];
-                coord_1[j * Ny_size2] = tmp_coord1[j];
+                //coord_1[j * Ny_size2] = tmp_coord1[j];
             }
         }
     }
@@ -1009,7 +1014,7 @@ void H2P_build(
     h2pack->krnl_matvec = krnl_matvec;
     h2pack->krnl_eval_flops = krnl_eval_flops;
     if (BD_JIT == 1 && krnl_matvec == NULL) 
-        printf("[WARNING] krnl_eval() will be used in BD_JIT matvec. For better performance, kernel_matvec() should be provided. \n");
+        printf("[WARNING] krnl_eval() will be used in BD_JIT matvec. For better performance, krnl_matvec() should be provided. \n");
 
     // 1. Build projection matrices and skeleton row sets
     st = H2P_get_wtime_sec();

@@ -755,7 +755,7 @@ void H2P_build_B(H2Pack_t h2pack)
         B_total_size += Bi_size;
         B_ptr[i + 1] = Bi_size;
         // Add Statistic info
-        h2pack->mat_size[4]  += 2 * (B_nrow[i] * B_ncol[i]);
+        h2pack->mat_size[4]  += B_nrow[i] * B_ncol[i];
         h2pack->mat_size[4]  += 2 * (B_nrow[i] + B_ncol[i]);
         h2pack->JIT_flops[0] += (double)(h2pack->krnl_eval_flops + krnl_dim * krnl_dim * 4) * (double)(node0_npt * node1_npt);
     }
@@ -915,7 +915,7 @@ void H2P_build_D(H2Pack_t h2pack)
         D_ptr[ii + 1] = Di_size;
         D1_total_size += Di_size;
         // Add statistic info
-        h2pack->mat_size[6] += 2 * (D_nrow[ii] * D_ncol[ii]);
+        h2pack->mat_size[6] += D_nrow[ii] * D_ncol[ii];
         h2pack->mat_size[6] += 2 * (D_nrow[ii] + D_ncol[ii]);
         h2pack->JIT_flops[1] += (double)(h2pack->krnl_eval_flops + krnl_dim * krnl_dim * 4) * (double)(node0_npt * node1_npt);
     }

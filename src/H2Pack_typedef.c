@@ -204,7 +204,7 @@ void H2P_print_statistic(H2Pack_t h2pack)
     printf("  * Matvec auxiliary arrays   : %.2lf (MB) \n", y0y1_MB);
     printf("  * Thread-local buffers      : %.2lf (MB) \n", tb_MB);
     printf("  * Max / Avg compressed rank : %d, %.0lf \n", max_node_rank, sum_node_rank / non_empty_node);
-    printf("  * sizeof(U + B + D) / kms   : %.3lf \n", UBD_k);
+    //printf("  * sizeof(U + B + D) / kms   : %.3lf \n", UBD_k);
     
     printf("==================== H2Pack timing info =====================\n");
     int n_matvec = h2pack->n_matvec;

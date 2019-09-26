@@ -379,24 +379,43 @@ void H2P_matvec_intermediate_sweep_AOT(H2Pack_t h2pack, const DTYPE *x)
     #endif
 }
 
+// Extend the number of points to a multipler of SIMD_LEN and perform a symmetric n-body matvec
+// Input parameters:
+//   coord0      : Matrix, size dim-by-ld0, coordinates of the 1st point set
+//   ld0         : Leading dimension of coord0, should be >= n0
+//   n0          : Number of points in coord0 (each column in coord0 is a coordinate)
+//   coord1      : Matrix, size dim-by-ld1, coordinates of the 2nd point set
+//   ld1         : Leading dimension of coord1, should be >= n1
+//   n1          : Number of points in coord1 (each column in coord0 is a coordinate)
+//   x_in_0_     : Vector, size >= n1, will be left multiplied by kernel_matrix(coord0, coord1)
+//   x_in_1_     : Vector, size >= n0, will be left multiplied by kernel_matrix(coord0, coord1)^T.
+//                 If x_in_1_ == NULL, x_out_1 will remains unchanged.
+//   pt_dim      : Dimension of point coordinate
+//   krnl_dim    : Dimension of tensor kernel's return
+//   workbuf     : H2P_dense_mat data sturcture for allocating working buffer
+//   krnl_matvec : Pointer to kernel matrix matvec function
+// Output parameter:
+//   x_out_0_ : Vector, size >= n0, x_out_0 += kernel_matrix(coord0, coord1) * x_in_0
+//   x_out_1_ : Vector, size >= n1, x_out_1 += kernel_matrix(coord0, coord1)^T * x_in_1
 void H2P_ext_symm_krnl_matvec(
     DTYPE *coord0, const int ld0, const int n0,
     DTYPE *coord1, const int ld1, const int n1,
     const DTYPE *x_in_0_, const DTYPE *x_in_1_, DTYPE *x_out_0_, DTYPE *x_out_1_,
-    const int pt_dim, kernel_matvec_fptr krnl_matvec, H2P_dense_mat_t workbuf
+    const int pt_dim, const int krnl_dim, H2P_dense_mat_t workbuf, 
+    kernel_matvec_fptr krnl_matvec
 )
 {
     int n0_ext  = (n0 + SIMD_LEN - 1) / SIMD_LEN * SIMD_LEN;
     int n1_ext  = (n1 + SIMD_LEN - 1) / SIMD_LEN * SIMD_LEN;
     int n01_ext = n0_ext + n1_ext;
-    int buf_size = (pt_dim + 1) * n01_ext * 2;
+    int buf_size = (pt_dim + krnl_dim) * n01_ext * 2;
     H2P_dense_mat_resize(workbuf, 1, buf_size);
     DTYPE *trg_coord = workbuf->data;
     DTYPE *src_coord = trg_coord + pt_dim * n0_ext;
     DTYPE *x_in_0    = src_coord + pt_dim * n1_ext;
-    DTYPE *x_in_1    = x_in_0    + n1_ext;
-    DTYPE *x_out_0   = x_in_1    + n0_ext;
-    DTYPE *x_out_1   = x_out_0   + n0_ext;
+    DTYPE *x_in_1    = x_in_0    + n1_ext * krnl_dim;
+    DTYPE *x_out_0   = x_in_1    + n0_ext * krnl_dim;
+    DTYPE *x_out_1   = x_out_0   + n0_ext * krnl_dim;
     
     // Copy coorindates and pad the extend part
     for (int i = 0; i < pt_dim; i++)
@@ -412,13 +431,20 @@ void H2P_ext_symm_krnl_matvec(
         for (int j = n0; j < n0_ext; j++) c0_dst[j] = 1e100;
         for (int j = n1; j < n1_ext; j++) c1_dst[j] = 1e100;
     }
+    
     // Copy input vectors and initialize output vectors
-    memcpy(x_in_0, x_in_0_, sizeof(DTYPE) * n1);
-    memcpy(x_in_1, x_in_1_, sizeof(DTYPE) * n0);
-    for (int j = n1; j < n1_ext; j++) x_in_0[j] = 0;
-    for (int j = n0; j < n0_ext; j++) x_in_1[j] = 0;
-    memset(x_out_0, 0, sizeof(DTYPE) * n0_ext);
-    memset(x_out_1, 0, sizeof(DTYPE) * n1_ext);
+    memcpy(x_in_0, x_in_0_, sizeof(DTYPE) * n1 * krnl_dim);
+    memset(x_out_0, 0, sizeof(DTYPE) * n0_ext * krnl_dim);
+    for (int j = n1 * krnl_dim; j < n1_ext * krnl_dim; j++) x_in_0[j] = 0;
+    if (x_in_1_ != NULL)
+    {
+        memcpy(x_in_1, x_in_1_, sizeof(DTYPE) * n0 * krnl_dim);
+        memset(x_out_1, 0, sizeof(DTYPE) * n1_ext * krnl_dim);
+        for (int j = n0 * krnl_dim; j < n0_ext * krnl_dim; j++) x_in_1[j] = 0;
+    } else {
+        x_in_1  = NULL;
+        x_out_1 = NULL;
+    }
     
     // Do the symmetric n-body matvec
     krnl_matvec(
@@ -428,8 +454,13 @@ void H2P_ext_symm_krnl_matvec(
     );
     
     // Add results back to original output vectors
-    for (int i = 0; i < n0; i++) x_out_0_[i] += x_out_0[i];
-    for (int i = 0; i < n1; i++) x_out_1_[i] += x_out_1[i];
+    #pragma omp simd
+    for (int i = 0; i < n0 * krnl_dim; i++) x_out_0_[i] += x_out_0[i];
+    if (x_in_1_ != NULL)
+    {
+        #pragma omp simd
+        for (int i = 0; i < n1 * krnl_dim; i++) x_out_1_[i] += x_out_1[i];
+    }
 }
 
 // H2 representation matvec intermediate sweep, calculate B_{ij} * (U_j^T * x_j)
@@ -525,15 +556,8 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                             J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
                             J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
                             y0[node1]->data, y0[node0]->data, y1_dst_0, y1_dst_1,
-                            pt_dim, krnl_matvec, workbuf
+                            pt_dim, krnl_dim, workbuf, krnl_matvec
                         );
-                        /*
-                        krnl_matvec(
-                            J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
-                            J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                            y0[node1]->data, y0[node0]->data, y1_dst_0, y1_dst_1
-                        );
-                        */
                     } else {
                         int Bi_npt_row = J_coord[node0]->ncol;
                         for (int blk_pt_s = 0; blk_pt_s < Bi_npt_row; blk_pt_s += Bi_blk_npt)
@@ -578,15 +602,8 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                             J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
                             coord + pt_s1, n_point, node1_npt,
                             x_spos, y0[node0]->data, y1_dst_0, y_spos, 
-                            pt_dim, krnl_matvec, workbuf
+                            pt_dim, krnl_dim, workbuf, krnl_matvec
                         );
-                        /*
-                        krnl_matvec(
-                            J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
-                            coord + pt_s1, n_point, node1_npt,
-                            x_spos, y0[node0]->data, y1_dst_0, y_spos
-                        );
-                        */
                     } else {
                         int Bi_npt_row = J_coord[node0]->ncol;
                         for (int blk_pt_s = 0; blk_pt_s < Bi_npt_row; blk_pt_s += Bi_blk_npt)
@@ -631,15 +648,8 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
                             coord + pt_s0, n_point, node0_npt,
                             J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
                             y0[node1]->data, x_spos, y_spos, y1_dst_1,
-                            pt_dim, krnl_matvec, workbuf
+                            pt_dim, krnl_dim, workbuf, krnl_matvec
                         );
-                        /*
-                        krnl_matvec(
-                            coord + pt_s0, n_point, node0_npt,
-                            J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                            y0[node1]->data, x_spos, y_spos, y1_dst_1
-                        );
-                        */
                     } else {
                         int Bi_npt_row = node0_npt;
                         for (int blk_pt_s = 0; blk_pt_s < Bi_npt_row; blk_pt_s += Bi_blk_npt)
@@ -916,10 +926,11 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
                 
                 if (krnl_matvec != NULL)
                 {
-                    krnl_matvec(
+                    H2P_ext_symm_krnl_matvec(
                         coord + pt_s, n_point, node_npt,
                         coord + pt_s, n_point, node_npt,
-                        x_spos, NULL, y_spos, NULL
+                        x_spos, NULL, y_spos, NULL, 
+                        pt_dim, krnl_dim, workbuf, krnl_matvec
                     );
                 } else {
                     int Di_nrow = D_nrow[i];
@@ -977,15 +988,8 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
                         coord + pt_s0, n_point, node0_npt,
                         coord + pt_s1, n_point, node1_npt,
                         x_spos1, x_spos0, y_spos0, y_spos1,
-                        pt_dim, krnl_matvec, workbuf
+                        pt_dim, krnl_dim, workbuf, krnl_matvec
                     );
-                    /*
-                    krnl_matvec(
-                        coord + pt_s0, n_point, node0_npt,
-                        coord + pt_s1, n_point, node1_npt,
-                        x_spos1, x_spos0, y_spos0, y_spos1
-                    );
-                    */
                 } else {
                     int Di_nrow = D_nrow[n_leaf_node + i];
                     int Di_ncol = D_ncol[n_leaf_node + i];

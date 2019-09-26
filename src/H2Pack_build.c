@@ -759,7 +759,8 @@ void H2P_build_B(H2Pack_t h2pack)
         h2pack->mat_size[4]  += 2 * (B_nrow[i] + B_ncol[i]);
         h2pack->JIT_flops[0] += (double)(h2pack->krnl_eval_flops + krnl_dim * krnl_dim * 4) * (double)(node0_npt * node1_npt);
     }
-    H2P_partition_workload(n_r_adm_pair, B_ptr + 1, B_total_size, n_thread * BD_NTASK_THREAD, B_blk);
+    int BD_ntask_thread = (h2pack->BD_JIT == 1) ? BD_NTASK_THREAD : 1;
+    H2P_partition_workload(n_r_adm_pair, B_ptr + 1, B_total_size, n_thread * BD_ntask_thread, B_blk);
     for (int i = 1; i <= n_r_adm_pair; i++) B_ptr[i] += B_ptr[i - 1];
     h2pack->mat_size[1] = B_total_size;
 
@@ -775,8 +776,9 @@ void H2P_build_B(H2Pack_t h2pack)
         int tid = omp_get_thread_num();
         
         h2pack->tb[tid]->timer = -H2P_get_wtime_sec();
-        #pragma omp for schedule(dynamic) nowait
-        for (int i_blk = 0; i_blk < n_B_blk; i_blk++)
+        //#pragma omp for schedule(dynamic) nowait
+        //for (int i_blk = 0; i_blk < n_B_blk; i_blk++)
+        int i_blk = tid;    // Use first-touch policy for better NUMA memeory access performance
         {
             int B_blk_s = B_blk->data[i_blk];
             int B_blk_e = B_blk->data[i_blk + 1];
@@ -895,7 +897,8 @@ void H2P_build_D(H2Pack_t h2pack)
         h2pack->mat_size[6] += D_nrow[i] + D_ncol[i];
         h2pack->JIT_flops[1] += (double)(h2pack->krnl_eval_flops + krnl_dim * krnl_dim * 2) * (double)(node_npt * node_npt);
     }
-    H2P_partition_workload(n_leaf_node, D_ptr + 1, D0_total_size, n_thread * BD_NTASK_THREAD, D_blk0);
+    int BD_ntask_thread = (h2pack->BD_JIT == 1) ? BD_NTASK_THREAD : 1;
+    H2P_partition_workload(n_leaf_node, D_ptr + 1, D0_total_size, n_thread * BD_ntask_thread, D_blk0);
     size_t D1_total_size = 0;
     for (int i = 0; i < n_r_inadm_pair; i++)
     {
@@ -919,7 +922,7 @@ void H2P_build_D(H2Pack_t h2pack)
         h2pack->mat_size[6] += 2 * (D_nrow[ii] + D_ncol[ii]);
         h2pack->JIT_flops[1] += (double)(h2pack->krnl_eval_flops + krnl_dim * krnl_dim * 4) * (double)(node0_npt * node1_npt);
     }
-    H2P_partition_workload(n_r_inadm_pair, D_ptr + n_leaf_node + 1, D1_total_size, n_thread * BD_NTASK_THREAD, D_blk1);
+    H2P_partition_workload(n_r_inadm_pair, D_ptr + n_leaf_node + 1, D1_total_size, n_thread * BD_ntask_thread, D_blk1);
     for (int i = 1; i <= n_leaf_node + n_r_inadm_pair; i++) D_ptr[i] += D_ptr[i - 1];
     h2pack->mat_size[2] = D0_total_size + D1_total_size;
     
@@ -937,8 +940,9 @@ void H2P_build_D(H2Pack_t h2pack)
         h2pack->tb[tid]->timer = -H2P_get_wtime_sec();
         
         // 3. Generate diagonal blocks (leaf node self interaction)
-        #pragma omp for schedule(dynamic) nowait
-        for (int i_blk0 = 0; i_blk0 < n_D0_blk; i_blk0++)
+        //#pragma omp for schedule(dynamic) nowait
+        //for (int i_blk0 = 0; i_blk0 < n_D0_blk; i_blk0++)
+        int i_blk0 = tid;    // Use first-touch policy for better NUMA memeory access performance
         {
             int D_blk0_s = D_blk0->data[i_blk0];
             int D_blk0_e = D_blk0->data[i_blk0 + 1];
@@ -958,8 +962,9 @@ void H2P_build_D(H2Pack_t h2pack)
         }  // End of i_blk0 loop
         
         // 4. Generate off-diagonal blocks from inadmissible pairs
-        #pragma omp for schedule(dynamic) nowait
-        for (int i_blk1 = 0; i_blk1 < n_D1_blk; i_blk1++)
+        //#pragma omp for schedule(dynamic) nowait
+        //for (int i_blk1 = 0; i_blk1 < n_D1_blk; i_blk1++)
+        int i_blk1 = tid;    // Use first-touch policy for better NUMA memeory access performance
         {
             int D_blk1_s = D_blk1->data[i_blk1];
             int D_blk1_e = D_blk1->data[i_blk1 + 1];

@@ -278,8 +278,9 @@ void H2P_matvec_intermediate_sweep_AOT(H2Pack_t h2pack, const DTYPE *x)
         
         #pragma omp barrier
         
-        #pragma omp for schedule(dynamic) nowait
-        for (int i_blk = 0; i_blk < n_B_blk; i_blk++)
+        //#pragma omp for schedule(dynamic) nowait
+        //for (int i_blk = 0; i_blk < n_B_blk; i_blk++)
+        int i_blk = tid;    // Use first-touch policy for better NUMA memeory access performance
         {
             int B_blk_s = B_blk->data[i_blk];
             int B_blk_e = B_blk->data[i_blk + 1];
@@ -716,8 +717,9 @@ void H2P_matvec_dense_blocks_AOT(H2Pack_t h2pack, const DTYPE *x)
         
         h2pack->tb[tid]->timer = -H2P_get_wtime_sec();
         // 1. Diagonal blocks matvec
-        #pragma omp for schedule(dynamic) nowait
-        for (int i_blk0 = 0; i_blk0 < n_D0_blk; i_blk0++)
+        //#pragma omp for schedule(dynamic) nowait
+        //for (int i_blk0 = 0; i_blk0 < n_D0_blk; i_blk0++)
+        int i_blk0 = tid;    // Use first-touch policy for better NUMA memeory access performance
         {
             int D_blk0_s = D_blk0->data[i_blk0];
             int D_blk0_e = D_blk0->data[i_blk0 + 1];
@@ -740,8 +742,9 @@ void H2P_matvec_dense_blocks_AOT(H2Pack_t h2pack, const DTYPE *x)
         }  // End of i_blk0 loop 
         
         // 2. Off-diagonal blocks from inadmissible pairs matvec
-        #pragma omp for schedule(dynamic) nowait
-        for (int i_blk1 = 0; i_blk1 < n_D1_blk; i_blk1++)
+        //#pragma omp for schedule(dynamic) nowait
+        //for (int i_blk1 = 0; i_blk1 < n_D1_blk; i_blk1++)
+        int i_blk1 = tid;    // Use first-touch policy for better NUMA memeory access performance
         {
             int D_blk1_s = D_blk1->data[i_blk1];
             int D_blk1_e = D_blk1->data[i_blk1 + 1];

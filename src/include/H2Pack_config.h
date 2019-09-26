@@ -20,6 +20,7 @@
 #define CBLAS_GER        cblas_dger    // CBLAS matrix rank-1 update
 #define CBLAS_TRSM       cblas_dtrsm   // CBLAS triangle solve
 #define N_DTYPE_64B      8             // 8 double == 64 bytes, for alignment
+#define SIMD_LEN         SIMD_LEN_D
 #endif
 
 #if DTYPE_SIZE == FLOAT_SIZE           // Functions for float data type
@@ -34,6 +35,7 @@
 #define CBLAS_GER        cblas_sger
 #define CBLAS_TRSM       cblas_strsm
 #define N_DTYPE_64B      16
+#define SIMD_LEN         SIMD_LEN_S
 #endif
 
 #define QR_RANK          0             // Partial QR stop criteria: maximum rank

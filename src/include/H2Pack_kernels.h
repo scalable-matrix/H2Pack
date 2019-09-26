@@ -6,12 +6,6 @@
 #include "H2Pack_config.h"
 #include "x86_intrin_wrapper.h" 
 
-#if DTYPE_SIZE == DOUBLE_SIZE
-#define SIMD_LEN SIMD_LEN_D
-#else
-#define SIMD_LEN SIMD_LEN_S
-#endif
-
 #define EVAL_KRNL_PARAM \
     const DTYPE *coord0, const int ld0, const int n0, \
     const DTYPE *coord1, const int ld1, const int n1, \

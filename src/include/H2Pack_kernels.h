@@ -47,27 +47,6 @@ extern "C" {
 // 3: dx, dy, dz; 5: r2 = dx^2 + dy^2 + dz^2; 2: 1/sqrt(r2)
 const int Coulomb_3d_eval_flop = (3 + 5 + 2);
 
-static void Coulomb_3d_eval_std(EVAL_KRNL_PARAM)
-{
-    EXTRACT_3D_COORD();
-    for (int i = 0; i < n0; i++)
-    {
-        const DTYPE x0_i = x0[i];
-        const DTYPE y0_i = y0[i];
-        const DTYPE z0_i = z0[i];
-        DTYPE *mat_irow = mat + i * ldm;
-        #pragma omp simd
-        for (int j = 0; j < n1; j++)
-        {
-            DTYPE dx = x0_i - x1[j];
-            DTYPE dy = y0_i - y1[j];
-            DTYPE dz = z0_i - z1[j];
-            DTYPE r2 = dx * dx + dy * dy + dz * dz;
-            mat_irow[j] = (r2 == 0.0) ? 0.0 : (1.0 / DSQRT(r2));
-        }
-    }
-}
-
 static void Coulomb_3d_eval_intrin_d(EVAL_KRNL_PARAM)
 {
     EXTRACT_3D_COORD();
@@ -111,13 +90,12 @@ static void Coulomb_3d_eval_intrin_d(EVAL_KRNL_PARAM)
 static void Coulomb_3d_matvec_nt_intrin_d(MATVEC_KRNL_PARAM)
 {
     EXTRACT_3D_COORD();
-    const int n0_vec = (n0 / SIMD_LEN) * SIMD_LEN;
     const vec_d frsqrt_pf = vec_frsqrt_pf_d();
-    for (int i = 0; i < n0_vec; i += SIMD_LEN)
+    for (int i = 0; i < n0; i += SIMD_LEN)
     {
-        vec_d tx = vec_loadu_d(x0 + i);
-        vec_d ty = vec_loadu_d(y0 + i);
-        vec_d tz = vec_loadu_d(z0 + i);
+        vec_d tx = vec_load_d(x0 + i);
+        vec_d ty = vec_load_d(y0 + i);
+        vec_d tz = vec_load_d(z0 + i);
         vec_d tv = vec_zero_d();
         for (int j = 0; j < n1; j++)
         {
@@ -133,9 +111,9 @@ static void Coulomb_3d_matvec_nt_intrin_d(MATVEC_KRNL_PARAM)
             vec_d rinv = vec_frsqrt_d(r2);
             tv = vec_fmadd_d(rinv, sv, tv);
         }
-        vec_d ov0 = vec_loadu_d(x_out_0 + i);
+        vec_d ov0 = vec_load_d(x_out_0 + i);
         ov0 = vec_fmadd_d(tv, frsqrt_pf, ov0);
-        vec_storeu_d(x_out_0 + i, ov0);
+        vec_store_d(x_out_0 + i, ov0);
     }
 }
 
@@ -159,30 +137,30 @@ static void Coulomb_3d_matvec_nt_t_intrin_d(SYMM_MATVEC_KRNL_PARAM)
         {
             vec_d dx, dy, dz, r2, rinv0, rinv1, x_in_0_j, ov1;
             
-            dx = vec_sub_d(x0_i0v, vec_loadu_d(x1 + j));
-            dy = vec_sub_d(y0_i0v, vec_loadu_d(y1 + j));
-            dz = vec_sub_d(z0_i0v, vec_loadu_d(z1 + j));
+            dx = vec_sub_d(x0_i0v, vec_load_d(x1 + j));
+            dy = vec_sub_d(y0_i0v, vec_load_d(y1 + j));
+            dz = vec_sub_d(z0_i0v, vec_load_d(z1 + j));
             r2 = vec_mul_d(dx, dx);
             r2 = vec_fmadd_d(dy, dy, r2);
             r2 = vec_fmadd_d(dz, dz, r2);
             rinv0 = vec_mul_d(frsqrt_pf, vec_frsqrt_d(r2));
             
-            dx = vec_sub_d(x0_i1v, vec_loadu_d(x1 + j));
-            dy = vec_sub_d(y0_i1v, vec_loadu_d(y1 + j));
-            dz = vec_sub_d(z0_i1v, vec_loadu_d(z1 + j));
+            dx = vec_sub_d(x0_i1v, vec_load_d(x1 + j));
+            dy = vec_sub_d(y0_i1v, vec_load_d(y1 + j));
+            dz = vec_sub_d(z0_i1v, vec_load_d(z1 + j));
             r2 = vec_mul_d(dx, dx);
             r2 = vec_fmadd_d(dy, dy, r2);
             r2 = vec_fmadd_d(dz, dz, r2);
             rinv1 = vec_mul_d(frsqrt_pf, vec_frsqrt_d(r2));
             
-            x_in_0_j = vec_loadu_d(x_in_0 + j);
+            x_in_0_j = vec_load_d(x_in_0 + j);
             sum_v0   = vec_fmadd_d(x_in_0_j, rinv0, sum_v0);
             sum_v1   = vec_fmadd_d(x_in_0_j, rinv1, sum_v1);
             
-            ov1 = vec_loadu_d(x_out_1 + j);
+            ov1 = vec_load_d(x_out_1 + j);
             ov1 = vec_fmadd_d(x_in_1_i0v, rinv0, ov1);
             ov1 = vec_fmadd_d(x_in_1_i1v, rinv1, ov1);
-            vec_storeu_d(x_out_1 + j, ov1);
+            vec_store_d(x_out_1 + j, ov1);
         }
         x_out_0[i]   += vec_reduce_add_d(sum_v0);
         x_out_0[i+1] += vec_reduce_add_d(sum_v1);

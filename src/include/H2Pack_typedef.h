@@ -47,8 +47,9 @@ typedef void (*kernel_eval_fptr) (
 //   x_out_1 : Vector, size >= n1, x_out_1 += kernel_matrix(coord0, coord1)^T * x_in_1
 // Performance optimization notes:
 //   When calling a kernel_matvec_fptr, H2Pack guarantees that:
-//     (1) n0, n1 are multiples of SIMD_LEN;
-//     (2) The length of x_{in,out}_{0,1} and x_out_1 are multiples of (SIMD_LEN * H2Pack->krnl_dim)
+//     (1) n{0,1} are multiples of SIMD_LEN;
+//     (2) The lengths of x_{in,out}_{0,1} are multiples of (SIMD_LEN * H2Pack->krnl_dim)
+//     (3) The addresses of coord{0,1}, x_{in,out}_{0,1} are aligned to (SIMD_LEN * sizeof(DTYPE))
 typedef void (*kernel_matvec_fptr) (
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,

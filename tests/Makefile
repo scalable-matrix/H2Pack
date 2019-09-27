@@ -1,8 +1,8 @@
-LIB     = ../src/libH2Pack.a
-INC     = -I../src/include
+LIB     = ../src/libH2Pack.a #$(VTUNE_AMPLIFIER_2018_DIR)/lib64/libittnotify.a
+INC     = -I../src/include   #-I$(VTUNE_AMPLIFIER_2018_DIR)/include
 HOSTCC  = icc
 CFLAGS  = $(INC) -Wall -g -std=gnu99 -O3 -qopenmp -xHost -mkl -DUSE_AVX
-LDFLAGS = -O3 -xHost -qopenmp 
+LDFLAGS = -g -O3 -xHost -qopenmp -mkl 
 
 SRCS = $(wildcard *.c)
 OBJS = $(SRCS:.c=.o)
@@ -14,7 +14,7 @@ all: $(EXES)
 	$(HOSTCC) $(CFLAGS) -I../ -c $^ 
 	
 %.x: %.o $(LIB)
-	$(HOSTCC) $(CFLAGS) -o $@ $^ $(LIB)
+	$(HOSTCC) $(LDFLAGS) -o $@ $^ 
 	
 clean:
 	rm -f $(EXES) $(OBJS)

@@ -7,6 +7,7 @@
 #include <omp.h>
 
 #include <mkl.h>
+//#include <ittnotify.h>
 
 #include "H2Pack.h"
 
@@ -192,9 +193,9 @@ void direct_nbody(
 {
     int n_point_ext = (n_point + SIMD_LEN - 1) / SIMD_LEN * SIMD_LEN;
     int n_vec_ext = n_point_ext / SIMD_LEN;
-    DTYPE *coord_ext = (DTYPE*) malloc(sizeof(DTYPE) * pt_dim * n_point_ext);
-    DTYPE *x_ext = (DTYPE*) malloc(sizeof(DTYPE) * krnl_dim * n_point_ext);
-    DTYPE *y_ext = (DTYPE*) malloc(sizeof(DTYPE) * krnl_dim * n_point_ext);
+    DTYPE *coord_ext = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * pt_dim * n_point_ext);
+    DTYPE *x_ext = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * krnl_dim * n_point_ext);
+    DTYPE *y_ext = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * krnl_dim * n_point_ext);
     
     for (int i = 0; i < pt_dim; i++)
     {
@@ -237,13 +238,14 @@ void direct_nbody(
     printf("Direct N-body reference result obtained, %.3lf s, %.2lf GFLOPS\n", ut, GFLOPS / ut);
     
     memcpy(y, y_ext, sizeof(DTYPE) * krnl_dim * n_point);
-    free(y_ext);
-    free(x_ext);
-    free(coord_ext);
+    H2P_free_aligned(y_ext);
+    H2P_free_aligned(x_ext);
+    H2P_free_aligned(coord_ext);
 }
 
 int main(int argc, char **argv)
 {
+    //__itt_pause();
     srand48(time(NULL));
     
     parse_params(argc, argv);
@@ -303,8 +305,10 @@ int main(int argc, char **argv)
     H2P_matvec(h2pack, x, y1); 
     h2pack->n_matvec = 0;
     memset(h2pack->timers + 4, 0, sizeof(double) * 5);
+    //__itt_resume();
     for (int i = 0; i < 10; i++) 
         H2P_matvec(h2pack, x, y1);
+    //__itt_pause();
     
     H2P_print_statistic(h2pack);
     

@@ -43,13 +43,9 @@ extern "C" {
 #define Coulomb_3d_matvec_intrin Coulomb_3d_matvec_intrin_d
 #endif
 
-#if DTYPE_SIZE == FLOAT_SIZE
-#define Coulomb_3d_eval_intrin   Coulomb_3d_eval_intrin_s
-#define Coulomb_3d_matvec_intrin Coulomb_3d_matvec_intrin_s
-#endif
-
-const int Coulomb_3d_eval_flop = (3 + 5 + (2 + 4 * NEWTON_ITER));
-
+// Report the effective instead of achieved FLOP
+// 3: dx, dy, dz; 5: r2 = dx^2 + dy^2 + dz^2; 2: 1/sqrt(r2)
+const int Coulomb_3d_eval_flop = (3 + 5 + 2);
 
 static void Coulomb_3d_eval_std(EVAL_KRNL_PARAM)
 {
@@ -70,63 +66,6 @@ static void Coulomb_3d_eval_std(EVAL_KRNL_PARAM)
             mat_irow[j] = (r2 == 0.0) ? 0.0 : (1.0 / DSQRT(r2));
         }
     }
-}
-
-static void Coulomb_3d_matvec_nt_std(MATVEC_KRNL_PARAM)
-{
-    EXTRACT_3D_COORD();
-    for (int i = 0; i < n0; i++)
-    {
-        const DTYPE x0_i = x0[i];
-        const DTYPE y0_i = y0[i];
-        const DTYPE z0_i = z0[i];
-        DTYPE sum = 0.0;
-        #pragma omp simd
-        for (int j = 0; j < n1; j++)
-        {
-            DTYPE dx = x0_i - x1[j];
-            DTYPE dy = y0_i - y1[j];
-            DTYPE dz = z0_i - z1[j];
-            DTYPE r2 = dx * dx + dy * dy + dz * dz;
-            sum += (r2 == 0.0) ? 0.0 : (x_in_0[j] / DSQRT(r2));
-        }
-        x_out_0[i] += sum;
-    }
-}
-
-static void Coulomb_3d_matvec_nt_t_std(SYMM_MATVEC_KRNL_PARAM)
-{
-    EXTRACT_3D_COORD();
-    for (int i = 0; i < n0; i++)
-    {
-        const DTYPE x0_i = x0[i];
-        const DTYPE y0_i = y0[i];
-        const DTYPE z0_i = z0[i];
-        const DTYPE x_in_1_i = x_in_1[i];
-        DTYPE sum = 0.0;
-        #pragma omp simd
-        for (int j = 0; j < n1; j++)
-        {
-            DTYPE dx = x0_i - x1[j];
-            DTYPE dy = y0_i - y1[j];
-            DTYPE dz = z0_i - z1[j];
-            DTYPE r2 = dx * dx + dy * dy + dz * dz;
-            DTYPE inv_d = (r2 == 0.0) ? 0.0 : (1.0 / DSQRT(r2));
-            sum += x_in_0[j] * inv_d;
-            x_out_1[j] += x_in_1_i * inv_d;
-        }
-        x_out_0[i] += sum;
-    }
-}
-
-static void Coulomb_3d_matvec_std(SYMM_MATVEC_KRNL_PARAM)
-{
-    if (x_in_1 == NULL) 
-    {
-        Coulomb_3d_matvec_nt_std  (coord0, ld0, n0, coord1, ld1, n1, x_in_0,         x_out_0         );
-    } else {
-        Coulomb_3d_matvec_nt_t_std(coord0, ld0, n0, coord1, ld1, n1, x_in_0, x_in_1, x_out_0, x_out_1);
-    }   
 }
 
 static void Coulomb_3d_eval_intrin_d(EVAL_KRNL_PARAM)
@@ -198,22 +137,13 @@ static void Coulomb_3d_matvec_nt_intrin_d(MATVEC_KRNL_PARAM)
         ov0 = vec_fmadd_d(tv, frsqrt_pf, ov0);
         vec_storeu_d(x_out_0 + i, ov0);
     }
-    Coulomb_3d_matvec_nt_std(
-        coord0 + n0_vec, ld0, n0 - n0_vec,
-        coord1, ld1, n1,
-        x_in_0, x_out_0 + n0_vec
-    );
 }
 
 static void Coulomb_3d_matvec_nt_t_intrin_d(SYMM_MATVEC_KRNL_PARAM)
 {
     EXTRACT_3D_COORD();
-    const int n0_vec  = (n0 / SIMD_LEN) * SIMD_LEN;
-    const int n1_vec  = (n1 / SIMD_LEN) * SIMD_LEN;
-    const int n0_vec2 = (n0 / 2) * 2;
     const vec_d frsqrt_pf = vec_frsqrt_pf_d();
-    // 2-way unroll to reduce update of x_out_1
-    for (int i = 0; i < n0_vec2; i += 2)
+    for (int i = 0; i < n0; i += 2)
     {
         vec_d sum_v0 = vec_zero_d();
         vec_d sum_v1 = vec_zero_d();
@@ -225,111 +155,37 @@ static void Coulomb_3d_matvec_nt_t_intrin_d(SYMM_MATVEC_KRNL_PARAM)
         vec_d z0_i1v = vec_bcast_d(z0 + i + 1);
         vec_d x_in_1_i0v = vec_bcast_d(x_in_1 + i);
         vec_d x_in_1_i1v = vec_bcast_d(x_in_1 + i + 1);
-        for (int j = 0; j < n1_vec; j += SIMD_LEN)
+        for (int j = 0; j < n1; j += SIMD_LEN)
         {
-            vec_d dx = vec_sub_d(x0_i0v, vec_loadu_d(x1 + j));
-            vec_d dy = vec_sub_d(y0_i0v, vec_loadu_d(y1 + j));
-            vec_d dz = vec_sub_d(z0_i0v, vec_loadu_d(z1 + j));
+            vec_d dx, dy, dz, r2, rinv0, rinv1, x_in_0_j, ov1;
             
-            vec_d r2 = vec_mul_d(dx, dx);
+            dx = vec_sub_d(x0_i0v, vec_loadu_d(x1 + j));
+            dy = vec_sub_d(y0_i0v, vec_loadu_d(y1 + j));
+            dz = vec_sub_d(z0_i0v, vec_loadu_d(z1 + j));
+            r2 = vec_mul_d(dx, dx);
             r2 = vec_fmadd_d(dy, dy, r2);
             r2 = vec_fmadd_d(dz, dz, r2);
-            vec_d rinv0 = vec_mul_d(frsqrt_pf, vec_frsqrt_d(r2));
-            
+            rinv0 = vec_mul_d(frsqrt_pf, vec_frsqrt_d(r2));
             
             dx = vec_sub_d(x0_i1v, vec_loadu_d(x1 + j));
             dy = vec_sub_d(y0_i1v, vec_loadu_d(y1 + j));
             dz = vec_sub_d(z0_i1v, vec_loadu_d(z1 + j));
-            
             r2 = vec_mul_d(dx, dx);
             r2 = vec_fmadd_d(dy, dy, r2);
             r2 = vec_fmadd_d(dz, dz, r2);
-            vec_d rinv1 = vec_mul_d(frsqrt_pf, vec_frsqrt_d(r2));
+            rinv1 = vec_mul_d(frsqrt_pf, vec_frsqrt_d(r2));
             
-            vec_d x_in_0_j = vec_loadu_d(x_in_0 + j);
-            sum_v0 = vec_fmadd_d(x_in_0_j, rinv0, sum_v0);
-            sum_v1 = vec_fmadd_d(x_in_0_j, rinv1, sum_v1);
+            x_in_0_j = vec_loadu_d(x_in_0 + j);
+            sum_v0   = vec_fmadd_d(x_in_0_j, rinv0, sum_v0);
+            sum_v1   = vec_fmadd_d(x_in_0_j, rinv1, sum_v1);
             
-            vec_d ov1 = vec_loadu_d(x_out_1 + j);
+            ov1 = vec_loadu_d(x_out_1 + j);
             ov1 = vec_fmadd_d(x_in_1_i0v, rinv0, ov1);
             ov1 = vec_fmadd_d(x_in_1_i1v, rinv1, ov1);
             vec_storeu_d(x_out_1 + j, ov1);
         }
-        
-        const DTYPE x0_i0 = x0[i];
-        const DTYPE y0_i0 = y0[i];
-        const DTYPE z0_i0 = z0[i];
-        const DTYPE x0_i1 = x0[i + 1];
-        const DTYPE y0_i1 = y0[i + 1];
-        const DTYPE z0_i1 = z0[i + 1];
-        const DTYPE x_in_1_i0 = x_in_1[i];
-        const DTYPE x_in_1_i1 = x_in_1[i + 1];
-        DTYPE sum0 = vec_reduce_add_d(sum_v0);
-        DTYPE sum1 = vec_reduce_add_d(sum_v1);
-        for (int j = n1_vec; j < n1; j++)
-        {
-            DTYPE dx = x0_i0 - x1[j];
-            DTYPE dy = y0_i0 - y1[j];
-            DTYPE dz = z0_i0 - z1[j];
-            DTYPE r2 = dx * dx + dy * dy + dz * dz;
-            DTYPE inv_d0 = (r2 == 0.0) ? 0.0 : (1.0 / DSQRT(r2));
-            
-            dx = x0_i1 - x1[j];
-            dy = y0_i1 - y1[j];
-            dz = z0_i1 - z1[j];
-            r2 = dx * dx + dy * dy + dz * dz;
-            DTYPE inv_d1 = (r2 == 0.0) ? 0.0 : (1.0 / DSQRT(r2));
-            
-            sum0 += x_in_0[j] * inv_d0;
-            sum1 += x_in_0[j] * inv_d1;
-            x_out_1[j] += x_in_1_i0 * inv_d0;
-            x_out_1[j] += x_in_1_i1 * inv_d1;
-        }
-        x_out_0[i]     += sum0;
-        x_out_0[i + 1] += sum1;
-    }
-    
-    for (int i = n0_vec2; i < n0; i++)
-    {
-        vec_d x0_iv = vec_bcast_d(x0 + i);
-        vec_d y0_iv = vec_bcast_d(y0 + i);
-        vec_d z0_iv = vec_bcast_d(z0 + i);
-        vec_d x_in_1_iv = vec_bcast_d(x_in_1 + i);
-        vec_d sum_v = vec_zero_d();
-        for (int j = 0; j < n1_vec; j += SIMD_LEN)
-        {
-            vec_d dx = vec_sub_d(x0_iv, vec_loadu_d(x1 + j));
-            vec_d dy = vec_sub_d(y0_iv, vec_loadu_d(y1 + j));
-            vec_d dz = vec_sub_d(z0_iv, vec_loadu_d(z1 + j));
-            
-            vec_d r2 = vec_mul_d(dx, dx);
-            r2 = vec_fmadd_d(dy, dy, r2);
-            r2 = vec_fmadd_d(dz, dz, r2);
-            
-            vec_d rinv = vec_mul_d(frsqrt_pf, vec_frsqrt_d(r2));
-            sum_v = vec_fmadd_d(vec_loadu_d(x_in_0 + j), rinv, sum_v);
-            
-            vec_d ov1 = vec_loadu_d(x_out_1 + j);
-            ov1 = vec_fmadd_d(x_in_1_iv, rinv, ov1);
-            vec_storeu_d(x_out_1 + j, ov1);
-        }
-        
-        const DTYPE x0_i = x0[i];
-        const DTYPE y0_i = y0[i];
-        const DTYPE z0_i = z0[i];
-        const DTYPE x_in_1_i = x_in_1[i];
-        DTYPE sum = vec_reduce_add_d(sum_v);
-        for (int j = n1_vec; j < n1; j++)
-        {
-            DTYPE dx = x0_i - x1[j];
-            DTYPE dy = y0_i - y1[j];
-            DTYPE dz = z0_i - z1[j];
-            DTYPE r2 = dx * dx + dy * dy + dz * dz;
-            DTYPE inv_d = (r2 == 0.0) ? 0.0 : (1.0 / DSQRT(r2));
-            sum += x_in_0[j] * inv_d;
-            x_out_1[j] += x_in_1_i * inv_d;
-        }
-        x_out_0[i] += sum;
+        x_out_0[i]   += vec_reduce_add_d(sum_v0);
+        x_out_0[i+1] += vec_reduce_add_d(sum_v1);
     }
 }
 
@@ -359,7 +215,7 @@ const DTYPE RPY_eta = 1.0;
     const DTYPE C_9o32oa = C * 9.0 / 32.0 / RPY_a;          \
     const DTYPE C_3o32oa = C * 3.0 / 32.0 / RPY_a;
 
-const int RPY_3d_eval_flop = 37;  // Not so accurate, the average should be larger
+const int RPY_3d_eval_flop = 31;
 
 static void RPY_3d_eval_std(EVAL_KRNL_PARAM)
 {

@@ -379,7 +379,7 @@ void H2P_matvec_intermediate_sweep_AOT(H2Pack_t h2pack, const DTYPE *x)
     #endif
 }
 
-// Extend the number of points to a multipler of SIMD_LEN and perform a symmetric n-body matvec
+// Extend the number of points to a multiple of SIMD_LEN and perform a symmetric n-body matvec
 // Input parameters:
 //   coord0      : Matrix, size dim-by-ld0, coordinates of the 1st point set
 //   ld0         : Leading dimension of coord0, should be >= n0

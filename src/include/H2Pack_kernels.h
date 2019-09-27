@@ -91,29 +91,49 @@ static void Coulomb_3d_matvec_nt_intrin_d(MATVEC_KRNL_PARAM)
 {
     EXTRACT_3D_COORD();
     const vec_d frsqrt_pf = vec_frsqrt_pf_d();
-    for (int i = 0; i < n0; i += SIMD_LEN)
+    for (int i = 0; i < n0; i += 2)
     {
-        vec_d tx = vec_load_d(x0 + i);
-        vec_d ty = vec_load_d(y0 + i);
-        vec_d tz = vec_load_d(z0 + i);
-        vec_d tv = vec_zero_d();
-        for (int j = 0; j < n1; j++)
+        vec_d sum_v0 = vec_zero_d();
+        vec_d sum_v1 = vec_zero_d();
+        const vec_d x0_i0v = vec_bcast_d(x0 + i);
+        const vec_d y0_i0v = vec_bcast_d(y0 + i);
+        const vec_d z0_i0v = vec_bcast_d(z0 + i);
+        const vec_d x0_i1v = vec_bcast_d(x0 + i + 1);
+        const vec_d y0_i1v = vec_bcast_d(y0 + i + 1);
+        const vec_d z0_i1v = vec_bcast_d(z0 + i + 1);
+        for (int j = 0; j < n1; j += SIMD_LEN)
         {
-            vec_d dx = vec_sub_d(tx, vec_bcast_d(x1 + j));
-            vec_d dy = vec_sub_d(ty, vec_bcast_d(y1 + j));
-            vec_d dz = vec_sub_d(tz, vec_bcast_d(z1 + j));
+            vec_d d0, d1, jv, r20, r21;
             
-            vec_d r2 = vec_mul_d(dx, dx);
-            r2 = vec_fmadd_d(dy, dy, r2);
-            r2 = vec_fmadd_d(dz, dz, r2);
+            jv  = vec_load_d(x1 + j);
+            d0  = vec_sub_d(x0_i0v, jv);
+            d1  = vec_sub_d(x0_i1v, jv);
+            r20 = vec_mul_d(d0, d0);
+            r21 = vec_mul_d(d1, d1);
             
-            vec_d sv = vec_bcast_d(x_in_0 + j);
-            vec_d rinv = vec_frsqrt_d(r2);
-            tv = vec_fmadd_d(rinv, sv, tv);
+            jv  = vec_load_d(y1 + j);
+            d0  = vec_sub_d(y0_i0v, jv);
+            d1  = vec_sub_d(y0_i1v, jv);
+            r20 = vec_fmadd_d(d0, d0, r20);
+            r21 = vec_fmadd_d(d1, d1, r21);
+            
+            jv  = vec_load_d(z1 + j);
+            d0  = vec_sub_d(z0_i0v, jv);
+            d1  = vec_sub_d(z0_i1v, jv);
+            r20 = vec_fmadd_d(d0, d0, r20);
+            r21 = vec_fmadd_d(d1, d1, r21);
+            
+            r20 = vec_frsqrt_d(r20);
+            r21 = vec_frsqrt_d(r21);
+            
+            d0 = vec_load_d(x_in_0 + j);
+            sum_v0 = vec_fmadd_d(d0, r20, sum_v0);
+            sum_v1 = vec_fmadd_d(d0, r21, sum_v1);
         }
-        vec_d ov0 = vec_load_d(x_out_0 + i);
-        ov0 = vec_fmadd_d(tv, frsqrt_pf, ov0);
-        vec_store_d(x_out_0 + i, ov0);
+        sum_v0 = vec_mul_d(sum_v0, frsqrt_pf);
+        sum_v1 = vec_mul_d(sum_v1, frsqrt_pf);
+        x_out_0[i]   += vec_reduce_add_d(sum_v0);
+        x_out_0[i+1] += vec_reduce_add_d(sum_v1);
     }
 }
 
@@ -125,42 +145,48 @@ static void Coulomb_3d_matvec_nt_t_intrin_d(SYMM_MATVEC_KRNL_PARAM)
     {
         vec_d sum_v0 = vec_zero_d();
         vec_d sum_v1 = vec_zero_d();
-        vec_d x0_i0v = vec_bcast_d(x0 + i);
-        vec_d y0_i0v = vec_bcast_d(y0 + i);
-        vec_d z0_i0v = vec_bcast_d(z0 + i);
-        vec_d x0_i1v = vec_bcast_d(x0 + i + 1);
-        vec_d y0_i1v = vec_bcast_d(y0 + i + 1);
-        vec_d z0_i1v = vec_bcast_d(z0 + i + 1);
-        vec_d x_in_1_i0v = vec_bcast_d(x_in_1 + i);
-        vec_d x_in_1_i1v = vec_bcast_d(x_in_1 + i + 1);
+        const vec_d x0_i0v = vec_bcast_d(x0 + i);
+        const vec_d y0_i0v = vec_bcast_d(y0 + i);
+        const vec_d z0_i0v = vec_bcast_d(z0 + i);
+        const vec_d x0_i1v = vec_bcast_d(x0 + i + 1);
+        const vec_d y0_i1v = vec_bcast_d(y0 + i + 1);
+        const vec_d z0_i1v = vec_bcast_d(z0 + i + 1);
+        const vec_d x_in_1_i0v = vec_bcast_d(x_in_1 + i);
+        const vec_d x_in_1_i1v = vec_bcast_d(x_in_1 + i + 1);
         for (int j = 0; j < n1; j += SIMD_LEN)
         {
-            vec_d dx, dy, dz, r2, rinv0, rinv1, x_in_0_j, ov1;
+            vec_d d0, d1, jv, r20, r21;
             
-            dx = vec_sub_d(x0_i0v, vec_load_d(x1 + j));
-            dy = vec_sub_d(y0_i0v, vec_load_d(y1 + j));
-            dz = vec_sub_d(z0_i0v, vec_load_d(z1 + j));
-            r2 = vec_mul_d(dx, dx);
-            r2 = vec_fmadd_d(dy, dy, r2);
-            r2 = vec_fmadd_d(dz, dz, r2);
-            rinv0 = vec_mul_d(frsqrt_pf, vec_frsqrt_d(r2));
+            jv  = vec_load_d(x1 + j);
+            d0  = vec_sub_d(x0_i0v, jv);
+            d1  = vec_sub_d(x0_i1v, jv);
+            r20 = vec_mul_d(d0, d0);
+            r21 = vec_mul_d(d1, d1);
             
-            dx = vec_sub_d(x0_i1v, vec_load_d(x1 + j));
-            dy = vec_sub_d(y0_i1v, vec_load_d(y1 + j));
-            dz = vec_sub_d(z0_i1v, vec_load_d(z1 + j));
-            r2 = vec_mul_d(dx, dx);
-            r2 = vec_fmadd_d(dy, dy, r2);
-            r2 = vec_fmadd_d(dz, dz, r2);
-            rinv1 = vec_mul_d(frsqrt_pf, vec_frsqrt_d(r2));
+            jv  = vec_load_d(y1 + j);
+            d0  = vec_sub_d(y0_i0v, jv);
+            d1  = vec_sub_d(y0_i1v, jv);
+            r20 = vec_fmadd_d(d0, d0, r20);
+            r21 = vec_fmadd_d(d1, d1, r21);
             
-            x_in_0_j = vec_load_d(x_in_0 + j);
-            sum_v0   = vec_fmadd_d(x_in_0_j, rinv0, sum_v0);
-            sum_v1   = vec_fmadd_d(x_in_0_j, rinv1, sum_v1);
+            jv  = vec_load_d(z1 + j);
+            d0  = vec_sub_d(z0_i0v, jv);
+            d1  = vec_sub_d(z0_i1v, jv);
+            r20 = vec_fmadd_d(d0, d0, r20);
+            r21 = vec_fmadd_d(d1, d1, r21);
             
-            ov1 = vec_load_d(x_out_1 + j);
-            ov1 = vec_fmadd_d(x_in_1_i0v, rinv0, ov1);
-            ov1 = vec_fmadd_d(x_in_1_i1v, rinv1, ov1);
-            vec_store_d(x_out_1 + j, ov1);
+            d0 = vec_load_d(x_in_0 + j);
+            d1 = vec_load_d(x_out_1 + j);
+            
+            r20 = vec_mul_d(frsqrt_pf, vec_frsqrt_d(r20));
+            r21 = vec_mul_d(frsqrt_pf, vec_frsqrt_d(r21));
+            
+            sum_v0 = vec_fmadd_d(d0, r20, sum_v0);
+            sum_v1 = vec_fmadd_d(d0, r21, sum_v1);
+            
+            d1 = vec_fmadd_d(x_in_1_i0v, r20, d1);
+            d1 = vec_fmadd_d(x_in_1_i1v, r21, d1);
+            vec_store_d(x_out_1 + j, d1);
         }
         x_out_0[i]   += vec_reduce_add_d(sum_v0);
         x_out_0[i+1] += vec_reduce_add_d(sum_v1);

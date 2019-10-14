@@ -60,18 +60,18 @@ void H2P_partition_workload(
 
 // Build H2 representation with a kernel function
 // Input parameter:
-//   h2pack          : H2Pack structure with point partitioning info
-//   pp              : Array of proxy points for each level
-//   BD_JIT          : 0 or 1, if B and D matrices are computed just-in-time in matvec
-//   krnl_eval       : Pointer to kernel matrix evaluation function
-//   krnl_matvec     : Pointer to kernel matrix matvec function
-//   krnl_eval_flops : FLOPs needed in evaulating the kernel function for a pair of point
+//   h2pack            : H2Pack structure with point partitioning info
+//   pp                : Array of proxy points for each level
+//   BD_JIT            : 0 or 1, if B and D matrices are computed just-in-time in matvec
+//   krnl_eval         : Pointer to kernel matrix evaluation function
+//   krnl_matvec       : Pointer to kernel matrix matvec function
+//   krnl_matvec_flops : FLOPs needed in symmetric kernel matvec
 // Output parameter:
 //   h2pack : H2Pack structure with H2 representation matrices
 void H2P_build(
     H2Pack_t h2pack, H2P_dense_mat_t *pp, const int BD_JIT, 
     kernel_eval_fptr krnl_eval, kernel_matvec_fptr krnl_matvec, 
-    const int krnl_eval_flops
+    const int krnl_matvec_flops
 );
 
 #ifdef __cplusplus

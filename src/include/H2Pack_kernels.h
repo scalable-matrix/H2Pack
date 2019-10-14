@@ -44,8 +44,8 @@ extern "C" {
 #endif
 
 // Report the effective instead of achieved FLOP
-// 3: dx, dy, dz; 5: r2 = dx^2 + dy^2 + dz^2; 2: 1/sqrt(r2)
-const int Coulomb_3d_eval_flop = (3 + 5 + 2);
+// 3: dx, dy, dz; 5: r2 = dx^2 + dy^2 + dz^2; 2: 1/sqrt(r2); 4: matvec
+const int Coulomb_3d_matvec_flop = (3 + 5 + 2 + 4);
 
 static void Coulomb_3d_eval_intrin_d(EVAL_KRNL_PARAM)
 {
@@ -219,9 +219,10 @@ const DTYPE RPY_eta = 1.0;
     const DTYPE C_9o32oa = C * 9.0 / 32.0 / RPY_a;          \
     const DTYPE C_3o32oa = C * 3.0 / 32.0 / RPY_a;
 
-const int RPY_3d_eval_flop = 31;
+// Report the effective instead of achieved FLOP
+const int RPY_matvec_flop = 62;
 
-static void RPY_3d_eval_std(EVAL_KRNL_PARAM)
+static void RPY_eval_std(EVAL_KRNL_PARAM)
 {
     EXTRACT_3D_COORD();
     CALC_RPY_CONST();
@@ -280,18 +281,19 @@ static void RPY_matvec_nt_std(MATVEC_KRNL_PARAM)
     CALC_RPY_CONST();
     for (int i = 0; i < n0; i++)
     {
-        DTYPE tx = x0[i];
-        DTYPE ty = y0[i];
-        DTYPE tz = z0[i];
-        DTYPE res[3] = {0.0, 0.0, 0.0};
+        DTYPE txs = x0[i];
+        DTYPE tys = y0[i];
+        DTYPE tzs = z0[i];
+        DTYPE xo0_0 = 0, xo0_1 = 0, xo0_2 = 0;
+        #pragma omp simd  
         for (int j = 0; j < n1; j++)
         {
-            DTYPE dx = tx - x1[j];
-            DTYPE dy = ty - y1[j];
-            DTYPE dz = tz - z1[j];
+            DTYPE dx = txs - x1[j];
+            DTYPE dy = tys - y1[j];
+            DTYPE dz = tzs - z1[j];
             DTYPE r2 = dx * dx + dy * dy + dz * dz;
-            DTYPE r  = DSQRT(r2);
-            DTYPE inv_r = (r < 1e-15) ? 0.0 : 1.0 / r;
+            DTYPE r  = sqrt(r2);
+            DTYPE inv_r = (r == 0.0) ? 0.0 : 1.0 / r;
             
             dx *= inv_r;
             dy *= inv_r;
@@ -303,28 +305,23 @@ static void RPY_matvec_nt_std(MATVEC_KRNL_PARAM)
                 t1 = C - C_9o32oa * r;
                 t2 =     C_3o32oa * r;
             } else {
-                t1 = C_075 * inv_r * (1 + aa_2o3 / r2);
-                t2 = C_075 * inv_r * (1 - aa2    / r2); 
+                t1 = C_075 * inv_r * (1 + aa_2o3 * inv_r * inv_r);
+                t2 = C_075 * inv_r * (1 - aa2    * inv_r * inv_r); 
             }
             
-            DTYPE x_in_0_j[3];
-            x_in_0_j[0] = x_in_0[j * 3 + 0];
-            x_in_0_j[1] = x_in_0[j * 3 + 1];
-            x_in_0_j[2] = x_in_0[j * 3 + 2];
+            DTYPE x_in_0_j0 = x_in_0[j * 3 + 0];
+            DTYPE x_in_0_j1 = x_in_0[j * 3 + 1];
+            DTYPE x_in_0_j2 = x_in_0[j * 3 + 2];
             
-            res[0] += (t2 * dx * dx + t1) * x_in_0_j[0];
-            res[0] += (t2 * dx * dy)      * x_in_0_j[1];
-            res[0] += (t2 * dx * dz)      * x_in_0_j[2];
-            res[1] += (t2 * dy * dx)      * x_in_0_j[0];
-            res[1] += (t2 * dy * dy + t1) * x_in_0_j[1];
-            res[1] += (t2 * dy * dz)      * x_in_0_j[2];
-            res[2] += (t2 * dz * dx)      * x_in_0_j[0];
-            res[2] += (t2 * dz * dy)      * x_in_0_j[1];
-            res[2] += (t2 * dz * dz + t1) * x_in_0_j[2];
+            DTYPE k1 = t2 * (x_in_0_j0 * dx + x_in_0_j1 * dy + x_in_0_j2 * dz);
+            
+            xo0_0 += dx * k1 + t1 * x_in_0_j0;
+            xo0_1 += dy * k1 + t1 * x_in_0_j1;
+            xo0_2 += dz * k1 + t1 * x_in_0_j2;
         }
-        x_out_0[i * 3 + 0] += res[0];
-        x_out_0[i * 3 + 1] += res[1];
-        x_out_0[i * 3 + 2] += res[2];
+        x_out_0[i * 3 + 0] += xo0_0;
+        x_out_0[i * 3 + 1] += xo0_1;
+        x_out_0[i * 3 + 2] += xo0_2;
     }
 }
 
@@ -334,23 +331,22 @@ static void RPY_matvec_nt_t_std(SYMM_MATVEC_KRNL_PARAM)
     CALC_RPY_CONST();
     for (int i = 0; i < n0; i++)
     {
-        DTYPE tx = x0[i];
-        DTYPE ty = y0[i];
-        DTYPE tz = z0[i];
-        DTYPE x_in_1_i[3];
-        int i3 = i * 3;
-        x_in_1_i[0] = x_in_1[i3 + 0];
-        x_in_1_i[1] = x_in_1[i3 + 1];
-        x_in_1_i[2] = x_in_1[i3 + 2];
-        DTYPE res[3] = {0.0, 0.0, 0.0};
+        DTYPE txs = x0[i];
+        DTYPE tys = y0[i];
+        DTYPE tzs = z0[i];
+        DTYPE x_in_1_i0 = x_in_1[i * 3 + 0];
+        DTYPE x_in_1_i1 = x_in_1[i * 3 + 1];
+        DTYPE x_in_1_i2 = x_in_1[i * 3 + 2];
+        DTYPE xo0_0 = 0, xo0_1 = 0, xo0_2 = 0;
+        #pragma omp simd  
         for (int j = 0; j < n1; j++)
         {
-            DTYPE dx = tx - x1[j];
-            DTYPE dy = ty - y1[j];
-            DTYPE dz = tz - z1[j];
+            DTYPE dx = txs - x1[j];
+            DTYPE dy = tys - y1[j];
+            DTYPE dz = tzs - z1[j];
             DTYPE r2 = dx * dx + dy * dy + dz * dz;
-            DTYPE r  = DSQRT(r2);
-            DTYPE inv_r = (r < 1e-15) ? 0.0 : 1.0 / r;
+            DTYPE r  = sqrt(r2);
+            DTYPE inv_r = (r == 0.0) ? 0.0 : 1.0 / r;
             
             dx *= inv_r;
             dy *= inv_r;
@@ -362,43 +358,35 @@ static void RPY_matvec_nt_t_std(SYMM_MATVEC_KRNL_PARAM)
                 t1 = C - C_9o32oa * r;
                 t2 =     C_3o32oa * r;
             } else {
-                t1 = C_075 * inv_r * (1 + aa_2o3 / r2);
-                t2 = C_075 * inv_r * (1 - aa2    / r2); 
+                t1 = C_075 * inv_r * (1 + aa_2o3 * inv_r * inv_r);
+                t2 = C_075 * inv_r * (1 - aa2    * inv_r * inv_r); 
             }
             
-            DTYPE x_in_0_j[3];
-            x_in_0_j[0] = x_in_0[j * 3 + 0];
-            x_in_0_j[1] = x_in_0[j * 3 + 1];
-            x_in_0_j[2] = x_in_0[j * 3 + 2];
+            DTYPE x_in_0_j0 = x_in_0[j * 3 + 0];
+            DTYPE x_in_0_j1 = x_in_0[j * 3 + 1];
+            DTYPE x_in_0_j2 = x_in_0[j * 3 + 2];
             
-            res[0] += (t2 * dx * dx + t1) * x_in_0_j[0];
-            res[0] += (t2 * dx * dy)      * x_in_0_j[1];
-            res[0] += (t2 * dx * dz)      * x_in_0_j[2];
-            res[1] += (t2 * dy * dx)      * x_in_0_j[0];
-            res[1] += (t2 * dy * dy + t1) * x_in_0_j[1];
-            res[1] += (t2 * dy * dz)      * x_in_0_j[2];
-            res[2] += (t2 * dz * dx)      * x_in_0_j[0];
-            res[2] += (t2 * dz * dy)      * x_in_0_j[1];
-            res[2] += (t2 * dz * dz + t1) * x_in_0_j[2];
+            DTYPE k0 = t2 * (x_in_0_j0 * dx + x_in_0_j1 * dy + x_in_0_j2 * dz);
+            DTYPE k1 = t2 * (x_in_1_i0 * dx + x_in_1_i1 * dy + x_in_1_i2 * dz);
             
-            int j3 = j * 3;
-            x_out_1[j3 + 0] += (t2 * dx * dx + t1) * x_in_1_i[0];
-            x_out_1[j3 + 0] += (t2 * dy * dx)      * x_in_1_i[1];
-            x_out_1[j3 + 0] += (t2 * dz * dx)      * x_in_1_i[2];
-            x_out_1[j3 + 1] += (t2 * dx * dy)      * x_in_1_i[0];
-            x_out_1[j3 + 1] += (t2 * dy * dy + t1) * x_in_1_i[1];
-            x_out_1[j3 + 1] += (t2 * dz * dy)      * x_in_1_i[2];
-            x_out_1[j3 + 2] += (t2 * dx * dz)      * x_in_1_i[0];
-            x_out_1[j3 + 2] += (t2 * dy * dz)      * x_in_1_i[1];
-            x_out_1[j3 + 2] += (t2 * dz * dz + t1) * x_in_1_i[2];
+            xo0_0 += dx * k0 + t1 * x_in_0_j0;
+            xo0_1 += dy * k0 + t1 * x_in_0_j1;
+            xo0_2 += dz * k0 + t1 * x_in_0_j2;
+            DTYPE xo1_0 = dx * k1 + t1 * x_in_1_i0;
+            DTYPE xo1_1 = dy * k1 + t1 * x_in_1_i1;
+            DTYPE xo1_2 = dz * k1 + t1 * x_in_1_i2;
+            
+            x_out_1[j * 3 + 0] += xo1_0;
+            x_out_1[j * 3 + 1] += xo1_1;
+            x_out_1[j * 3 + 2] += xo1_2;
         }
-        x_out_0[i * 3 + 0] += res[0];
-        x_out_0[i * 3 + 1] += res[1];
-        x_out_0[i * 3 + 2] += res[2];
+        x_out_0[i * 3 + 0] += xo0_0;
+        x_out_0[i * 3 + 1] += xo0_1;
+        x_out_0[i * 3 + 2] += xo0_2;
     }
 }
 
-static void RPY_3d_matvec_std(SYMM_MATVEC_KRNL_PARAM)
+static void RPY_matvec_std(SYMM_MATVEC_KRNL_PARAM)
 {
     if (x_in_1 == NULL)
     {

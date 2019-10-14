@@ -757,7 +757,7 @@ void H2P_build_B(H2Pack_t h2pack)
         // Add Statistic info
         h2pack->mat_size[4]  += B_nrow[i] * B_ncol[i];
         h2pack->mat_size[4]  += 2 * (B_nrow[i] + B_ncol[i]);
-        h2pack->JIT_flops[0] += (double)(h2pack->krnl_eval_flops + krnl_dim * krnl_dim * 4) * (double)(node0_npt * node1_npt);
+        h2pack->JIT_flops[0] += (double)(h2pack->krnl_matvec_flops) * (double)(node0_npt * node1_npt);
     }
     int BD_ntask_thread = (h2pack->BD_JIT == 1) ? BD_NTASK_THREAD : 1;
     H2P_partition_workload(n_r_adm_pair, B_ptr + 1, B_total_size, n_thread * BD_ntask_thread, B_blk);
@@ -895,7 +895,7 @@ void H2P_build_D(H2Pack_t h2pack)
         // Add statistic info
         h2pack->mat_size[6] += D_nrow[i] * D_ncol[i];
         h2pack->mat_size[6] += D_nrow[i] + D_ncol[i];
-        h2pack->JIT_flops[1] += (double)(h2pack->krnl_eval_flops + krnl_dim * krnl_dim * 2) * (double)(node_npt * node_npt);
+        h2pack->JIT_flops[1] += (double)(h2pack->krnl_matvec_flops) * (double)(node_npt * node_npt);
     }
     int BD_ntask_thread = (h2pack->BD_JIT == 1) ? BD_NTASK_THREAD : 1;
     H2P_partition_workload(n_leaf_node, D_ptr + 1, D0_total_size, n_thread * BD_ntask_thread, D_blk0);
@@ -920,7 +920,7 @@ void H2P_build_D(H2Pack_t h2pack)
         // Add statistic info
         h2pack->mat_size[6] += D_nrow[ii] * D_ncol[ii];
         h2pack->mat_size[6] += 2 * (D_nrow[ii] + D_ncol[ii]);
-        h2pack->JIT_flops[1] += (double)(h2pack->krnl_eval_flops + krnl_dim * krnl_dim * 4) * (double)(node0_npt * node1_npt);
+        h2pack->JIT_flops[1] += (double)(h2pack->krnl_matvec_flops) * (double)(node0_npt * node1_npt);
     }
     H2P_partition_workload(n_r_inadm_pair, D_ptr + n_leaf_node + 1, D1_total_size, n_thread * BD_ntask_thread, D_blk1);
     for (int i = 1; i <= n_leaf_node + n_r_inadm_pair; i++) D_ptr[i] += D_ptr[i - 1];
@@ -1008,7 +1008,7 @@ void H2P_build_D(H2Pack_t h2pack)
 void H2P_build(
     H2Pack_t h2pack, H2P_dense_mat_t *pp, const int BD_JIT, 
     kernel_eval_fptr krnl_eval, kernel_matvec_fptr krnl_matvec, 
-    const int krnl_eval_flops
+    const int krnl_matvec_flops
 )
 {
     double st, et;
@@ -1017,7 +1017,7 @@ void H2P_build(
     h2pack->BD_JIT = BD_JIT;
     h2pack->krnl_eval = krnl_eval;
     h2pack->krnl_matvec = krnl_matvec;
-    h2pack->krnl_eval_flops = krnl_eval_flops;
+    h2pack->krnl_matvec_flops = krnl_matvec_flops;
     if (BD_JIT == 1 && krnl_matvec == NULL) 
         printf("[WARNING] krnl_eval() will be used in BD_JIT matvec. For better performance, krnl_matvec() should be provided. \n");
 

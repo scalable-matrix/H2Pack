@@ -309,15 +309,15 @@ static inline __m512d vec_arsqrt_d(const __m512d r2)
 static inline vec_f vec_rsqrt_ntit_s(const vec_f r2, vec_f rsqrt, const float  C_)
 {
     vec_f C  = vec_set1_s(C_);
-    vec_f t1 = vec_mul_s(r2, vec_mul_s(rsqrt, rsqrt));
-    vec_f t2 = vec_sub_s(C, t1);
+    vec_f t1 = vec_mul_s(rsqrt, rsqrt);
+    vec_f t2 = vec_fnmadd_s(r2, t1, C);
     return vec_mul_s(rsqrt, t2);
 }
 static inline vec_d vec_rsqrt_ntit_d(const vec_d r2, vec_d rsqrt, const double C_)
 {
     vec_d C  = vec_set1_d(C_);
-    vec_d t1 = vec_mul_d(r2, vec_mul_d(rsqrt, rsqrt));
-    vec_d t2 = vec_sub_d(C, t1);
+    vec_d t1 = vec_mul_d(rsqrt, rsqrt);
+    vec_d t2 = vec_fnmadd_d(r2, t1, C);
     return vec_mul_d(rsqrt, t2);
 }
 

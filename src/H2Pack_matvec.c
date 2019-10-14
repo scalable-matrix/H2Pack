@@ -704,7 +704,7 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
 }
 
 // H2 representation matvec downward sweep, calculate U_i * (B_{ij} * (U_j^T * x_j))
-void H2P_matvec_downward_sweep(H2Pack_t h2pack, const DTYPE *x)
+void H2P_matvec_downward_sweep(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
 {
     int max_child       = h2pack->max_child;
     int n_leaf_node     = h2pack->n_leaf_node;
@@ -727,7 +727,6 @@ void H2P_matvec_downward_sweep(H2Pack_t h2pack, const DTYPE *x)
         #pragma omp parallel num_threads(nthreads) 
         {
             int tid = omp_get_thread_num();
-            DTYPE *y = h2pack->tb[tid]->y;
             H2P_dense_mat_t y1_tmp = h2pack->tb[tid]->mat0;
             
             h2pack->tb[tid]->timer = -H2P_get_wtime_sec();
@@ -1051,6 +1050,9 @@ void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
         int tid = omp_get_thread_num();
         DTYPE *tid_y = h2pack->tb[tid]->y;
         memset(tid_y, 0, sizeof(DTYPE) * krnl_mat_size);
+        
+        #pragma omp for
+        for (int i = 0; i < krnl_mat_size; i++) y[i] = 0;
     }
     et = H2P_get_wtime_sec();
     h2pack->timers[8] += et - st;
@@ -1074,7 +1076,7 @@ void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
     
     // 4. Downward sweep, calculate U_i * (B_{ij} * (U_j^T * x_j))
     st = H2P_get_wtime_sec();
-    H2P_matvec_downward_sweep(h2pack, x);
+    H2P_matvec_downward_sweep(h2pack, x, y);
     et = H2P_get_wtime_sec();
     h2pack->timers[6] += et - st;
     
@@ -1097,17 +1099,15 @@ void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
         int spos, len;
         H2P_block_partition(krnl_mat_size, n_thread, tid, &spos, &len);
         
-        DTYPE *y_src = h2pack->tb[0]->y;
-        memcpy(y + spos, y_src + spos, sizeof(DTYPE) * len);
-        for (int tid = 1; tid < n_thread; tid++)
+        for (int tid = 0; tid < n_thread; tid++)
         {
-            y_src = h2pack->tb[tid]->y;
+            DTYPE *y_src = h2pack->tb[tid]->y;
             #pragma omp simd
             for (int i = spos; i < spos + len; i++) y[i] += y_src[i];
         }
     }
     et = H2P_get_wtime_sec();
-    h2pack->mat_size[7] = (n_thread + 1) * h2pack->krnl_mat_size;
+    h2pack->mat_size[7] = (2 * n_thread + 1) * h2pack->krnl_mat_size;
     h2pack->timers[8] += et - st;
     
     h2pack->n_matvec++;

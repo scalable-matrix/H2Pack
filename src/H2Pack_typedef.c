@@ -58,6 +58,8 @@ void H2P_init(
     h2pack->enbox         = NULL;
     h2pack->B_data        = NULL;
     h2pack->D_data        = NULL;
+    h2pack->xT            = NULL;
+    h2pack->yT            = NULL;
     h2pack->J             = NULL;
     h2pack->J_coord       = NULL;
     h2pack->pp            = NULL;
@@ -101,6 +103,8 @@ void H2P_destroy(H2Pack_t h2pack)
     free(h2pack->enbox);
     H2P_free_aligned(h2pack->B_data);
     H2P_free_aligned(h2pack->D_data);
+    free(h2pack->xT);
+    free(h2pack->yT);
     
     H2P_int_vec_destroy(h2pack->B_blk);
     H2P_int_vec_destroy(h2pack->D_blk0);

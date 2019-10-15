@@ -27,11 +27,12 @@ typedef void (*kernel_eval_fptr) (
     DTYPE *mat, const int ldm
 );
 
-// Pointer to function that performs one or two kernel matrix matvec(s) using given
-// sets of points and given input vector(s). The kernel function must be symmetric.
+// Pointer to function that performs two kernel matrix matvec using given sets
+// of points and given input vectors. The kernel function must be symmetric.
 // This function computes:
-//   (1) x_out_0 = kernel_matrix(coord0, coord1) * x_in_0
-//   (2) x_out_1 = kernel_matrix(coord0, coord1)^T * x_in_1 (optional)
+//   (1) x_out_0 = kernel_matrix(coord0, coord1) * x_in_0,
+//   (2) x_out_1 = kernel_matrix(coord1, coord0) * x_in_1,
+//   where kernel_matrix(coord0, coord1)^T = kernel_matrix(coord1, coord0).
 // Input parameters:
 //   coord0 : Matrix, size dim-by-ld0, coordinates of the 1st point set
 //   ld0    : Leading dimension of coord0, should be >= n0
@@ -40,17 +41,16 @@ typedef void (*kernel_eval_fptr) (
 //   ld1    : Leading dimension of coord1, should be >= n1
 //   n1     : Number of points in coord1 (each column in coord0 is a coordinate)
 //   x_in_0 : Vector, size >= n1, will be left multiplied by kernel_matrix(coord0, coord1)
-//   x_in_1 : Vector, size >= n0, will be left multiplied by kernel_matrix(coord0, coord1)^T.
-//            If x_in_1 == NULL, x_out_1 will remains unchanged.
+//   x_in_1 : Vector, size >= n0, will be left multiplied by kernel_matrix(coord1, coord0).
 // Output parameter:
 //   x_out_0 : Vector, size >= n0, x_out_0 += kernel_matrix(coord0, coord1) * x_in_0
-//   x_out_1 : Vector, size >= n1, x_out_1 += kernel_matrix(coord0, coord1)^T * x_in_1
+//   x_out_1 : Vector, size >= n1, x_out_1 += kernel_matrix(coord1, coord0) * x_in_1
 // Performance optimization notes:
-//   When calling a kernel_matvec_fptr, H2Pack guarantees that:
+//   When calling a kernel_symmv_fptr, H2Pack guarantees that:
 //     (1) n{0,1} are multiples of SIMD_LEN;
 //     (2) The lengths of x_{in,out}_{0,1} are multiples of (SIMD_LEN * H2Pack->krnl_dim)
 //     (3) The addresses of coord{0,1}, x_{in,out}_{0,1} are aligned to (SIMD_LEN * sizeof(DTYPE))
-typedef void (*kernel_matvec_fptr) (
+typedef void (*kernel_symmv_fptr) (
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
     const DTYPE *x_in_0, const DTYPE *x_in_1, 
@@ -110,18 +110,20 @@ struct H2Pack
     DTYPE  *enbox;                  // Size n_node * (2*dim), enclosing box data of each node
     DTYPE  *B_data;                 // Size unknown, data of generator matrices
     DTYPE  *D_data;                 // Size unknown, data of dense blocks in the original matrix
-    H2P_int_vec_t    B_blk;         // Size BD_NTASK_THREAD * n_thread, B matrices task partitioning
-    H2P_int_vec_t    D_blk0;        // Size BD_NTASK_THREAD * n_thread, diagonal blocks in D matrices task partitioning
-    H2P_int_vec_t    D_blk1;        // Size BD_NTASK_THREAD * n_thread, inadmissible blocks in D matrices task partitioning
-    H2P_int_vec_t    *J;            // Size n_node, skeleton row sets
-    H2P_dense_mat_t  *J_coord;      // Size n_node, Coordinate of J points
-    H2P_dense_mat_t  *pp;           // Size max_level + 1, proxy points on each level for generating U and J
-    H2P_dense_mat_t  *U;            // Size n_node, Projection matrices
-    H2P_dense_mat_t  *y0;           // Size n_node, temporary arrays used in matvec
-    H2P_dense_mat_t  *y1;           // Size n_node, temporary arrays used in matvec
-    H2P_thread_buf_t *tb;           // Size n_thread, thread-local buffer
-    kernel_eval_fptr   krnl_eval;   // Pointer to kernel matrix evaluation function
-    kernel_matvec_fptr krnl_matvec; // Pointer to kernel matrix matvec function
+    DTYPE  *xT;                     // Size krnl_mat_size, use for transpose matvec input  "matrix" when krnl_dim > 1
+    DTYPE  *yT;                     // Size krnl_mat_size, use for transpose matevc output "matrix" when krnl_dim > 1
+    H2P_int_vec_t     B_blk;        // Size BD_NTASK_THREAD * n_thread, B matrices task partitioning
+    H2P_int_vec_t     D_blk0;       // Size BD_NTASK_THREAD * n_thread, diagonal blocks in D matrices task partitioning
+    H2P_int_vec_t     D_blk1;       // Size BD_NTASK_THREAD * n_thread, inadmissible blocks in D matrices task partitioning
+    H2P_int_vec_t     *J;           // Size n_node, skeleton row sets
+    H2P_dense_mat_t   *J_coord;     // Size n_node, Coordinate of J points
+    H2P_dense_mat_t   *pp;          // Size max_level + 1, proxy points on each level for generating U and J
+    H2P_dense_mat_t   *U;           // Size n_node, Projection matrices
+    H2P_dense_mat_t   *y0;          // Size n_node, temporary arrays used in matvec
+    H2P_dense_mat_t   *y1;          // Size n_node, temporary arrays used in matvec
+    H2P_thread_buf_t  *tb;          // Size n_thread, thread-local buffer
+    kernel_eval_fptr  krnl_eval;    // Pointer to kernel matrix evaluation function
+    kernel_symmv_fptr krnl_symmv;   // Pointer to kernel matrix symmetric matvec function
 
     // Statistic data
     int    n_matvec;                // Number of performed matvec

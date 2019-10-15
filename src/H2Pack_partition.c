@@ -528,6 +528,8 @@ void H2P_partition_points(
         h2pack->mat_cluster[i21] = h2pack->krnl_dim * (h2pack->pt_cluster[i21] + 1) - 1;
     }
     h2pack->krnl_mat_size = h2pack->krnl_dim * h2pack->n_point;
+    h2pack->xT = (DTYPE*) malloc(sizeof(DTYPE) * h2pack->krnl_mat_size);
+    h2pack->yT = (DTYPE*) malloc(sizeof(DTYPE) * h2pack->krnl_mat_size);
     
     // 4. Calculate reduced (in)admissible pairs
     int estimated_n_pair = h2pack->n_node * h2pack->max_child;

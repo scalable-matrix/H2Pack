@@ -11,12 +11,7 @@
     const DTYPE *coord1, const int ld1, const int n1, \
     DTYPE *mat, const int ldm 
 
-#define MATVEC_KRNL_PARAM \
-    const DTYPE *coord0, const int ld0, const int n0, \
-    const DTYPE *coord1, const int ld1, const int n1, \
-    const DTYPE *x_in_0, DTYPE *x_out_0
-
-#define SYMM_MATVEC_KRNL_PARAM \
+#define KRNL_SYMMV_PARAM \
     const DTYPE *coord0, const int ld0, const int n0, \
     const DTYPE *coord1, const int ld1, const int n1, \
     const DTYPE *x_in_0, const DTYPE *x_in_1,         \
@@ -45,7 +40,7 @@ extern "C" {
 
 // Report the effective instead of achieved FLOP
 // 3: dx, dy, dz; 5: r2 = dx^2 + dy^2 + dz^2; 2: 1/sqrt(r2); 4: matvec
-const int Coulomb_3d_matvec_flop = (3 + 5 + 2 + 4);
+const int Coulomb_3d_krnl_symmv_flop = (3 + 5 + 2 + 4);
 
 static void Coulomb_3d_eval_intrin_d(EVAL_KRNL_PARAM)
 {
@@ -87,57 +82,7 @@ static void Coulomb_3d_eval_intrin_d(EVAL_KRNL_PARAM)
     }
 }
 
-static void Coulomb_3d_matvec_nt_intrin_d(MATVEC_KRNL_PARAM)
-{
-    EXTRACT_3D_COORD();
-    const vec_d frsqrt_pf = vec_frsqrt_pf_d();
-    for (int i = 0; i < n0; i += 2)
-    {
-        vec_d sum_v0 = vec_zero_d();
-        vec_d sum_v1 = vec_zero_d();
-        const vec_d x0_i0v = vec_bcast_d(x0 + i);
-        const vec_d y0_i0v = vec_bcast_d(y0 + i);
-        const vec_d z0_i0v = vec_bcast_d(z0 + i);
-        const vec_d x0_i1v = vec_bcast_d(x0 + i + 1);
-        const vec_d y0_i1v = vec_bcast_d(y0 + i + 1);
-        const vec_d z0_i1v = vec_bcast_d(z0 + i + 1);
-        for (int j = 0; j < n1; j += SIMD_LEN)
-        {
-            vec_d d0, d1, jv, r20, r21;
-            
-            jv  = vec_load_d(x1 + j);
-            d0  = vec_sub_d(x0_i0v, jv);
-            d1  = vec_sub_d(x0_i1v, jv);
-            r20 = vec_mul_d(d0, d0);
-            r21 = vec_mul_d(d1, d1);
-            
-            jv  = vec_load_d(y1 + j);
-            d0  = vec_sub_d(y0_i0v, jv);
-            d1  = vec_sub_d(y0_i1v, jv);
-            r20 = vec_fmadd_d(d0, d0, r20);
-            r21 = vec_fmadd_d(d1, d1, r21);
-            
-            jv  = vec_load_d(z1 + j);
-            d0  = vec_sub_d(z0_i0v, jv);
-            d1  = vec_sub_d(z0_i1v, jv);
-            r20 = vec_fmadd_d(d0, d0, r20);
-            r21 = vec_fmadd_d(d1, d1, r21);
-            
-            r20 = vec_frsqrt_d(r20);
-            r21 = vec_frsqrt_d(r21);
-            
-            d0 = vec_load_d(x_in_0 + j);
-            sum_v0 = vec_fmadd_d(d0, r20, sum_v0);
-            sum_v1 = vec_fmadd_d(d0, r21, sum_v1);
-        }
-        sum_v0 = vec_mul_d(sum_v0, frsqrt_pf);
-        sum_v1 = vec_mul_d(sum_v1, frsqrt_pf);
-        x_out_0[i]   += vec_reduce_add_d(sum_v0);
-        x_out_0[i+1] += vec_reduce_add_d(sum_v1);
-    }
-}
-
-static void Coulomb_3d_matvec_nt_t_intrin_d(SYMM_MATVEC_KRNL_PARAM)
+static void Coulomb_3d_krnl_symmv_intrin_d(KRNL_SYMMV_PARAM)
 {
     EXTRACT_3D_COORD();
     const vec_d frsqrt_pf = vec_frsqrt_pf_d();
@@ -193,16 +138,6 @@ static void Coulomb_3d_matvec_nt_t_intrin_d(SYMM_MATVEC_KRNL_PARAM)
     }
 }
 
-static void Coulomb_3d_matvec_intrin_d(SYMM_MATVEC_KRNL_PARAM)
-{
-    if (x_in_1 == NULL) 
-    {
-        Coulomb_3d_matvec_nt_intrin_d  (coord0, ld0, n0, coord1, ld1, n1, x_in_0,         x_out_0         );
-    } else {
-        Coulomb_3d_matvec_nt_t_intrin_d(coord0, ld0, n0, coord1, ld1, n1, x_in_0, x_in_1, x_out_0, x_out_1);
-    }
-}
-
 // ============================================================ //
 // ======================   RPY Kernel   ====================== //
 // ============================================================ //
@@ -220,7 +155,7 @@ const DTYPE RPY_eta = 1.0;
     const DTYPE C_3o32oa = C * 3.0 / 32.0 / RPY_a;
 
 // Report the effective instead of achieved FLOP
-const int RPY_matvec_flop = 62;
+const int RPY_krnl_symmv_flop = 62;
 
 static void RPY_eval_std(EVAL_KRNL_PARAM)
 {
@@ -275,72 +210,7 @@ static void RPY_eval_std(EVAL_KRNL_PARAM)
     }
 }
 
-static void RPY_matvec_nt_intrin(MATVEC_KRNL_PARAM)
-{
-    EXTRACT_3D_COORD();
-    CALC_RPY_CONST();
-    for (int i = 0; i < n0; i++)
-    {
-        vec_d txv = vec_bcast_d(x0 + i);
-        vec_d tyv = vec_bcast_d(y0 + i);
-        vec_d tzv = vec_bcast_d(z0 + i);
-        vec_d xo0_0 = vec_zero_d();
-        vec_d xo0_1 = vec_zero_d();
-        vec_d xo0_2 = vec_zero_d();
-        vec_d frsqrt_pf = vec_frsqrt_pf_d();
-        for (int j = 0; j < n1; j += SIMD_LEN_D)
-        {
-            vec_d dx = vec_sub_d(txv, vec_loadu_d(x1 + j));
-            vec_d dy = vec_sub_d(tyv, vec_loadu_d(y1 + j));
-            vec_d dz = vec_sub_d(tzv, vec_loadu_d(z1 + j));
-            vec_d r2 = vec_mul_d(dx, dx);
-            r2 = vec_fmadd_d(dy, dy, r2);
-            r2 = vec_fmadd_d(dz, dz, r2);
-            vec_d r = vec_sqrt_d(r2);
-            vec_d inv_r = vec_mul_d(vec_frsqrt_d(r2), frsqrt_pf);
-            
-            dx = vec_mul_d(dx, inv_r);
-            dy = vec_mul_d(dy, inv_r);
-            dz = vec_mul_d(dz, inv_r);
-            
-            vec_cmp_d r_lt_a2 = vec_cmp_lt_d(r, vec_set1_d(a2));
-            vec_d C_075_o_r = vec_mul_d(vec_set1_d(C_075), inv_r);
-            vec_d inv_r2 = vec_mul_d(inv_r, inv_r);
-            
-            vec_d tmp0, tmp1, t1, t2;
-            tmp0 = vec_fnmadd_d(vec_set1_d(C_9o32oa), r, vec_set1_d(C));
-            tmp1 = vec_fmadd_d(vec_set1_d(aa_2o3), inv_r2, vec_set1_d(1));
-            tmp1 = vec_mul_d(C_075_o_r, tmp1);
-            t1   = vec_blend_d(tmp1, tmp0, r_lt_a2);
-            
-            tmp0 = vec_mul_d(vec_set1_d(C_3o32oa), r);
-            tmp1 = vec_fnmadd_d(vec_set1_d(aa2), inv_r2, vec_set1_d(1));
-            tmp1 = vec_mul_d(C_075_o_r, tmp1);
-            t2   = vec_blend_d(tmp1, tmp0, r_lt_a2);
-            
-            vec_d x_in_0_j0 = vec_loadu_d(x_in_0 + j);
-            vec_d x_in_0_j1 = vec_loadu_d(x_in_0 + j + ld1);
-            vec_d x_in_0_j2 = vec_loadu_d(x_in_0 + j + ld1 * 2);
-            
-            tmp0 = vec_mul_d(x_in_0_j0, dx);
-            tmp0 = vec_fmadd_d(x_in_0_j1, dy, tmp0);
-            tmp0 = vec_fmadd_d(x_in_0_j2, dz, tmp0);
-            tmp0 = vec_mul_d(t2, tmp0);
-            
-            xo0_0 = vec_fmadd_d(dx, tmp0, xo0_0);
-            xo0_1 = vec_fmadd_d(dy, tmp0, xo0_1);
-            xo0_2 = vec_fmadd_d(dz, tmp0, xo0_2);
-            xo0_0 = vec_fmadd_d(t1, x_in_0_j0, xo0_0);
-            xo0_1 = vec_fmadd_d(t1, x_in_0_j1, xo0_1);
-            xo0_2 = vec_fmadd_d(t1, x_in_0_j2, xo0_2);
-        }
-        x_out_0[i + 0 * ld0] += vec_reduce_add_d(xo0_0);
-        x_out_0[i + 1 * ld0] += vec_reduce_add_d(xo0_1);
-        x_out_0[i + 2 * ld0] += vec_reduce_add_d(xo0_2);
-    }
-}
-
-static void RPY_matvec_nt_t_intrin(SYMM_MATVEC_KRNL_PARAM)
+static void RPY_krnl_symmv_intrin_d(KRNL_SYMMV_PARAM)
 {
     EXTRACT_3D_COORD();
     CALC_RPY_CONST();
@@ -433,16 +303,6 @@ static void RPY_matvec_nt_t_intrin(SYMM_MATVEC_KRNL_PARAM)
         x_out_0[i + 0 * ld0] += vec_reduce_add_d(xo0_0);
         x_out_0[i + 1 * ld0] += vec_reduce_add_d(xo0_1);
         x_out_0[i + 2 * ld0] += vec_reduce_add_d(xo0_2);
-    }
-}
-
-static void RPY_matvec_intrin(SYMM_MATVEC_KRNL_PARAM)
-{
-    if (x_in_1 == NULL)
-    {
-        RPY_matvec_nt_intrin  (coord0, ld0, n0, coord1, ld1, n1, x_in_0,         x_out_0);
-    } else {
-        RPY_matvec_nt_t_intrin(coord0, ld0, n0, coord1, ld1, n1, x_in_0, x_in_1, x_out_0, x_out_1);
     }
 }
 

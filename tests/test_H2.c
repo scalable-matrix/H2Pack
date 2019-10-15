@@ -19,11 +19,11 @@ struct H2P_test_params
     int   krnl_mat_size;
     int   BD_JIT;
     int   kernel_id;
-    int   krnl_matvec_flops;
+    int   krnl_symmv_flops;
     DTYPE rel_tol;
     DTYPE *coord;
-    kernel_eval_fptr   krnl_eval;
-    kernel_matvec_fptr krnl_matvec;
+    kernel_eval_fptr  krnl_eval;
+    kernel_symmv_fptr krnl_symmv;
 };
 struct H2P_test_params test_params;
 
@@ -136,23 +136,23 @@ void parse_params(int argc, char **argv)
         {
             case 0: 
             { 
-                test_params.krnl_eval         = Coulomb_3d_eval_intrin; 
-                test_params.krnl_matvec       = Coulomb_3d_matvec_intrin; 
-                test_params.krnl_matvec_flops = Coulomb_3d_matvec_flop;
+                test_params.krnl_eval        = Coulomb_3d_eval_intrin_d; 
+                test_params.krnl_symmv       = Coulomb_3d_krnl_symmv_intrin_d; 
+                test_params.krnl_symmv_flops = Coulomb_3d_krnl_symmv_flop;
                 break;
             }
             case 1: 
             {
-                test_params.krnl_eval         = NULL; 
-                test_params.krnl_matvec       = NULL; 
-                test_params.krnl_matvec_flops = 0;
+                test_params.krnl_eval        = NULL; 
+                test_params.krnl_symmv       = NULL; 
+                test_params.krnl_symmv_flops = 0;
                 break;
             }
             case 2: 
             {
-                test_params.krnl_eval         = NULL; 
-                test_params.krnl_matvec       = NULL; 
-                test_params.krnl_matvec_flops = 0;
+                test_params.krnl_eval        = NULL; 
+                test_params.krnl_symmv       = NULL; 
+                test_params.krnl_symmv_flops = 0;
                 break;
             }
         }
@@ -163,23 +163,23 @@ void parse_params(int argc, char **argv)
         {
             case 0: 
             {
-                test_params.krnl_eval         = NULL; 
-                test_params.krnl_matvec       = NULL; 
-                test_params.krnl_matvec_flops = 0;
+                test_params.krnl_eval        = NULL; 
+                test_params.krnl_symmv       = NULL; 
+                test_params.krnl_symmv_flops = 0;
                 break;
             }
             case 1: 
             {
-                test_params.krnl_eval         = NULL; 
-                test_params.krnl_matvec       = NULL; 
-                test_params.krnl_matvec_flops = 0;
+                test_params.krnl_eval        = NULL; 
+                test_params.krnl_symmv       = NULL; 
+                test_params.krnl_symmv_flops = 0;
                 break;
             }
             case 2: 
             {
-                test_params.krnl_eval         = NULL; 
-                test_params.krnl_matvec       = NULL; 
-                test_params.krnl_matvec_flops = 0;
+                test_params.krnl_eval        = NULL; 
+                test_params.krnl_symmv       = NULL; 
+                test_params.krnl_symmv_flops = 0;
                 break;
             }
         }
@@ -187,7 +187,7 @@ void parse_params(int argc, char **argv)
 }
 
 void direct_nbody(
-    kernel_matvec_fptr krnl_matvec, const int krnl_matvec_flops, const int pt_dim, 
+    kernel_symmv_fptr krnl_symmv, const int krnl_symmv_flops, const int pt_dim, 
     const int krnl_dim, const int n_point, const DTYPE *coord, const DTYPE *x, DTYPE *y
 )
 {
@@ -196,6 +196,7 @@ void direct_nbody(
     DTYPE *coord_ext = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * pt_dim * n_point_ext);
     DTYPE *x_ext = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * krnl_dim * n_point_ext);
     DTYPE *y_ext = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * krnl_dim * n_point_ext);
+    
     
     for (int i = 0; i < pt_dim; i++)
     {
@@ -208,7 +209,9 @@ void direct_nbody(
     memcpy(x_ext, x, sizeof(DTYPE) * krnl_dim * n_point);
     for (int j = krnl_dim * n_point; j < krnl_dim * n_point_ext; j++) x_ext[j] = 0.0;
     
+    int blk_size = 512;
     int nthreads = omp_get_max_threads();
+    DTYPE *buff  = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * nthreads * blk_size);
     double st = H2P_get_wtime_sec();
     #pragma omp parallel
     {
@@ -217,23 +220,27 @@ void direct_nbody(
         H2P_block_partition(n_vec_ext, nthreads, tid, &start_vec, &n_vec);
         int start_point = start_vec * SIMD_LEN;
         int n_point1 = n_vec * SIMD_LEN;
-        int blk_size = 512;
+        DTYPE *thread_buff = buff + tid * blk_size;
+        
         for (int ix = start_point; ix < start_point + n_point1; ix += blk_size)
         {
             int nx = (ix + blk_size > start_point + n_point1) ? (start_point + n_point1 - ix) : blk_size;
             for (int iy = 0; iy < n_point_ext; iy += blk_size)
             {
                 int ny = (iy + blk_size > n_point_ext) ? (n_point_ext - iy) : blk_size;
-                krnl_matvec(
+                DTYPE *x_in  = x_ext + iy * krnl_dim;
+                DTYPE *x_out = y_ext + ix * krnl_dim;
+                krnl_symmv(
                     coord_ext + ix, n_point_ext, nx,
                     coord_ext + iy, n_point_ext, ny,
-                    x_ext + iy * krnl_dim, NULL, y_ext + ix * krnl_dim, NULL
+                    x_in, x_in, x_out, thread_buff
                 );
             }
         }
     }
     double ut = H2P_get_wtime_sec() - st;
-    double GFLOPS = (double)(n_point) * (double)(n_point) * (double)(krnl_matvec_flops - 2);
+    H2P_free_aligned(buff);
+    double GFLOPS = (double)(n_point) * (double)(n_point) * (double)(krnl_symmv_flops - 2);
     GFLOPS = GFLOPS / 1000000000.0;
     printf("Direct N-body reference result obtained, %.3lf s, %.2lf GFLOPS\n", ut, GFLOPS / ut);
     
@@ -284,7 +291,7 @@ int main(int argc, char **argv)
     
     H2P_build(
         h2pack, pp, test_params.BD_JIT, test_params.krnl_eval, 
-        test_params.krnl_matvec, test_params.krnl_matvec_flops
+        test_params.krnl_symmv, test_params.krnl_symmv_flops
     );
     
     int nthreads = omp_get_max_threads();
@@ -297,7 +304,7 @@ int main(int argc, char **argv)
     
     // Get reference results
     direct_nbody(
-        test_params.krnl_matvec, test_params.krnl_matvec_flops, test_params.pt_dim, 
+        test_params.krnl_symmv, test_params.krnl_symmv_flops, test_params.pt_dim, 
         test_params.krnl_dim, test_params.n_point, h2pack->coord, x, y0
     );
     

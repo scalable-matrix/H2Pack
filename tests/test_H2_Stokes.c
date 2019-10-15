@@ -31,7 +31,7 @@ void parse_params(int argc, char **argv)
     test_params.pt_dim = 3;
     test_params.krnl_dim = 3;
     
-    printf("Using 3D RPY kernel\n");
+    printf("Using 3D Stokes kernel\n");
     if (argc < 2)
     {
         printf("Number of points   = ");
@@ -108,19 +108,19 @@ void parse_params(int argc, char **argv)
         printf(" done.\n");
     }
     
-    test_params.krnl_eval        = RPY_eval_std;
-    test_params.krnl_symmv       = RPY_krnl_symmv_intrin_d;
-    test_params.krnl_symmv_flops = RPY_krnl_symmv_flop;
+    test_params.krnl_eval        = Stokes_eval_std;
+    test_params.krnl_symmv       = Stokes_krnl_symmv_intrin_d;
+    test_params.krnl_symmv_flops = Stokes_krnl_symmv_flop;
 }
 
-static void RPY_matvec_nt_std(
+static void Stokes_matvec_nt_std(
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
     const DTYPE *x_in_0, DTYPE *x_out_0
 )
 {
     EXTRACT_3D_COORD();
-    CALC_RPY_CONST();
+    CALC_STOKES_CONST();
     for (int i = 0; i < n0; i++)
     {
         DTYPE txs = x0[i];
@@ -134,32 +134,30 @@ static void RPY_matvec_nt_std(
             DTYPE dy = tys - y1[j];
             DTYPE dz = tzs - z1[j];
             DTYPE r2 = dx * dx + dy * dy + dz * dz;
-            DTYPE r  = sqrt(r2);
-            DTYPE inv_r = (r == 0.0) ? 0.0 : 1.0 / r;
+            
+            DTYPE inv_r, t1;
+            if (r2 == 0.0)
+            {
+                inv_r = 0.0;
+                t1 = C;
+            } else {
+                inv_r = 1.0 / sqrt(r2);
+                t1 = inv_r * Ca3o4;
+            }
             
             dx *= inv_r;
             dy *= inv_r;
             dz *= inv_r;
-
-            DTYPE t1, t2;
-            if (r < a2)
-            {
-                t1 = C - C_9o32oa * r;
-                t2 =     C_3o32oa * r;
-            } else {
-                t1 = C_075 * inv_r * (1 + aa_2o3 * inv_r * inv_r);
-                t2 = C_075 * inv_r * (1 - aa2    * inv_r * inv_r); 
-            }
             
             DTYPE x_in_0_j0 = x_in_0[j * 3 + 0];
             DTYPE x_in_0_j1 = x_in_0[j * 3 + 1];
             DTYPE x_in_0_j2 = x_in_0[j * 3 + 2];
             
-            DTYPE k1 = t2 * (x_in_0_j0 * dx + x_in_0_j1 * dy + x_in_0_j2 * dz);
+            DTYPE k0 = x_in_0_j0 * dx + x_in_0_j1 * dy + x_in_0_j2 * dz;
             
-            xo0_0 += dx * k1 + t1 * x_in_0_j0;
-            xo0_1 += dy * k1 + t1 * x_in_0_j1;
-            xo0_2 += dz * k1 + t1 * x_in_0_j2;
+            xo0_0 += t1 * (x_in_0_j0 + dx * k0);
+            xo0_1 += t1 * (x_in_0_j1 + dy * k0);
+            xo0_2 += t1 * (x_in_0_j2 + dz * k0);
         }
         x_out_0[i * 3 + 0] += xo0_0;
         x_out_0[i * 3 + 1] += xo0_1;
@@ -198,7 +196,7 @@ void direct_nbody(
             {
                 DTYPE beta = (iy > 0) ? 1.0 : 0.0;
                 int blk_ny = (iy + ny_blk_size > n_point) ? n_point - iy : ny_blk_size;
-                RPY_matvec_nt_std(
+                Stokes_matvec_nt_std(
                     coord + ix, n_point, blk_nx,
                     coord + iy, n_point, blk_ny,
                     x + iy * krnl_dim, y + ix * krnl_dim

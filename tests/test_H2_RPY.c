@@ -109,7 +109,7 @@ void parse_params(int argc, char **argv)
     }
     
     test_params.krnl_eval         = RPY_eval_std;
-    test_params.krnl_matvec       = RPY_matvec_std;
+    test_params.krnl_matvec       = RPY_matvec_autovec;
     test_params.krnl_matvec_flops = RPY_matvec_flop;
 }
 
@@ -224,7 +224,7 @@ int main(int argc, char **argv)
     
     // Get reference results
     direct_nbody(
-        test_params.krnl_matvec, test_params.krnl_matvec_flops, 
+        RPY_matvec_std, test_params.krnl_matvec_flops, 
         test_params.krnl_dim, test_params.n_point, h2pack->coord, x, y0
     );
     

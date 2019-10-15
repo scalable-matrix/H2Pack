@@ -396,6 +396,127 @@ static void RPY_matvec_std(SYMM_MATVEC_KRNL_PARAM)
     }
 }
 
+static void RPY_matvec_nt_autovec(MATVEC_KRNL_PARAM)
+{
+    EXTRACT_3D_COORD();
+    CALC_RPY_CONST();
+    for (int i = 0; i < n0; i++)
+    {
+        DTYPE txs = x0[i];
+        DTYPE tys = y0[i];
+        DTYPE tzs = z0[i];
+        DTYPE xo0_0 = 0, xo0_1 = 0, xo0_2 = 0;
+        #pragma omp simd  
+        for (int j = 0; j < n1; j++)
+        {
+            DTYPE dx = txs - x1[j];
+            DTYPE dy = tys - y1[j];
+            DTYPE dz = tzs - z1[j];
+            DTYPE r2 = dx * dx + dy * dy + dz * dz;
+            DTYPE r  = sqrt(r2);
+            DTYPE inv_r = (r == 0.0) ? 0.0 : 1.0 / r;
+            
+            dx *= inv_r;
+            dy *= inv_r;
+            dz *= inv_r;
+
+            DTYPE t1, t2;
+            if (r < a2)
+            {
+                t1 = C - C_9o32oa * r;
+                t2 =     C_3o32oa * r;
+            } else {
+                t1 = C_075 * inv_r * (1 + aa_2o3 * inv_r * inv_r);
+                t2 = C_075 * inv_r * (1 - aa2    * inv_r * inv_r); 
+            }
+            
+            DTYPE x_in_0_j0 = x_in_0[j + 0 * ld1];
+            DTYPE x_in_0_j1 = x_in_0[j + 1 * ld1];
+            DTYPE x_in_0_j2 = x_in_0[j + 2 * ld1];
+            
+            DTYPE k1 = t2 * (x_in_0_j0 * dx + x_in_0_j1 * dy + x_in_0_j2 * dz);
+            
+            xo0_0 += dx * k1 + t1 * x_in_0_j0;
+            xo0_1 += dy * k1 + t1 * x_in_0_j1;
+            xo0_2 += dz * k1 + t1 * x_in_0_j2;
+        }
+        x_out_0[i + 0 * ld0] += xo0_0;
+        x_out_0[i + 1 * ld0] += xo0_1;
+        x_out_0[i + 2 * ld0] += xo0_2;
+    }
+}
+
+static void RPY_matvec_nt_t_autovec(SYMM_MATVEC_KRNL_PARAM)
+{
+    EXTRACT_3D_COORD();
+    CALC_RPY_CONST();
+    for (int i = 0; i < n0; i++)
+    {
+        DTYPE txs = x0[i];
+        DTYPE tys = y0[i];
+        DTYPE tzs = z0[i];
+        DTYPE x_in_1_i0 = x_in_1[i + 0 * ld0];
+        DTYPE x_in_1_i1 = x_in_1[i + 1 * ld0];
+        DTYPE x_in_1_i2 = x_in_1[i + 2 * ld0];
+        DTYPE xo0_0 = 0, xo0_1 = 0, xo0_2 = 0;
+        #pragma omp simd  
+        for (int j = 0; j < n1; j++)
+        {
+            DTYPE dx = txs - x1[j];
+            DTYPE dy = tys - y1[j];
+            DTYPE dz = tzs - z1[j];
+            DTYPE r2 = dx * dx + dy * dy + dz * dz;
+            DTYPE r  = sqrt(r2);
+            DTYPE inv_r = (r == 0.0) ? 0.0 : 1.0 / r;
+            
+            dx *= inv_r;
+            dy *= inv_r;
+            dz *= inv_r;
+
+            DTYPE t1, t2;
+            if (r < a2)
+            {
+                t1 = C - C_9o32oa * r;
+                t2 =     C_3o32oa * r;
+            } else {
+                t1 = C_075 * inv_r * (1 + aa_2o3 * inv_r * inv_r);
+                t2 = C_075 * inv_r * (1 - aa2    * inv_r * inv_r); 
+            }
+            
+            DTYPE x_in_0_j0 = x_in_0[j + 0 * ld1];
+            DTYPE x_in_0_j1 = x_in_0[j + 1 * ld1];
+            DTYPE x_in_0_j2 = x_in_0[j + 2 * ld1];
+            
+            DTYPE k0 = t2 * (x_in_0_j0 * dx + x_in_0_j1 * dy + x_in_0_j2 * dz);
+            DTYPE k1 = t2 * (x_in_1_i0 * dx + x_in_1_i1 * dy + x_in_1_i2 * dz);
+            
+            xo0_0 += dx * k0 + t1 * x_in_0_j0;
+            xo0_1 += dy * k0 + t1 * x_in_0_j1;
+            xo0_2 += dz * k0 + t1 * x_in_0_j2;
+            DTYPE xo1_0 = dx * k1 + t1 * x_in_1_i0;
+            DTYPE xo1_1 = dy * k1 + t1 * x_in_1_i1;
+            DTYPE xo1_2 = dz * k1 + t1 * x_in_1_i2;
+            
+            x_out_1[j + 0 * ld1] += xo1_0;
+            x_out_1[j + 1 * ld1] += xo1_1;
+            x_out_1[j + 2 * ld1] += xo1_2;
+        }
+        x_out_0[i + 0 * ld0] += xo0_0;
+        x_out_0[i + 1 * ld0] += xo0_1;
+        x_out_0[i + 2 * ld0] += xo0_2;
+    }
+}
+
+static void RPY_matvec_autovec(SYMM_MATVEC_KRNL_PARAM)
+{
+    if (x_in_1 == NULL)
+    {
+        RPY_matvec_nt_autovec  (coord0, ld0, n0, coord1, ld1, n1, x_in_0,         x_out_0);
+    } else {
+        RPY_matvec_nt_t_autovec(coord0, ld0, n0, coord1, ld1, n1, x_in_0, x_in_1, x_out_0, x_out_1);
+    }
+}
+
 #ifdef __cplusplus
 }
 #endif

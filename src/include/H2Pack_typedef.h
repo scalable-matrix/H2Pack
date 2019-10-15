@@ -110,6 +110,8 @@ struct H2Pack
     DTYPE  *enbox;                  // Size n_node * (2*dim), enclosing box data of each node
     DTYPE  *B_data;                 // Size unknown, data of generator matrices
     DTYPE  *D_data;                 // Size unknown, data of dense blocks in the original matrix
+    DTYPE  *xT;                     // Size krnl_mat_size, use for transpose matvec input  "matrix" when krnl_dim > 1
+    DTYPE  *yT;                     // Size krnl_mat_size, use for transpose matevc output "matrix" when krnl_dim > 1
     H2P_int_vec_t    B_blk;         // Size BD_NTASK_THREAD * n_thread, B matrices task partitioning
     H2P_int_vec_t    D_blk0;        // Size BD_NTASK_THREAD * n_thread, diagonal blocks in D matrices task partitioning
     H2P_int_vec_t    D_blk1;        // Size BD_NTASK_THREAD * n_thread, inadmissible blocks in D matrices task partitioning

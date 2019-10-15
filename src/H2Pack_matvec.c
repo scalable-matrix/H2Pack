@@ -15,7 +15,7 @@
 #include "H2Pack_aux_structs.h"
 #include "x86_intrin_wrapper.h" 
 
-// Calculate GEMV A * x0 and A' * x1 in one run to reduce bandwidth pressure
+// Calculate GEMV A * x0 and A^T * x1 in one run to reduce bandwidth pressure
 // Input parameters:
 //   nrow   : Number of rows in the matrix
 //   ncol   : Number of columns in the matrix
@@ -24,8 +24,8 @@
 //   x_in_0 : Input vector 0
 //   x_in_1 : Input vector 1
 // Output parameter:
-//   x_out_0 : Output vector 0, := mat * x_in_0
-//   x_out_1 : Output vector 1, := trans(mat) * x_in_0
+//   x_out_0 : Output vector 0, := mat   * x_in_0
+//   x_out_1 : Output vector 1, := mat^T * x_in_1
 static void CBLAS_GESYMMV(
     const int nrow, const int ncol, const DTYPE *mat, const int ldm,
     const DTYPE *x_in_0, const DTYPE *x_in_1, DTYPE *x_out_0, DTYPE *x_out_1
@@ -585,14 +585,14 @@ void H2P_ext_symm_krnl_matvec(
 //   coord1      : Matrix, size dim-by-ld1, coordinates of the 2nd point set
 //   ld1         : Leading dimension of coord1, should be >= n1
 //   n1          : Number of points in coord1 (each column in coord0 is a coordinate)
-//   x_in_0      : Vector, size >= n1, will be left multiplied by kernel_matrix(coord0, coord1)
-//   x_in_1      : Vector, size >= n0, will be left multiplied by kernel_matrix(coord0, coord1)^T
+//   x_in_0      : Vector, size >= n1 * krnl_dim, will be left multiplied by kernel_matrix(coord0, coord1)
+//   x_in_1      : Vector, size >= n0 * krnl_dim, will be left multiplied by kernel_matrix(coord1, coord0)
 //   krnl_dim    : Dimension of tensor kernel's return
 //   npt_row_blk : Blocking size for coord0 points
 //   krnl_eval   : Pointer to kernel matrix evaluation function
 // Output parameter:
-//   x_out_0 : Vector, size >= n0, x_out_0 += kernel_matrix(coord0, coord1) * x_in_0
-//   x_out_1 : Vector, size >= n1, x_out_1 += kernel_matrix(coord0, coord1)^T * x_in_1
+//   x_out_0 : Vector, size >= n0 * krnl_dim, x_out_0 += kernel_matrix(coord0, coord1) * x_in_0
+//   x_out_1 : Vector, size >= n1 * krnl_dim, x_out_1 += kernel_matrix(coord1, coord0) * x_in_1
 void H2P_symm_krnl_eval_matvec(
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
@@ -1205,6 +1205,8 @@ void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
         {
             #pragma omp for
             for (int i = 0; i < krnl_mat_size; i++) h2pack->yT[i] = 0;
+            
+            H2P_transpose_dmat(n_thread, n_point, krnl_dim, x, krnl_dim, h2pack->xT, n_point);
         }
     }
     et = H2P_get_wtime_sec();
@@ -1220,12 +1222,8 @@ void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
     st = H2P_get_wtime_sec();
     if (BD_JIT == 1)
     {
-        if (need_trans)
-        {
-            H2P_transpose_dmat(n_thread, n_point, krnl_dim, x, krnl_dim, h2pack->xT, n_point);
-            H2P_transpose_y0_from_krnldim(h2pack);
-        }
         const DTYPE *x_ = need_trans ? h2pack->xT : x;
+        if (need_trans) H2P_transpose_y0_from_krnldim(h2pack);
         H2P_matvec_intermediate_sweep_JIT(h2pack, x_);
         if (need_trans) H2P_transpose_y1_to_krnldim(h2pack);
     } else {
@@ -1268,15 +1266,16 @@ void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
             for (int i = spos; i < spos + len; i++) y_[i] += y_src[i];
         }
     }
+    h2pack->mat_size[7] = (2 * n_thread + 1) * h2pack->krnl_mat_size;
     // We use xT here to hold the transpose of yT
     if (need_trans)
     {
         H2P_transpose_dmat(n_thread, krnl_dim, n_point, h2pack->yT, n_point, h2pack->xT, krnl_dim);
         #pragma omp parallel for simd
         for (int i = 0; i < krnl_mat_size; i++) y[i] += h2pack->xT[i];
+        h2pack->mat_size[7] += 4 * h2pack->krnl_mat_size;
     }
     et = H2P_get_wtime_sec();
-    h2pack->mat_size[7] = (2 * n_thread + 1) * h2pack->krnl_mat_size;
     h2pack->timers[8] += et - st;
     
     h2pack->n_matvec++;

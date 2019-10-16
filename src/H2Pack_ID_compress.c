@@ -221,9 +221,9 @@ void H2P_partial_pivot_QR_kdim(
     num_threads(nthreads) schedule(static)
     for (int j = 0; j < ncol; j++)
         blk_norm[j] = CBLAS_NRM2(nrow, R + j * ldR);
-    DTYPE max_col_norm = 0.0;
-    for (int j = 0; j < ncol; j++)
-        max_col_norm = MAX(max_col_norm, blk_norm[j]);
+ //   DTYPE max_col_norm = 0.0;
+ //   for (int j = 0; j < ncol; j++)
+ //       max_col_norm = MAX(max_col_norm, blk_norm[j]);
     
     // Find a column block with largest 2-norm as the first pivot
     DTYPE norm_p = 0.0;
@@ -237,9 +237,9 @@ void H2P_partial_pivot_QR_kdim(
             tmp += blk_norm[idx] * blk_norm[idx]; 
         }
         blk_norm[j] = DSQRT(tmp);
-        if (tmp > norm_p)
+        if (blk_norm[j] > norm_p)
         {
-            norm_p = tmp;
+            norm_p = blk_norm[j];
             pivot  = j;
         }
     }
@@ -248,7 +248,7 @@ void H2P_partial_pivot_QR_kdim(
     int stop_rank   = MIN(max_iter, tol_rank);
     DTYPE norm_eps  = DSQRT((DTYPE) nrow) * 1e-15;
     DTYPE stop_norm = MAX(norm_eps, tol_norm);
-    if (rel_norm) stop_norm *= max_col_norm;
+    if (rel_norm) stop_norm *= norm_p;
     
     int rank = -1;
     // Main iteration of Household QR

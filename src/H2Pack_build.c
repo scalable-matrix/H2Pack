@@ -194,7 +194,13 @@ void H2P_generate_proxy_point_ID(
         DTYPE rel_tol = 1e-14;
         
         H2P_eval_kernel_matrix_OMP(krnl_eval, krnl_dim, Nx_points, Ny_points, tmpA);
-        H2P_dense_mat_resize(QR_buff, tmpA->nrow, 1);
+        if (krnl_dim == 1)
+        {
+            H2P_dense_mat_resize(QR_buff, tmpA->nrow, 1);
+        } else {
+            int QR_buff_size = (2 * krnl_dim + 2) * tmpA->ncol + (krnl_dim + 1) * tmpA->nrow;
+            H2P_dense_mat_resize(QR_buff, QR_buff_size, 1);
+        }
         H2P_int_vec_set_capacity(ID_buff, 4 * tmpA->nrow);
         H2P_ID_compress(
             tmpA, QR_REL_NRM, &rel_tol, NULL, skel_idx, 
@@ -203,7 +209,13 @@ void H2P_generate_proxy_point_ID(
         H2P_dense_mat_select_columns(Nx_points, skel_idx);
         
         H2P_eval_kernel_matrix_OMP(krnl_eval, krnl_dim, Ny_points, Nx_points, tmpA);
-        H2P_dense_mat_resize(QR_buff, tmpA->nrow, 1);
+        if (krnl_dim == 1)
+        {
+            H2P_dense_mat_resize(QR_buff, tmpA->nrow, 1);
+        } else {
+            int QR_buff_size = (2 * krnl_dim + 2) * tmpA->ncol + (krnl_dim + 1) * tmpA->nrow;
+            H2P_dense_mat_resize(QR_buff, QR_buff_size, 1);
+        }
         H2P_int_vec_set_capacity(ID_buff, 4 * tmpA->nrow);
         H2P_ID_compress(
             tmpA, QR_REL_NRM, &rel_tol, NULL, skel_idx, 
@@ -584,7 +596,14 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                 );
 
                 // ID compress
-                H2P_dense_mat_resize(QR_buff, A_block->nrow, 1);
+                // Note: A is transposed in ID compress, be careful when calculating the buffer size
+                if (krnl_dim == 1)
+                {
+                    H2P_dense_mat_resize(QR_buff, A_block->nrow, 1);
+                } else {
+                    int QR_buff_size = (2 * krnl_dim + 2) * A_block->ncol + (krnl_dim + 1) * A_block->nrow;
+                    H2P_dense_mat_resize(QR_buff, QR_buff_size, 1);
+                }
                 H2P_int_vec_set_capacity(ID_buff, 4 * A_block->nrow);
                 H2P_ID_compress(
                     A_block, stop_type, stop_param, &U[node], sub_idx, 

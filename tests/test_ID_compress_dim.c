@@ -114,12 +114,16 @@ int main()
     for (int i = 0; i < A_nrow * A_ncol; i++)
         A0_fnorm += A->data[i] * A->data[i];
     
-    int   *ID_buff = (int *)   malloc(sizeof(int)     * A->nrow * 4);
-    DTYPE *QR_buff = (DTYPE *) malloc(sizeof(QR_buff) * A->nrow);
+    int QR_buff_size = (2 * kdim + 2) * A->nrow + (kdim + 1) * A->ncol;
+    int   *ID_buff = (int *)   malloc(sizeof(int)   * A->nrow * 4);
+    DTYPE *QR_buff = (DTYPE *) malloc(sizeof(DTYPE) * QR_buff_size);
+    double st = omp_get_wtime();
     H2P_ID_compress(
         A, QR_REL_NRM, &tol_norm, &U, J, 
         1, QR_buff, ID_buff, kdim
     );
+    double ut = omp_get_wtime() - st;
+    printf("H2P_ID_compress used %.3lf s\n", ut);
     
     DTYPE *AJ = (DTYPE*) malloc(sizeof(DTYPE) * U->ncol * A_ncol);
     for (int i = 0; i < J->length; i++)
@@ -143,7 +147,7 @@ int main()
         res_fnorm += A0->data[i] * A0->data[i];
     res_fnorm = sqrt(res_fnorm);
     printf("U rank = %d (%d column blocks)\n", U->ncol, J->length);
-    printf("||A - A_{H2}||_fro / ||A||_fro = %e\n", res_fnorm / A0_fnorm);
+    printf("||A - A_{ID}||_fro / ||A||_fro = %e\n", res_fnorm / A0_fnorm);
     
     free(QR_buff);
     free(ID_buff);

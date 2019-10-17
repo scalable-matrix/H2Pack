@@ -20,7 +20,8 @@ extern "C" {
 //   stop_type  : Partial QR stop criteria: QR_RANK, QR_REL_NRM, or QR_ABS_NRM
 //   stop_param : Pointer to partial QR stop parameter
 //   nthreads   : Number of threads used in this function
-//   QR_buff    : Size A->nrow, working buffer for partial pivoting QR
+//   QR_buff    : Working buffer for partial pivoting QR. If kdim == 1, size A->ncol.
+//                If kdim > 1, size (2*kdim+2)*A->nrow + (kdim+1)*A->ncol.
 //   ID_buff    : Size 4 * A->nrow, working buffer for ID compression
 //   kdim       : Dimension of tensor kernel's return (column block size)
 // Output parameters:

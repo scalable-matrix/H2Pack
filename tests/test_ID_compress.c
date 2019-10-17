@@ -54,6 +54,7 @@ int main()
     }
     A0_fnorm = sqrt(A0_fnorm);
     
+    /*
     FILE *ouf = fopen("A.csv", "w");
     for (int irow = 0; irow < nrow; irow++)
     {
@@ -67,6 +68,7 @@ int main()
         //printf("%e\n", A_irow[ncol - 1]);
     }
     fclose(ouf);
+    */
 
     H2P_int_vec_t J;
     H2P_int_vec_init(&J, nrow);
@@ -93,6 +95,7 @@ int main()
     printf("U rank = %d, average used time = %.8lf (s)\n", U->ncol, ut / 10.0);
     fflush(stdout);
     
+    /*
     ouf = fopen("U.csv", "w");
     for (int irow = 0; irow < U->nrow; irow++)
     {
@@ -106,6 +109,7 @@ int main()
         //printf("% .4lf  \n", U_irow[U->ncol - 1]);
     }
     fclose(ouf);
+    */
     
     //printf("A skeleton rows: ");
     //for (int i = 0; i < U->ncol; i++) printf("%d ", J[i]);
@@ -122,7 +126,7 @@ int main()
     for (int i = 0; i < nrow * ncol; i++) 
         res_fnorm += A0->data[i] * A0->data[i];
     res_fnorm = sqrt(res_fnorm);
-    printf("||A - A_{H2}||_fro / ||A||_fro = %e\n", res_fnorm / A0_fnorm);
+    printf("||A - A_{ID}||_fro / ||A||_fro = %e\n", res_fnorm / A0_fnorm);
     
     free(ID_buff);
     free(QR_buff);

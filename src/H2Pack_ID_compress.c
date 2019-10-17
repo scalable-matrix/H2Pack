@@ -198,6 +198,8 @@ void H2P_partial_pivot_QR(
 // H2P_partial_pivot_QR operated on column blocks for tensor kernel matrix.
 // Each column block has kdim columns. In each step, we swap kdim columns 
 // and do kdim Householder orthogonalization.
+// Size of QR_buff: (2*kdim+2)*A->nrow + (kdim+1)*A->ncol
+// BLAS-3 approach, ref: https://doi.org/10.1145/1513895.1513904
 void H2P_partial_pivot_QR_kdim(
     H2P_dense_mat_t A, const int kdim, const int tol_rank, const DTYPE tol_norm, 
     const int rel_norm, int *p, int *r, const int nthreads, DTYPE *QR_buff
@@ -212,18 +214,21 @@ void H2P_partial_pivot_QR_kdim(
     
     BLAS_SET_NUM_THREADS(nthreads);
     
-    DTYPE *blk_norm = QR_buff;
-    
     for (int j = 0; j < ncol; j++) p[j] = j;
+    
+    // Partition the work buffer 
+    DTYPE *blk_norm = QR_buff;
+    DTYPE *Vblk = blk_norm + ncol;
+    DTYPE *Wblk = Vblk + kdim * nrow;
+    DTYPE *VV   = Wblk + kdim * nrow;
+    DTYPE *WVV  = VV   + nrow;
+    DTYPE *WR   = WVV  + nrow;
     
     // Find a column with largest 2-norm as a scaling factor
     #pragma omp parallel for if(nthreads > 1) \
     num_threads(nthreads) schedule(static)
     for (int j = 0; j < ncol; j++)
         blk_norm[j] = CBLAS_NRM2(nrow, R + j * ldR);
- //   DTYPE max_col_norm = 0.0;
- //   for (int j = 0; j < ncol; j++)
- //       max_col_norm = MAX(max_col_norm, blk_norm[j]);
     
     // Find a column block with largest 2-norm as the first pivot
     DTYPE norm_p = 0.0;
@@ -250,8 +255,8 @@ void H2P_partial_pivot_QR_kdim(
     DTYPE stop_norm = MAX(norm_eps, tol_norm);
     if (rel_norm) stop_norm *= norm_p;
     
-    int rank = -1;
     // Main iteration of Household QR
+    int rank = -1;
     for (int i = 0; i < max_iter; i++)
     {   
         // 1. Check the stop criteria
@@ -271,10 +276,12 @@ void H2P_partial_pivot_QR_kdim(
             swap_DTYPE(R_i, R_pivot, ldR * kdim);
         }
         
-        // Do kdim times of consecutive Householder orthogonalize
+        int VWblk_nrow = nrow - i * kdim;
+        
+        // 3. Do kdim times of consecutive Householder orthogonalize on the current column block
         for (int ii = i * kdim; ii < i * kdim + kdim; ii++)
         {
-            // 3. Calculate Householder vector
+            // 3.1 Calculate Householder vector
             int h_len    = nrow - ii;
             DTYPE *h_vec = R + ii * ldR + ii;
             DTYPE sign   = (h_vec[0] > 0.0) ? 1.0 : -1.0;
@@ -284,13 +291,12 @@ void H2P_partial_pivot_QR_kdim(
             #pragma omp simd
             for (int j = 0; j < h_len; j++) h_vec[j] *= inv_h_norm;
             
-            // 4. Householder update 
+            // 3.2 Householder update current column block
+            int blk_i = ii - i * kdim;
             DTYPE *R_block = R + (ii + 1) * ldR + ii;
             int R_block_nrow = h_len;
             int R_block_ncol = ncol - ii - 1;
-            #pragma omp parallel for if(nthreads > 1) \
-            num_threads(nthreads) schedule(guided)
-            for (int j = 0; j < R_block_ncol; j++)
+            for (int j = 0; j < kdim - blk_i - 1; j++)
             {
                 int ji1 = j + ii + 1;
                 
@@ -303,10 +309,49 @@ void H2P_partial_pivot_QR_kdim(
                     R_block_j[k] -= h_Rj * h_vec[k];
             }
             
+            // Save the Householder vector for block update
+            for (int j = 0; j < blk_i; j++) Vblk[blk_i * VWblk_nrow + j] = 0.0;
+            memcpy(Vblk + blk_i * VWblk_nrow + blk_i, h_vec, sizeof(DTYPE) * h_len);
+            
             // We don't need h_vec anymore, can overwrite the i-th column of R
             h_vec[0] = -sign * h_norm;
             memset(h_vec + 1, 0, sizeof(DTYPE) * (h_len - 1));
         }
+        
+        // 4. Construct W, use V & W for block Householder update 
+        #pragma omp simd
+        for (int j = 0; j < VWblk_nrow; j++) Wblk[j] = -2.0 * Vblk[j];
+        for (int ii = 1; ii < kdim; ii++)
+        {
+            DTYPE *Vii = Vblk + ii * VWblk_nrow;
+            DTYPE *Wii = Wblk + ii * VWblk_nrow;
+            CBLAS_GEMV(
+                CblasColMajor, CblasTrans, VWblk_nrow, ii, 
+                1.0, Vblk, VWblk_nrow, Vii, 1, 0.0, VV, 1
+            );
+            CBLAS_GEMV(
+                CblasColMajor, CblasNoTrans, VWblk_nrow, ii,
+                1.0, Wblk, VWblk_nrow, VV, 1, 0.0, WVV, 1    
+            );
+            #pragma omp simd
+            for (int j = 0; j < VWblk_nrow; j++)
+                Wii[j] = -2.0 * (Vii[j] + WVV[j]);
+        }
+        int R_blk_scol = i * kdim + kdim;
+        int R_blk_ncol = ncol - R_blk_scol;
+        DTYPE *R_blk = R + R_blk_scol * ldR + (i * kdim);
+        CBLAS_GEMM(
+            CblasColMajor, CblasTrans, CblasNoTrans,
+            kdim, R_blk_ncol, VWblk_nrow, 
+            1.0, Wblk, VWblk_nrow, R_blk, ldR, 
+            0.0, WR, kdim
+        );
+        CBLAS_GEMM(
+            CblasColMajor, CblasNoTrans, CblasNoTrans, 
+            VWblk_nrow, R_blk_ncol, kdim, 
+            1.0, Vblk, VWblk_nrow, WR, kdim, 
+            1.0, R_blk, ldR
+        );
         
         // 5. Update i-th column's 2-norm
         #pragma omp parallel for if(nthreads > 1) \
@@ -322,11 +367,13 @@ void H2P_partial_pivot_QR_kdim(
             DTYPE *R_block = R + i * kdim + j * kdim * ldR;
             DTYPE tmp = blk_norm[j] * blk_norm[j];
             for (int k0 = 0; k0 < kdim; k0++)
+            {
                 for (int k1 = 0; k1 < kdim; k1++)
                 {
                     int idx = k0 * ldR + k1;
                     tmp -= R_block[idx] * R_block[idx];
                 }
+            }
             
             if (tmp <= 1e-10)
             {
@@ -363,13 +410,15 @@ void H2P_partial_pivot_QR_kdim(
     *r = rank;
 }
 
+
 // Partial pivoting QR for ID
 // Input parameters:
 //   A          : Target matrix, stored in column major
 //   stop_type  : Partial QR stop criteria: QR_RANK, QR_REL_NRM, or QR_ABS_NRM
 //   stop_param : Pointer to partial QR stop parameter
 //   nthreads   : Number of threads used in this function
-//   QR_buff    : Size A->ncol, working buffer for partial pivoting QR
+//   QR_buff    : Working buffer for partial pivoting QR. If kdim == 1, size A->ncol.
+//                If kdim > 1, size (2*kdim+2)*A->nrow + (kdim+1)*A->ncol.
 //   kdim       : Dimension of tensor kernel's return (column block size)
 // Output parameters:
 //   A : Matrix R: [R11, R12]

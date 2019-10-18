@@ -209,7 +209,7 @@ void H2P_matvec_upward_sweep(H2Pack_t h2pack, const DTYPE *x)
         }  // End of "pragma omp parallel"
         
         #ifdef PROFILING_OUTPUT
-        double max_t = 0.0, avg_t = 0.0, min_t = 1145141919.0;
+        double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
         for (int i = 0; i < nthreads; i++)
         {
             double thread_i_timer = h2pack->tb[i]->timer;
@@ -470,7 +470,7 @@ void H2P_matvec_intermediate_sweep_AOT(H2Pack_t h2pack, const DTYPE *x)
     H2P_matvec_sum_y1_thread(h2pack);
     
     #ifdef PROFILING_OUTPUT
-    double max_t = 0.0, avg_t = 0.0, min_t = 1145141919.0;
+    double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
     for (int i = 0; i < n_thread; i++)
     {
         double thread_i_timer = h2pack->tb[i]->timer;
@@ -833,7 +833,7 @@ void H2P_matvec_intermediate_sweep_JIT(H2Pack_t h2pack, const DTYPE *x)
     H2P_matvec_sum_y1_thread(h2pack);
     
     #ifdef PROFILING_OUTPUT
-    double max_t = 0.0, avg_t = 0.0, min_t = 1145141919.0;
+    double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
     for (int i = 0; i < n_thread; i++)
     {
         double thread_i_timer = h2pack->tb[i]->timer;
@@ -924,7 +924,7 @@ void H2P_matvec_downward_sweep(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
             h2pack->tb[tid]->timer += H2P_get_wtime_sec();
         }  // End of "pragma omp parallel"
         #ifdef PROFILING_OUTPUT
-        double max_t = 0.0, avg_t = 0.0, min_t = 1145141919.0;
+        double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
         for (int i = 0; i < nthreads; i++)
         {
             double thread_i_timer = h2pack->tb[i]->timer;
@@ -1020,7 +1020,7 @@ void H2P_matvec_dense_blocks_AOT(H2Pack_t h2pack, const DTYPE *x)
     }  // End of "pragma omp parallel"
     
     #ifdef PROFILING_OUTPUT
-    double max_t = 0.0, avg_t = 0.0, min_t = 1145141919.0;
+    double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
     for (int i = 0; i < h2pack->n_thread; i++)
     {
         double thread_i_timer = h2pack->tb[i]->timer;
@@ -1167,7 +1167,7 @@ void H2P_matvec_dense_blocks_JIT(H2Pack_t h2pack, const DTYPE *x)
     }  // End of "pragma omp parallel"
     
     #ifdef PROFILING_OUTPUT
-    double max_t = 0.0, avg_t = 0.0, min_t = 1145141919.0;
+    double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
     for (int i = 0; i < h2pack->n_thread; i++)
     {
         double thread_i_timer = h2pack->tb[i]->timer;

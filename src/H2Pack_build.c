@@ -624,7 +624,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
         }  // End of "pragma omp parallel"
         
         #ifdef PROFILING_OUTPUT
-        double max_t = 0.0, avg_t = 0.0, min_t = 1145141919.0;
+        double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
         for (int i = 0; i < nthreads; i++)
         {
             double thread_i_timer = h2pack->tb[i]->timer;
@@ -852,7 +852,7 @@ void H2P_build_B(H2Pack_t h2pack)
     }  // End of "pragma omp parallel"
     
     #ifdef PROFILING_OUTPUT
-    double max_t = 0.0, avg_t = 0.0, min_t = 1145141919.0;
+    double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
     for (int i = 0; i < n_thread; i++)
     {
         double thread_i_timer = h2pack->tb[i]->timer;
@@ -1010,7 +1010,7 @@ void H2P_build_D(H2Pack_t h2pack)
     }  // End of "pragma omp parallel"
     
     #ifdef PROFILING_OUTPUT
-    double max_t = 0.0, avg_t = 0.0, min_t = 1145141919.0;
+    double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
     for (int i = 0; i < n_thread; i++)
     {
         double thread_i_timer = h2pack->tb[i]->timer;

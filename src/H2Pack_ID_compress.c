@@ -340,18 +340,24 @@ void H2P_partial_pivot_QR_kdim(
         int R_blk_scol = i * kdim + kdim;
         int R_blk_ncol = ncol - R_blk_scol;
         DTYPE *R_blk = R + R_blk_scol * ldR + (i * kdim);
-        CBLAS_GEMM(
-            CblasColMajor, CblasTrans, CblasNoTrans,
-            kdim, R_blk_ncol, VWblk_nrow, 
-            1.0, Wblk, VWblk_nrow, R_blk, ldR, 
-            0.0, WR, kdim
-        );
-        CBLAS_GEMM(
-            CblasColMajor, CblasNoTrans, CblasNoTrans, 
-            VWblk_nrow, R_blk_ncol, kdim, 
-            1.0, Vblk, VWblk_nrow, WR, kdim, 
-            1.0, R_blk, ldR
-        );
+        int R_col_blk_128KB = 128 * 1024 / sizeof(DTYPE) / (VWblk_nrow * kdim * 3);
+        for (int R_col_offset = 0; R_col_offset < R_blk_ncol; R_col_offset += R_col_blk_128KB)
+        {
+            int R_col_blksize = R_col_blk_128KB;
+            if (R_col_blksize + R_col_offset > R_blk_ncol) R_col_blksize = R_blk_ncol - R_col_offset;
+            CBLAS_GEMM(
+                CblasColMajor, CblasTrans, CblasNoTrans,
+                kdim, R_col_blksize, VWblk_nrow, 
+                1.0, Wblk, VWblk_nrow, R_blk + ldR * R_col_offset, ldR, 
+                0.0, WR, kdim
+            );
+            CBLAS_GEMM(
+                CblasColMajor, CblasNoTrans, CblasNoTrans, 
+                VWblk_nrow, R_col_blksize, kdim, 
+                1.0, Vblk, VWblk_nrow, WR, kdim, 
+                1.0, R_blk + ldR * R_col_offset, ldR
+            );
+        }
         
         // 5. Update i-th column's 2-norm
         #pragma omp parallel for if(nthreads > 1) \

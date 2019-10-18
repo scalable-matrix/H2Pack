@@ -225,7 +225,7 @@ int main(int argc, char **argv)
     
     H2P_init(&h2pack, test_params.pt_dim, test_params.krnl_dim, QR_REL_NRM, &test_params.rel_tol);
     
-    H2P_partition_points(h2pack, test_params.n_point, test_params.coord, 0, 0);
+    H2P_partition_points(h2pack, test_params.n_point, test_params.coord, 300, 0);
     
     // Check if point index permutation is correct in H2Pack
     DTYPE coord_diff_sum = 0.0;
@@ -244,8 +244,11 @@ int main(int argc, char **argv)
     H2P_dense_mat_t *pp;
     DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * test_params.pt_dim + test_params.pt_dim];
     st = H2P_get_wtime_sec();
+    int num_pp = ceil(-log10(test_params.rel_tol)) - 1;
+    if (num_pp > 10) num_pp = 10;
+    num_pp = 6 * num_pp * num_pp;
     H2P_generate_proxy_point_surface(
-        test_params.pt_dim, 600, h2pack->max_level, 
+        test_params.pt_dim, num_pp, h2pack->max_level, 
         2, max_L, test_params.krnl_eval, &pp
     );
     et = H2P_get_wtime_sec();

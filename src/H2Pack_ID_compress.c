@@ -340,7 +340,10 @@ void H2P_partial_pivot_QR_kdim(
         int R_blk_scol = i * kdim + kdim;
         int R_blk_ncol = ncol - R_blk_scol;
         DTYPE *R_blk = R + R_blk_scol * ldR + (i * kdim);
-        int R_col_blk_128KB = 128 * 1024 / sizeof(DTYPE) / (VWblk_nrow * kdim * 3);
+        int R_col_blk_128KB = 128 * 1024;
+        R_col_blk_128KB /= (int) sizeof(DTYPE);
+        R_col_blk_128KB /= (VWblk_nrow * kdim * 3);
+        if (R_col_blk_128KB < 2) R_col_blk_128KB = 8;
         for (int R_col_offset = 0; R_col_offset < R_blk_ncol; R_col_offset += R_col_blk_128KB)
         {
             int R_col_blksize = R_col_blk_128KB;

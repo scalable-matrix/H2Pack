@@ -77,9 +77,8 @@ void parse_params(int argc, char **argv)
     }
     switch (test_params.kernel_id)
     {
-        case 0: printf("Using Coulomb kernel : k(x, y) = 1 / ||x - y||  \n"); break;
-        case 1: printf("Using Laplace kernel : k(x, y) = log(||x - y||) \n"); break;
-        case 2: printf("Using Gaussian kernel : k(x, y) = exp(-||x - y||^2) \n"); break;
+        case 0: printf("Using Laplace kernel : k(x, y) = 1 / |x - y|  \n"); break;
+        case 1: printf("Using Gaussian kernel : k(x, y) = exp(-|x - y|^2) \n"); break;
     }
     
     test_params.coord = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * test_params.n_point * test_params.pt_dim);
@@ -143,16 +142,9 @@ void parse_params(int argc, char **argv)
             }
             case 1: 
             {
-                test_params.krnl_eval        = NULL; 
-                test_params.krnl_symmv       = NULL; 
-                test_params.krnl_symmv_flops = 0;
-                break;
-            }
-            case 2: 
-            {
-                test_params.krnl_eval        = NULL; 
-                test_params.krnl_symmv       = NULL; 
-                test_params.krnl_symmv_flops = 0;
+                test_params.krnl_eval        = Gaussian_3d_eval_intrin_d; 
+                test_params.krnl_symmv       = Gaussian_3d_krnl_symmv_intrin_d; 
+                test_params.krnl_symmv_flops = Gaussian_3d_krnl_symmv_flop;
                 break;
             }
         }
@@ -169,13 +161,6 @@ void parse_params(int argc, char **argv)
                 break;
             }
             case 1: 
-            {
-                test_params.krnl_eval        = NULL; 
-                test_params.krnl_symmv       = NULL; 
-                test_params.krnl_symmv_flops = 0;
-                break;
-            }
-            case 2: 
             {
                 test_params.krnl_eval        = NULL; 
                 test_params.krnl_symmv       = NULL; 

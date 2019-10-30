@@ -20,8 +20,8 @@
     vec_fmadd_*      : Fused Multiply-Add intrinsic vectors a * b + c
     vec_fnmadd_*     : Fused negative Multiply-Add intrinsic vectors -(a * b) + c
     vec_fmsub_*      : Fused Multiply-Sub intrinsic vectors a * b - c
-    vec_max_*        : Return each lane's maximum values of two intrinsic vectors 
-    vec_min_*        : Return each lane's minimum values of two intrinsic vectors   
+    vec_max_*        : Return the maximum values of each lane in two intrinsic vectors 
+    vec_min_*        : Return the minimum values of each lane in two intrinsic vectors   
     vec_cmp_eq_*     : Return in each lane if a == b
     vec_cmp_neq_*    : Return in each lane if a != b
     vec_cmp_lt_*     : Return in each lane if a <  b
@@ -38,6 +38,12 @@
     vec_frsqrt_*     : Fast reverse squart root using Newton iteration, 
                        returns 0 if r2 == 0, otherwise result need to be 
                        multipled with vec_ntfrac_*() to get the correct one.
+    vec_log_*        : Return the natural logarithm of each lane 
+    vec_log2_*       : Return the base-2  logarithm of each lane 
+    vec_log10_*      : Return the base-10 logarithm of each lane 
+    vec_exp_*        : Return the exponential value of e  raised to the power of values in each lane
+    vec_exp2_*       : Return the exponential value of 2  raised to the power of values in each lane
+    vec_exp10_*      : Return the exponential value of 10 raised to the power of values in each lane
 
     Reference:
     1. Intel Intrinsic Guide: https://software.intel.com/sites/landingpage/IntrinsicsGuide/
@@ -98,23 +104,23 @@ static inline __m256  vec_sqrt_s(const __m256  a) { return _mm256_sqrt_ps(a); }
 static inline __m256d vec_sqrt_d(const __m256d a) { return _mm256_sqrt_pd(a); }
 
 #ifdef __AVX2__
-static inline __m256  vec_fmadd_s(const __m256  a, const __m256  b, const __m256  c) { return _mm256_fmadd_ps(a, b, c); }
-static inline __m256d vec_fmadd_d(const __m256d a, const __m256d b, const __m256d c) { return _mm256_fmadd_pd(a, b, c); }
+static inline __m256  vec_fmadd_s(const __m256  a, const __m256  b, const __m256  c)  { return _mm256_fmadd_ps(a, b, c);  }
+static inline __m256d vec_fmadd_d(const __m256d a, const __m256d b, const __m256d c)  { return _mm256_fmadd_pd(a, b, c);  }
 
 static inline __m256  vec_fnmadd_s(const __m256  a, const __m256  b, const __m256  c) { return _mm256_fnmadd_ps(a, b, c); }
 static inline __m256d vec_fnmadd_d(const __m256d a, const __m256d b, const __m256d c) { return _mm256_fnmadd_pd(a, b, c); }
 
-static inline __m256  vec_fmsub_s(const __m256  a, const __m256  b, const __m256  c) { return _mm256_fmsub_ps(a, b, c); }
-static inline __m256d vec_fmsub_d(const __m256d a, const __m256d b, const __m256d c) { return _mm256_fmsub_pd(a, b, c); }
+static inline __m256  vec_fmsub_s(const __m256  a, const __m256  b, const __m256  c)  { return _mm256_fmsub_ps(a, b, c);  }
+static inline __m256d vec_fmsub_d(const __m256d a, const __m256d b, const __m256d c)  { return _mm256_fmsub_pd(a, b, c);  }
 #else
-static inline __m256  vec_fmadd_s(const __m256  a, const __m256  b, const __m256  c) { return _mm256_add_ps(_mm256_mul_ps(a, b), c); }
-static inline __m256d vec_fmadd_d(const __m256d a, const __m256d b, const __m256d c) { return _mm256_add_pd(_mm256_mul_pd(a, b), c); }
+static inline __m256  vec_fmadd_s(const __m256  a, const __m256  b, const __m256  c)  { return _mm256_add_ps(_mm256_mul_ps(a, b), c); }
+static inline __m256d vec_fmadd_d(const __m256d a, const __m256d b, const __m256d c)  { return _mm256_add_pd(_mm256_mul_pd(a, b), c); }
 
 static inline __m256  vec_fnmadd_s(const __m256  a, const __m256  b, const __m256  c) { return _mm256_sub_ps(c, _mm256_mul_ps(a, b)); }
 static inline __m256d vec_fnmadd_d(const __m256d a, const __m256d b, const __m256d c) { return _mm256_sub_pd(c, _mm256_mul_pd(a, b)); }
 
-static inline __m256  vec_fmsub_s(const __m256  a, const __m256  b, const __m256  c) { return _mm256_sub_ps(_mm256_mul_ps(a, b), c); }
-static inline __m256d vec_fmsub_d(const __m256d a, const __m256d b, const __m256d c) { return _mm256_sub_pd(_mm256_mul_pd(a, b), c); }
+static inline __m256  vec_fmsub_s(const __m256  a, const __m256  b, const __m256  c)  { return _mm256_sub_ps(_mm256_mul_ps(a, b), c); }
+static inline __m256d vec_fmsub_d(const __m256d a, const __m256d b, const __m256d c)  { return _mm256_sub_pd(_mm256_mul_pd(a, b), c); }
 #endif // End of #ifdef __AVX2__
 
 static inline __m256  vec_max_s(const __m256  a, const __m256  b) { return _mm256_max_ps(a, b); }
@@ -181,6 +187,24 @@ static inline __m256d vec_arsqrt_d(const __m256d r2)
     return _mm256_cvtps_pd(ret_s); 
 }
 
+static inline __m256  vec_log_s  (const __m256  a) { return _mm256_log_ps(a);   }
+static inline __m256d vec_log_d  (const __m256d a) { return _mm256_log_pd(a);   }
+
+static inline __m256  vec_log2_s (const __m256  a) { return _mm256_log2_ps(a);  }
+static inline __m256d vec_log2_d (const __m256d a) { return _mm256_log2_pd(a);  }
+
+static inline __m256  vec_log10_s(const __m256  a) { return _mm256_log10_ps(a); }
+static inline __m256d vec_log10_d(const __m256d a) { return _mm256_log10_pd(a); }
+
+static inline __m256  vec_exp_s  (const __m256  a) { return _mm256_exp_ps(a);   }
+static inline __m256d vec_exp_d  (const __m256d a) { return _mm256_exp_pd(a);   }
+
+static inline __m256  vec_exp2_s (const __m256  a) { return _mm256_exp2_ps(a);  }
+static inline __m256d vec_exp2_d (const __m256d a) { return _mm256_exp2_pd(a);  }
+
+static inline __m256  vec_exp10_s(const __m256  a) { return _mm256_exp10_ps(a); }
+static inline __m256d vec_exp10_d(const __m256d a) { return _mm256_exp10_pd(a); }
+
 #endif  // End of #ifdef __AVX__
 #endif  // End of #ifdef USE_AVX
 
@@ -231,14 +255,14 @@ static inline __m512d vec_div_d(const __m512d a, const __m512d b) { return _mm51
 static inline __m512  vec_sqrt_s(const __m512  a) { return _mm512_sqrt_ps(a); }
 static inline __m512d vec_sqrt_d(const __m512d a) { return _mm512_sqrt_pd(a); }
 
-static inline __m512  vec_fmadd_s(const __m512  a, const __m512  b, const __m512  c) { return _mm512_fmadd_ps(a, b, c); }
-static inline __m512d vec_fmadd_d(const __m512d a, const __m512d b, const __m512d c) { return _mm512_fmadd_pd(a, b, c); }
+static inline __m512  vec_fmadd_s(const __m512  a, const __m512  b, const __m512  c)  { return _mm512_fmadd_ps(a, b, c);  }
+static inline __m512d vec_fmadd_d(const __m512d a, const __m512d b, const __m512d c)  { return _mm512_fmadd_pd(a, b, c);  }
 
 static inline __m512  vec_fnmadd_s(const __m512  a, const __m512  b, const __m512  c) { return _mm512_fnmadd_ps(a, b, c); }
 static inline __m512d vec_fnmadd_d(const __m512d a, const __m512d b, const __m512d c) { return _mm512_fnmadd_pd(a, b, c); }
 
-static inline __m512  vec_fmsub_s(const __m512  a, const __m512  b, const __m512  c) { return _mm512_fmsub_ps(a, b, c); }
-static inline __m512d vec_fmsub_d(const __m512d a, const __m512d b, const __m512d c) { return _mm512_fmsub_pd(a, b, c); }
+static inline __m512  vec_fmsub_s(const __m512  a, const __m512  b, const __m512  c)  { return _mm512_fmsub_ps(a, b, c);  }
+static inline __m512d vec_fmsub_d(const __m512d a, const __m512d b, const __m512d c)  { return _mm512_fmsub_pd(a, b, c);  }
 
 static inline __m512  vec_max_s(const __m512  a, const __m512  b) { return _mm512_max_ps(a, b); }
 static inline __m512d vec_max_d(const __m512d a, const __m512d b) { return _mm512_max_pd(a, b); }
@@ -301,6 +325,24 @@ static inline __m512d vec_arsqrt_d(const __m512d r2)
     return _mm512_mask_mov_pd(rsqrt, cmp0, zero);
 }
 #endif  // End of #ifdef __AVX512ER__
+
+static inline __m512  vec_log_s  (const __m512  a) { return _mm512_log_ps(a);   }
+static inline __m512d vec_log_d  (const __m512d a) { return _mm512_log_pd(a);   }
+
+static inline __m512  vec_log2_s (const __m512  a) { return _mm512_log2_ps(a);  }
+static inline __m512d vec_log2_d (const __m512d a) { return _mm512_log2_pd(a);  }
+
+static inline __m512  vec_log10_s(const __m512  a) { return _mm512_log10_ps(a); }
+static inline __m512d vec_log10_d(const __m512d a) { return _mm512_log10_pd(a); }
+
+static inline __m512  vec_exp_s  (const __m512  a) { return _mm512_exp_ps(a);   }
+static inline __m512d vec_exp_d  (const __m512d a) { return _mm512_exp_pd(a);   }
+
+static inline __m512  vec_exp2_s (const __m512  a) { return _mm512_exp2_ps(a);  }
+static inline __m512d vec_exp2_d (const __m512d a) { return _mm512_exp2_pd(a);  }
+
+static inline __m512  vec_exp10_s(const __m512  a) { return _mm512_exp10_ps(a); }
+static inline __m512d vec_exp10_d(const __m512d a) { return _mm512_exp10_pd(a); }
 
 #endif  // End of #ifdef __AVX512F__
 #endif  // End of #ifdef USE_AVX512
@@ -368,4 +410,3 @@ static inline vec_d vec_frsqrt_d(const vec_d r2)
 }
 
 #endif  // End of header file 
-

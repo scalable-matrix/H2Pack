@@ -245,6 +245,7 @@ int main(int argc, char **argv)
     DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * test_params.pt_dim + test_params.pt_dim];
     st = H2P_get_wtime_sec();
     int num_pp = ceil(-log10(test_params.rel_tol)) - 1;
+    if (num_pp < 4 ) num_pp = 4;
     if (num_pp > 10) num_pp = 10;
     num_pp = 6 * num_pp * num_pp;
     H2P_generate_proxy_point_surface(
@@ -265,7 +266,7 @@ int main(int argc, char **argv)
     y0 = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * test_params.krnl_mat_size);
     y1 = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * test_params.krnl_mat_size);
     assert(x != NULL && y0 != NULL && y1 != NULL);
-    for (int i = 0; i < test_params.krnl_mat_size; i++) x[i] = 1.0; //drand48();
+    for (int i = 0; i < test_params.krnl_mat_size; i++) x[i] = drand48();
     
     // Get reference results
     direct_nbody(

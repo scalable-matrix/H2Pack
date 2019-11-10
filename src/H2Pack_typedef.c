@@ -23,6 +23,7 @@ void H2P_init(
     h2pack->krnl_dim  = krnl_dim;
     h2pack->max_child = 1 << pt_dim;
     h2pack->n_matvec  = 0;
+    h2pack->is_H2ERI  = 0;
     memset(h2pack->mat_size,  0, sizeof(size_t) * 8);
     memset(h2pack->timers,    0, sizeof(double) * 9);
     memset(h2pack->JIT_flops, 0, sizeof(double) * 2);
@@ -191,24 +192,27 @@ void H2P_print_statistic(H2Pack_t h2pack)
     }
     y0y1_MB /= 1048576.0;
     tb_MB   /= 1048576.0;
-    int max_node_rank = 0;
-    double sum_node_rank = 0.0, non_empty_node = 0.0;
-    for (int i = 0; i < h2pack->n_UJ; i++)
-    {
-        int rank_i = h2pack->J[i]->length;
-        if (rank_i > 0)
-        {
-            sum_node_rank  += (double) rank_i;
-            non_empty_node += 1.0;
-            max_node_rank   = (rank_i > max_node_rank) ? rank_i : max_node_rank;
-        }
-    }
     printf("  * Just-In-Time B & D build  : %s\n", h2pack->BD_JIT ? "Yes (B & D not allocated)" : "No");
     printf("  * H2 representation U, B, D : %.2lf, %.2lf, %.2lf (MB) \n", U_MB, B_MB, D_MB);
     printf("  * Matvec auxiliary arrays   : %.2lf (MB) \n", y0y1_MB);
     printf("  * Thread-local buffers      : %.2lf (MB) \n", tb_MB);
-    printf("  * Max / Avg compressed rank : %d, %.0lf \n", max_node_rank, sum_node_rank / non_empty_node);
     //printf("  * sizeof(U + B + D) / kms   : %.3lf \n", UBD_k);
+    if (h2pack->is_H2ERI == 0)
+    {
+        int max_node_rank = 0;
+        double sum_node_rank = 0.0, non_empty_node = 0.0;
+        for (int i = 0; i < h2pack->n_UJ; i++)
+        {
+            int rank_i = h2pack->J[i]->length;
+            if (rank_i > 0)
+            {
+                sum_node_rank  += (double) rank_i;
+                non_empty_node += 1.0;
+                max_node_rank   = (rank_i > max_node_rank) ? rank_i : max_node_rank;
+            }
+        }
+        printf("  * Max / Avg compressed rank : %d, %.0lf \n", max_node_rank, sum_node_rank / non_empty_node);
+    }
     
     printf("==================== H2Pack timing info =====================\n");
     int n_matvec = h2pack->n_matvec;

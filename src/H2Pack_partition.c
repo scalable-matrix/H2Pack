@@ -384,14 +384,18 @@ void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0
         {
             H2P_int_vec_push_back(partition_vars.r_adm_pairs, n0);
             H2P_int_vec_push_back(partition_vars.r_adm_pairs, n1);
-            partition_vars.min_adm_level  = MIN(partition_vars.min_adm_level,  level_n0);
-            partition_vars.min_adm_level  = MIN(partition_vars.min_adm_level,  level_n1);
-            partition_vars.max_adm_height = MAX(partition_vars.max_adm_height, height_n0);
-            partition_vars.max_adm_height = MAX(partition_vars.max_adm_height, height_n1);
-            //int max_level_n01  = MAX(level_n0,  level_n1);
-            //int min_height_n01 = MIN(height_n0, height_n1);
-            //partition_vars.min_adm_level  = MIN(partition_vars.min_adm_level,  max_level_n01);
-            //partition_vars.max_adm_height = MAX(partition_vars.max_adm_height, min_height_n01);
+            if (h2pack->is_H2ERI)
+            {
+                int max_level_n01  = MAX(level_n0,  level_n1);
+                int min_height_n01 = MIN(height_n0, height_n1);
+                partition_vars.min_adm_level  = MIN(partition_vars.min_adm_level,  max_level_n01);
+                partition_vars.max_adm_height = MAX(partition_vars.max_adm_height, min_height_n01);
+            } else {
+                partition_vars.min_adm_level  = MIN(partition_vars.min_adm_level,  level_n0);
+                partition_vars.min_adm_level  = MIN(partition_vars.min_adm_level,  level_n1);
+                partition_vars.max_adm_height = MAX(partition_vars.max_adm_height, height_n0);
+                partition_vars.max_adm_height = MAX(partition_vars.max_adm_height, height_n1);
+            }
             return;
         }
         
@@ -520,16 +524,20 @@ void H2P_partition_points(
     h2pack->parent[h2pack->root_idx] = -1;  // Root node doesn't have parent
     H2P_tree_node_destroy(root);  // We don't need the linked list H2 tree anymore
     
-    for (int i = 0; i < n_node; i++)
+    // in H2ERI, mat_cluster and krnl_mat_size will be set outside and we don't need xT, yT
+    if (h2pack->is_H2ERI == 0)
     {
-        int i20 = i * 2;
-        int i21 = i * 2 + 1;
-        h2pack->mat_cluster[i20] = h2pack->krnl_dim * h2pack->pt_cluster[i20];
-        h2pack->mat_cluster[i21] = h2pack->krnl_dim * (h2pack->pt_cluster[i21] + 1) - 1;
+        for (int i = 0; i < n_node; i++)
+        {
+            int i20 = i * 2;
+            int i21 = i * 2 + 1;
+            h2pack->mat_cluster[i20] = h2pack->krnl_dim * h2pack->pt_cluster[i20];
+            h2pack->mat_cluster[i21] = h2pack->krnl_dim * (h2pack->pt_cluster[i21] + 1) - 1;
+        }
+        h2pack->krnl_mat_size = h2pack->krnl_dim * h2pack->n_point;
+        h2pack->xT = (DTYPE*) malloc(sizeof(DTYPE) * h2pack->krnl_mat_size);
+        h2pack->yT = (DTYPE*) malloc(sizeof(DTYPE) * h2pack->krnl_mat_size);
     }
-    h2pack->krnl_mat_size = h2pack->krnl_dim * h2pack->n_point;
-    h2pack->xT = (DTYPE*) malloc(sizeof(DTYPE) * h2pack->krnl_mat_size);
-    h2pack->yT = (DTYPE*) malloc(sizeof(DTYPE) * h2pack->krnl_mat_size);
     
     // 4. Calculate reduced (in)admissible pairs
     int estimated_n_pair = h2pack->n_node * h2pack->max_child;

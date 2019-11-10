@@ -83,6 +83,7 @@ struct H2Pack
     int    n_B;                     // Number of generator matrices
     int    n_D;                     // Number of dense blocks
     int    BD_JIT;                  // If B and D matrices are computed just-in-time in matvec
+    int    is_H2ERI;                // If H2Pack is called from H2ERI
     int    *parent;                 // Size n_node, parent index of each node
     int    *children;               // Size n_node * max_child, indices of a node's children nodes
     int    *pt_cluster;             // Size n_node * 2, start and end (included) indices of points belong to each node

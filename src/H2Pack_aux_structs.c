@@ -61,6 +61,7 @@ void H2P_int_vec_destroy(H2P_int_vec_t int_vec)
 {
     if (int_vec == NULL) return;
     free(int_vec->data);
+    int_vec->data = NULL;
     int_vec->capacity = 0;
     int_vec->length = 0;
 }
@@ -247,6 +248,27 @@ void H2P_thread_buf_destroy(H2P_thread_buf_t thread_buf)
     H2P_dense_mat_destroy(thread_buf->mat1);
     H2P_dense_mat_destroy(thread_buf->mat2);
     H2P_free_aligned(thread_buf->y);
+}
+
+void H2P_thread_buf_reset(H2P_thread_buf_t thread_buf)
+{
+    if (thread_buf == NULL) return;
+    H2P_int_vec_destroy(thread_buf->idx0);
+    H2P_int_vec_destroy(thread_buf->idx1);
+    H2P_int_vec_destroy(thread_buf->idx2);
+    H2P_int_vec_destroy(thread_buf->idx3);
+    H2P_int_vec_destroy(thread_buf->idx4);
+    H2P_dense_mat_destroy(thread_buf->mat0);
+    H2P_dense_mat_destroy(thread_buf->mat1);
+    H2P_dense_mat_destroy(thread_buf->mat2);
+    H2P_int_vec_set_capacity(thread_buf->idx0, 1024);
+    H2P_int_vec_set_capacity(thread_buf->idx1, 1024);
+    H2P_int_vec_set_capacity(thread_buf->idx2, 1024);
+    H2P_int_vec_set_capacity(thread_buf->idx3, 1024);
+    H2P_int_vec_set_capacity(thread_buf->idx4, 1024);
+    H2P_dense_mat_resize(thread_buf->mat0, 1024, 1);
+    H2P_dense_mat_resize(thread_buf->mat1, 1024, 1);
+    H2P_dense_mat_resize(thread_buf->mat2, 1024, 1);
 }
 
 // ------------------------------------------------------------------- // 

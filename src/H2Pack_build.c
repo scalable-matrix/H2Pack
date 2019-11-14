@@ -664,6 +664,9 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
         }
         //printf("Node %3d: %d skeleton points\n", i, J[i]->length);
     }
+    
+    for (int i = 0; i < h2pack->n_thread; i++)
+        H2P_thread_buf_reset(h2pack->tb[i]);
 }
 
 // Partition work units into multiple blocks s.t. each block has 

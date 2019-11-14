@@ -243,6 +243,11 @@ void H2P_thread_buf_init(H2P_thread_buf_t *thread_buf_, const int krnl_mat_size)
 //   thread_buf : H2P_thread_buf structure to be destroyed 
 void H2P_thread_buf_destroy(H2P_thread_buf_t thread_buf);
 
+// Reset a H2P_thread_buf structure (release memory)
+// Input parameter:
+//   thread_buf : H2P_thread_buf structure to be reset 
+void H2P_thread_buf_reset(H2P_thread_buf_t thread_buf);
+
 // ------------------------------------------------------------------------------ // 
 
 #ifdef __cplusplus

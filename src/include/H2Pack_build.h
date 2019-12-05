@@ -21,7 +21,7 @@ extern "C" {
 // Output parameter:
 //   pp_  : Array of proxy points for each level
 void H2P_generate_proxy_point_ID(
-    const int pt_dim, const int krnl_dim, const int max_level, const int start_level,
+    const int pt_dim, const int krnl_dim, const DTYPE tol_norm, const int max_level, const int start_level,
     DTYPE max_L, kernel_eval_fptr krnl_eval, H2P_dense_mat_t **pp_
 );
 

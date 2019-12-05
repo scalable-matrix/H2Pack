@@ -121,7 +121,7 @@ int point_in_box(const int pt_dim, DTYPE *coord, DTYPE L)
 // Generate proxy points for constructing H2 projection and skeleton matrices
 // using ID compress for any kernel function
 void H2P_generate_proxy_point_ID(
-    const int pt_dim, const int krnl_dim, const int max_level, const int start_level,
+    const int pt_dim, const int krnl_dim, const DTYPE tol_norm, const int max_level, const int start_level,
     DTYPE max_L, kernel_eval_fptr krnl_eval, H2P_dense_mat_t **pp_
 )
 {   
@@ -191,7 +191,8 @@ void H2P_generate_proxy_point_ID(
 
         // (3) Use ID to select skeleton points in Nx first, then use the
         //     skeleton Nx points to select skeleton Ny points
-        DTYPE rel_tol = 1e-14;
+
+        DTYPE rel_tol = tol_norm < 1e-13 ? 1e-14 : tol_norm * 1e-1;
         
         H2P_eval_kernel_matrix_OMP(krnl_eval, krnl_dim, Nx_points, Ny_points, tmpA);
         if (krnl_dim == 1)
@@ -248,6 +249,8 @@ void H2P_generate_proxy_point_ID(
             }
         }
         
+        // UNDONE (Xin): enable densification when tol_norm < 1e-13. 
+
         // Disable densification for the moment. Should be enabled when high accuracy is required.
         const int Ny_size2 = ny;// * 2;
         H2P_dense_mat_init(&pp[level], pt_dim, Ny_size2);

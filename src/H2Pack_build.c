@@ -670,6 +670,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     
     for (int i = 0; i < h2pack->n_thread; i++)
         H2P_thread_buf_reset(h2pack->tb[i]);
+    BLAS_SET_NUM_THREADS(h2pack->n_thread);
 }
 
 // Partition work units into multiple blocks s.t. each block has 

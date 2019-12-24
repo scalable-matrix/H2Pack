@@ -1,7 +1,7 @@
 LIB     = ../src/libH2Pack.a #$(VTUNE_AMPLIFIER_2018_DIR)/lib64/libittnotify.a
 INC     = -I../src/include   #-I$(VTUNE_AMPLIFIER_2018_DIR)/include
 HOSTCC  = icc
-CFLAGS  = $(INC) -Wall -g -std=gnu99 -O3 -qopenmp -xHost -mkl -DUSE_AVX
+CFLAGS  = $(INC) -Wall -g -std=gnu99 -O3 -qopenmp -xHost -mkl
 LDFLAGS = -g -O3 -xHost -qopenmp -mkl 
 
 SRCS = $(wildcard *.c)

@@ -57,6 +57,13 @@
 #define NEWTON_ITER 2   // Two Newton iterations is usually sufficient for rsqrt using double type
 #endif
 
+#ifndef USE_AVX512
+#ifndef USE_AVX
+#define USE_AVX
+#warning H2Pack is using AVX/AVX2 by default. Add -DUSE_AVX512 to your CFLAGS to use AVX-512 in H2Pack.
+#endif
+#endif
+
 #ifdef USE_AVX
 #ifdef __AVX__
 

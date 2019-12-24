@@ -5,11 +5,6 @@
 #include <math.h>
 #include <float.h>
 
-#ifdef USE_MKL
-#include <mkl.h>
-#define BLAS_SET_NUM_THREADS mkl_set_num_threads
-#endif
-
 #include "H2Pack_config.h"
 #include "H2Pack_utils.h"
 #include "H2Pack_aux_structs.h"

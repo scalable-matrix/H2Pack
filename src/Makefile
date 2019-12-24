@@ -4,7 +4,7 @@ OBJS  = H2Pack_typedef.o H2Pack_utils.o H2Pack_aux_structs.o H2Pack_ID_compress.
 
 HOSTCC  = icc
 AR      = xiar rcs
-DEF     = -DUSE_MKL -DUSE_AVX
+DEF     = -DUSE_MKL
 INC     = ./include
 CFLAGS  = -I$(INC) -Wall -g -std=gnu99 -O3 -qopenmp -xHost -mkl $(DEF)
 LDFLAGS = -O3 -xHost -qopenmp 

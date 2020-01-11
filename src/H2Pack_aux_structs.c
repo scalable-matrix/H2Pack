@@ -46,7 +46,7 @@ void H2P_tree_node_destroy(H2P_tree_node_t node)
 // Initialize a H2P_int_vec structure
 void H2P_int_vec_init(H2P_int_vec_t *int_vec_, int capacity)
 {
-    if (capacity < 0 || capacity > 65536) capacity = 128;
+    if (capacity < 0) capacity = 128;
     H2P_int_vec_t int_vec = (H2P_int_vec_t) malloc(sizeof(struct H2P_int_vec));
     assert(int_vec != NULL);
     int_vec->capacity = capacity;

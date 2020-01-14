@@ -387,7 +387,7 @@ void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0
             if (h2pack->is_H2ERI)
             {
                 int max_level_n01  = MAX(level_n0,  level_n1);
-                int min_height_n01 = MIN(height_n0, height_n1);
+                int min_height_n01 = (max_level_n01 == level_n0) ? height_n0 : height_n1;
                 partition_vars.min_adm_level  = MIN(partition_vars.min_adm_level,  max_level_n01);
                 partition_vars.max_adm_height = MAX(partition_vars.max_adm_height, min_height_n01);
             } else {

@@ -111,18 +111,31 @@ void H2P_destroy(H2Pack_t h2pack)
     H2P_int_vec_destroy(h2pack->D_blk0);
     H2P_int_vec_destroy(h2pack->D_blk1);
     
-    for (int i = 0; i <= h2pack->max_level; i++)
-        H2P_dense_mat_destroy(h2pack->pp[i]);
-    free(h2pack->pp);
+    // If H2Pack is called from H2P-ERI, pp == J == J_coord == NULL
+    
+    if (h2pack->pp != NULL)
+    {
+        for (int i = 0; i <= h2pack->max_level; i++)
+            H2P_dense_mat_destroy(h2pack->pp[i]);
+        free(h2pack->pp);
+    }
+    
+    if (h2pack->J != NULL)
+    {
+        for (int i = 0; i < h2pack->n_UJ; i++)
+            H2P_int_vec_destroy(h2pack->J[i]);
+        free(h2pack->J);
+    }
+    
+    if (h2pack->J_coord != NULL)
+    {
+        for (int i = 0; i < h2pack->n_UJ; i++)
+            H2P_dense_mat_destroy(h2pack->J_coord[i]);
+        free(h2pack->J_coord);
+    }
     
     for (int i = 0; i < h2pack->n_UJ; i++)
-    {
-        H2P_int_vec_destroy(h2pack->J[i]);
-        H2P_dense_mat_destroy(h2pack->J_coord[i]);
         H2P_dense_mat_destroy(h2pack->U[i]);
-    }
-    free(h2pack->J);
-    free(h2pack->J_coord);
     free(h2pack->U);
     
     for (int i = 0; i < h2pack->n_node; i++)

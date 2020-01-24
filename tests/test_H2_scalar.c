@@ -31,11 +31,11 @@ void parse_params(int argc, char **argv)
 {
     if (argc < 2)
     {
-        printf("Kernel dimension   = ");
+        printf("Point dimension    = ");
         scanf("%d", &test_params.pt_dim);
     } else {
         test_params.pt_dim = atoi(argv[1]);
-        printf("Kernel dimension   = %d\n", test_params.pt_dim);
+        printf("Point dimension    = %d\n", test_params.pt_dim);
     }
     test_params.krnl_dim = 1;
     
@@ -79,6 +79,7 @@ void parse_params(int argc, char **argv)
     {
         case 0: printf("Using Laplace kernel : k(x, y) = 1 / |x - y|  \n"); break;
         case 1: printf("Using Gaussian kernel : k(x, y) = exp(-|x - y|^2) \n"); break;
+        case 2: printf("Using 3/2 Matern kernel : k(x, y) = (1 + k) * exp(-k), where k = sqrt(3) * |x - y| \n"); break;
     }
     
     test_params.coord = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * test_params.n_point * test_params.pt_dim);
@@ -147,24 +148,11 @@ void parse_params(int argc, char **argv)
                 test_params.krnl_symmv_flops = Gaussian_3d_krnl_symmv_flop;
                 break;
             }
-        }
-    }
-    if (test_params.pt_dim == 2) 
-    {
-        switch (test_params.kernel_id)
-        {
-            case 0: 
+            case 2: 
             {
-                test_params.krnl_eval        = NULL; 
-                test_params.krnl_symmv       = NULL; 
-                test_params.krnl_symmv_flops = 0;
-                break;
-            }
-            case 1: 
-            {
-                test_params.krnl_eval        = NULL; 
-                test_params.krnl_symmv       = NULL; 
-                test_params.krnl_symmv_flops = 0;
+                test_params.krnl_eval        = Matern_3d_eval_intrin_d; 
+                test_params.krnl_symmv       = Matern_3d_krnl_symmv_intrin_d; 
+                test_params.krnl_symmv_flops = Matern_3d_krnl_symmv_flop;
                 break;
             }
         }
@@ -181,7 +169,6 @@ void direct_nbody(
     DTYPE *coord_ext = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * pt_dim * n_point_ext);
     DTYPE *x_ext = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * krnl_dim * n_point_ext);
     DTYPE *y_ext = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * krnl_dim * n_point_ext);
-    
     
     for (int i = 0; i < pt_dim; i++)
     {

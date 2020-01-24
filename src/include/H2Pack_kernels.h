@@ -239,6 +239,117 @@ static void Gaussian_3d_krnl_symmv_intrin_d(KRNL_SYMMV_PARAM)
 }
 
 // ============================================================ //
+// =====================   Matern Kernel   ==================== //
+// ============================================================ //
+
+const  int  Matern_3d_krnl_symmv_flop = 17;
+
+#define NSQRT3 -1.7320508075688772
+
+static void Matern_3d_eval_intrin_d(KRNL_EVAL_PARAM)
+{
+    EXTRACT_3D_COORD();
+    const int n1_vec = (n1 / SIMD_LEN) * SIMD_LEN;
+    for (int i = 0; i < n0; i++)
+    {
+        DTYPE *mat_irow = mat + i * ldm;
+        
+        vec_d x0_iv = vec_bcast_d(x0 + i);
+        vec_d y0_iv = vec_bcast_d(y0 + i);
+        vec_d z0_iv = vec_bcast_d(z0 + i);
+        for (int j = 0; j < n1_vec; j += SIMD_LEN)
+        {
+            vec_d dx = vec_sub_d(x0_iv, vec_loadu_d(x1 + j));
+            vec_d dy = vec_sub_d(y0_iv, vec_loadu_d(y1 + j));
+            vec_d dz = vec_sub_d(z0_iv, vec_loadu_d(z1 + j));
+            
+            vec_d r = vec_mul_d(dx, dx);
+            r = vec_fmadd_d(dy, dy, r);
+            r = vec_fmadd_d(dz, dz, r);
+            r = vec_sqrt_d(r);
+            r = vec_mul_d(r, vec_set1_d(NSQRT3));
+            r = vec_mul_d(vec_sub_d(vec_set1_d(1.0), r), vec_exp_d(r));
+            
+            vec_storeu_d(mat_irow + j, r);
+        }
+        
+        const DTYPE x0_i = x0[i];
+        const DTYPE y0_i = y0[i];
+        const DTYPE z0_i = z0[i];
+        for (int j = n1_vec; j < n1; j++)
+        {
+            DTYPE dx = x0_i - x1[j];
+            DTYPE dy = y0_i - y1[j];
+            DTYPE dz = z0_i - z1[j];
+            DTYPE r  = sqrt(dx * dx + dy * dy + dz * dz);
+            r = r * NSQRT3;
+            r = (1.0 - r) * exp(r);
+            mat_irow[j] = r;
+        }
+    }
+}
+
+static void Matern_3d_krnl_symmv_intrin_d(KRNL_SYMMV_PARAM)
+{
+    EXTRACT_3D_COORD();
+    for (int i = 0; i < n0; i += 2)
+    {
+        vec_d sum_v0 = vec_zero_d();
+        vec_d sum_v1 = vec_zero_d();
+        const vec_d x0_i0v = vec_bcast_d(x0 + i);
+        const vec_d y0_i0v = vec_bcast_d(y0 + i);
+        const vec_d z0_i0v = vec_bcast_d(z0 + i);
+        const vec_d x0_i1v = vec_bcast_d(x0 + i + 1);
+        const vec_d y0_i1v = vec_bcast_d(y0 + i + 1);
+        const vec_d z0_i1v = vec_bcast_d(z0 + i + 1);
+        const vec_d x_in_1_i0v = vec_bcast_d(x_in_1 + i);
+        const vec_d x_in_1_i1v = vec_bcast_d(x_in_1 + i + 1);
+        for (int j = 0; j < n1; j += SIMD_LEN)
+        {
+            vec_d d0, d1, jv, r0, r1;
+            
+            jv = vec_load_d(x1 + j);
+            d0 = vec_sub_d(x0_i0v, jv);
+            d1 = vec_sub_d(x0_i1v, jv);
+            r0 = vec_mul_d(d0, d0);
+            r1 = vec_mul_d(d1, d1);
+            
+            jv = vec_load_d(y1 + j);
+            d0 = vec_sub_d(y0_i0v, jv);
+            d1 = vec_sub_d(y0_i1v, jv);
+            r0 = vec_fmadd_d(d0, d0, r0);
+            r1 = vec_fmadd_d(d1, d1, r1);
+            
+            jv = vec_load_d(z1 + j);
+            d0 = vec_sub_d(z0_i0v, jv);
+            d1 = vec_sub_d(z0_i1v, jv);
+            r0 = vec_fmadd_d(d0, d0, r0);
+            r1 = vec_fmadd_d(d1, d1, r1);
+            
+            r0 = vec_sqrt_d(r0);
+            r1 = vec_sqrt_d(r1);
+            
+            d0 = vec_load_d(x_in_0 + j);
+            d1 = vec_load_d(x_out_1 + j);
+            
+            r0 = vec_mul_d(r0, vec_set1_d(NSQRT3));
+            r1 = vec_mul_d(r1, vec_set1_d(NSQRT3));
+            r0 = vec_mul_d(vec_sub_d(vec_set1_d(1.0), r0), vec_exp_d(r0));
+            r1 = vec_mul_d(vec_sub_d(vec_set1_d(1.0), r1), vec_exp_d(r1));
+            
+            sum_v0 = vec_fmadd_d(d0, r0, sum_v0);
+            sum_v1 = vec_fmadd_d(d0, r1, sum_v1);
+            
+            d1 = vec_fmadd_d(x_in_1_i0v, r0, d1);
+            d1 = vec_fmadd_d(x_in_1_i1v, r1, d1);
+            vec_store_d(x_out_1 + j, d1);
+        }
+        x_out_0[i]   += vec_reduce_add_d(sum_v0);
+        x_out_0[i+1] += vec_reduce_add_d(sum_v1);
+    }
+}
+
+// ============================================================ //
 // =====================   Stokes Kernel   ==================== //
 // ============================================================ //
 

@@ -210,22 +210,19 @@ void H2P_print_statistic(H2Pack_t h2pack)
     printf("  * Matvec auxiliary arrays   : %.2lf (MB) \n", y0y1_MB);
     printf("  * Thread-local buffers      : %.2lf (MB) \n", tb_MB);
     //printf("  * sizeof(U + B + D) / kms   : %.3lf \n", UBD_k);
-    if (h2pack->is_H2ERI == 0)
+    int max_node_rank = 0;
+    double sum_node_rank = 0.0, non_empty_node = 0.0;
+    for (int i = 0; i < h2pack->n_UJ; i++)
     {
-        int max_node_rank = 0;
-        double sum_node_rank = 0.0, non_empty_node = 0.0;
-        for (int i = 0; i < h2pack->n_UJ; i++)
+        int rank_i = h2pack->U[i]->ncol;
+        if (rank_i > 0)
         {
-            int rank_i = h2pack->J[i]->length;
-            if (rank_i > 0)
-            {
-                sum_node_rank  += (double) rank_i;
-                non_empty_node += 1.0;
-                max_node_rank   = (rank_i > max_node_rank) ? rank_i : max_node_rank;
-            }
+            sum_node_rank  += (double) rank_i;
+            non_empty_node += 1.0;
+            max_node_rank   = (rank_i > max_node_rank) ? rank_i : max_node_rank;
         }
-        printf("  * Max / Avg compressed rank : %d, %.0lf \n", max_node_rank, sum_node_rank / non_empty_node);
     }
+    printf("  * Max / Avg compressed rank : %d, %.0lf \n", max_node_rank, sum_node_rank / non_empty_node);
     
     printf("==================== H2Pack timing info =====================\n");
     int n_matvec = h2pack->n_matvec;

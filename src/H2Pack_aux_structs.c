@@ -225,12 +225,8 @@ void H2P_thread_buf_init(H2P_thread_buf_t *thread_buf_, const int krnl_mat_size)
     assert(thread_buf != NULL);
     H2P_int_vec_init(&thread_buf->idx0, 1024);
     H2P_int_vec_init(&thread_buf->idx1, 1024);
-    H2P_int_vec_init(&thread_buf->idx2, 1024);
-    H2P_int_vec_init(&thread_buf->idx3, 1024);
-    H2P_int_vec_init(&thread_buf->idx4, 1024);
     H2P_dense_mat_init(&thread_buf->mat0, 1024, 1);
     H2P_dense_mat_init(&thread_buf->mat1, 1024, 1);
-    H2P_dense_mat_init(&thread_buf->mat2, 1024, 1);
     thread_buf->y = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * krnl_mat_size);
     assert(thread_buf->y != NULL);
     *thread_buf_ = thread_buf;
@@ -241,12 +237,8 @@ void H2P_thread_buf_destroy(H2P_thread_buf_t thread_buf)
     if (thread_buf == NULL) return;
     H2P_int_vec_destroy(thread_buf->idx0);
     H2P_int_vec_destroy(thread_buf->idx1);
-    H2P_int_vec_destroy(thread_buf->idx2);
-    H2P_int_vec_destroy(thread_buf->idx3);
-    H2P_int_vec_destroy(thread_buf->idx4);
     H2P_dense_mat_destroy(thread_buf->mat0);
     H2P_dense_mat_destroy(thread_buf->mat1);
-    H2P_dense_mat_destroy(thread_buf->mat2);
     H2P_free_aligned(thread_buf->y);
 }
 
@@ -255,20 +247,12 @@ void H2P_thread_buf_reset(H2P_thread_buf_t thread_buf)
     if (thread_buf == NULL) return;
     H2P_int_vec_destroy(thread_buf->idx0);
     H2P_int_vec_destroy(thread_buf->idx1);
-    H2P_int_vec_destroy(thread_buf->idx2);
-    H2P_int_vec_destroy(thread_buf->idx3);
-    H2P_int_vec_destroy(thread_buf->idx4);
     H2P_dense_mat_destroy(thread_buf->mat0);
     H2P_dense_mat_destroy(thread_buf->mat1);
-    H2P_dense_mat_destroy(thread_buf->mat2);
     H2P_int_vec_set_capacity(thread_buf->idx0, 1024);
     H2P_int_vec_set_capacity(thread_buf->idx1, 1024);
-    H2P_int_vec_set_capacity(thread_buf->idx2, 1024);
-    H2P_int_vec_set_capacity(thread_buf->idx3, 1024);
-    H2P_int_vec_set_capacity(thread_buf->idx4, 1024);
     H2P_dense_mat_resize(thread_buf->mat0, 1024, 1);
     H2P_dense_mat_resize(thread_buf->mat1, 1024, 1);
-    H2P_dense_mat_resize(thread_buf->mat2, 1024, 1);
 }
 
 // ------------------------------------------------------------------- // 

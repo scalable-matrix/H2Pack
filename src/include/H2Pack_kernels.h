@@ -9,12 +9,12 @@
 #define KRNL_EVAL_PARAM \
     const DTYPE *coord0, const int ld0, const int n0, \
     const DTYPE *coord1, const int ld1, const int n1, \
-    DTYPE *mat, const int ldm 
+    const void *param, DTYPE *mat, const int ldm 
 
 #define KRNL_BIMV_PARAM \
-    const DTYPE *coord0, const int ld0, const int n0, \
-    const DTYPE *coord1, const int ld1, const int n1, \
-    const DTYPE *x_in_0, const DTYPE *x_in_1,         \
+    const DTYPE *coord0, const int ld0, const int n0,            \
+    const DTYPE *coord1, const int ld1, const int n1,            \
+    const void *param, const DTYPE *x_in_0, const DTYPE *x_in_1, \
     DTYPE *x_out_0, DTYPE *x_out_1
 
 #define EXTRACT_3D_COORD() \
@@ -354,10 +354,11 @@ static void Matern_3d_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
 // ============================================================ //
 
 #define CALC_STOKES_CONST() \
-    const double eta = 1.0;                          \
-    const double a   = 1.0;                          \
-    const double C   = 1.0 / (6.0 * M_PI * a * eta); \
-    const double Ca3o4 = C * a * 0.75;               
+    const DTYPE *param_ = (DTYPE*) param;           \
+    const DTYPE eta = param_[0];                    \
+    const DTYPE a   = param_[1];                    \
+    const DTYPE C   = 1.0 / (6.0 * M_PI * a * eta); \
+    const DTYPE Ca3o4 = C * a * 0.75;               
 
 const  int  Stokes_krnl_bimv_flop = 48;
 
@@ -489,8 +490,9 @@ static void Stokes_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
 // ============================================================ //
 
 #define CALC_RPY_CONST() \
-    const DTYPE a   = 1.0;                          \
-    const DTYPE eta = 1.0;                          \
+    const DTYPE *param_ = (DTYPE*) param;           \
+    const DTYPE eta = param_[0];                    \
+    const DTYPE a   = param_[1];                    \
     const DTYPE C   = 1.0 / (6.0 * M_PI * a * eta); \
     const DTYPE aa  = a * a;                        \
     const DTYPE a2  = 2.0 * a;                      \

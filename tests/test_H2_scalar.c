@@ -160,7 +160,7 @@ void parse_params(int argc, char **argv)
 }
 
 void direct_nbody(
-    kernel_bimv_fptr krnl_bimv, const int krnl_bimv_flops, const int pt_dim, 
+    const void *krnl_param, kernel_bimv_fptr krnl_bimv, const int krnl_bimv_flops, const int pt_dim, 
     const int krnl_dim, const int n_point, const DTYPE *coord, const DTYPE *x, DTYPE *y
 )
 {
@@ -205,7 +205,7 @@ void direct_nbody(
                 krnl_bimv(
                     coord_ext + ix, n_point_ext, nx,
                     coord_ext + iy, n_point_ext, ny,
-                    x_in, x_in, x_out, thread_buff
+                    krnl_param, x_in, x_in, x_out, thread_buff
                 );
             }
         }
@@ -253,17 +253,19 @@ int main(int argc, char **argv)
 
     H2P_dense_mat_t *pp;
     DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * test_params.pt_dim + test_params.pt_dim];
+    void *krnl_param = NULL;  // We don't need kernel parameters yet
+    
     st = H2P_get_wtime_sec();
     H2P_generate_proxy_point_ID(
         test_params.pt_dim, test_params.krnl_dim, test_params.rel_tol, h2pack->max_level, 
-        2, max_L, test_params.krnl_eval, &pp
+        2, max_L, krnl_param, test_params.krnl_eval, &pp
     );
     et = H2P_get_wtime_sec();
     printf("H2Pack generate proxy points used %.3lf (s)\n", et - st);
     
     H2P_build(
-        h2pack, pp, test_params.BD_JIT, test_params.krnl_eval, 
-        test_params.krnl_bimv, test_params.krnl_bimv_flops
+        h2pack, pp, test_params.BD_JIT, krnl_param, 
+        test_params.krnl_eval, test_params.krnl_bimv, test_params.krnl_bimv_flops
     );
     
     int nthreads = omp_get_max_threads();
@@ -276,7 +278,7 @@ int main(int argc, char **argv)
     
     // Get reference results
     direct_nbody(
-        test_params.krnl_bimv, test_params.krnl_bimv_flops, test_params.pt_dim, 
+        krnl_param, test_params.krnl_bimv, test_params.krnl_bimv_flops, test_params.pt_dim, 
         test_params.krnl_dim, test_params.n_point, h2pack->coord, x, y0
     );
     

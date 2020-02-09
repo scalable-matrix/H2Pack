@@ -12,19 +12,20 @@ extern "C" {
 // Pointer to function that evaluates a kernel matrix using given sets of points.
 // The kernel function must by stmmetric.
 // Input parameters:
-//   coord0 : Matrix, size dim-by-ld0, coordinates of the 1st point set
-//   ld0    : Leading dimension of coord0, should be >= n0
-//   n0     : Number of points in coord0 (each column in coord0 is a coordinate)
-//   coord1 : Matrix, size dim-by-ld1, coordinates of the 2nd point set
-//   ld1    : Leading dimension of coord1, should be >= n1
-//   n1     : Number of points in coord1 (each column in coord0 is a coordinate)
-//   ldm    : Leading dimension of the kernel matrix
+//   coord0     : Matrix, size dim-by-ld0, coordinates of the 1st point set
+//   ld0        : Leading dimension of coord0, should be >= n0
+//   n0         : Number of points in coord0 (each column in coord0 is a coordinate)
+//   coord1     : Matrix, size dim-by-ld1, coordinates of the 2nd point set
+//   ld1        : Leading dimension of coord1, should be >= n1
+//   n1         : Number of points in coord1 (each column in coord0 is a coordinate)
+//   ldm        : Leading dimension of the kernel matrix
+//   krnl_param : Pointer to kernel function parameter array
 // Output parameter:
 //   mat : Obtained kernel matrix, size n0-by-ld1
 typedef void (*kernel_eval_fptr) (
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
-    DTYPE *mat, const int ldm
+    const void *krnl_param, DTYPE *mat, const int ldm
 );
 
 // Pointer to function that performs kernel matrix bi-matvec using given sets
@@ -34,14 +35,15 @@ typedef void (*kernel_eval_fptr) (
 //   (2) x_out_1 = kernel_matrix(coord1, coord0) * x_in_1,
 //   where kernel_matrix(coord0, coord1)^T = kernel_matrix(coord1, coord0).
 // Input parameters:
-//   coord0 : Matrix, size dim-by-ld0, coordinates of the 1st point set
-//   ld0    : Leading dimension of coord0, should be >= n0
-//   n0     : Number of points in coord0 (each column in coord0 is a coordinate)
-//   coord1 : Matrix, size dim-by-ld1, coordinates of the 2nd point set
-//   ld1    : Leading dimension of coord1, should be >= n1
-//   n1     : Number of points in coord1 (each column in coord0 is a coordinate)
-//   x_in_0 : Vector, size >= n1, will be left multiplied by kernel_matrix(coord0, coord1)
-//   x_in_1 : Vector, size >= n0, will be left multiplied by kernel_matrix(coord1, coord0).
+//   coord0     : Matrix, size dim-by-ld0, coordinates of the 1st point set
+//   ld0        : Leading dimension of coord0, should be >= n0
+//   n0         : Number of points in coord0 (each column in coord0 is a coordinate)
+//   coord1     : Matrix, size dim-by-ld1, coordinates of the 2nd point set
+//   ld1        : Leading dimension of coord1, should be >= n1
+//   n1         : Number of points in coord1 (each column in coord0 is a coordinate)
+//   krnl_param : Pointer to kernel function parameter array
+//   x_in_0     : Vector, size >= n1, will be left multiplied by kernel_matrix(coord0, coord1)
+//   x_in_1     : Vector, size >= n0, will be left multiplied by kernel_matrix(coord1, coord0).
 // Output parameter:
 //   x_out_0 : Vector, size >= n0, x_out_0 += kernel_matrix(coord0, coord1) * x_in_0
 //   x_out_1 : Vector, size >= n1, x_out_1 += kernel_matrix(coord1, coord0) * x_in_1
@@ -53,7 +55,7 @@ typedef void (*kernel_eval_fptr) (
 typedef void (*kernel_bimv_fptr) (
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
-    const DTYPE *x_in_0, const DTYPE *x_in_1, 
+    const void *krnl_param, const DTYPE *x_in_0, const DTYPE *x_in_1, 
     DTYPE *x_out_0, DTYPE *x_out_1
 );
 
@@ -105,6 +107,7 @@ struct H2Pack
     int    *D_ncol;                 // Size n_D, numbers of columns of dense blocks in the original matrix
     size_t *B_ptr;                  // Size n_B, offset of each generator matrix's data in B_data
     size_t *D_ptr;                  // Size n_D, offset of each dense block's data in D_data
+    void   *krnl_param;             // Pointer to kernel function parameter array
     DTYPE  max_leaf_size;           // Maximum size of a leaf node's box
     DTYPE  QR_stop_tol;             // Partial QR stop column norm tolerance
     DTYPE  *coord;                  // Size n_point * dim, sorted point coordinates

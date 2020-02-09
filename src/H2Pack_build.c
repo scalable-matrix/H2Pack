@@ -62,15 +62,16 @@ void H2P_copy_matrix_block(
 
 // Evaluate a kernel matrix with OpenMP parallelization
 // Input parameters:
-//   krnl_eval : Kernel matrix evaluation function
-//   krnl_dim  : Dimension of tensor kernel's return
-//   x_coord   : X point set coordinates, size nx-by-pt_dim
-//   y_coord   : Y point set coordinates, size ny-by-pt_dim
+//   krnl_param : Pointer to kernel function parameter array
+//   krnl_eval  : Kernel matrix evaluation function
+//   krnl_dim   : Dimension of tensor kernel's return
+//   x_coord    : X point set coordinates, size nx-by-pt_dim
+//   y_coord    : Y point set coordinates, size ny-by-pt_dim
 // Output parameter:
 //   kernel_mat : Obtained kernel matrix, nx-by-ny
 void H2P_eval_kernel_matrix_OMP(
-    kernel_eval_fptr krnl_eval, const int krnl_dim, H2P_dense_mat_t x_coord, 
-    H2P_dense_mat_t y_coord, H2P_dense_mat_t kernel_mat
+    const void *krnl_param, kernel_eval_fptr krnl_eval, const int krnl_dim, 
+    H2P_dense_mat_t x_coord, H2P_dense_mat_t y_coord, H2P_dense_mat_t kernel_mat
 )
 {
     const int nx = x_coord->ncol;
@@ -91,7 +92,7 @@ void H2P_eval_kernel_matrix_OMP(
         krnl_eval(
             x_coord_spos,  x_coord->ncol, nx_blk_len, 
             y_coord->data, y_coord->ncol, ny, 
-            kernel_mat_srow, kernel_mat->ld
+            krnl_param, kernel_mat_srow, kernel_mat->ld
         );
     }
 }
@@ -123,7 +124,7 @@ int point_in_box(const int pt_dim, DTYPE *coord, DTYPE L)
 // using ID compress for any kernel function
 void H2P_generate_proxy_point_ID(
     const int pt_dim, const int krnl_dim, const DTYPE tol_norm, const int max_level, const int start_level,
-    DTYPE max_L, kernel_eval_fptr krnl_eval, H2P_dense_mat_t **pp_
+    DTYPE max_L, const void *krnl_param, kernel_eval_fptr krnl_eval, H2P_dense_mat_t **pp_
 )
 {   
     // 1. Initialize proxy point arrays
@@ -195,7 +196,7 @@ void H2P_generate_proxy_point_ID(
 
         DTYPE rel_tol = tol_norm < 1e-13 ? 1e-14 : tol_norm * 1e-1;
         
-        H2P_eval_kernel_matrix_OMP(krnl_eval, krnl_dim, Nx_points, Ny_points, tmpA);
+        H2P_eval_kernel_matrix_OMP(krnl_param, krnl_eval, krnl_dim, Nx_points, Ny_points, tmpA);
         if (krnl_dim == 1)
         {
             H2P_dense_mat_resize(QR_buff, tmpA->nrow, 1);
@@ -210,7 +211,7 @@ void H2P_generate_proxy_point_ID(
         );
         H2P_dense_mat_select_columns(Nx_points, skel_idx);
         
-        H2P_eval_kernel_matrix_OMP(krnl_eval, krnl_dim, Ny_points, Nx_points, tmpA);
+        H2P_eval_kernel_matrix_OMP(krnl_param, krnl_eval, krnl_dim, Ny_points, Nx_points, tmpA);
         if (krnl_dim == 1)
         {
             H2P_dense_mat_resize(QR_buff, tmpA->nrow, 1);
@@ -451,6 +452,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     DTYPE  *coord         = h2pack->coord;
     DTYPE  *enbox         = h2pack->enbox;
     size_t *mat_size      = h2pack->mat_size;
+    void   *krnl_param    = h2pack->krnl_param;
     H2P_dense_mat_t  *pp  = h2pack->pp;
     H2P_thread_buf_t *thread_buf = h2pack->tb;
     kernel_eval_fptr krnl_eval = h2pack->krnl_eval;
@@ -599,7 +601,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                 krnl_eval(
                     tmp_x->data,     nrow, nrow,
                     pp[level]->data, ncol, ncol, 
-                    A_block->data, A_block->ld
+                    krnl_param, A_block->data, A_block->ld
                 );
 
                 // ID compress
@@ -727,6 +729,7 @@ void H2P_build_B(H2Pack_t h2pack)
     int    *pt_cluster     = h2pack->pt_cluster;
     DTYPE  *coord          = h2pack->coord;
     size_t *mat_size       = h2pack->mat_size;
+    void   *krnl_param     = h2pack->krnl_param;
     double *JIT_flops      = h2pack->JIT_flops;
     kernel_eval_fptr krnl_eval = h2pack->krnl_eval;
     H2P_int_vec_t    B_blk     = h2pack->B_blk;
@@ -836,7 +839,7 @@ void H2P_build_B(H2Pack_t h2pack)
                     krnl_eval(
                         J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
                         J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                        Bi, J_coord[node1]->ncol * krnl_dim
+                        krnl_param, Bi, J_coord[node1]->ncol * krnl_dim
                     );
                 }
                 
@@ -850,7 +853,7 @@ void H2P_build_B(H2Pack_t h2pack)
                     krnl_eval(
                         J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
                         coord + pt_s1, n_point, node1_npt, 
-                        Bi, node1_npt * krnl_dim
+                        krnl_param, Bi, node1_npt * krnl_dim
                     );
                 }
                 
@@ -864,7 +867,7 @@ void H2P_build_B(H2Pack_t h2pack)
                     krnl_eval(
                         coord + pt_s0, n_point, node0_npt, 
                         J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                        Bi, J_coord[node1]->ncol * krnl_dim
+                        krnl_param, Bi, J_coord[node1]->ncol * krnl_dim
                     );
                 }
             }  // End of i loop
@@ -905,6 +908,7 @@ void H2P_build_D(H2Pack_t h2pack)
     int    *r_inadm_pairs  = h2pack->r_inadm_pairs;
     DTYPE  *coord          = h2pack->coord;
     size_t *mat_size       = h2pack->mat_size;
+    void   *krnl_param     = h2pack->krnl_param;
     double *JIT_flops      = h2pack->JIT_flops;
     kernel_eval_fptr krnl_eval = h2pack->krnl_eval;
     H2P_int_vec_t    D_blk0    = h2pack->D_blk0;
@@ -1006,7 +1010,7 @@ void H2P_build_D(H2Pack_t h2pack)
                 krnl_eval(
                     coord + pt_s, n_point, node_npt,
                     coord + pt_s, n_point, node_npt,
-                    Di, node_npt * krnl_dim
+                    krnl_param, Di, node_npt * krnl_dim
                 );
             }
         }  // End of i_blk0 loop
@@ -1037,7 +1041,7 @@ void H2P_build_D(H2Pack_t h2pack)
                 krnl_eval(
                     coord + pt_s0, n_point, node0_npt,
                     coord + pt_s1, n_point, node1_npt,
-                    Di, node1_npt * krnl_dim
+                    krnl_param, Di, node1_npt * krnl_dim
                 );
             }
         }  // End of i_blk1 loop
@@ -1061,17 +1065,17 @@ void H2P_build_D(H2Pack_t h2pack)
 
 // Build H2 representation with a kernel function
 void H2P_build(
-    H2Pack_t h2pack, H2P_dense_mat_t *pp, const int BD_JIT, 
-    kernel_eval_fptr krnl_eval, kernel_bimv_fptr krnl_bimv, 
-    const int krnl_bimv_flops
+    H2Pack_t h2pack, H2P_dense_mat_t *pp, const int BD_JIT, void *krnl_param, 
+    kernel_eval_fptr krnl_eval, kernel_bimv_fptr krnl_bimv, const int krnl_bimv_flops
 )
 {
     double st, et;
 
     h2pack->pp = pp;
     h2pack->BD_JIT = BD_JIT;
-    h2pack->krnl_eval = krnl_eval;
-    h2pack->krnl_bimv = krnl_bimv;
+    h2pack->krnl_param = krnl_param;
+    h2pack->krnl_eval  = krnl_eval;
+    h2pack->krnl_bimv  = krnl_bimv;
     h2pack->krnl_bimv_flops = krnl_bimv_flops;
     if (BD_JIT == 1 && krnl_bimv == NULL) 
         printf("[WARNING] krnl_eval() will be used in BD_JIT matvec. For better performance, krnl_bimv() should be provided. \n");

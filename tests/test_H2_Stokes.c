@@ -116,7 +116,7 @@ void parse_params(int argc, char **argv)
 static void Stokes_matvec_nt_std(
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
-    const DTYPE *x_in_0, DTYPE *x_out_0
+    const void *param, const DTYPE *x_in_0, DTYPE *x_out_0
 )
 {
     EXTRACT_3D_COORD();
@@ -167,8 +167,8 @@ static void Stokes_matvec_nt_std(
 
 
 void direct_nbody(
-    const int krnl_bimv_flops, const int krnl_dim, 
-    const int n_point, const DTYPE *coord, const DTYPE *x, DTYPE *y
+    const void *krnl_param, const int krnl_dim, const int n_point, 
+    const DTYPE *coord, const DTYPE *x, DTYPE *y
 )
 {
     int nx_blk_size = 128;
@@ -199,13 +199,13 @@ void direct_nbody(
                 Stokes_matvec_nt_std(
                     coord + ix, n_point, blk_nx,
                     coord + iy, n_point, blk_ny,
-                    x + iy * krnl_dim, y + ix * krnl_dim
+                    krnl_param, x + iy * krnl_dim, y + ix * krnl_dim
                 );
             }
         }
     }
     double ut = H2P_get_wtime_sec() - st;
-    double GFLOPS = (double)(n_point) * (double)(n_point) * (double)(krnl_bimv_flops);
+    double GFLOPS = (double)(n_point) * (double)(n_point) * 31.0;
     GFLOPS = GFLOPS / 1000000000.0;
     printf("Direct N-body reference result obtained, %.3lf s, %.2lf GFLOPS\n", ut, GFLOPS / ut);
     H2P_free_aligned(thread_buffs);
@@ -254,9 +254,12 @@ int main(int argc, char **argv)
     et = H2P_get_wtime_sec();
     //printf("Proxy point generation used %.3lf (s)\n", et - st);
     
+    double eta = 0.5;
+    double a   = 0.8;
+    double krnl_param[2] = {eta, a};
     H2P_build(
-        h2pack, pp, test_params.BD_JIT, test_params.krnl_eval, 
-        test_params.krnl_bimv, test_params.krnl_bimv_flops
+        h2pack, pp, test_params.BD_JIT, krnl_param, 
+        test_params.krnl_eval, test_params.krnl_bimv, test_params.krnl_bimv_flops
     );
     
     int nthreads = omp_get_max_threads();
@@ -269,8 +272,8 @@ int main(int argc, char **argv)
     
     // Get reference results
     direct_nbody(
-        test_params.krnl_bimv_flops, test_params.krnl_dim, 
-        test_params.n_point, h2pack->coord, x, y0
+        krnl_param, test_params.krnl_dim, test_params.n_point, 
+        h2pack->coord, x, y0
     );
     
     // Warm up, reset timers, and test the matvec performance

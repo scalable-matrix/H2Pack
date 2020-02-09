@@ -783,7 +783,7 @@ void H2P_build_B(H2Pack_t h2pack)
         // Add Statistic info
         h2pack->mat_size[4]  += B_nrow[i] * B_ncol[i];
         h2pack->mat_size[4]  += 2 * (B_nrow[i] + B_ncol[i]);
-        h2pack->JIT_flops[0] += (double)(h2pack->krnl_matvec_flops) * (double)(node0_npt * node1_npt);
+        h2pack->JIT_flops[0] += (double)(h2pack->krnl_bimv_flops) * (double)(node0_npt * node1_npt);
     }
     int BD_ntask_thread = (h2pack->BD_JIT == 1) ? BD_NTASK_THREAD : 1;
     H2P_partition_workload(n_r_adm_pair, B_ptr + 1, B_total_size, n_thread * BD_ntask_thread, B_blk);
@@ -796,7 +796,7 @@ void H2P_build_B(H2Pack_t h2pack)
     h2pack->B_data = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * B_total_size);
     assert(h2pack->B_data != NULL);
     DTYPE *B_data = h2pack->B_data;
-    const int n_B_blk = B_blk->length;
+    const int n_B_blk = B_blk->length - 1;
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
@@ -804,10 +804,15 @@ void H2P_build_B(H2Pack_t h2pack)
         h2pack->tb[tid]->timer = -H2P_get_wtime_sec();
         //#pragma omp for schedule(dynamic) nowait
         //for (int i_blk = 0; i_blk < n_B_blk; i_blk++)
-        int i_blk = tid;    // Use first-touch policy for better NUMA memeory access performance
+        int i_blk = tid;    // Use first-touch policy for better NUMA memory access performance
         {
             int B_blk_s = B_blk->data[i_blk];
             int B_blk_e = B_blk->data[i_blk + 1];
+            if (i_blk >= n_B_blk)
+            {
+                B_blk_s = 0; 
+                B_blk_e = 0;
+            }
             for (int i = B_blk_s; i < B_blk_e; i++)
             {
                 int node0  = r_adm_pairs[2 * i];
@@ -921,7 +926,7 @@ void H2P_build_D(H2Pack_t h2pack)
         // Add statistic info
         h2pack->mat_size[6] += D_nrow[i] * D_ncol[i];
         h2pack->mat_size[6] += D_nrow[i] + D_ncol[i];
-        h2pack->JIT_flops[1] += (double)(h2pack->krnl_matvec_flops) * (double)(node_npt * node_npt);
+        h2pack->JIT_flops[1] += (double)(h2pack->krnl_bimv_flops) * (double)(node_npt * node_npt);
     }
     int BD_ntask_thread = (h2pack->BD_JIT == 1) ? BD_NTASK_THREAD : 1;
     H2P_partition_workload(n_leaf_node, D_ptr + 1, D0_total_size, n_thread * BD_ntask_thread, D_blk0);
@@ -946,7 +951,7 @@ void H2P_build_D(H2Pack_t h2pack)
         // Add statistic info
         h2pack->mat_size[6] += D_nrow[ii] * D_ncol[ii];
         h2pack->mat_size[6] += 2 * (D_nrow[ii] + D_ncol[ii]);
-        h2pack->JIT_flops[1] += (double)(h2pack->krnl_matvec_flops) * (double)(node0_npt * node1_npt);
+        h2pack->JIT_flops[1] += (double)(h2pack->krnl_bimv_flops) * (double)(node0_npt * node1_npt);
     }
     H2P_partition_workload(n_r_inadm_pair, D_ptr + n_leaf_node + 1, D1_total_size, n_thread * BD_ntask_thread, D_blk1);
     for (int i = 1; i <= n_leaf_node + n_r_inadm_pair; i++) D_ptr[i] += D_ptr[i - 1];
@@ -957,8 +962,8 @@ void H2P_build_D(H2Pack_t h2pack)
     h2pack->D_data = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * (D0_total_size + D1_total_size));
     assert(h2pack->D_data != NULL);
     DTYPE *D_data = h2pack->D_data;
-    const int n_D0_blk = D_blk0->length;
-    const int n_D1_blk = D_blk1->length;
+    const int n_D0_blk = D_blk0->length - 1;
+    const int n_D1_blk = D_blk1->length - 1;
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
@@ -968,10 +973,15 @@ void H2P_build_D(H2Pack_t h2pack)
         // 3. Generate diagonal blocks (leaf node self interaction)
         //#pragma omp for schedule(dynamic) nowait
         //for (int i_blk0 = 0; i_blk0 < n_D0_blk; i_blk0++)
-        int i_blk0 = tid;    // Use first-touch policy for better NUMA memeory access performance
+        int i_blk0 = tid;    // Use first-touch policy for better NUMA memory access performance
         {
             int D_blk0_s = D_blk0->data[i_blk0];
             int D_blk0_e = D_blk0->data[i_blk0 + 1];
+            if (i_blk0 >= n_D0_blk)
+            {
+                D_blk0_s = 0;
+                D_blk0_e = 0;
+            }
             for (int i = D_blk0_s; i < D_blk0_e; i++)
             {
                 int node = leaf_nodes[i];
@@ -990,10 +1000,15 @@ void H2P_build_D(H2Pack_t h2pack)
         // 4. Generate off-diagonal blocks from inadmissible pairs
         //#pragma omp for schedule(dynamic) nowait
         //for (int i_blk1 = 0; i_blk1 < n_D1_blk; i_blk1++)
-        int i_blk1 = tid;    // Use first-touch policy for better NUMA memeory access performance
+        int i_blk1 = tid;    // Use first-touch policy for better NUMA memory access performance
         {
             int D_blk1_s = D_blk1->data[i_blk1];
             int D_blk1_e = D_blk1->data[i_blk1 + 1];
+            if (i_blk1 >= n_D1_blk)
+            {
+                D_blk1_s = 0;
+                D_blk1_e = 0;
+            }
             for (int i = D_blk1_s; i < D_blk1_e; i++)
             {
                 int node0 = r_inadm_pairs[2 * i];
@@ -1033,8 +1048,8 @@ void H2P_build_D(H2Pack_t h2pack)
 // Build H2 representation with a kernel function
 void H2P_build(
     H2Pack_t h2pack, H2P_dense_mat_t *pp, const int BD_JIT, 
-    kernel_eval_fptr krnl_eval, kernel_symmv_fptr krnl_symmv, 
-    const int krnl_matvec_flops
+    kernel_eval_fptr krnl_eval, kernel_bimv_fptr krnl_bimv, 
+    const int krnl_bimv_flops
 )
 {
     double st, et;
@@ -1042,10 +1057,10 @@ void H2P_build(
     h2pack->pp = pp;
     h2pack->BD_JIT = BD_JIT;
     h2pack->krnl_eval = krnl_eval;
-    h2pack->krnl_symmv = krnl_symmv;
-    h2pack->krnl_matvec_flops = krnl_matvec_flops;
-    if (BD_JIT == 1 && krnl_symmv == NULL) 
-        printf("[WARNING] krnl_eval() will be used in BD_JIT matvec. For better performance, krnl_symmv() should be provided. \n");
+    h2pack->krnl_bimv = krnl_bimv;
+    h2pack->krnl_bimv_flops = krnl_bimv_flops;
+    if (BD_JIT == 1 && krnl_bimv == NULL) 
+        printf("[WARNING] krnl_eval() will be used in BD_JIT matvec. For better performance, krnl_bimv() should be provided. \n");
 
     // 1. Build projection matrices and skeleton row sets
     st = H2P_get_wtime_sec();

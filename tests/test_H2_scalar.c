@@ -19,11 +19,11 @@ struct H2P_test_params
     int   krnl_mat_size;
     int   BD_JIT;
     int   kernel_id;
-    int   krnl_symmv_flops;
+    int   krnl_bimv_flops;
     DTYPE rel_tol;
     DTYPE *coord;
-    kernel_eval_fptr  krnl_eval;
-    kernel_symmv_fptr krnl_symmv;
+    kernel_eval_fptr krnl_eval;
+    kernel_bimv_fptr krnl_bimv;
 };
 struct H2P_test_params test_params;
 
@@ -136,23 +136,23 @@ void parse_params(int argc, char **argv)
         {
             case 0: 
             { 
-                test_params.krnl_eval        = Coulomb_3d_eval_intrin_d; 
-                test_params.krnl_symmv       = Coulomb_3d_krnl_symmv_intrin_d; 
-                test_params.krnl_symmv_flops = Coulomb_3d_krnl_symmv_flop;
+                test_params.krnl_eval       = Coulomb_3d_eval_intrin_d; 
+                test_params.krnl_bimv       = Coulomb_3d_krnl_bimv_intrin_d; 
+                test_params.krnl_bimv_flops = Coulomb_3d_krnl_bimv_flop;
                 break;
             }
             case 1: 
             {
-                test_params.krnl_eval        = Gaussian_3d_eval_intrin_d; 
-                test_params.krnl_symmv       = Gaussian_3d_krnl_symmv_intrin_d; 
-                test_params.krnl_symmv_flops = Gaussian_3d_krnl_symmv_flop;
+                test_params.krnl_eval       = Gaussian_3d_eval_intrin_d; 
+                test_params.krnl_bimv       = Gaussian_3d_krnl_bimv_intrin_d; 
+                test_params.krnl_bimv_flops = Gaussian_3d_krnl_bimv_flop;
                 break;
             }
             case 2: 
             {
-                test_params.krnl_eval        = Matern_3d_eval_intrin_d; 
-                test_params.krnl_symmv       = Matern_3d_krnl_symmv_intrin_d; 
-                test_params.krnl_symmv_flops = Matern_3d_krnl_symmv_flop;
+                test_params.krnl_eval       = Matern_3d_eval_intrin_d; 
+                test_params.krnl_bimv       = Matern_3d_krnl_bimv_intrin_d; 
+                test_params.krnl_bimv_flops = Matern_3d_krnl_bimv_flop;
                 break;
             }
         }
@@ -160,7 +160,7 @@ void parse_params(int argc, char **argv)
 }
 
 void direct_nbody(
-    kernel_symmv_fptr krnl_symmv, const int krnl_symmv_flops, const int pt_dim, 
+    kernel_bimv_fptr krnl_bimv, const int krnl_bimv_flops, const int pt_dim, 
     const int krnl_dim, const int n_point, const DTYPE *coord, const DTYPE *x, DTYPE *y
 )
 {
@@ -202,7 +202,7 @@ void direct_nbody(
                 int ny = (iy + blk_size > n_point_ext) ? (n_point_ext - iy) : blk_size;
                 DTYPE *x_in  = x_ext + iy * krnl_dim;
                 DTYPE *x_out = y_ext + ix * krnl_dim;
-                krnl_symmv(
+                krnl_bimv(
                     coord_ext + ix, n_point_ext, nx,
                     coord_ext + iy, n_point_ext, ny,
                     x_in, x_in, x_out, thread_buff
@@ -212,7 +212,7 @@ void direct_nbody(
     }
     double ut = H2P_get_wtime_sec() - st;
     H2P_free_aligned(buff);
-    double GFLOPS = (double)(n_point) * (double)(n_point) * (double)(krnl_symmv_flops - 2);
+    double GFLOPS = (double)(n_point) * (double)(n_point) * (double)(krnl_bimv_flops - 2);
     GFLOPS = GFLOPS / 1000000000.0;
     printf("Direct N-body reference result obtained, %.3lf s, %.2lf GFLOPS\n", ut, GFLOPS / ut);
     
@@ -263,7 +263,7 @@ int main(int argc, char **argv)
     
     H2P_build(
         h2pack, pp, test_params.BD_JIT, test_params.krnl_eval, 
-        test_params.krnl_symmv, test_params.krnl_symmv_flops
+        test_params.krnl_bimv, test_params.krnl_bimv_flops
     );
     
     int nthreads = omp_get_max_threads();
@@ -276,7 +276,7 @@ int main(int argc, char **argv)
     
     // Get reference results
     direct_nbody(
-        test_params.krnl_symmv, test_params.krnl_symmv_flops, test_params.pt_dim, 
+        test_params.krnl_bimv, test_params.krnl_bimv_flops, test_params.pt_dim, 
         test_params.krnl_dim, test_params.n_point, h2pack->coord, x, y0
     );
     

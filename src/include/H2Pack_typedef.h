@@ -27,7 +27,7 @@ typedef void (*kernel_eval_fptr) (
     DTYPE *mat, const int ldm
 );
 
-// Pointer to function that performs two kernel matrix matvec using given sets
+// Pointer to function that performs kernel matrix bi-matvec using given sets
 // of points and given input vectors. The kernel function must be symmetric.
 // This function computes:
 //   (1) x_out_0 = kernel_matrix(coord0, coord1) * x_in_0,
@@ -46,11 +46,11 @@ typedef void (*kernel_eval_fptr) (
 //   x_out_0 : Vector, size >= n0, x_out_0 += kernel_matrix(coord0, coord1) * x_in_0
 //   x_out_1 : Vector, size >= n1, x_out_1 += kernel_matrix(coord1, coord0) * x_in_1
 // Performance optimization notes:
-//   When calling a kernel_symmv_fptr, H2Pack guarantees that:
+//   When calling a kernel_bimv_fptr, H2Pack guarantees that:
 //     (1) n{0,1} are multiples of SIMD_LEN;
 //     (2) The lengths of x_{in,out}_{0,1} are multiples of (SIMD_LEN * H2Pack->krnl_dim)
 //     (3) The addresses of coord{0,1}, x_{in,out}_{0,1} are aligned to (SIMD_LEN * sizeof(DTYPE))
-typedef void (*kernel_symmv_fptr) (
+typedef void (*kernel_bimv_fptr) (
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
     const DTYPE *x_in_0, const DTYPE *x_in_1, 
@@ -68,7 +68,7 @@ struct H2Pack
     int    QR_stop_rank;            // Partial QR maximum rank
     int    n_point;                 // Number of points for the kernel matrix
     int    krnl_mat_size;           // Size of the kernel matrix
-    int    krnl_matvec_flops;       // FLOPs needed in symmetric kernel matvec
+    int    krnl_bimv_flops;         // FLOPs needed in kernel bi-matvec
     int    max_leaf_points;         // Maximum point in a leaf node's box
     int    n_node;                  // Number of nodes in this H2 tree
     int    root_idx;                // Index of the root node (== n_node - 1, save it for convenience)
@@ -124,7 +124,7 @@ struct H2Pack
     H2P_dense_mat_t   *y1;          // Size n_node, temporary arrays used in matvec
     H2P_thread_buf_t  *tb;          // Size n_thread, thread-local buffer
     kernel_eval_fptr  krnl_eval;    // Pointer to kernel matrix evaluation function
-    kernel_symmv_fptr krnl_symmv;   // Pointer to kernel matrix symmetric matvec function
+    kernel_bimv_fptr  krnl_bimv;    // Pointer to kernel matrix bi-matvec function
 
     // Statistic data
     int    n_matvec;                // Number of performed matvec

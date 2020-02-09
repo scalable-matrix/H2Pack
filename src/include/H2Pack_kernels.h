@@ -11,7 +11,7 @@
     const DTYPE *coord1, const int ld1, const int n1, \
     DTYPE *mat, const int ldm 
 
-#define KRNL_SYMMV_PARAM \
+#define KRNL_BIMV_PARAM \
     const DTYPE *coord0, const int ld0, const int n0, \
     const DTYPE *coord1, const int ld1, const int n1, \
     const DTYPE *x_in_0, const DTYPE *x_in_1,         \
@@ -36,7 +36,7 @@ extern "C" {
 // ====================   Coulomb Kernel   ==================== //
 // ============================================================ //
 
-const  int  Coulomb_3d_krnl_symmv_flop = 14;
+const  int  Coulomb_3d_krnl_bimv_flop = 14;
 
 static void Coulomb_3d_eval_intrin_d(KRNL_EVAL_PARAM)
 {
@@ -78,7 +78,7 @@ static void Coulomb_3d_eval_intrin_d(KRNL_EVAL_PARAM)
     }
 }
 
-static void Coulomb_3d_krnl_symmv_intrin_d(KRNL_SYMMV_PARAM)
+static void Coulomb_3d_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
 {
     EXTRACT_3D_COORD();
     const vec_d frsqrt_pf = vec_frsqrt_pf_d();
@@ -138,7 +138,7 @@ static void Coulomb_3d_krnl_symmv_intrin_d(KRNL_SYMMV_PARAM)
 // ====================   Gaussian Kernel   =================== //
 // ============================================================ //
 
-const  int  Gaussian_3d_krnl_symmv_flop = 13;
+const  int  Gaussian_3d_krnl_bimv_flop = 13;
 
 static void Gaussian_3d_eval_intrin_d(KRNL_EVAL_PARAM)
 {
@@ -181,7 +181,7 @@ static void Gaussian_3d_eval_intrin_d(KRNL_EVAL_PARAM)
     }
 }
 
-static void Gaussian_3d_krnl_symmv_intrin_d(KRNL_SYMMV_PARAM)
+static void Gaussian_3d_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
 {
     EXTRACT_3D_COORD();
     for (int i = 0; i < n0; i += 2)
@@ -242,7 +242,7 @@ static void Gaussian_3d_krnl_symmv_intrin_d(KRNL_SYMMV_PARAM)
 // =====================   Matern Kernel   ==================== //
 // ============================================================ //
 
-const  int  Matern_3d_krnl_symmv_flop = 17;
+const  int  Matern_3d_krnl_bimv_flop = 17;
 
 #define NSQRT3 -1.7320508075688772
 
@@ -289,7 +289,7 @@ static void Matern_3d_eval_intrin_d(KRNL_EVAL_PARAM)
     }
 }
 
-static void Matern_3d_krnl_symmv_intrin_d(KRNL_SYMMV_PARAM)
+static void Matern_3d_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
 {
     EXTRACT_3D_COORD();
     for (int i = 0; i < n0; i += 2)
@@ -359,7 +359,7 @@ static void Matern_3d_krnl_symmv_intrin_d(KRNL_SYMMV_PARAM)
     const double C   = 1.0 / (6.0 * M_PI * a * eta); \
     const double Ca3o4 = C * a * 0.75;               
 
-const  int  Stokes_krnl_symmv_flop = 48;
+const  int  Stokes_krnl_bimv_flop = 48;
 
 static void Stokes_eval_std(KRNL_EVAL_PARAM)
 {
@@ -411,7 +411,7 @@ static void Stokes_eval_std(KRNL_EVAL_PARAM)
     }
 }
 
-static void Stokes_krnl_symmv_intrin_d(KRNL_SYMMV_PARAM)
+static void Stokes_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
 {
     EXTRACT_3D_COORD();
     CALC_STOKES_CONST();
@@ -500,7 +500,7 @@ static void Stokes_krnl_symmv_intrin_d(KRNL_SYMMV_PARAM)
     const DTYPE C_9o32oa = C * 9.0 / 32.0 / a;      \
     const DTYPE C_3o32oa = C * 3.0 / 32.0 / a;
 
-const  int  RPY_krnl_symmv_flop = 62;
+const  int  RPY_krnl_bimv_flop = 62;
 
 static void RPY_eval_std(KRNL_EVAL_PARAM)
 {
@@ -555,7 +555,7 @@ static void RPY_eval_std(KRNL_EVAL_PARAM)
     }
 }
 
-static void RPY_krnl_symmv_intrin_d(KRNL_SYMMV_PARAM)
+static void RPY_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
 {
     EXTRACT_3D_COORD();
     CALC_RPY_CONST();

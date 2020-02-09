@@ -52,7 +52,10 @@ void H2P_generate_proxy_point_surface(
 //   n_block    : Number of blocks to be partitioned, the final result
 //                may have fewer blocks
 // Output parameter:
-//   blk_displs : Indices of each block's first work unit
+//   blk_displs : Indices of each block's first work unit. The actual 
+//                number of work units == blk_displs->length-1 because 
+//                blk_displs->data[0] == 0 and 
+//                blk_displs->data[blk_displs->length-1] == total_size. 
 void H2P_partition_workload(
     const int n_work,  const size_t *work_sizes, const size_t total_size, 
     const int n_block, H2P_int_vec_t blk_displs
@@ -60,18 +63,18 @@ void H2P_partition_workload(
 
 // Build H2 representation with a kernel function
 // Input parameter:
-//   h2pack            : H2Pack structure with point partitioning info
-//   pp                : Array of proxy points for each level
-//   BD_JIT            : 0 or 1, if B and D matrices are computed just-in-time in matvec
-//   krnl_eval         : Pointer to kernel matrix evaluation function
-//   krnl_symmv        : Pointer to kernel matrix symmetric matvec function
-//   krnl_matvec_flops : FLOPs needed in symmetric kernel matvec
+//   h2pack          : H2Pack structure with point partitioning info
+//   pp              : Array of proxy points for each level
+//   BD_JIT          : 0 or 1, if B and D matrices are computed just-in-time in matvec
+//   krnl_eval       : Pointer to kernel matrix evaluation function
+//   krnl_bimv       : Pointer to kernel matrix bi-matvec function
+//   krnl_bimv_flops : FLOPs needed in kernel bi-matvec
 // Output parameter:
 //   h2pack : H2Pack structure with H2 representation matrices
 void H2P_build(
     H2Pack_t h2pack, H2P_dense_mat_t *pp, const int BD_JIT, 
-    kernel_eval_fptr krnl_eval, kernel_symmv_fptr krnl_symmv, 
-    const int krnl_matvec_flops
+    kernel_eval_fptr krnl_eval, kernel_bimv_fptr krnl_bimv, 
+    const int krnl_bimv_flops
 );
 
 #ifdef __cplusplus

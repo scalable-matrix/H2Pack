@@ -35,12 +35,11 @@ void H2P_generate_proxy_point_ID(
 //   max_level   : Maximum level (included) of a H2 tree, (root level == 0)
 //   start_level : Minimum level that needs proxy points
 //   max_L       : The size of the root node's enclosing box
-//   krnl_eval   : Pointer to kernel matrix evaluation function
 // Output parameter:
 //   pp_  : Array of proxy points for each level
 void H2P_generate_proxy_point_surface(
-    const int pt_dim, const int min_npts, const int max_level, const int start_level,
-    DTYPE max_L, kernel_eval_fptr krnl_eval, H2P_dense_mat_t **pp_
+    const int pt_dim, const int min_npts, const int max_level, 
+    const int start_level, DTYPE max_L, H2P_dense_mat_t **pp_
 );
 
 // Partition work units into multiple blocks s.t. each block has 

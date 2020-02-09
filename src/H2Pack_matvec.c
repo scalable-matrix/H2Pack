@@ -13,6 +13,7 @@
 #include "H2Pack_utils.h"
 #include "H2Pack_typedef.h"
 #include "H2Pack_aux_structs.h"
+#include "H2Pack_matvec.h"
 #include "x86_intrin_wrapper.h" 
 
 // Calculate GEMV A * x0 and A^T * x1 in one run to reduce bandwidth pressure
@@ -520,7 +521,7 @@ void H2P_matvec_intmd_mult_AOT(H2Pack_t h2pack, const DTYPE *x)
 //   ldo0, ldo1 : Leading dimensions of x_out_0 and x_out_1
 //   pt_dim     : Dimension of point coordinate
 //   krnl_dim   : Dimension of tensor kernel's return
-//   workbuf    : H2P_dense_mat data sturcture for allocating working buffer
+//   workbuf    : H2P_dense_mat data structure for allocating working buffer
 //   krnl_bimv  : Pointer to kernel matrix bi-matvec function
 // Output parameter:
 //   x_out_0 : Matrix, size >= krnl_dim * n0, x_out_0 += kernel_matrix(coord0, coord1) * x_in_0
@@ -528,7 +529,7 @@ void H2P_matvec_intmd_mult_AOT(H2Pack_t h2pack, const DTYPE *x)
 // Note:
 //   For x_{in,out}_{0,1}, they are not stored as the original (n{0,1} * krnl_dim)-by-1 column vector,
 //   which can be viewed as n{0,1}-by-krnl_dim matrices. Instead, they are stored as krnl_dim-by-n{0,1}
-//   matriecs so the krnl_bimv can vectorize the load and store. 
+//   matrices so the krnl_bimv can vectorize the load and store. 
 void H2P_ext_krnl_bimv(
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
@@ -617,8 +618,8 @@ void H2P_ext_krnl_bimv(
 //   coord1      : Matrix, size dim-by-ld1, coordinates of the 2nd point set
 //   ld1         : Leading dimension of coord1, should be >= n1
 //   n1          : Number of points in coord1 (each column in coord0 is a coordinate)
-//   x_in_0      : Matrix, size >= n1 * krnl_dim, will be left multiplied by kernel_matrix(coord0, coord1)
-//   x_in_1      : Matrix, size >= n0 * krnl_dim, will be left multiplied by kernel_matrix(coord1, coord0)
+//   x_in_0      : Vector, size >= n1 * krnl_dim, will be left multiplied by kernel_matrix(coord0, coord1)
+//   x_in_1      : Vector, size >= n0 * krnl_dim, will be left multiplied by kernel_matrix(coord1, coord0)
 //   krnl_dim    : Dimension of tensor kernel's return
 //   npt_row_blk : Blocking size for coord0 points
 //   krnl_eval   : Pointer to kernel matrix evaluation function
@@ -1149,7 +1150,7 @@ void H2P_matvec_dense_mult_JIT(H2Pack_t h2pack, const DTYPE *x)
                         coord + pt_s, n_point, node_npt,
                         coord + pt_s, n_point, node_npt,
                         x_spos, x_spos, y_spos, tmp->data, 
-                        n_point, n_point, n_point, n_point, 
+                        n_point, 0, n_point, 0,   // ldi1 and ldo1 need to be 0 here!
                         pt_dim, krnl_dim, workbuf, krnl_bimv
                     );
                 } else {

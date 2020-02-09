@@ -243,6 +243,7 @@ int main(int argc, char **argv)
 
     H2P_dense_mat_t *pp;
     DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * test_params.pt_dim + test_params.pt_dim];
+    int start_level = 2;
     st = H2P_get_wtime_sec();
     int num_pp = ceil(-log10(test_params.rel_tol)) - 1;
     if (num_pp < 4 ) num_pp = 4;
@@ -250,7 +251,7 @@ int main(int argc, char **argv)
     num_pp = 6 * num_pp * num_pp;
     H2P_generate_proxy_point_surface(
         test_params.pt_dim, num_pp, h2pack->max_level, 
-        2, max_L, test_params.krnl_eval, &pp
+        start_level, max_L, &pp
     );
     et = H2P_get_wtime_sec();
     //printf("Proxy point generation used %.3lf (s)\n", et - st);

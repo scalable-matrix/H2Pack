@@ -5,8 +5,8 @@
 #include <math.h>
 
 #include "H2Pack_config.h"
-#include "H2Pack_utils.h"
 #include "H2Pack_aux_structs.h"
+#include "utils.h"
 
 // ========================== H2P_tree_node ========================== //
 
@@ -104,7 +104,7 @@ void H2P_dense_mat_init(H2P_dense_mat_t *mat_, const int nrow, const int ncol)
     mat->size = mat->nrow * mat->ncol;
     if (mat->size > 0)
     {
-        mat->data = H2P_malloc_aligned(sizeof(DTYPE) * mat->size);
+        mat->data = malloc_aligned(sizeof(DTYPE) * mat->size, 64);
         assert(mat->data != NULL);
     } else {
         mat->data = NULL;
@@ -117,7 +117,7 @@ void H2P_dense_mat_init(H2P_dense_mat_t *mat_, const int nrow, const int ncol)
 void H2P_dense_mat_destroy(H2P_dense_mat_t mat)
 {
     if (mat == NULL) return;
-    H2P_free_aligned(mat->data);
+    free_aligned(mat->data);
     mat->data = NULL;
     mat->size = 0;
 }
@@ -125,7 +125,7 @@ void H2P_dense_mat_destroy(H2P_dense_mat_t mat)
 // Permute rows in a H2P_dense_mat structure
 void H2P_dense_mat_permute_rows(H2P_dense_mat_t mat, const int *p)
 {
-    DTYPE *mat_dst = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * mat->nrow * mat->ncol);
+    DTYPE *mat_dst = (DTYPE*) malloc_aligned(sizeof(DTYPE) * mat->nrow * mat->ncol, 64);
     assert(mat_dst != NULL);
     
     for (int irow = 0; irow < mat->nrow; irow++)
@@ -137,7 +137,7 @@ void H2P_dense_mat_permute_rows(H2P_dense_mat_t mat, const int *p)
     
     mat->ld   = mat->ncol;
     mat->size = mat->nrow * mat->ncol;
-    H2P_free_aligned(mat->data);
+    free_aligned(mat->data);
     mat->data = mat_dst;
 }
 
@@ -227,7 +227,7 @@ void H2P_thread_buf_init(H2P_thread_buf_t *thread_buf_, const int krnl_mat_size)
     H2P_int_vec_init(&thread_buf->idx1, 1024);
     H2P_dense_mat_init(&thread_buf->mat0, 1024, 1);
     H2P_dense_mat_init(&thread_buf->mat1, 1024, 1);
-    thread_buf->y = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * krnl_mat_size);
+    thread_buf->y = (DTYPE*) malloc_aligned(sizeof(DTYPE) * krnl_mat_size, 64);
     assert(thread_buf->y != NULL);
     *thread_buf_ = thread_buf;
 }
@@ -239,7 +239,7 @@ void H2P_thread_buf_destroy(H2P_thread_buf_t thread_buf)
     H2P_int_vec_destroy(thread_buf->idx1);
     H2P_dense_mat_destroy(thread_buf->mat0);
     H2P_dense_mat_destroy(thread_buf->mat1);
-    H2P_free_aligned(thread_buf->y);
+    free_aligned(thread_buf->y);
 }
 
 void H2P_thread_buf_reset(H2P_thread_buf_t thread_buf)

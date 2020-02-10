@@ -6,8 +6,6 @@
 #include <time.h>
 #include <omp.h>
 
-#include <mkl.h>
-
 #include "H2Pack.h"
 
 struct H2P_test_params
@@ -60,7 +58,7 @@ void parse_params(int argc, char **argv)
         printf("Just-In-Time B & D = %d\n", test_params.BD_JIT);
     }
     
-    test_params.coord = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * test_params.n_point * test_params.pt_dim);
+    test_params.coord = (DTYPE*) malloc_aligned(sizeof(DTYPE) * test_params.n_point * test_params.pt_dim, 64);
     assert(test_params.coord != NULL);
     
     // Note: coordinates need to be stored in column-major style, i.e. test_params.coord 
@@ -177,15 +175,14 @@ void direct_nbody(
     int col_blk_size = ny_blk_size * krnl_dim;
     int thread_blk_size = row_blk_size * col_blk_size;
     int nthreads = omp_get_max_threads();
-    DTYPE *thread_buffs = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * thread_blk_size * nthreads);
-    double st = H2P_get_wtime_sec();
+    DTYPE *thread_buffs = (DTYPE*) malloc_aligned(sizeof(DTYPE) * thread_blk_size * nthreads, 64);
+    double st = get_wtime_sec();
     #pragma omp parallel
     {
         int tid = omp_get_thread_num();
         int nx_blk_start, nx_blk_len, nx_blk_end;
-        H2P_block_partition(n_point, nthreads, tid, &nx_blk_start, &nx_blk_len);
+        calc_block_spos_len(n_point, nthreads, tid, &nx_blk_start, &nx_blk_len);
         nx_blk_end = nx_blk_start + nx_blk_len;
-        DTYPE *thread_A_blk = thread_buffs + tid * thread_blk_size;
         
         memset(y + nx_blk_start * krnl_dim, 0, sizeof(DTYPE) * nx_blk_len * krnl_dim);
 
@@ -194,7 +191,6 @@ void direct_nbody(
             int blk_nx = (ix + nx_blk_size > nx_blk_end) ? nx_blk_end - ix : nx_blk_size;
             for (int iy = 0; iy < n_point; iy += ny_blk_size)
             {
-                DTYPE beta = (iy > 0) ? 1.0 : 0.0;
                 int blk_ny = (iy + ny_blk_size > n_point) ? n_point - iy : ny_blk_size;
                 Stokes_matvec_nt_std(
                     coord + ix, n_point, blk_nx,
@@ -204,11 +200,11 @@ void direct_nbody(
             }
         }
     }
-    double ut = H2P_get_wtime_sec() - st;
+    double ut = get_wtime_sec() - st;
     double GFLOPS = (double)(n_point) * (double)(n_point) * 31.0;
     GFLOPS = GFLOPS / 1000000000.0;
     printf("Direct N-body reference result obtained, %.3lf s, %.2lf GFLOPS\n", ut, GFLOPS / ut);
-    H2P_free_aligned(thread_buffs);
+    free_aligned(thread_buffs);
 }
 
 int main(int argc, char **argv)
@@ -217,8 +213,6 @@ int main(int argc, char **argv)
     
     parse_params(argc, argv);
     
-    double st, et, ut, total_t;
-
     H2Pack_t h2pack;
     
     H2P_init(&h2pack, test_params.pt_dim, test_params.krnl_dim, QR_REL_NRM, &test_params.rel_tol);
@@ -242,7 +236,6 @@ int main(int argc, char **argv)
     H2P_dense_mat_t *pp;
     DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * test_params.pt_dim + test_params.pt_dim];
     int start_level = 2;
-    st = H2P_get_wtime_sec();
     int num_pp = ceil(-log10(test_params.rel_tol)) - 1;
     if (num_pp < 4 ) num_pp = 4;
     if (num_pp > 10) num_pp = 10;
@@ -251,8 +244,6 @@ int main(int argc, char **argv)
         test_params.pt_dim, num_pp, h2pack->max_level, 
         start_level, max_L, &pp
     );
-    et = H2P_get_wtime_sec();
-    //printf("Proxy point generation used %.3lf (s)\n", et - st);
     
     double eta = 0.5;
     double a   = 0.8;
@@ -262,11 +253,10 @@ int main(int argc, char **argv)
         test_params.krnl_eval, test_params.krnl_bimv, test_params.krnl_bimv_flops
     );
     
-    int nthreads = omp_get_max_threads();
-    DTYPE *x, *y0, *y1, *tb;
-    x  = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * test_params.krnl_mat_size);
-    y0 = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * test_params.krnl_mat_size);
-    y1 = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * test_params.krnl_mat_size);
+    DTYPE *x, *y0, *y1;
+    x  = (DTYPE*) malloc_aligned(sizeof(DTYPE) * test_params.krnl_mat_size, 64);
+    y0 = (DTYPE*) malloc_aligned(sizeof(DTYPE) * test_params.krnl_mat_size, 64);
+    y1 = (DTYPE*) malloc_aligned(sizeof(DTYPE) * test_params.krnl_mat_size, 64);
     assert(x != NULL && y0 != NULL && y1 != NULL);
     for (int i = 0; i < test_params.krnl_mat_size; i++) x[i] = drand48();
     
@@ -297,9 +287,9 @@ int main(int argc, char **argv)
     err_norm = DSQRT(err_norm);
     printf("||y_{H2} - y||_2 / ||y||_2 = %e\n", err_norm / y0_norm);
     
-    H2P_free_aligned(x);
-    H2P_free_aligned(y0);
-    H2P_free_aligned(y1);
-    H2P_free_aligned(test_params.coord);
+    free_aligned(x);
+    free_aligned(y0);
+    free_aligned(y1);
+    free_aligned(test_params.coord);
     H2P_destroy(h2pack);
 }

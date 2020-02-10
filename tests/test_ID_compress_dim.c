@@ -6,11 +6,9 @@
 #include <time.h>
 #include <omp.h>
 
-#include <mkl.h>
-
-#include "H2Pack_utils.h"
 #include "H2Pack_aux_structs.h"
 #include "H2Pack_ID_compress.h"
+#include "utils.h"
 
 void RPY_kernel_3d(
     const DTYPE *coord0, const int ld0, const int n0,
@@ -117,12 +115,12 @@ int main()
     int QR_buff_size = (2 * kdim + 2) * A->nrow + (kdim + 1) * A->ncol;
     int   *ID_buff = (int *)   malloc(sizeof(int)   * A->nrow * 4);
     DTYPE *QR_buff = (DTYPE *) malloc(sizeof(DTYPE) * QR_buff_size);
-    double st = omp_get_wtime();
+    double st = get_wtime_sec();
     H2P_ID_compress(
         A, QR_REL_NRM, &tol_norm, &U, J, 
         1, QR_buff, ID_buff, kdim
     );
-    double ut = omp_get_wtime() - st;
+    double ut = get_wtime_sec() - st;
     printf("H2P_ID_compress used %.3lf s\n", ut);
     
     DTYPE *AJ = (DTYPE*) malloc(sizeof(DTYPE) * U->ncol * A_ncol);

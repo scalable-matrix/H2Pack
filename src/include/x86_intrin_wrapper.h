@@ -51,7 +51,9 @@
     3. For AVX vec_reduce_add_s: https://stackoverflow.com/questions/13219146/how-to-sum-m256-horizontally
     4. For AVX vec_reduce_add_d: https://www.oipapio.com/question-771803
     5. For fast inverse square root: https://en.wikipedia.org/wiki/Fast_inverse_square_root
+    6. For GCC SIMD math functions: https://stackoverflow.com/questions/40475140/mathematical-functions-for-simd-registers
 */ 
+
 
 #ifndef NEWTON_ITER
 #define NEWTON_ITER 2   // Two Newton iterations is usually sufficient for rsqrt using double type
@@ -194,6 +196,7 @@ static inline __m256d vec_arsqrt_d(const __m256d r2)
     return _mm256_cvtps_pd(ret_s); 
 }
 
+#ifdef __INTEL_COMPILER
 static inline __m256  vec_log_s  (const __m256  a) { return _mm256_log_ps(a);   }
 static inline __m256d vec_log_d  (const __m256d a) { return _mm256_log_pd(a);   }
 
@@ -211,6 +214,19 @@ static inline __m256d vec_exp2_d (const __m256d a) { return _mm256_exp2_pd(a);  
 
 static inline __m256  vec_exp10_s(const __m256  a) { return _mm256_exp10_ps(a); }
 static inline __m256d vec_exp10_d(const __m256d a) { return _mm256_exp10_pd(a); }
+#else
+#if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 22
+__m256  _ZGVdN8v_logf(__m256 x);
+__m256d _ZGVdN4v_log(__m256d x);
+static inline __m256  vec_log_s  (const __m256  a) { return _ZGVdN8v_logf(a);   }
+static inline __m256d vec_log_d  (const __m256d a) { return _ZGVdN4v_log (a);   }
+
+__m256  _ZGVdN8v_expf(__m256 x);
+__m256d _ZGVdN4v_exp(__m256d x);
+static inline __m256  vec_exp_s  (const __m256  a) { return _ZGVdN8v_expf(a);   }
+static inline __m256d vec_exp_d  (const __m256d a) { return _ZGVdN4v_exp (a);   }
+#endif
+#endif  // End of #ifdef __INTEL_COMPILER
 
 #endif  // End of #ifdef __AVX__
 #endif  // End of #ifdef USE_AVX
@@ -333,6 +349,7 @@ static inline __m512d vec_arsqrt_d(const __m512d r2)
 }
 #endif  // End of #ifdef __AVX512ER__
 
+#ifdef __INTEL_COMPILER
 static inline __m512  vec_log_s  (const __m512  a) { return _mm512_log_ps(a);   }
 static inline __m512d vec_log_d  (const __m512d a) { return _mm512_log_pd(a);   }
 
@@ -350,6 +367,7 @@ static inline __m512d vec_exp2_d (const __m512d a) { return _mm512_exp2_pd(a);  
 
 static inline __m512  vec_exp10_s(const __m512  a) { return _mm512_exp10_ps(a); }
 static inline __m512d vec_exp10_d(const __m512d a) { return _mm512_exp10_pd(a); }
+#endif
 
 #endif  // End of #ifdef __AVX512F__
 #endif  // End of #ifdef USE_AVX512

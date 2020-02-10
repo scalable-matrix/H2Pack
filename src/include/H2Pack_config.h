@@ -47,9 +47,6 @@
 
 #define BD_NTASK_THREAD  10            // Average number of tasks each thread has in B & D build
 
-#ifdef USE_MKL
-#include <mkl.h>
-#define BLAS_SET_NUM_THREADS mkl_set_num_threads
-#endif
+#include "linalg_lib_wrapper.h"
 
 #endif

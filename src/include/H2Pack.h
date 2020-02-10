@@ -4,9 +4,6 @@
 // H2Pack configurations
 #include "H2Pack_config.h"
 
-// H2Pack helper functions
-#include "H2Pack_utils.h"
-
 // H2Pack data structure
 #include "H2Pack_typedef.h"
 
@@ -28,7 +25,10 @@
 // H2Pack optimized kernels
 #include "H2Pack_kernels.h"
 
+// Helper functions
+#include "utils.h"
+
 // x86 intrinsic function wrapper
-#include "x86_intrin_wrapper.h"
+//#include "x86_intrin_wrapper.h"
 
 #endif

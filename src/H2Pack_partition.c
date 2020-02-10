@@ -5,10 +5,10 @@
 #include <math.h>
 #include <omp.h>
 
-#include "H2Pack_utils.h"
 #include "H2Pack_config.h"
 #include "H2Pack_typedef.h"
 #include "H2Pack_aux_structs.h"
+#include "utils.h"
 
 // Use this structure as a namespace for global variables in this file
 struct H2P_partition_vars
@@ -458,7 +458,7 @@ void H2P_partition_points(
     const int pt_dim = h2pack->pt_dim;
     double st, et;
     
-    st = H2P_get_wtime_sec();
+    st = get_wtime_sec();
     
     // 1. Copy input point coordinates
     h2pack->n_point = n_point;
@@ -572,6 +572,6 @@ void H2P_partition_points(
     for (int i = 0; i < h2pack->n_thread; i++)
         H2P_thread_buf_init(&h2pack->tb[i], h2pack->krnl_mat_size);
     
-    et = H2P_get_wtime_sec();
+    et = get_wtime_sec();
     h2pack->timers[0] = et - st;
 }

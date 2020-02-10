@@ -1,7 +1,6 @@
 #ifndef __H2PACK_TYPEDEF_H__
 #define __H2PACK_TYPEDEF_H__
 
-#include "H2Pack_utils.h"
 #include "H2Pack_config.h"
 #include "H2Pack_aux_structs.h"
 

@@ -28,7 +28,10 @@
 // Helper functions
 #include "utils.h"
 
+// Linear algebra library (BLAS, LAPACK) wrapper header
+#include "linalg_lib_wrapper.h"
+
 // x86 intrinsic function wrapper
-//#include "x86_intrin_wrapper.h"
+#include "x86_intrin_wrapper.h"
 
 #endif

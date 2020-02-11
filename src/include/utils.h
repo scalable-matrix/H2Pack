@@ -1,5 +1,6 @@
-// @brief  : Header of some helper functions I use here and there
-// @author : Hua Huang <huangh223@gatech.edu>
+// @brief    : Implementations of some helper functions I use here and there
+// @author   : Hua Huang <huangh223@gatech.edu>
+// @modified : 2020-02-10
 
 #ifndef __HUANGH223_UTILS_H__
 #define __HUANGH223_UTILS_H__

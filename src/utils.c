@@ -1,5 +1,6 @@
-// @brief  : Implementations of some helper functions I use here and there
-// @author : Hua Huang <huangh223@gatech.edu>
+// @brief    : Implementations of some helper functions I use here and there
+// @author   : Hua Huang <huangh223@gatech.edu>
+// @modified : 2020-02-10
 
 #include <stdio.h>
 #include <string.h>
@@ -98,9 +99,8 @@ void copy_int_mat_blk(
     int *dst, const int ldd
 )
 {
-    const size_t int_msize = sizeof(int);
     for (int irow = 0; irow < nrow; irow++)
-        memcpy(dst + irow * ldd, src + irow * lds, int_msize * ncol);
+        memcpy(dst + irow * ldd, src + irow * lds, INT_MSIZE * ncol);
 }
 
 // Copy a row-major double matrix block to another row-major double matrix
@@ -109,9 +109,8 @@ void copy_dbl_mat_blk(
     double *dst, const int ldd
 )
 {
-    const size_t dbl_msize = sizeof(int);
     for (int irow = 0; irow < nrow; irow++)
-        memcpy(dst + irow * ldd, src + irow * lds, dbl_msize * ncol);
+        memcpy(dst + irow * ldd, src + irow * lds, DBL_MSIZE * ncol);
 }
 
 // Print a row-major int matrix block to standard output

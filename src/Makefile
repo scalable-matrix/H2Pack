@@ -18,7 +18,7 @@ endif
 
 ifeq ($(CC), gcc)
 AR      = ar rcs
-CFLAGS  += -fopenmp -march=native
+CFLAGS  += -fopenmp -march=native -Wno-unused-result -Wno-unused-function
 endif
 
 ifeq ($(USE_MKL), 1)

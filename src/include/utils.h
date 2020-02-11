@@ -9,6 +9,9 @@
 extern "C" {
 #endif
 
+#define INT_MSIZE sizeof(int)
+#define DBL_MSIZE sizeof(double)
+
 #define MIN(a, b)  ((a) < (b) ? (a) : (b))
 #define MAX(a, b)  ((a) > (b) ? (a) : (b))
 

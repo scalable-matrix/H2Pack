@@ -66,6 +66,9 @@
 #endif
 #endif
 
+#define M_LOG_E_2  0.6931471805599453094172321214581
+#define M_LOG_E_10 2.3025850929940456840179914546843
+
 #ifdef USE_AVX
 #ifdef __AVX__
 
@@ -221,6 +224,12 @@ __m256d _ZGVdN4v_log(__m256d x);
 static inline __m256  vec_log_s  (const __m256  a) { return _ZGVdN8v_logf(a);   }
 static inline __m256d vec_log_d  (const __m256d a) { return _ZGVdN4v_log (a);   }
 
+static inline __m256  vec_log2_s (const __m256  a) { return vec_div_s(vec_log_s(a), vec_set1_s(M_LOG_E_2)); }
+static inline __m256d vec_log2_d (const __m256d a) { return vec_div_d(vec_log_s(a), vec_set1_d(M_LOG_E_2)); }
+
+static inline __m256  vec_log10_s(const __m256  a) { return vec_div_s(vec_log_s(a), vec_set1_s(M_LOG_E_10)); }
+static inline __m256d vec_log10_d(const __m256d a) { return vec_div_d(vec_log_s(a), vec_set1_d(M_LOG_E_10)); }
+
 __m256  _ZGVdN8v_expf(__m256 x);
 __m256d _ZGVdN4v_exp(__m256d x);
 static inline __m256  vec_exp_s  (const __m256  a) { return _ZGVdN8v_expf(a);   }
@@ -367,7 +376,25 @@ static inline __m512d vec_exp2_d (const __m512d a) { return _mm512_exp2_pd(a);  
 
 static inline __m512  vec_exp10_s(const __m512  a) { return _mm512_exp10_ps(a); }
 static inline __m512d vec_exp10_d(const __m512d a) { return _mm512_exp10_pd(a); }
+#else
+#if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 22
+__m512  _ZGVeN16v_logf(__m512 x);
+__m512d _ZGVeN8v_log  (__m512d x);
+static inline __m512  vec_log_s  (const __m512  a) { return _ZGVeN16v_logf(a);   }
+static inline __m512d vec_log_d  (const __m512d a) { return _ZGVeN8v_log  (a);   }
+
+static inline __m512  vec_log2_s (const __m512  a) { return vec_div_s(vec_log_s(a), vec_set1_s(M_LOG_E_2)); }
+static inline __m512d vec_log2_d (const __m512d a) { return vec_div_d(vec_log_s(a), vec_set1_d(M_LOG_E_2)); }
+
+static inline __m512  vec_log10_s(const __m512  a) { return vec_div_s(vec_log_s(a), vec_set1_s(M_LOG_E_10)); }
+static inline __m512d vec_log10_d(const __m512d a) { return vec_div_d(vec_log_s(a), vec_set1_d(M_LOG_E_10)); }
+
+__m512  _ZGVeN16v_expf(__m512 x);
+__m512d _ZGVeN8v_exp  (__m512d x);
+static inline __m512  vec_exp_s  (const __m512  a) { return _ZGVeN16v_expf(a);   }
+static inline __m512d vec_exp_d  (const __m512d a) { return _ZGVeN8v_exp  (a);   }
 #endif
+#endif  // End of #ifdef __INTEL_COMPILER
 
 #endif  // End of #ifdef __AVX512F__
 #endif  // End of #ifdef USE_AVX512

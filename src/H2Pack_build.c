@@ -7,11 +7,11 @@
 #include <omp.h>
 
 #include "H2Pack_config.h"
-#include "H2Pack_utils.h"
 #include "H2Pack_typedef.h"
 #include "H2Pack_aux_structs.h"
 #include "H2Pack_ID_compress.h"
 #include "H2Pack_build.h"
+#include "utils.h"
 
 // Gather some columns from a matrix to another matrix
 // Input parameters:
@@ -84,7 +84,7 @@ void H2P_eval_kernel_matrix_OMP(
         int tid = omp_get_thread_num();
         int nt  = omp_get_num_threads();
         int nx_blk_start, nx_blk_len;
-        H2P_block_partition(nx, nt, tid, &nx_blk_start, &nx_blk_len);
+        calc_block_spos_len(nx, nt, tid, &nx_blk_start, &nx_blk_len);
         
         DTYPE *kernel_mat_srow = kernel_mat->data + nx_blk_start * krnl_dim * kernel_mat->ld;
         DTYPE *x_coord_spos = x_coord->data + nx_blk_start;
@@ -230,7 +230,6 @@ void H2P_generate_proxy_point_ID(
         int ny = skel_idx->length;
         H2P_dense_mat_resize(min_dist, ny, 1);
         DTYPE *coord_i = tmpA->data;
-        DTYPE *coord_j = tmpA->data + pt_dim;
         for (int i = 0; i < ny; i++) min_dist->data[i] = 1e20;
         for (int i = 0; i < ny; i++)
         {
@@ -261,12 +260,12 @@ void H2P_generate_proxy_point_ID(
         for (int i = 0; i < ny; i++)
         {
             DTYPE *tmp_coord0 = tmpA->data;
-            DTYPE *tmp_coord1 = tmpA->data + pt_dim;
             DTYPE *Ny_point_i = Ny_points->data + i;
             for (int j = 0; j < pt_dim; j++)
                 tmp_coord0[j] = Ny_point_i[j * Ny_points->ncol];
-            DTYPE radius_i_scale = min_dist->data[i] * 0.33;
             /*
+            DTYPE *tmp_coord1 = tmpA->data + pt_dim;
+            DTYPE radius_i_scale = min_dist->data[i] * 0.33;
             int flag = 1;
             while (flag == 1)
             {
@@ -438,7 +437,6 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     int    n_leaf_node    = h2pack->n_leaf_node;
     int    n_thread       = h2pack->n_thread;
     int    max_child      = h2pack->max_child;
-    int    max_level      = h2pack->max_level;
     int    max_adm_height = h2pack->max_adm_height;
     int    min_adm_level  = h2pack->min_adm_level;
     int    stop_type      = h2pack->QR_stop_type;
@@ -446,7 +444,6 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     int    *n_child       = h2pack->n_child;
     int    *height_n_node = h2pack->height_n_node;
     int    *height_nodes  = h2pack->height_nodes;
-    int    *leaf_nodes    = h2pack->height_nodes;
     int    *node_level    = h2pack->node_level;
     int    *pt_cluster    = h2pack->pt_cluster;
     DTYPE  *coord         = h2pack->coord;
@@ -456,7 +453,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     H2P_dense_mat_t  *pp  = h2pack->pp;
     H2P_thread_buf_t *thread_buf = h2pack->tb;
     kernel_eval_fptr krnl_eval = h2pack->krnl_eval;
-    void  *stop_param;
+    void *stop_param = NULL;
     if (stop_type == QR_RANK) 
         stop_param = &h2pack->QR_stop_rank;
     if ((stop_type == QR_REL_NRM) || (stop_type == QR_ABS_NRM))
@@ -495,7 +492,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
             #pragma omp parallel num_threads(n_thread_i)
             {
                 int tid = omp_get_thread_num();
-                thread_buf[tid]->timer = -H2P_get_wtime_sec();
+                thread_buf[tid]->timer = -get_wtime_sec();
                 #pragma omp for schedule(dynamic) nowait
                 for (int j = 0; j < height_n_node[i]; j++)
                 {
@@ -511,14 +508,14 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                     H2P_dense_mat_init(&J_coord[node], pt_dim, node_npt);
                     H2P_copy_matrix_block(pt_dim, node_npt, coord + pt_s, n_point, J_coord[node]->data, node_npt);
                 }
-                thread_buf[tid]->timer += H2P_get_wtime_sec();
+                thread_buf[tid]->timer += get_wtime_sec();
             }
         } else {
             // Non-leaf nodes, gather row indices from children nodes
             #pragma omp parallel num_threads(n_thread_i)
             {
                 int tid = omp_get_thread_num();
-                thread_buf[tid]->timer = -H2P_get_wtime_sec();
+                thread_buf[tid]->timer = -get_wtime_sec();
                 #pragma omp for schedule(dynamic) nowait
                 for (int j = 0; j < height_n_node[i]; j++)
                 {
@@ -540,7 +537,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                         H2P_int_vec_concatenate(J[node], J[i_child_node]);
                     }
                 }
-                thread_buf[tid]->timer += H2P_get_wtime_sec();
+                thread_buf[tid]->timer += get_wtime_sec();
             }  // End of "pragma omp parallel"
         }  // End of "if (i == 0)"
         
@@ -554,7 +551,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
             H2P_int_vec_t   sub_idx = thread_buf[tid]->idx0;
             H2P_int_vec_t   ID_buff = thread_buf[tid]->idx1;
             
-            thread_buf[tid]->timer -= H2P_get_wtime_sec();
+            thread_buf[tid]->timer -= get_wtime_sec();
             #pragma omp for schedule(dynamic) nowait
             for (int j = 0; j < height_n_node[i]; j++)
             {
@@ -629,7 +626,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                     pt_dim, J[node]->data, J[node]->length
                 );
             }  // End of j loop
-            thread_buf[tid]->timer += H2P_get_wtime_sec();
+            thread_buf[tid]->timer += get_wtime_sec();
         }  // End of "pragma omp parallel"
         
         #ifdef PROFILING_OUTPUT
@@ -736,9 +733,6 @@ void H2P_build_B(H2Pack_t h2pack)
     H2P_dense_mat_t  *J_coord  = h2pack->J_coord;
     H2P_thread_buf_t *thread_buf = h2pack->tb;
 
-    double st, et;
-    st = H2P_get_wtime_sec();
-
     // 1. Allocate B
     h2pack->n_B = n_r_adm_pair;
     h2pack->B_nrow = (int*)    malloc(sizeof(int)    * n_r_adm_pair);
@@ -766,7 +760,7 @@ void H2P_build_B(H2Pack_t h2pack)
         int level1 = node_level[node1];
         node_n_r_adm[node0]++;
         node_n_r_adm[node1]++;
-        int node0_npt, node1_npt;
+        int node0_npt = 0, node1_npt = 0;
         if (level0 == level1)
         {
             node0_npt = J[node0]->length;
@@ -805,7 +799,7 @@ void H2P_build_B(H2Pack_t h2pack)
     if (BD_JIT == 1) return;
 
     // 3. Generate B matrices
-    h2pack->B_data = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * B_total_size);
+    h2pack->B_data = (DTYPE*) malloc_aligned(sizeof(DTYPE) * B_total_size, 64);
     assert(h2pack->B_data != NULL);
     DTYPE *B_data = h2pack->B_data;
     const int n_B_blk = B_blk->length - 1;
@@ -813,7 +807,7 @@ void H2P_build_B(H2Pack_t h2pack)
     {
         int tid = omp_get_thread_num();
         
-        thread_buf[tid]->timer = -H2P_get_wtime_sec();
+        thread_buf[tid]->timer = -get_wtime_sec();
         //#pragma omp for schedule(dynamic) nowait
         //for (int i_blk = 0; i_blk < n_B_blk; i_blk++)
         int i_blk = tid;    // Use first-touch policy for better NUMA memory access performance
@@ -872,7 +866,7 @@ void H2P_build_B(H2Pack_t h2pack)
                 }
             }  // End of i loop
         }  // End of i_blk loop
-        thread_buf[tid]->timer += H2P_get_wtime_sec();
+        thread_buf[tid]->timer += get_wtime_sec();
     }  // End of "pragma omp parallel"
     
     #ifdef PROFILING_OUTPUT
@@ -977,7 +971,7 @@ void H2P_build_D(H2Pack_t h2pack)
     
     if (BD_JIT == 1) return;
     
-    h2pack->D_data = (DTYPE*) H2P_malloc_aligned(sizeof(DTYPE) * (D0_total_size + D1_total_size));
+    h2pack->D_data = (DTYPE*) malloc_aligned(sizeof(DTYPE) * (D0_total_size + D1_total_size), 64);
     assert(h2pack->D_data != NULL);
     DTYPE *D_data = h2pack->D_data;
     const int n_D0_blk = D_blk0->length - 1;
@@ -986,7 +980,7 @@ void H2P_build_D(H2Pack_t h2pack)
     {
         int tid = omp_get_thread_num();
         
-        thread_buf[tid]->timer = -H2P_get_wtime_sec();
+        thread_buf[tid]->timer = -get_wtime_sec();
         
         // 3. Generate diagonal blocks (leaf node self interaction)
         //#pragma omp for schedule(dynamic) nowait
@@ -1046,7 +1040,7 @@ void H2P_build_D(H2Pack_t h2pack)
             }
         }  // End of i_blk1 loop
         
-        thread_buf[tid]->timer += H2P_get_wtime_sec();
+        thread_buf[tid]->timer += get_wtime_sec();
     }  // End of "pragma omp parallel"
     
     #ifdef PROFILING_OUTPUT
@@ -1081,21 +1075,21 @@ void H2P_build(
         printf("[WARNING] krnl_eval() will be used in BD_JIT matvec. For better performance, krnl_bimv() should be provided. \n");
 
     // 1. Build projection matrices and skeleton row sets
-    st = H2P_get_wtime_sec();
+    st = get_wtime_sec();
     H2P_build_UJ_proxy(h2pack);
-    et = H2P_get_wtime_sec();
+    et = get_wtime_sec();
     h2pack->timers[1] = et - st;
 
     // 2. Build generator matrices
-    st = H2P_get_wtime_sec();
+    st = get_wtime_sec();
     H2P_build_B(h2pack);
-    et = H2P_get_wtime_sec();
+    et = get_wtime_sec();
     h2pack->timers[2] = et - st;
     
     // 3. Build dense blocks
-    st = H2P_get_wtime_sec();
+    st = get_wtime_sec();
     H2P_build_D(h2pack);
-    et = H2P_get_wtime_sec();
+    et = get_wtime_sec();
     h2pack->timers[3] = et - st;
 }
 

@@ -4,8 +4,8 @@
 #include <assert.h>
 #include <omp.h>
 
+#include "utils.h"
 #include "H2Pack_config.h"
-#include "H2Pack_utils.h"
 #include "H2Pack_typedef.h"
 #include "H2Pack_aux_structs.h"
 
@@ -102,8 +102,8 @@ void H2P_destroy(H2Pack_t h2pack)
     free(h2pack->D_ptr);
     free(h2pack->coord);
     free(h2pack->enbox);
-    H2P_free_aligned(h2pack->B_data);
-    H2P_free_aligned(h2pack->D_data);
+    free_aligned(h2pack->B_data);
+    free_aligned(h2pack->D_data);
     free(h2pack->xT);
     free(h2pack->yT);
     
@@ -225,7 +225,6 @@ void H2P_print_statistic(H2Pack_t h2pack)
     printf("  * Max / Avg compressed rank : %d, %.0lf \n", max_node_rank, sum_node_rank / non_empty_node);
     
     printf("==================== H2Pack timing info =====================\n");
-    int n_matvec = h2pack->n_matvec;
     double build_t = 0.0, matvec_t = 0.0;
     double d_n_matvec = (double) h2pack->n_matvec;
     for (int i = 0; i < 4; i++) build_t += h2pack->timers[i];

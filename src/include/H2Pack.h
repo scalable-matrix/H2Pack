@@ -4,9 +4,6 @@
 // H2Pack configurations
 #include "H2Pack_config.h"
 
-// H2Pack helper functions
-#include "H2Pack_utils.h"
-
 // H2Pack data structure
 #include "H2Pack_typedef.h"
 
@@ -27,6 +24,12 @@
 
 // H2Pack optimized kernels
 #include "H2Pack_kernels.h"
+
+// Helper functions
+#include "utils.h"
+
+// Linear algebra library (BLAS, LAPACK) wrapper header
+#include "linalg_lib_wrapper.h"
 
 // x86 intrinsic function wrapper
 #include "x86_intrin_wrapper.h"

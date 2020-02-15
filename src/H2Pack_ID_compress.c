@@ -6,8 +6,8 @@
 #include <float.h>
 
 #include "H2Pack_config.h"
-#include "H2Pack_utils.h"
 #include "H2Pack_aux_structs.h"
+#include "utils.h"
 
 static inline DTYPE CBLAS_NRM2(const int n, const DTYPE *x)
 {
@@ -290,10 +290,10 @@ void H2P_partial_pivot_QR_kdim(
             int blk_i = ii - i * kdim;
             DTYPE *R_block = R + (ii + 1) * ldR + ii;
             int R_block_nrow = h_len;
-            int R_block_ncol = ncol - ii - 1;
+            //int R_block_ncol = ncol - ii - 1;
             for (int j = 0; j < kdim - blk_i - 1; j++)
             {
-                int ji1 = j + ii + 1;
+                //int ji1 = j + ii + 1;
                 
                 DTYPE *R_block_j = R_block + j * ldR;
                 DTYPE h_Rj = 2.0 * CBLAS_DOT(R_block_nrow, h_vec, R_block_j);
@@ -433,8 +433,8 @@ void H2P_ID_QR(
 )
 {
     // Parse partial QR stop criteria and perform partial QR
-    int r, tol_rank, rel_norm;
-    DTYPE tol_norm;
+    int r, tol_rank = MIN(A->nrow, A->ncol), rel_norm = 1;
+    DTYPE tol_norm = 1e-15;
     if (stop_type == QR_RANK)
     {
         int *param = (int*) stop_param;

@@ -1,8 +1,8 @@
 #ifndef __H2PACK_AUX_STRUCTS_H__
 #define __H2PACK_AUX_STRUCTS_H__
 
-#include "H2Pack_utils.h"
 #include "H2Pack_config.h"
+#include "utils.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -160,8 +160,8 @@ static inline void H2P_dense_mat_resize(H2P_dense_mat_t mat, const int nrow, con
     if (new_size > mat->size)
     {
         mat->size = new_size;
-        H2P_free_aligned(mat->data);
-        mat->data = H2P_malloc_aligned(sizeof(DTYPE) * mat->size);
+        free_aligned(mat->data);
+        mat->data = malloc_aligned(sizeof(DTYPE) * mat->size, 64);
         assert(mat->data != NULL);
     }
 }

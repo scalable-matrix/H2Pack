@@ -6,11 +6,9 @@
 #include <time.h>
 #include <omp.h>
 
-#include <mkl.h>
-
-#include "H2Pack_utils.h"
 #include "H2Pack_aux_structs.h"
 #include "H2Pack_ID_compress.h"
+#include "utils.h"
 
 int main()
 {
@@ -87,9 +85,9 @@ int main()
         A->nrow = nrow;
         A->ncol = ncol;
         A->ld = ncol;
-        double st = H2P_get_wtime_sec();
+        double st = get_wtime_sec();
         H2P_ID_compress(A, QR_REL_NRM, &tol_norm, &U, J, nthreads, QR_buff, ID_buff, 1);
-        double et = H2P_get_wtime_sec();
+        double et = get_wtime_sec();
         ut += et - st;
     }
     printf("U rank = %d, average used time = %.8lf (s)\n", U->ncol, ut / 10.0);

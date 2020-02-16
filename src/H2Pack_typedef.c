@@ -34,6 +34,7 @@ void H2P_init(
     if ((QR_stop_type == QR_REL_NRM) || (QR_stop_type == QR_ABS_NRM))
         memcpy(&h2pack->QR_stop_tol,  QR_stop_param, sizeof(DTYPE));
     
+    h2pack->n_node        = 0;
     h2pack->parent        = NULL;
     h2pack->children      = NULL;
     h2pack->pt_cluster    = NULL;
@@ -79,6 +80,8 @@ void H2P_init(
 // Destroy a H2Pack structure
 void H2P_destroy(H2Pack_t h2pack)
 {
+    if (h2pack == NULL) return;
+    
     free(h2pack->parent);
     free(h2pack->children);
     free(h2pack->pt_cluster);
@@ -107,9 +110,9 @@ void H2P_destroy(H2Pack_t h2pack)
     free(h2pack->xT);
     free(h2pack->yT);
     
-    H2P_int_vec_destroy(h2pack->B_blk);
-    H2P_int_vec_destroy(h2pack->D_blk0);
-    H2P_int_vec_destroy(h2pack->D_blk1);
+    if (h2pack->B_blk  != NULL) H2P_int_vec_destroy(h2pack->B_blk);
+    if (h2pack->D_blk0 != NULL) H2P_int_vec_destroy(h2pack->D_blk0);
+    if (h2pack->D_blk1 != NULL) H2P_int_vec_destroy(h2pack->D_blk1);
     
     // If H2Pack is called from H2P-ERI, pp == J == J_coord == NULL
     
@@ -134,26 +137,44 @@ void H2P_destroy(H2Pack_t h2pack)
         free(h2pack->J_coord);
     }
     
-    for (int i = 0; i < h2pack->n_UJ; i++)
-        H2P_dense_mat_destroy(h2pack->U[i]);
-    free(h2pack->U);
-    
-    for (int i = 0; i < h2pack->n_node; i++)
+    // If we don't run H2P_build, h2pack->U == NULL
+    if (h2pack->U != NULL)
     {
-        H2P_dense_mat_destroy(h2pack->y0[i]);
-        H2P_dense_mat_destroy(h2pack->y1[i]);
+        for (int i = 0; i < h2pack->n_UJ; i++)
+            H2P_dense_mat_destroy(h2pack->U[i]);
+        free(h2pack->U);
     }
-    free(h2pack->y0);
-    free(h2pack->y1);
     
-    for (int i = 0; i < h2pack->n_thread; i++)
-        H2P_thread_buf_destroy(h2pack->tb[i]);
-    free(h2pack->tb);
+    // If we don't run H2P_matvec, h2pack->y0 == h2pack->y1 == NULL
+    if (h2pack->y0 != NULL && h2pack->y1 != NULL)
+    {
+        for (int i = 0; i < h2pack->n_node; i++)
+        {
+            H2P_dense_mat_destroy(h2pack->y0[i]);
+            H2P_dense_mat_destroy(h2pack->y1[i]);
+        }
+        free(h2pack->y0);
+        free(h2pack->y1);
+    }
+    
+    if (h2pack->tb != NULL)
+    {
+        for (int i = 0; i < h2pack->n_thread; i++)
+            H2P_thread_buf_destroy(h2pack->tb[i]);
+        free(h2pack->tb);
+    }
 }
 
 // Print statistic info of a H2Pack structure
 void H2P_print_statistic(H2Pack_t h2pack)
 {
+    if (h2pack == NULL) return;
+    if (h2pack->n_node == 0)
+    {
+        printf("H2Pack has nothing to report yet.\n");
+        return;
+    }
+    
     printf("==================== H2Pack H2 tree info ====================\n");
     printf("  * Number of points               : %d\n", h2pack->n_point);
     printf("  * Kernel matrix size (kms)       : %d\n", h2pack->krnl_mat_size);
@@ -170,6 +191,12 @@ void H2P_print_statistic(H2Pack_t h2pack)
     printf("%d\n", h2pack->height_n_node[h2pack->max_level]);
     printf("  * Number of reduced far pairs    : %d\n", h2pack->n_r_adm_pair);
     printf("  * Number of reduced near pairs   : %d\n", h2pack->n_r_inadm_pair);
+    
+    if (h2pack->U == NULL) 
+    {
+        printf("H2Pack H2 matrix has not been constructed yet.\n");
+        return;
+    }
     
     printf("==================== H2Pack storage info ====================\n");
     double DTYPE_msize = sizeof(DTYPE);
@@ -196,12 +223,15 @@ void H2P_print_statistic(H2Pack_t h2pack)
         tb_MB += DTYPE_msize * msize0 + (double) sizeof(int) * msize1;
         tb_MB += DTYPE_msize * (double) h2pack->krnl_mat_size;
     }
-    for (int i = 0; i < h2pack->n_node; i++)
+    if (h2pack->y0 != NULL && h2pack->y1 != NULL)
     {
-        H2P_dense_mat_t y0i = h2pack->y0[i];
-        H2P_dense_mat_t y1i = h2pack->y1[i];
-        y0y1_MB += DTYPE_msize * (double) (y0i->size + y1i->ncol - 1);
-        tb_MB   += DTYPE_msize * (double) (y1i->size - y1i->ncol + 1);
+        for (int i = 0; i < h2pack->n_node; i++)
+        {
+            H2P_dense_mat_t y0i = h2pack->y0[i];
+            H2P_dense_mat_t y1i = h2pack->y1[i];
+            y0y1_MB += DTYPE_msize * (double) (y0i->size + y1i->ncol - 1);
+            tb_MB   += DTYPE_msize * (double) (y1i->size - y1i->ncol + 1);
+        }
     }
     y0y1_MB /= 1048576.0;
     tb_MB   /= 1048576.0;
@@ -228,16 +258,23 @@ void H2P_print_statistic(H2Pack_t h2pack)
     double build_t = 0.0, matvec_t = 0.0;
     double d_n_matvec = (double) h2pack->n_matvec;
     for (int i = 0; i < 4; i++) build_t += h2pack->timers[i];
-    for (int i = 4; i < 9; i++) 
-    {
-        h2pack->timers[i] /= d_n_matvec;
-        matvec_t += h2pack->timers[i];
-    }
     printf("  * H2 construction time (sec) = %.3lf \n", build_t);
     printf("      |----> Point partition   = %.3lf \n", h2pack->timers[0]);
     printf("      |----> U construction    = %.3lf \n", h2pack->timers[1]);
     printf("      |----> B construction    = %.3lf \n", h2pack->timers[2]);
     printf("      |----> D construction    = %.3lf \n", h2pack->timers[3]);
+    
+    if (h2pack->n_matvec == 0)
+    {
+        printf("H2Pack does not has matvec timings results yet.\n");
+        return;
+    }
+    
+    for (int i = 4; i < 9; i++) 
+    {
+        h2pack->timers[i] /= d_n_matvec;
+        matvec_t += h2pack->timers[i];
+    }
     printf(
         "  * H2 matvec average time (sec) = %.3lf, %.2lf GB/s\n", 
         matvec_t, mv_MB / matvec_t / 1024.0
@@ -280,6 +317,10 @@ void H2P_print_statistic(H2Pack_t h2pack)
         "      |----> OpenMP reduction    = %.3lf, %.2lf GB/s\n", 
         h2pack->timers[8], rd_MB  / h2pack->timers[8] / 1024.0
     );
+    
+    // Restore the accumulated timings
+    for (int i = 4; i < 9; i++)
+        h2pack->timers[i] *= d_n_matvec;
     
     printf("=============================================================\n");
 }

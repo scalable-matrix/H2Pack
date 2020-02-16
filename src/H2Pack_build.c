@@ -317,8 +317,9 @@ void H2P_generate_proxy_point_surface(
 {
     if (pt_dim < 2 || pt_dim > 3)
     {
-        printf("[FATAL] H2P_generate_proxy_point_surface() need pt_dim = 2 or 3\n");
-        assert(pt_dim == 2 || pt_dim == 3);
+        fprintf(stderr, "[ERROR] H2P_generate_proxy_point_surface() needs pt_dim = 2 or 3!\n");
+        fprintf(stderr, "[ERROR] H2P_generate_proxy_point_surface() exits without doing anything.\n");
+        return;
     }
     
     H2P_dense_mat_t *pp = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * (max_level + 1));
@@ -1064,6 +1065,20 @@ void H2P_build(
 )
 {
     double st, et;
+
+    if (pp == NULL)
+    {
+        fprintf(stderr, "[ERROR] You need to provide a set of proxy points for H2P_build()!\n");
+        fprintf(stderr, "[ERROR] H2P_build() exits without doing anything.\n");
+        return;
+    }
+    
+    if (krnl_eval == NULL)
+    {
+        fprintf(stderr, "[ERROR] You need to provide a valid krnl_eval() for H2P_build()!\n");
+        fprintf(stderr, "[ERROR] H2P_build() exits without doing anything.\n");
+        return;
+    }
 
     h2pack->pp = pp;
     h2pack->BD_JIT = BD_JIT;

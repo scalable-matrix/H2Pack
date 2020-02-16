@@ -159,66 +159,59 @@ void parse_params(int argc, char **argv)
 }
 
 void direct_nbody(
-    const void *krnl_param, kernel_bimv_fptr krnl_bimv, const int krnl_bimv_flops, const int pt_dim, 
-    const int krnl_dim, const int n_point, const DTYPE *coord, const DTYPE *x, DTYPE *y
+    const void *krnl_param, kernel_eval_fptr krnl_eval, const int pt_dim, const int krnl_dim, 
+    const DTYPE *src_coord, const int src_coord_ld, const int n_src_pt, const DTYPE *src_val,
+    const DTYPE *dst_coord, const int dst_coord_ld, const int n_dst_pt, DTYPE *dst_val
 )
 {
-    int n_point_ext = (n_point + SIMD_LEN - 1) / SIMD_LEN * SIMD_LEN;
-    int n_vec_ext = n_point_ext / SIMD_LEN;
-    DTYPE *coord_ext = (DTYPE*) malloc_aligned(sizeof(DTYPE) * pt_dim * n_point_ext, 64);
-    DTYPE *x_ext = (DTYPE*) malloc_aligned(sizeof(DTYPE) * krnl_dim * n_point_ext, 64);
-    DTYPE *y_ext = (DTYPE*) malloc_aligned(sizeof(DTYPE) * krnl_dim * n_point_ext, 64);
+    const int npt_blk  = 256;
+    const int blk_size = npt_blk * krnl_dim;
+    const int n_thread = omp_get_max_threads();
     
-    for (int i = 0; i < pt_dim; i++)
-    {
-        const DTYPE *src = coord + i * n_point;
-        DTYPE *dst = coord_ext + i * n_point_ext;
-        memcpy(dst, src, sizeof(DTYPE) * n_point);
-        for (int j = n_point; j < n_point_ext; j++) dst[j] = 1e100;
-    }
-    memset(y_ext, 0, sizeof(DTYPE) * krnl_dim * n_point_ext);
-    memcpy(x_ext, x, sizeof(DTYPE) * krnl_dim * n_point);
-    for (int j = krnl_dim * n_point; j < krnl_dim * n_point_ext; j++) x_ext[j] = 0.0;
+    memset(dst_val, 0, sizeof(DTYPE) * n_dst_pt * krnl_dim);
     
-    int blk_size = 512;
-    int nthreads = omp_get_max_threads();
-    DTYPE *buff  = (DTYPE*) malloc_aligned(sizeof(DTYPE) * nthreads * blk_size, 64);
+    DTYPE *krnl_mat_buffs = (DTYPE*) malloc(sizeof(DTYPE) * n_thread * blk_size * blk_size);
+    assert(krnl_mat_buffs != NULL);
+    
     double st = get_wtime_sec();
     #pragma omp parallel
     {
         int tid = omp_get_thread_num();
-        int start_vec, n_vec;
-        calc_block_spos_len(n_vec_ext, nthreads, tid, &start_vec, &n_vec);
-        int start_point = start_vec * SIMD_LEN;
-        int n_point1 = n_vec * SIMD_LEN;
-        DTYPE *thread_buff = buff + tid * blk_size;
+        DTYPE *krnl_mat_buff = krnl_mat_buffs + tid * blk_size * blk_size;
         
-        for (int ix = start_point; ix < start_point + n_point1; ix += blk_size)
+        int tid_dst_pt_s, tid_dst_pt_n, tid_dst_pt_e;
+        calc_block_spos_len(n_dst_pt, n_thread, tid, &tid_dst_pt_s, &tid_dst_pt_n);
+        tid_dst_pt_e = tid_dst_pt_s + tid_dst_pt_n;
+        
+        for (int dst_pt_idx = tid_dst_pt_s; dst_pt_idx < tid_dst_pt_e; dst_pt_idx += npt_blk)
         {
-            int nx = (ix + blk_size > start_point + n_point1) ? (start_point + n_point1 - ix) : blk_size;
-            for (int iy = 0; iy < n_point_ext; iy += blk_size)
+            int dst_pt_blk = (dst_pt_idx + npt_blk > tid_dst_pt_e) ? (tid_dst_pt_e - dst_pt_idx) : npt_blk;
+            int krnl_mat_nrow = dst_pt_blk * krnl_dim;
+            const DTYPE *dst_coord_ptr = dst_coord + dst_pt_idx;
+            DTYPE *dst_val_ptr = dst_val + dst_pt_idx * krnl_dim;
+            for (int src_pt_idx = 0; src_pt_idx < n_src_pt; src_pt_idx += npt_blk)
             {
-                int ny = (iy + blk_size > n_point_ext) ? (n_point_ext - iy) : blk_size;
-                DTYPE *x_in  = x_ext + iy * krnl_dim;
-                DTYPE *x_out = y_ext + ix * krnl_dim;
-                krnl_bimv(
-                    coord_ext + ix, n_point_ext, nx,
-                    coord_ext + iy, n_point_ext, ny,
-                    krnl_param, x_in, x_in, x_out, thread_buff
+                int src_pt_blk = (src_pt_idx + npt_blk > n_src_pt) ? (n_src_pt - src_pt_idx) : npt_blk;
+                int krnl_mat_ncol = src_pt_blk * krnl_dim;
+                const DTYPE *src_coord_ptr = src_coord + src_pt_idx;
+                const DTYPE *src_val_ptr = src_val + src_pt_idx * krnl_dim;
+                
+                krnl_eval(
+                    dst_coord_ptr, dst_coord_ld, dst_pt_blk,
+                    src_coord_ptr, src_coord_ld, src_pt_blk, 
+                    krnl_param, krnl_mat_buff, krnl_mat_ncol
+                );
+                
+                CBLAS_GEMV(
+                    CblasRowMajor, CblasNoTrans, krnl_mat_nrow, krnl_mat_ncol, 
+                    1.0, krnl_mat_buff, krnl_mat_ncol, src_val_ptr, 1, 1.0, dst_val_ptr, 1
                 );
             }
         }
     }
     double ut = get_wtime_sec() - st;
-    free_aligned(buff);
-    double GFLOPS = (double)(n_point) * (double)(n_point) * (double)(krnl_bimv_flops - 2);
-    GFLOPS = GFLOPS / 1000000000.0;
-    printf("Direct N-body reference result obtained, %.3lf s, %.2lf GFLOPS\n", ut, GFLOPS / ut);
-    
-    memcpy(y, y_ext, sizeof(DTYPE) * krnl_dim * n_point);
-    free_aligned(y_ext);
-    free_aligned(x_ext);
-    free_aligned(coord_ext);
+    printf("Calculate direct n-body reference results for %d points done\n", n_dst_pt);
+    free(krnl_mat_buffs);
 }
 
 int main(int argc, char **argv)
@@ -267,17 +260,29 @@ int main(int argc, char **argv)
         test_params.krnl_eval, test_params.krnl_bimv, test_params.krnl_bimv_flops
     );
     
+    int n_check_pt = 10000, check_pt_s;
+    if (n_check_pt > test_params.n_point)
+    {
+        n_check_pt = test_params.n_point;
+        check_pt_s = 0;
+    } else {
+        srand(time(NULL));
+        check_pt_s = rand() % (test_params.n_point - n_check_pt);
+    }
+    printf("Calculating direct n-body reference result for points %d -> %d\n", check_pt_s, check_pt_s + n_check_pt - 1);
+    
     DTYPE *x, *y0, *y1;
-    x  = (DTYPE*) malloc_aligned(sizeof(DTYPE) * test_params.krnl_mat_size, 64);
-    y0 = (DTYPE*) malloc_aligned(sizeof(DTYPE) * test_params.krnl_mat_size, 64);
-    y1 = (DTYPE*) malloc_aligned(sizeof(DTYPE) * test_params.krnl_mat_size, 64);
+    x  = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
+    y0 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_dim * n_check_pt);
+    y1 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
     assert(x != NULL && y0 != NULL && y1 != NULL);
     for (int i = 0; i < test_params.krnl_mat_size; i++) x[i] = drand48();
     
     // Get reference results
     direct_nbody(
-        krnl_param, test_params.krnl_bimv, test_params.krnl_bimv_flops, test_params.pt_dim, 
-        test_params.krnl_dim, test_params.n_point, h2pack->coord, x, y0
+        krnl_param, test_params.krnl_eval, test_params.pt_dim, test_params.krnl_dim, 
+        h2pack->coord,              test_params.n_point, test_params.n_point, x, 
+        h2pack->coord + check_pt_s, test_params.n_point, n_check_pt,          y0
     );
     
     // Warm up, reset timers, and test the matvec performance
@@ -293,19 +298,19 @@ int main(int argc, char **argv)
     
     // Verify H2 matvec results
     DTYPE y0_norm = 0.0, err_norm = 0.0;
-    for (int i = 0; i < test_params.krnl_mat_size; i++)
+    for (int i = 0; i < test_params.krnl_dim * n_check_pt; i++)
     {
-        DTYPE diff = y1[i] - y0[i];
+        DTYPE diff = y1[test_params.krnl_dim * check_pt_s + i] - y0[i];
         y0_norm  += y0[i] * y0[i];
         err_norm += diff * diff;
     }
     y0_norm  = DSQRT(y0_norm);
     err_norm = DSQRT(err_norm);
-    printf("||y_{H2} - y||_2 / ||y||_2 = %e\n", err_norm / y0_norm);
+    printf("For %d validating points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / y0_norm);
     
-    free_aligned(x);
-    free_aligned(y0);
-    free_aligned(y1);
+    free(x);
+    free(y0);
+    free(y1);
     free_aligned(test_params.coord);
     H2P_destroy(h2pack);
 }

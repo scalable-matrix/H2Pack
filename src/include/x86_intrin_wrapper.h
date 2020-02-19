@@ -1,6 +1,7 @@
 #ifndef __X86_INTRIN_WRAPPER_H__
 #define __X86_INTRIN_WRAPPER_H__
 
+#include <math.h>
 #include <x86intrin.h>
 
 /*
@@ -30,12 +31,12 @@
     vec_cmp_ge_*     : Return in each lane if a >= b
     vec_blend_*      : Blend elements from two intrinsic vectors a, b using mask, mask == 1 --> use b, else use a
     vec_reduce_add_* : Return the sum of values in an intrinsic vector
-    vec_arsqrt_*     : Approximate reverse squart root, returns 0 if r2 == 0
-    vec_rsqrt_ntit_* : Newton iteration step for reverse squart root,
+    vec_arsqrt_*     : Approximate reverse square root, returns 0 if r2 == 0
+    vec_rsqrt_ntit_* : Newton iteration step for reverse square root,
                        rsqrt' = 0.5 * rsqrt * (C - r2 * rsqrt^2),
                        0.5 is ignored here and need to be adjusted outside. 
     vec_frsqrt_pf_*  : Return the scaling prefactor for vec_frsqrt_*()
-    vec_frsqrt_*     : Fast reverse squart root using Newton iteration, 
+    vec_frsqrt_*     : Fast reverse square root using Newton iteration, 
                        returns 0 if r2 == 0, otherwise result need to be 
                        multipled with vec_ntfrac_*() to get the correct one.
     vec_log_*        : Return the natural logarithm of each lane 
@@ -44,6 +45,7 @@
     vec_exp_*        : Return the exponential value of e  raised to the power of values in each lane
     vec_exp2_*       : Return the exponential value of 2  raised to the power of values in each lane
     vec_exp10_*      : Return the exponential value of 10 raised to the power of values in each lane
+    vec_pow_*        : Return the exponential value of a  raised to the power of b      in each lane
 
     Reference:
     1. Intel Intrinsic Guide: https://software.intel.com/sites/landingpage/IntrinsicsGuide/
@@ -54,6 +56,9 @@
     6. For GCC SIMD math functions: https://stackoverflow.com/questions/40475140/mathematical-functions-for-simd-registers
 */ 
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #ifndef NEWTON_ITER
 #define NEWTON_ITER 2   // Two Newton iterations is usually sufficient for rsqrt using double type
@@ -62,12 +67,9 @@
 #ifndef USE_AVX512
 #ifndef USE_AVX
 #define USE_AVX
-#warning H2Pack is using AVX/AVX2 by default. Add -DUSE_AVX512 to your CFLAGS to use AVX-512 in H2Pack.
+#warning x86_intrin_wrapper.h is using AVX & AVX2 by default. Add -DUSE_AVX512 to your CFLAGS to use AVX-512 in x86_intrin_wrapper.h.
 #endif
 #endif
-
-#define M_LOG_E_2  0.6931471805599453094172321214581
-#define M_LOG_E_10 2.3025850929940456840179914546843
 
 #ifdef USE_AVX
 #ifdef __AVX__
@@ -78,6 +80,18 @@
 #define vec_d       __m256d
 #define vec_cmp_f   __m256
 #define vec_cmp_d   __m256d
+
+union vec8f
+{
+    __m256 v;
+    float f[4];
+};
+
+union vec4d
+{
+    __m256d v;
+    double d[4];
+};
 
 static inline __m256  vec_zero_s() { return _mm256_setzero_ps(); }
 static inline __m256d vec_zero_d() { return _mm256_setzero_pd(); }
@@ -116,24 +130,24 @@ static inline __m256  vec_sqrt_s(const __m256  a) { return _mm256_sqrt_ps(a); }
 static inline __m256d vec_sqrt_d(const __m256d a) { return _mm256_sqrt_pd(a); }
 
 #ifdef __AVX2__
-static inline __m256  vec_fmadd_s(const __m256  a, const __m256  b, const __m256  c)  { return _mm256_fmadd_ps(a, b, c);  }
-static inline __m256d vec_fmadd_d(const __m256d a, const __m256d b, const __m256d c)  { return _mm256_fmadd_pd(a, b, c);  }
+static inline __m256  vec_fmadd_s (const __m256  a, const __m256  b, const __m256  c) { return _mm256_fmadd_ps(a, b, c);  }
+static inline __m256d vec_fmadd_d (const __m256d a, const __m256d b, const __m256d c) { return _mm256_fmadd_pd(a, b, c);  }
 
 static inline __m256  vec_fnmadd_s(const __m256  a, const __m256  b, const __m256  c) { return _mm256_fnmadd_ps(a, b, c); }
 static inline __m256d vec_fnmadd_d(const __m256d a, const __m256d b, const __m256d c) { return _mm256_fnmadd_pd(a, b, c); }
 
-static inline __m256  vec_fmsub_s(const __m256  a, const __m256  b, const __m256  c)  { return _mm256_fmsub_ps(a, b, c);  }
-static inline __m256d vec_fmsub_d(const __m256d a, const __m256d b, const __m256d c)  { return _mm256_fmsub_pd(a, b, c);  }
-#else
-static inline __m256  vec_fmadd_s(const __m256  a, const __m256  b, const __m256  c)  { return _mm256_add_ps(_mm256_mul_ps(a, b), c); }
-static inline __m256d vec_fmadd_d(const __m256d a, const __m256d b, const __m256d c)  { return _mm256_add_pd(_mm256_mul_pd(a, b), c); }
+static inline __m256  vec_fmsub_s (const __m256  a, const __m256  b, const __m256  c) { return _mm256_fmsub_ps(a, b, c);  }
+static inline __m256d vec_fmsub_d (const __m256d a, const __m256d b, const __m256d c) { return _mm256_fmsub_pd(a, b, c);  }
+#else   // Else of "#ifdef __AVX2__"
+static inline __m256  vec_fmadd_s (const __m256  a, const __m256  b, const __m256  c) { return _mm256_add_ps(_mm256_mul_ps(a, b), c); }
+static inline __m256d vec_fmadd_d (const __m256d a, const __m256d b, const __m256d c) { return _mm256_add_pd(_mm256_mul_pd(a, b), c); }
 
 static inline __m256  vec_fnmadd_s(const __m256  a, const __m256  b, const __m256  c) { return _mm256_sub_ps(c, _mm256_mul_ps(a, b)); }
 static inline __m256d vec_fnmadd_d(const __m256d a, const __m256d b, const __m256d c) { return _mm256_sub_pd(c, _mm256_mul_pd(a, b)); }
 
-static inline __m256  vec_fmsub_s(const __m256  a, const __m256  b, const __m256  c)  { return _mm256_sub_ps(_mm256_mul_ps(a, b), c); }
-static inline __m256d vec_fmsub_d(const __m256d a, const __m256d b, const __m256d c)  { return _mm256_sub_pd(_mm256_mul_pd(a, b), c); }
-#endif // End of #ifdef __AVX2__
+static inline __m256  vec_fmsub_s (const __m256  a, const __m256  b, const __m256  c) { return _mm256_sub_ps(_mm256_mul_ps(a, b), c); }
+static inline __m256d vec_fmsub_d (const __m256d a, const __m256d b, const __m256d c) { return _mm256_sub_pd(_mm256_mul_pd(a, b), c); }
+#endif  // End of "#ifdef __AVX2__"
 
 static inline __m256  vec_max_s(const __m256  a, const __m256  b) { return _mm256_max_ps(a, b); }
 static inline __m256d vec_max_d(const __m256d a, const __m256d b) { return _mm256_max_pd(a, b); }
@@ -217,28 +231,76 @@ static inline __m256d vec_exp2_d (const __m256d a) { return _mm256_exp2_pd(a);  
 
 static inline __m256  vec_exp10_s(const __m256  a) { return _mm256_exp10_ps(a); }
 static inline __m256d vec_exp10_d(const __m256d a) { return _mm256_exp10_pd(a); }
-#else
+
+static inline __m256  vec_pow_s  (const __m256  a, const __m256  b) { return _mm256_pow_ps(a, b); }
+static inline __m256d vec_pow_d  (const __m256d a, const __m256d b) { return _mm256_pow_pd(a, b); }
+#else  // Else of "#ifdef __INTEL_COMPILER"
 #if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 22
-__m256  _ZGVdN8v_logf(__m256 x);
-__m256d _ZGVdN4v_log(__m256d x);
+__m256  _ZGVdN8v_logf(__m256  a);
+__m256d _ZGVdN4v_log (__m256d a);
 static inline __m256  vec_log_s  (const __m256  a) { return _ZGVdN8v_logf(a);   }
 static inline __m256d vec_log_d  (const __m256d a) { return _ZGVdN4v_log (a);   }
 
-static inline __m256  vec_log2_s (const __m256  a) { return vec_div_s(vec_log_s(a), vec_set1_s(M_LOG_E_2)); }
-static inline __m256d vec_log2_d (const __m256d a) { return vec_div_d(vec_log_s(a), vec_set1_d(M_LOG_E_2)); }
-
-static inline __m256  vec_log10_s(const __m256  a) { return vec_div_s(vec_log_s(a), vec_set1_s(M_LOG_E_10)); }
-static inline __m256d vec_log10_d(const __m256d a) { return vec_div_d(vec_log_s(a), vec_set1_d(M_LOG_E_10)); }
-
-__m256  _ZGVdN8v_expf(__m256 x);
-__m256d _ZGVdN4v_exp(__m256d x);
+__m256  _ZGVdN8v_expf(__m256  a);
+__m256d _ZGVdN4v_exp (__m256d a);
 static inline __m256  vec_exp_s  (const __m256  a) { return _ZGVdN8v_expf(a);   }
 static inline __m256d vec_exp_d  (const __m256d a) { return _ZGVdN4v_exp (a);   }
-#endif
-#endif  // End of #ifdef __INTEL_COMPILER
 
-#endif  // End of #ifdef __AVX__
-#endif  // End of #ifdef USE_AVX
+__m256  _ZGVdN8vv_powf(__m256  a, __m256  b);
+__m256d _ZGVdN4vv_pow (__m256d a, __m256d b);
+static inline __m256  vec_pow_s  (const __m256  a, const __m256  b) { return _ZGVdN8vv_powf(a, b); }
+static inline __m256d vec_pow_d  (const __m256d a, const __m256d b) { return _ZGVdN4vv_pow (a, b); }
+#else   // Else of "#if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 22"
+#warning Your compiler or GLIBC does not support vectorized log(), pow(), and exp(), x86_intrin_wrapper.h will use simulated implementations. 
+static inline __m256  vec_log_s(__m256  x)
+{
+    int i;
+    union vec8f u = {x}, res;
+    for (i = 0; i < 8; i++) res.f[i] = logf(u.f[i]);
+    return res.v;
+}
+static inline __m256d vec_log_d(__m256d x)
+{
+    int i;
+    union vec4d u = {x}, res;
+    for (i = 0; i < 4; i++) res.d[i] = log(u.d[i]);
+    return res.v;
+}
+
+static inline __m256  vec_exp_s(__m256  x)
+{
+    int i;
+    union vec8f u = {x}, res;
+    for (i = 0; i < 8; i++) res.f[i] = expf(u.f[i]);
+    return res.v;
+}
+static inline __m256d vec_exp_d(__m256d x)
+{
+    int i;
+    union vec4d u = {x}, res;
+    for (i = 0; i < 4; i++) res.d[i] = exp(u.d[i]);
+    return res.v;
+}
+
+static inline __m256  vec_pow_s(__m256  a, __m256  b)
+{
+    int i;
+    union vec8f ua = {a}, ub = {b}, res;
+    for (i = 0; i < 8; i++) res.f[i] = pow(ua.f[i], ub.f[i]);
+    return res.v;
+}
+static inline __m256d vec_pow_d(__m256d a, __m256d b)
+{
+    int i;
+    union vec4d ua = {a}, ub = {b}, res;
+    for (i = 0; i < 4; i++) res.d[i] = pow(ua.d[i], ub.d[i]);
+    return res.v;
+}
+#endif  // End of "#if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 22"
+#endif  // End of "#ifdef __INTEL_COMPILER"
+
+#endif  // End of "#ifdef __AVX__"
+#endif  // End of "#ifdef USE_AVX"
 
 
 #ifdef USE_AVX512
@@ -250,6 +312,18 @@ static inline __m256d vec_exp_d  (const __m256d a) { return _ZGVdN4v_exp (a);   
 #define vec_d       __m512d
 #define vec_cmp_f   __mmask16
 #define vec_cmp_d   __mmask8
+
+union vec16f
+{
+    __m512 v;
+    float f[16];
+};
+
+union vec8d
+{
+    __m512d v;
+    double d[8];
+};
 
 static inline __m512  vec_zero_s() { return _mm512_setzero_ps(); }
 static inline __m512d vec_zero_d() { return _mm512_setzero_pd(); }
@@ -287,14 +361,14 @@ static inline __m512d vec_div_d(const __m512d a, const __m512d b) { return _mm51
 static inline __m512  vec_sqrt_s(const __m512  a) { return _mm512_sqrt_ps(a); }
 static inline __m512d vec_sqrt_d(const __m512d a) { return _mm512_sqrt_pd(a); }
 
-static inline __m512  vec_fmadd_s(const __m512  a, const __m512  b, const __m512  c)  { return _mm512_fmadd_ps(a, b, c);  }
-static inline __m512d vec_fmadd_d(const __m512d a, const __m512d b, const __m512d c)  { return _mm512_fmadd_pd(a, b, c);  }
+static inline __m512  vec_fmadd_s (const __m512  a, const __m512  b, const __m512  c) { return _mm512_fmadd_ps(a, b, c);  }
+static inline __m512d vec_fmadd_d (const __m512d a, const __m512d b, const __m512d c) { return _mm512_fmadd_pd(a, b, c);  }
 
 static inline __m512  vec_fnmadd_s(const __m512  a, const __m512  b, const __m512  c) { return _mm512_fnmadd_ps(a, b, c); }
 static inline __m512d vec_fnmadd_d(const __m512d a, const __m512d b, const __m512d c) { return _mm512_fnmadd_pd(a, b, c); }
 
-static inline __m512  vec_fmsub_s(const __m512  a, const __m512  b, const __m512  c)  { return _mm512_fmsub_ps(a, b, c);  }
-static inline __m512d vec_fmsub_d(const __m512d a, const __m512d b, const __m512d c)  { return _mm512_fmsub_pd(a, b, c);  }
+static inline __m512  vec_fmsub_s (const __m512  a, const __m512  b, const __m512  c) { return _mm512_fmsub_ps(a, b, c);  }
+static inline __m512d vec_fmsub_d (const __m512d a, const __m512d b, const __m512d c) { return _mm512_fmsub_pd(a, b, c);  }
 
 static inline __m512  vec_max_s(const __m512  a, const __m512  b) { return _mm512_max_ps(a, b); }
 static inline __m512d vec_max_d(const __m512d a, const __m512d b) { return _mm512_max_pd(a, b); }
@@ -341,7 +415,7 @@ static inline __m512d vec_arsqrt_d(const __m512d r2)
     __mmask8 cmp0 = _mm512_cmp_pd_mask(r2, zero, _CMP_EQ_OS);
     return _mm512_mask_mov_pd(rsqrt, cmp0, zero);
 }
-#else
+#else   // Else of "#ifdef __AVX512ER__"
 static inline __m512  vec_arsqrt_s(const __m512  r2)
 {
     __m512 zero  = vec_zero_s();
@@ -356,7 +430,7 @@ static inline __m512d vec_arsqrt_d(const __m512d r2)
     __mmask8 cmp0 = _mm512_cmp_pd_mask(r2, zero, _CMP_EQ_OS);
     return _mm512_mask_mov_pd(rsqrt, cmp0, zero);
 }
-#endif  // End of #ifdef __AVX512ER__
+#endif  // End of "#ifdef __AVX512ER__"
 
 #ifdef __INTEL_COMPILER
 static inline __m512  vec_log_s  (const __m512  a) { return _mm512_log_ps(a);   }
@@ -376,28 +450,91 @@ static inline __m512d vec_exp2_d (const __m512d a) { return _mm512_exp2_pd(a);  
 
 static inline __m512  vec_exp10_s(const __m512  a) { return _mm512_exp10_ps(a); }
 static inline __m512d vec_exp10_d(const __m512d a) { return _mm512_exp10_pd(a); }
-#else
+
+static inline __m512  vec_pow_s  (const __m512  a, const __m512  b) { return _mm512_pow_ps(a, b); }
+static inline __m512d vec_pow_d  (const __m512d a, const __m512d b) { return _mm512_pow_pd(a, b); }
+#else   // Else of "#ifdef __INTEL_COMPILER"
 #if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 22
-__m512  _ZGVeN16v_logf(__m512 x);
-__m512d _ZGVeN8v_log  (__m512d x);
-static inline __m512  vec_log_s  (const __m512  a) { return _ZGVeN16v_logf(a);   }
-static inline __m512d vec_log_d  (const __m512d a) { return _ZGVeN8v_log  (a);   }
+__m512  _ZGVeN16v_logf(__m512  a);
+__m512d _ZGVeN8v_log  (__m512d a);
+static inline __m512  vec_log_s  (const __m512  a) { return _ZGVeN16v_logf(a);  }
+static inline __m512d vec_log_d  (const __m512d a) { return _ZGVeN8v_log  (a);  }
 
-static inline __m512  vec_log2_s (const __m512  a) { return vec_div_s(vec_log_s(a), vec_set1_s(M_LOG_E_2)); }
-static inline __m512d vec_log2_d (const __m512d a) { return vec_div_d(vec_log_s(a), vec_set1_d(M_LOG_E_2)); }
+__m512  _ZGVeN16v_expf(__m512  a);
+__m512d _ZGVeN8v_exp  (__m512d a);
+static inline __m512  vec_exp_s  (const __m512  a) { return _ZGVeN16v_expf(a);  }
+static inline __m512d vec_exp_d  (const __m512d a) { return _ZGVeN8v_exp  (a);  }
 
-static inline __m512  vec_log10_s(const __m512  a) { return vec_div_s(vec_log_s(a), vec_set1_s(M_LOG_E_10)); }
-static inline __m512d vec_log10_d(const __m512d a) { return vec_div_d(vec_log_s(a), vec_set1_d(M_LOG_E_10)); }
+__m512  _ZGVeN16vv_powf(__m512  a, __m512  b);
+__m512d _ZGVeN8vv_pow  (__m512d a, __m512d b);
+static inline __m512  vec_pow_s  (const __m512  a, const __m512  b) { return _ZGVeN16vv_powf(a, b); }
+static inline __m512d vec_pow_d  (const __m512d a, const __m512d b) { return _ZGVeN8vv_pow  (a, b); }
+#else   // Else of "#if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 22"
+#warning Your compiler or GLIBC does not support vectorized log(), pow(), and exp(), x86_intrin_wrapper.h will use simulated implementations. 
+static inline __m512  vec_log_s(__m512  x)
+{
+    int i;
+    union vec16f u = {x}, res;
+    for (i = 0; i < 16; i++) res.f[i] = logf(u.f[i]);
+    return res.v;
+}
+static inline __m512d vec_log_d(__m512d x)
+{
+    int i;
+    union vec8d u = {x}, res;
+    for (i = 0; i < 8; i++) res.d[i] = log(u.d[i]);
+    return res.v;
+}
 
-__m512  _ZGVeN16v_expf(__m512 x);
-__m512d _ZGVeN8v_exp  (__m512d x);
-static inline __m512  vec_exp_s  (const __m512  a) { return _ZGVeN16v_expf(a);   }
-static inline __m512d vec_exp_d  (const __m512d a) { return _ZGVeN8v_exp  (a);   }
-#endif
+static inline __m512  vec_exp_s(__m512  x)
+{
+    int i;
+    union vec16f u = {x}, res;
+    for (i = 0; i < 16; i++) res.f[i] = expf(u.f[i]);
+    return res.v;
+}
+static inline __m512d vec_exp_d(__m512d x)
+{
+    int i;
+    union vec8d u = {x}, res;
+    for (i = 0; i < 8; i++) res.d[i] = exp(u.d[i]);
+    return res.v;
+}
+
+static inline __m512  vec_pow_s(__m512  a, __m512  b)
+{
+    int i;
+    union vec16f ua = {a}, ub = {b}, res;
+    for (i = 0; i < 16; i++) res.f[i] = pow(ua.f[i], ub.f[i]);
+    return res.v;
+}
+static inline __m512d vec_pow_d(__m512d a, __m512d b)
+{
+    int i;
+    union vec8d ua = {a}, ub = {b}, res;
+    for (i = 0; i < 8; i++) res.d[i] = pow(ua.d[i], ub.d[i]);
+    return res.v;
+}
+#endif  // End of "#if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 22"
+#endif  // End of "#ifdef __INTEL_COMPILER"
+
+#endif  // End of "#ifdef __AVX512F__"
+#endif  // End of "#ifdef USE_AVX512"
+
+
+#ifndef __INTEL_COMPILER
+static inline vec_f vec_log2_s (const vec_f a) { return vec_div_s(vec_log_s(a), vec_set1_s(M_LN2));  }
+static inline vec_d vec_log2_d (const vec_d a) { return vec_div_d(vec_log_d(a), vec_set1_d(M_LN2));  }
+
+static inline vec_f vec_log10_s(const vec_f a) { return vec_div_s(vec_log_s(a), vec_set1_s(M_LN10)); }
+static inline vec_d vec_log10_d(const vec_d a) { return vec_div_d(vec_log_d(a), vec_set1_d(M_LN10)); }
+
+static inline vec_f vec_exp2_s (const vec_f a) { return vec_exp_s(vec_mul_s(a, vec_set1_s(M_LN2)));  }
+static inline vec_d vec_exp2_d (const vec_d a) { return vec_exp_d(vec_mul_d(a, vec_set1_d(M_LN2)));  }
+
+static inline vec_f vec_exp10_s(const vec_f a) { return vec_exp_s(vec_mul_s(a, vec_set1_s(M_LN10))); }
+static inline vec_d vec_exp10_d(const vec_d a) { return vec_exp_d(vec_mul_d(a, vec_set1_d(M_LN10))); }
 #endif  // End of #ifdef __INTEL_COMPILER
-
-#endif  // End of #ifdef __AVX512F__
-#endif  // End of #ifdef USE_AVX512
 
 
 static inline vec_f vec_rsqrt_ntit_s(const vec_f r2, vec_f rsqrt, const float  C_)
@@ -460,5 +597,10 @@ static inline vec_d vec_frsqrt_d(const vec_d r2)
     #endif
     return rsqrt;
 }
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif  // End of header file 

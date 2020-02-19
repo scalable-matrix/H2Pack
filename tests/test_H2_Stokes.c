@@ -126,7 +126,6 @@ void direct_nbody(
     DTYPE *krnl_mat_buffs = (DTYPE*) malloc(sizeof(DTYPE) * n_thread * blk_size * blk_size);
     assert(krnl_mat_buffs != NULL);
     
-    double st = get_wtime_sec();
     #pragma omp parallel
     {
         int tid = omp_get_thread_num();
@@ -162,7 +161,6 @@ void direct_nbody(
             }
         }
     }
-    double ut = get_wtime_sec() - st;
     printf("Calculate direct n-body reference results for %d points done\n", n_dst_pt);
     free(krnl_mat_buffs);
 }

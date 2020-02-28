@@ -112,7 +112,7 @@ int main()
     for (int i = 0; i < A_nrow * A_ncol; i++)
         A0_fnorm += A->data[i] * A->data[i];
     
-    int QR_buff_size = (2 * kdim + 2) * A->nrow + (kdim + 1) * A->ncol;
+    int QR_buff_size = (2 * kdim + 2) * A->ncol + (kdim + 1) * A->nrow;
     int   *ID_buff = (int *)   malloc(sizeof(int)   * A->nrow * 4);
     DTYPE *QR_buff = (DTYPE *) malloc(sizeof(DTYPE) * QR_buff_size);
     double st = get_wtime_sec();

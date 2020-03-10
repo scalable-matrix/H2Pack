@@ -125,7 +125,7 @@ void parse_params(int argc, char **argv)
     {
         printf("Binary/CSV coordinate file not provided. Generating random coordinates in unit box...");
         for (int i = 0; i < test_params.n_point * test_params.pt_dim; i++)
-            test_params.coord[i] = drand48();
+            test_params.coord[i] = drand48();// + drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48() - 6)/sqrt(12);
         printf(" done.\n");
     }
     
@@ -274,8 +274,8 @@ int main(int argc, char **argv)
     y0 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_dim * n_check_pt);
     y1 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
     assert(x != NULL && y0 != NULL && y1 != NULL);
-    for (int i = 0; i < test_params.krnl_mat_size; i++) x[i] = drand48();
-    
+    for (int i = 0; i < test_params.krnl_mat_size; i++) x[i] = (drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48() - 6)/sqrt(12);
+
     // Get reference results
     direct_nbody(
         krnl_param, test_params.krnl_eval, test_params.pt_dim, test_params.krnl_dim, 

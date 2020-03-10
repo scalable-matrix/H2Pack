@@ -6,7 +6,7 @@ N = 100000
 krnl_dim = 1
 coord = np.random.normal(0, 5, size=(3, N))
 
-pyh2pack.setup(kernel="Coulomb", kernel_dimension=krnl_dim, point_coord=coord, point_dimension=3, JIT_mode=1, rel_tol=1e-11, proxy_surface=1)
+pyh2pack.setup(kernel="Coulomb", kernel_dimension=krnl_dim, point_coord=coord, point_dimension=3, JIT_mode=1, rel_tol=1e-11, proxy_surface=0)
 
 x = np.random.normal(size=(krnl_dim*N))
 y = pyh2pack.h2matvec(x)
@@ -15,10 +15,3 @@ np.linalg.norm(y - z) / np.linalg.norm(z)
 pyh2pack.print_statistic()
 pyh2pack.clean()
 
-
-
-
-
-
-import os
-os.environ["OMP_NUM_THREADS"] = "3"

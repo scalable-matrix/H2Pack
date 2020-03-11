@@ -1,24 +1,50 @@
-// Setup H2Pack:
-//      0.  clean up possible remainings from the previous run
-//      1.  parse the variables to set up test_params
-//      2.  H2P_init for h2pack
-//      3.  H2P_partition_points
-// Input parameters:
-//      kernel             : 
-//      kernel_dimension   : 
-//      point_coord        : 
-//      point_dimension    : 
-//      rel_tol            : 
-//      kernel_param (opt) :
-//      JIT_mode     (opt) : 
+const char description_setup[] = 
+            "H2Pack function setup(...) involves the following three computation steps:\n\
+                1. parse the test information \n\
+                2. select the proxy points \n\
+                3. construct the H2 matrix representation of the kernel matrix \n\n\
+             Input description (keywords : datatype): \n\
+                kernel           : string, kernel name (presently support 'Coulomb', 'Matern', 'Gaussian', 'RPY', 'Stokes'); \n\
+                kernel_dimension : integer, dimension of the kernel function's output;\n\
+                point_coord      : 2d numpy array, point coordinates. Each row or column stores the coordinate of one point;\n\
+                point_dimension  : integer, dimension of the space points lying in (support 1D,2D,and 3D);\n\
+                rel_tol          : float, accuracy threshold for the H2 matrix representation;\n\
+                (optional) JIT_mode       : 1 or 0, flag for running matvec in JIT mode (JIT mode reduces storage cost but has sloer matvec);\n\
+                (optional) kernel_param   : 1d numpy array, parameters of the kernel function;\n\
+                (optional) proxy_surface  : 1 or 0, flag for using proxy surface points (mainly work for potential kernel;\n\
+                (optional) max_leaf_points: integer, the maximum number of points in each leaf node.";    
 static PyObject *setup(PyObject *self, PyObject *args, PyObject *keywds);
-// static PyObject *h2build(PyObject *self, PyObject *args);
+
+const char description_h2matvec[] = 
+            "H2Pack function matvec(x) efficiently multiplies the kernel matrix with ONE vector\n\
+             Input description (no need for keywords): \n\
+                x: 1d numpy array, the multiplied vector. should be of the same dimension as the matrix.\
+            ";
 static PyObject *h2matvec(PyObject *self, PyObject *args);
+
+const char description_directmatvec[] = 
+            "H2Pack function direct_matvec(x) calculates the kernel matrix-vector multiplication directly by evaluating kernel matrix entries dynamically.\n\
+             Input description (no need for keywords): \n\
+                x: 1d numpy array, the multiplied vector. should be of the same dimension as the matrix.\
+            ";
 static PyObject *direct_matvec(PyObject *self, PyObject *args);
-static PyObject *clean(PyObject *self, PyObject *args);
+
+const char description_printstat[] = 
+            "H2Pack funciton print_statistic() prints out the main information of the constructed H2 matrix representation.";
 static PyObject *print_statistic(PyObject *self, PyObject *args);
+
+const char description_printset[] = 
+            "H2Pack funciton print_setting() prints out the main information of H2Pack setting.";
 static PyObject *print_setting(PyObject *self, PyObject *args);
+
+const char description_printkernel[] = 
+            "H2Pack funciton print_kernels() lists all the supported kernel functions and their descriptions.";
 static PyObject *print_kernels(PyObject *self, PyObject *args);
+
+static PyObject *clean(PyObject *self, PyObject *args);
+
+
+
 
 //  
 //  Auxiliary functions 

@@ -194,7 +194,7 @@ void H2P_generate_proxy_point_ID(
         // (3) Use ID to select skeleton points in Nx first, then use the
         //     skeleton Nx points to select skeleton Ny points
 
-        DTYPE rel_tol = tol_norm < 1e-13 ? 1e-14 : tol_norm * 1e-1;
+        DTYPE rel_tol = tol_norm < 1e-11 ? 1e-14 : tol_norm * 1e-2;
         
         H2P_eval_kernel_matrix_OMP(krnl_param, krnl_eval, krnl_dim, Nx_points, Ny_points, tmpA);
         if (krnl_dim == 1)
@@ -226,74 +226,89 @@ void H2P_generate_proxy_point_ID(
         );
         H2P_dense_mat_select_columns(Ny_points, skel_idx);
         
-        // (4) Make the skeleton Ny points dense and then use them as proxy points
+        // (4) Set up the proxy points
         int ny = skel_idx->length;
-        H2P_dense_mat_resize(min_dist, ny, 1);
-        DTYPE *coord_i = tmpA->data;
-        for (int i = 0; i < ny; i++) min_dist->data[i] = 1e20;
-        for (int i = 0; i < ny; i++)
+        if (tol_norm > 1e-11)
         {
-            for (int k = 0; k < pt_dim; k++)
-                coord_i[k] = Ny_points->data[i + k * Ny_points->ncol];
-            
-            for (int j = 0; j < i; j++)
+            //  Case 1: when tol_norm is LARGE, directly use the Ny_points as the proxy points. 
+            const int Ny_size2 = ny;
+            H2P_dense_mat_init(&pp[level], pt_dim, Ny_size2);
+            H2P_dense_mat_t pp_level = pp[level];
+            // Also transpose the coordinate array for vectorizing kernel evaluation here
+            for (int i = 0; i < ny; i++)
             {
-                DTYPE dist_ij = 0.0;
-                for (int k = 0; k < pt_dim; k++)
-                {
-                    DTYPE diff = coord_i[k] - Ny_points->data[j + k * Ny_points->ncol];
-                    dist_ij += diff * diff;
-                }
-                dist_ij = DSQRT(dist_ij);
-                min_dist->data[i] = MIN(min_dist->data[i], dist_ij);
-                min_dist->data[j] = MIN(min_dist->data[j], dist_ij);
+                DTYPE *tmp_coord0 = tmpA->data;
+                DTYPE *Ny_point_i = Ny_points->data + i;
+                for (int j = 0; j < pt_dim; j++)
+                    tmp_coord0[j] = Ny_point_i[j * Ny_points->ncol];
+                DTYPE *coord_0 = pp_level->data + i;
+                for (int j = 0; j < pt_dim; j++)
+                    coord_0[j * Ny_size2] = tmp_coord0[j];
             }
         }
-        
-        // UNDONE (Xin): enable densification when tol_norm < 1e-13. 
-
-        // Disable densification for the moment. Should be enabled when high accuracy is required.
-        const int Ny_size2 = ny;// * 2;
-        H2P_dense_mat_init(&pp[level], pt_dim, Ny_size2);
-        H2P_dense_mat_t pp_level = pp[level];
-        // Also transpose the coordinate array for vectorizing kernel evaluation here
-        for (int i = 0; i < ny; i++)
+        else
         {
-            DTYPE *tmp_coord0 = tmpA->data;
-            DTYPE *Ny_point_i = Ny_points->data + i;
-            for (int j = 0; j < pt_dim; j++)
-                tmp_coord0[j] = Ny_point_i[j * Ny_points->ncol];
-            /*
-            DTYPE *tmp_coord1 = tmpA->data + pt_dim;
-            DTYPE radius_i_scale = min_dist->data[i] * 0.33;
-            int flag = 1;
-            while (flag == 1)
+            //  Case 2: when tol_norm is SMALL, densify the Ny_points as the proxy points. 
+            H2P_dense_mat_resize(min_dist, ny, 1);
+            DTYPE *coord_i = tmpA->data;
+            for (int i = 0; i < ny; i++) min_dist->data[i] = 1e20;
+            for (int i = 0; i < ny; i++)
             {
-                DTYPE radius_1 = 0.0;
+                for (int k = 0; k < pt_dim; k++)
+                    coord_i[k] = Ny_points->data[i + k * Ny_points->ncol];
+                
+                for (int j = 0; j < i; j++)
+                {
+                    DTYPE dist_ij = 0.0;
+                    for (int k = 0; k < pt_dim; k++)
+                    {
+                        DTYPE diff = coord_i[k] - Ny_points->data[j + k * Ny_points->ncol];
+                        dist_ij += diff * diff;
+                    }
+                    dist_ij = DSQRT(dist_ij);
+                    min_dist->data[i] = MIN(min_dist->data[i], dist_ij);
+                    min_dist->data[j] = MIN(min_dist->data[j], dist_ij);
+                }
+            }
+
+            const int Ny_size2 = ny * 2;
+            H2P_dense_mat_init(&pp[level], pt_dim, Ny_size2);
+            H2P_dense_mat_t pp_level = pp[level];
+            for (int i = 0; i < ny; i++)
+            {
+                DTYPE *tmp_coord0 = tmpA->data;
+                DTYPE *Ny_point_i = Ny_points->data + i;
+                for (int j = 0; j < pt_dim; j++)
+                    tmp_coord0[j] = Ny_point_i[j * Ny_points->ncol];
+                DTYPE *tmp_coord1 = tmpA->data + pt_dim;
+                DTYPE radius_i_scale = min_dist->data[i] * 0.33;
+                int flag = 1;
+                while (flag == 1)
+                {
+                    DTYPE radius_1 = 0.0;
+                    for (int j = 0; j < pt_dim; j++)
+                    {
+                        tmp_coord1[j] = drand48() - 0.5;
+                        radius_1 += tmp_coord1[j] * tmp_coord1[j];
+                    }
+                    DTYPE inv_radius_1 = 1.0 / DSQRT(radius_1);
+                    for (int j = 0; j < pt_dim; j++) 
+                    {
+                        tmp_coord1[j] *= inv_radius_1;
+                        tmp_coord1[j] *= radius_i_scale;
+                        tmp_coord1[j] += tmp_coord0[j];
+                    }
+                    if ((point_in_box(pt_dim, tmp_coord1, L2) == 0) &&
+                        (point_in_box(pt_dim, tmp_coord1, L3) == 1))
+                        flag = 0;
+                }
+                DTYPE *coord_0 = pp_level->data + (2 * i);
+                DTYPE *coord_1 = pp_level->data + (2 * i + 1);
                 for (int j = 0; j < pt_dim; j++)
                 {
-                    tmp_coord1[j] = drand48() - 0.5;
-                    radius_1 += tmp_coord1[j] * tmp_coord1[j];
+                    coord_0[j * Ny_size2] = tmp_coord0[j];
+                    coord_1[j * Ny_size2] = tmp_coord1[j];
                 }
-                DTYPE inv_radius_1 = 1.0 / DSQRT(radius_1);
-                for (int j = 0; j < pt_dim; j++) 
-                {
-                    tmp_coord1[j] *= inv_radius_1;
-                    tmp_coord1[j] *= radius_i_scale;
-                    tmp_coord1[j] += tmp_coord0[j];
-                }
-                if ((point_in_box(pt_dim, tmp_coord1, L2) == 0) &&
-                    (point_in_box(pt_dim, tmp_coord1, L3) == 1))
-                    flag = 0;
-            }
-            DTYPE *coord_0 = pp_level->data + (2 * i);
-            DTYPE *coord_1 = pp_level->data + (2 * i + 1);
-            */
-            DTYPE *coord_0 = pp_level->data + i;
-            for (int j = 0; j < pt_dim; j++)
-            {
-                coord_0[j * Ny_size2] = tmp_coord0[j];
-                //coord_1[j * Ny_size2] = tmp_coord1[j];
             }
         }
     }

@@ -258,7 +258,7 @@ int main(int argc, char **argv)
         test_params.krnl_eval, test_params.krnl_bimv, test_params.krnl_bimv_flops
     );
     
-    int n_check_pt = 10000, check_pt_s;
+    int n_check_pt = 50000, check_pt_s;
     if (n_check_pt > test_params.n_point)
     {
         n_check_pt = test_params.n_point;
@@ -274,7 +274,7 @@ int main(int argc, char **argv)
     y0 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_dim * n_check_pt);
     y1 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
     assert(x != NULL && y0 != NULL && y1 != NULL);
-    for (int i = 0; i < test_params.krnl_mat_size; i++) x[i] = (drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48() - 6)/sqrt(12);
+    for (int i = 0; i < test_params.krnl_mat_size; i++) x[i] = (drand48() + drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48() - 6)/sqrt(12);
 
     // Get reference results
     direct_nbody(

@@ -3,7 +3,6 @@ INC     = -I../src/include   #-I$(VTUNE_AMPLIFIER_2018_DIR)/include
 
 USE_MKL      = 0
 USE_OPENBLAS = 1
-#OPENBLAS_INSTALL_DIR = /home/mkurisu/Workspace/OpenBLAS-0.3.8/install
 OPENBLAS_INSTALL_DIR = /usr/local/opt/openblas
 
 CC      = gcc

@@ -13,20 +13,20 @@
 
 /********       Basics of Python C extension       ********/
 static PyMethodDef PyH2Pack_Methods[] = {
-    {"setup", (PyCFunction) setup, METH_VARARGS|METH_KEYWORDS, "print global variables"},
-    {"h2matvec", h2matvec, METH_VARARGS, "increase global variables"},
-    {"direct_matvec", direct_matvec, METH_VARARGS, "increase global variables"},
-    {"print_statistic", print_statistic, METH_VARARGS, "increase global variables"},
-    {"print_setting", print_setting, METH_VARARGS, "increase global variables"},
-    {"print_kernels", print_kernels, METH_VARARGS, "increase global variables"},
-    {"clean", clean, METH_VARARGS, "increase global variables"},
+    {"setup", (PyCFunction) setup, METH_VARARGS|METH_KEYWORDS, description_setup},
+    {"h2matvec", h2matvec, METH_VARARGS, description_h2matvec},
+    {"direct_matvec", direct_matvec, METH_VARARGS, description_directmatvec},
+    {"print_statistic", print_statistic, METH_VARARGS, description_printstat},
+    {"print_setting", print_setting, METH_VARARGS, description_printset},
+    {"print_kernels", print_kernels, METH_VARARGS, description_printkernel},
+    {"clean", clean, METH_VARARGS, "Reset pyh2pack and free allocated memories."},
     {NULL, NULL, 0, NULL}
 };
 
 static struct PyModuleDef PyH2Pack_Module = {
     PyModuleDef_HEAD_INIT,
     "pyh2pack",
-    "Python Interface for H2Pack",
+    "Python Interface for H2Pack: A fast summation method for kernel matrices.",
     -1,
     PyH2Pack_Methods
 };
@@ -45,11 +45,11 @@ struct H2Pack_Params
     int    pts_num;             //  Number of points
 
     int    krnl_dim;            //  Dimension of the output of the kernel function
-    char   krnl_name[16];           //  Name of the kernel function. 
+    char   krnl_name[16];       //  Name of the kernel function. 
     DTYPE *krnl_param;          //  parameters of the kernel function
-    char  krnl_param_descr[512]; //  Description of the kernel.
-    int   krnl_param_len;
-    int   krnl_bimv_flops;
+    char  krnl_param_descr[512];//  Description of the kernel.
+    int   krnl_param_len;       //  Number of parameters
+    int   krnl_bimv_flops;      //  Flops of bimv operation.
     kernel_eval_fptr krnl_eval; //  Function pointer for kernel_evaluation
     kernel_bimv_fptr krnl_bimv; //  Function pointer for kernel_bimv
   
@@ -63,21 +63,22 @@ struct H2Pack_Params
 
 //  H2Pack paramemters
 struct H2Pack_Params h2pack_params = {.pts_coord = NULL, .krnl_param = NULL, .flag_setup = 0};
+
 //  H2Pack object
 H2Pack_t h2pack;
-
 
 /********       Implementation of member functions      ********/
 static PyObject *setup(PyObject *self, PyObject *args, PyObject *keywds) {
     PyArrayObject *coord = NULL, *kernel_param = NULL;
-    char *krnl_name_in;
-    double st, et;  //  timing variable.
-    int flag_proxysurface_in = -1;
-
-    //  Step 1: check whether h2pack is setup before. 
+    char *krnl_name_in;                 //  kernel name
+    double st, et;                      //  timing variable.
+    int flag_proxysurface_in = -1;      //  flag for the use of proxy surface points
+    int max_leaf_points = 0;
+    //  Step 1: check whether h2pack has been setup before. 
     if (h2pack_params.flag_setup == 1)
     {
         free_aligned(h2pack_params.pts_coord);
+        free(h2pack_params.krnl_param);
         H2P_destroy(h2pack);
         h2pack_params.flag_setup = 0;
     }
@@ -85,29 +86,23 @@ static PyObject *setup(PyObject *self, PyObject *args, PyObject *keywds) {
 
     //  Step 2: parse input variables
     static char *keywdslist[] = {"kernel", "kernel_dimension", "point_coord",
-                             "point_dimension", "rel_tol", "JIT_mode", "kernel_param", "proxy_surface", NULL};
+                             "point_dimension", "rel_tol", "JIT_mode", "kernel_param", "proxy_surface", "max_leaf_points", NULL};
     h2pack_params.BD_JIT = 1;
-    if (!PyArg_ParseTupleAndKeywords(args, keywds, "siO!id|iO!i", keywdslist,
+    if (!PyArg_ParseTupleAndKeywords(args, keywds, "siO!id|iO!ii", keywdslist,
                                     &krnl_name_in, &(h2pack_params.krnl_dim), &PyArray_Type, &coord, &(h2pack_params.pts_dim), 
-                                    &(h2pack_params.rel_tol), &(h2pack_params.BD_JIT), &PyArray_Type, &kernel_param, &flag_proxysurface_in))
+                                    &(h2pack_params.rel_tol), &(h2pack_params.BD_JIT), &PyArray_Type, &kernel_param, &flag_proxysurface_in, 
+                                    &max_leaf_points))
     {
         PyErr_SetString(PyExc_TypeError, 
-            "Error in the input arguments for pyh2pack.setup(). Input format (keywords : data type) is as follows (must use with keywords):\n \
-            kernel : string, name of the kernel function, presently support 'Coulomb', 'Matern', 'Gaussian', 'RPY', 'Stokes'; \n \
-            kernel_dimension : integer, dimension of the kernel function's output;\n \
-            point_coord : 2d numpy array, coordinates of the points, one of the array\'s dimension should match the 'point dimension' below;\n \
-            point_dimension : integer, dimension of the space points lying in, presently only support 1D,2D,and 3D.\n \
-            rel_tol : python float, accuracy threshold for the H2 matrix representation and for the accuracy of the multiplication;\n  \
-            (optional) JIT_mode : 1 or 0, flag for whether running matvec in JIT mode (JIT mode can dramatically reduce the memory cost at the sacrifice of slower matvec);\n \
-            (optional) kernel_param: 1d numpy array, possible parameters that characterize the kernel function."
+            "Error in the input arguments for pyh2pack.setup(). Refer to help(pyh2pack.setup) for detailed description of the function inputs"
             );
         return NULL;
     }
 
-    //  Step 3: process the information of points
+    //  Step 2.1: process the information of points
     if (coord == NULL) 
     {
-        PyErr_SetString(PyExc_ValueError, "Point coordinates in pyh2pack.setup() are not allocated.\n");
+        PyErr_SetString(PyExc_ValueError, "Point coordinates in pyh2pack.setup() are not properly allocated.\n");
         return NULL;
     }
     if (not_doublematrix(coord)) 
@@ -119,6 +114,11 @@ static PyObject *setup(PyObject *self, PyObject *args, PyObject *keywds) {
     {
         PyErr_Format(PyExc_ValueError, "Array of point coordinates has dimension %ld * %ld, not matching the specified point dimension.\n", 
                         coord->dimensions[0], coord->dimensions[1], h2pack_params.pts_dim);
+        return NULL;
+    }
+    if (h2pack_params.pts_dim != 1 && h2pack_params.pts_dim != 2 && h2pack_params.pts_dim != 3)    
+    {
+        PyErr_SetString(PyExc_ValueError, "Pyh2pack presently only supports 1D, 2D, and 3D problems. \n");
         return NULL;
     }
     h2pack_params.pts_coord = (DTYPE*) malloc_aligned(sizeof(DTYPE) * coord->dimensions[0] * coord->dimensions[1], 64);
@@ -145,14 +145,7 @@ static PyObject *setup(PyObject *self, PyObject *args, PyObject *keywds) {
     h2pack_params.krnl_mat_size = h2pack_params.pts_num * h2pack_params.krnl_dim;
 
 
-    //  Step 4: Process the information of kernel function.
-    if (h2pack_params.pts_dim != 1 && h2pack_params.pts_dim != 2 && h2pack_params.pts_dim != 3)    
-    {
-        PyErr_SetString(PyExc_ValueError, "Pyh2pack presently only work for 1D, 2D, and 3D problems. \n");
-        free_aligned(h2pack_params.pts_coord);
-        return NULL;
-    }
-
+    //   Step 2.2: Process the information of kernel function.
     H2P_kernel kernel_info = identify_kernel_info(krnl_name_in, h2pack_params.krnl_dim, h2pack_params.pts_dim);
     if (kernel_info.krnl_name == NULL)
     {
@@ -168,12 +161,6 @@ static PyObject *setup(PyObject *self, PyObject *args, PyObject *keywds) {
     h2pack_params.krnl_bimv_flops = kernel_info.krnl_bimv_flops;
     h2pack_params.krnl_param = (DTYPE*) malloc(sizeof(DTYPE)*kernel_info.krnl_param_len);
     h2pack_params.krnl_param_len = kernel_info.krnl_param_len;
-    
-    if (flag_proxysurface_in < 0)
-        h2pack_params.flag_proxysurface = kernel_info.flag_proxysurface;
-    else
-        h2pack_params.flag_proxysurface = flag_proxysurface_in;
-    
     if (kernel_param == NULL)
     {
         //  use default parameters
@@ -193,11 +180,18 @@ static PyObject *setup(PyObject *self, PyObject *args, PyObject *keywds) {
             h2pack_params.krnl_param[i] = *((double*)PyArray_GETPTR1(kernel_param, i));
     }
 
+    //  Other parameters
+    max_leaf_points = (max_leaf_points > 0) ? max_leaf_points : 0;
+    if (flag_proxysurface_in < 0)
+        h2pack_params.flag_proxysurface = kernel_info.flag_proxysurface;
+    else
+        h2pack_params.flag_proxysurface = flag_proxysurface_in;
+
     //  Main Step 1: initialize H2Pack 
     H2P_init(&h2pack, h2pack_params.pts_dim, h2pack_params.krnl_dim, QR_REL_NRM, &h2pack_params.rel_tol);
 
     //  Main Step 2: hierarchical partitioning of points
-    H2P_partition_points(h2pack, h2pack_params.pts_num, h2pack_params.pts_coord, 0, 0);
+    H2P_partition_points(h2pack, h2pack_params.pts_num, h2pack_params.pts_coord, max_leaf_points, 0);
 
     //  Main Step 3: construction of the proxy points
     H2P_dense_mat_t *pp;
@@ -229,7 +223,7 @@ static PyObject *setup(PyObject *self, PyObject *args, PyObject *keywds) {
         et = get_wtime_sec();
         PySys_WriteStdout("Step 1: H2Pack generate proxy points used %.3lf (s)\n", et - st);
     }
-    // PySys_WriteStdout("Size of proxy points %d %d\n", pp[2]->ncol, pp[3]->ncol);
+    // PySys_WriteStdout("number of proxy points at different layers %d %d\n", pp[2]->ncol, pp[3]->ncol);
 
     //  Main Step 4: H2 Matrix Construction
     st = get_wtime_sec();
@@ -240,11 +234,11 @@ static PyObject *setup(PyObject *self, PyObject *args, PyObject *keywds) {
     et = get_wtime_sec();
     PySys_WriteStdout("Step 2: H2Pack constructs the H2 matrix rep. used %.3lf (s)\n", et - st);
 
-    //  for Statistics
+    //  statistics of matvec in h2pack
     h2pack->n_matvec = 0;
     memset(h2pack->timers + 4, 0, sizeof(double) * 5);
  
-    //  Set flag and return 
+    //  set "setup" flag and return 
     h2pack_params.flag_setup = 1;
     Py_RETURN_NONE;
 }
@@ -277,7 +271,7 @@ static PyObject *h2matvec(PyObject *self, PyObject *args) {
         return NULL; 
     }
 
-    //  Copy to a local vector 
+    //  Copy to the local vector x
     x = (DTYPE*) malloc_aligned(sizeof(DTYPE) * h2pack_params.krnl_mat_size, 64);
     y = (DTYPE*) malloc_aligned(sizeof(DTYPE) * h2pack_params.krnl_mat_size, 64);
     if (x == NULL || y == NULL)

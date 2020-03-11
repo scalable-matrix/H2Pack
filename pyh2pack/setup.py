@@ -19,7 +19,7 @@ def main():
         version="1.0.0",
         description="Python interface for H2Pack",
         author="Hua Huang, and Xin Xing",
-        author_email="your_email@gmail.com",
+        author_email="xxing02@gmail.com",
         ext_modules=[Extension(
             name = "pyh2pack",
             sources = ["pyh2pack.c"], 

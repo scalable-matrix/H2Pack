@@ -4,7 +4,6 @@ OBJS  = H2Pack_typedef.o utils.o H2Pack_aux_structs.o H2Pack_ID_compress.o \
 
 USE_MKL      = 0
 USE_OPENBLAS = 1
-#OPENBLAS_INSTALL_DIR = /home/mkurisu/Workspace/OpenBLAS-0.3.8/install
 OPENBLAS_INSTALL_DIR = /usr/local/opt/openblas
 
 CC      = gcc

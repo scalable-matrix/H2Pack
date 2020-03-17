@@ -246,9 +246,7 @@ void H2P_generate_proxy_point_ID(
                 for (int j = 0; j < pt_dim; j++)
                     coord_0[j * Ny_size2] = tmp_coord0[j];
             }
-        }
-        else
-        {
+        } else {
             //  Case 2: when tol_norm is SMALL, densify the Ny_points as the proxy points. 
             H2P_dense_mat_resize(min_dist, ny, 1);
             DTYPE *coord_i = tmpA->data;
@@ -302,7 +300,7 @@ void H2P_generate_proxy_point_ID(
                     if ((point_in_box(pt_dim, tmp_coord1, L2) == 0) &&
                         (point_in_box(pt_dim, tmp_coord1, L3) == 1))
                         flag = 0;
-                }
+                }  // End of "while (flag == 1)"
                 DTYPE *coord_0 = pp_level->data + (2 * i);
                 DTYPE *coord_1 = pp_level->data + (2 * i + 1);
                 for (int j = 0; j < pt_dim; j++)
@@ -310,9 +308,9 @@ void H2P_generate_proxy_point_ID(
                     coord_0[j * Ny_size2] = tmp_coord0[j];
                     coord_1[j * Ny_size2] = tmp_coord1[j];
                 }
-            }
-        }
-    }
+            }  // End of "for (int i = 0; i < ny; i++)"
+        }  // End of "if (tol_norm > 1e-11)"
+    }  // End of "for (int level = start_level; level <= max_level; level++)"
     
     *pp_ = pp;
     H2P_int_vec_destroy(skel_idx);
@@ -397,7 +395,7 @@ void H2P_generate_proxy_point_surface(
                 index += 6;
             }
         }
-    }
+    }  // End of "if (pt_dim == 3)"
     if (pt_dim == 2)
     {
         DTYPE *x = unit_pp->data;
@@ -418,7 +416,7 @@ void H2P_generate_proxy_point_surface(
             x[index + 3] = 1.0;
             y[index + 3] = h_i;
         }
-    } 
+    }  // End of "if (pt_dim == 2)"
     
     // Scale proxy points on unit box surface to different size as
     // proxy points on different levels
@@ -556,7 +554,6 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                     H2P_int_vec_concatenate(J[node], J[i_child_node]);
                 }
             }  // End of "if (height == 0)"
-            
 
             // (2) Gather coordinates of this node's points (== all children nodes' skeleton points)
             H2P_dense_mat_resize(tmp_x, pt_dim, J[node]->length);
@@ -614,7 +611,6 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                 A_block, stop_type, stop_param, &U[node], sub_idx, 
                 1, QR_buff->data, ID_buff->data, krnl_dim
             );
-            //printf("Node %3d: A_block size %d * %d, rank = %d\n", node, nrow, ncol, sub_idx->length);
             
             // (5) Choose the skeleton points of this node
             for (int k = 0; k < sub_idx->length; k++)
@@ -626,7 +622,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
                 pt_dim, J[node]->data, J[node]->length
             );
 
-            // Tell DAG_task_queue that this node is finished, and get next available node
+            // (6) Tell DAG_task_queue that this node is finished, and get next available node
             thread_buf[tid]->timer += get_wtime_sec();
             DAG_task_queue_finish_task(upward_tq, node);
             node = DAG_task_queue_get_task(upward_tq);
@@ -671,8 +667,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
             J_coord[i]->ncol = 0;
             J_coord[i]->ld   = 0;
         }
-        //printf("Node %3d: %d skeleton points\n", i, J[i]->length);
-    }
+    }  // End of "for (int i = 0; i < h2pack->n_UJ; i++)"
     
     for (int i = 0; i < n_thread; i++)
         H2P_thread_buf_reset(thread_buf[i]);

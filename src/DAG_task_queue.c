@@ -10,8 +10,8 @@
 // DAG(i, j) is nonzero means that task j relies on task i. If DAG(i, i) is 
 // nonzero, task i will be skipped. 
 void DAG_task_queue_init(
-    const int max_task_id, const int num_dep, const int *DAG_row_ptr, 
-    const int *DAG_col_idx, DAG_task_queue_t *tq_
+    const int max_task_id, const int num_dep, const int *DAG_src_ptr, 
+    const int *DAG_dst_idx, DAG_task_queue_t *tq_
 )
 {
     DAG_task_queue_t tq = (DAG_task_queue_t) malloc(sizeof(DAG_task_queue_s));
@@ -30,15 +30,15 @@ void DAG_task_queue_init(
     assert(tq->task_queue  != NULL);
     
     // Copy DAG CSR matrix, count DAG vertex indegree and number of actual tasks
-    if (num_dep != DAG_row_ptr[max_task_id])
+    if (num_dep != DAG_src_ptr[max_task_id])
     {
-        fprintf(stderr, "ERROR: num_dep != DAG_row_ptr[max_task_id] \n");
+        fprintf(stderr, "ERROR: num_dep != DAG_src_ptr[max_task_id] \n");
         return;
     }
     tq->max_task_id = max_task_id;
     tq->num_task    = max_task_id;
-    memcpy(tq->DAG_src_ptr, DAG_row_ptr, sizeof(int) * (max_task_id + 1));
-    memcpy(tq->DAG_dst_idx, DAG_col_idx, sizeof(int) * num_dep);
+    memcpy(tq->DAG_src_ptr, DAG_src_ptr, sizeof(int) * (max_task_id + 1));
+    memcpy(tq->DAG_dst_idx, DAG_dst_idx, sizeof(int) * num_dep);
     memset(tq->indeg, 0, sizeof(int) * max_task_id);
     for (int i = 0; i < max_task_id; i++)
     {
@@ -71,6 +71,8 @@ void DAG_task_queue_free(DAG_task_queue_t tq)
 // This function can be called by multiple threads at the same time.
 int  DAG_task_queue_get_task(DAG_task_queue_t tq)
 {
+    if (tq == NULL) return -1;
+    
     // Get current task queue head index and increment it
     // If all tasks are finished, return directly
     int task_head = __atomic_fetch_add(&tq->task_head, 1, __ATOMIC_SEQ_CST);
@@ -92,6 +94,7 @@ int  DAG_task_queue_get_task(DAG_task_queue_t tq)
 // This function can be called by multiple threads at the same time.
 void DAG_task_queue_finish_task(DAG_task_queue_t tq, const int task_id)
 {
+    if (tq == NULL) return;
     for (int j = tq->DAG_src_ptr[task_id]; j < tq->DAG_src_ptr[task_id + 1]; j++)
     {
         // For a destination vertex, subtract its current indegree count by 1
@@ -112,6 +115,7 @@ void DAG_task_queue_finish_task(DAG_task_queue_t tq, const int task_id)
 // Reset the task queue in a DAG_task_queue structure. 
 void DAG_task_queue_reset(DAG_task_queue_t tq)
 {
+    if (tq == NULL) return;
     tq->task_head = 0;
     tq->task_tail = 0;
     for (int i = 0; i < tq->max_task_id; i++)

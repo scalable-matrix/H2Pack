@@ -26,13 +26,13 @@ extern "C" {
 // Input parameters:
 //   max_task_id : Max task id + 1, Tasks are indexed from 0 to max_task_id-1
 //   num_dep     : Number of dependencies (nonzeros in DAG matrix)
-//   DAG_row_ptr : Size max_task_id+1, DAG CSR matrix row_ptr array
-//   DAG_col_idx : Size num_dep, DAG CSR matrix col_idx array
+//   DAG_src_ptr : Size max_task_id+1, CSR matrix row_ptr array
+//   DAG_dst_idx : Size num_dep, CSR matrix col_idx array
 // Output parameter:
 //   *tq_ : Pointer to an initialized DAG_task_queue structure
 void DAG_task_queue_init(
-    const int max_task_id, const int num_dep, const int *DAG_row_ptr, 
-    const int *DAG_col_idx, DAG_task_queue_t *tq_
+    const int max_task_id, const int num_dep, const int *DAG_src_ptr, 
+    const int *DAG_dst_idx, DAG_task_queue_t *tq_
 );
 
 // Destroy a DAG_task_queue structure.

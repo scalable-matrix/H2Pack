@@ -517,13 +517,13 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
         H2P_int_vec_t   sub_idx = thread_buf[tid]->idx0;
         H2P_int_vec_t   ID_buff = thread_buf[tid]->idx1;
 
+        thread_buf[tid]->timer = -get_wtime_sec();
         int node = DAG_task_queue_get_task(upward_tq);
         while (node != -1)
         {
             int height = node_height[node];
             int level  = node_level[node];
-            thread_buf[tid]->timer = -get_wtime_sec();
-
+            
             // (1) Update row indices associated with clusters for current node
             if (height == 0)
             {
@@ -623,25 +623,23 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
             );
 
             // (6) Tell DAG_task_queue that this node is finished, and get next available node
-            thread_buf[tid]->timer += get_wtime_sec();
             DAG_task_queue_finish_task(upward_tq, node);
             node = DAG_task_queue_get_task(upward_tq);
         }  // End of "while (node != -1)"
-
-        #ifdef PROFILING_OUTPUT
-        double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
-        for (int i = 0; i < n_thread_i; i++)
-        {
-            double thread_i_timer = thread_buf[i]->timer;
-            avg_t += thread_i_timer;
-            max_t = MAX(max_t, thread_i_timer);
-            min_t = MIN(min_t, thread_i_timer);
-        }
-        avg_t /= (double) n_thread_i;
-        printf("[PROFILING] Build U: height %d, %d/%d threads, %d nodes, ", i, n_thread_i, n_thread, height_n_node[i]);
-        printf("min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
-        #endif
+        thread_buf[tid]->timer += get_wtime_sec();
     }  // End of "#pragma omp parallel num_thread(n_thread)"
+    #ifdef PROFILING_OUTPUT
+    double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
+    for (int i = 0; i < n_thread; i++)
+    {
+        double thread_i_timer = thread_buf[i]->timer;
+        avg_t += thread_i_timer;
+        max_t = MAX(max_t, thread_i_timer);
+        min_t = MIN(min_t, thread_i_timer);
+    }
+    avg_t /= (double) n_thread;
+    printf("[PROFILING] Build U: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
+    #endif
 
     // 4. Initialize other not touched U J & add statistic info
     for (int i = 0; i < h2pack->n_UJ; i++)

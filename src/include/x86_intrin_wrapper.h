@@ -1,60 +1,69 @@
+/* ================================================================================
+x86 intrinsic function wrapper for AVX, AVX-2, AVX-512 instruction sets
+Authors: Hua Huang   <huangh223@gatech.edu>
+         Xin Xing    <xxing02@gmail.com>
+         Edmond Chow <echow@cc.gatech.edu>
+
+Tested platforms:
+1. Intel Xeon Platinum 8160, AVX-512, CentOS 7.6,             ICC 18.0.4
+2. Intel Xeon Gold 6226,     AVX-512, RHEL   7.6,             ICC 19.0.5
+3. Intel Core i7-8550U,      AVX-2,   WSL Ubuntu 18.04.4 LTS, GCC 7.4.0
+4. Intel Xeon E5-2670,       AVX,     WSL Ubuntu 18.04.4 LTS, GCC 7.4.0
+5. Intel Xeon E5-1620,       AVX,     Ubuntu 18.04.4 LTS,     ICC 18.0.5, GCC 7.5.0
+6. AMD Threadripper 2950X,   AVX-2,   Ubuntu 18.04.4 LTS,     GCC 7.5.0  <-- Thanks to KaraRyougi@GitHub !
+
+Naming: vec_<operation>_<s/d>, suffix s is for float, d is for double 
+vec_zero_*()            : Set all lanes of a vector to zero and return this vector
+vec_set1_*(a)           : Set all lanes of a vector to value <a> and return this vector
+vec_bcast_*(a)          : Set all lanes of a vector to value <a[0]> and return this vector
+vec_load_*(a)           : Load a vector from an address <a> which must be aligned to required bits
+vec_loadu_*(a)          : Load a vector from an address <a> which may not be aligned to required bits
+vec_store_*(a, b)       : Store a vector <b> to an address <a> which must be aligned to required bits
+vec_storeu_*(a, b)      : Store a vector <b> to an address <a> which may not be aligned to required bits
+vec_add_*(a, b)         : Return lane-wise <a[i]> + <b[i]>
+vec_sub_*(a, b)         : Return lane-wise <a[i]> - <b[i]>
+vec_mul_*(a, b)         : Return lane-wise <a[i]> * <b[i]>
+vec_div_*(a, b)         : Return lane-wise <a[i]> / <b[i]>
+vec_sqrt_*(a)           : Return lane-wise sqrt(<a[i]>)
+vec_fmadd_* (a, b, c)   : Return lane-wise Fused Multiply-Add            <a[i]> * <b[i]> + <c[i]>
+vec_fnmadd_*(a, b, c)   : Return lane-wise Fused Negative Multiply-Add  -<a[i]> * <b[i]> + <c[i]>
+vec_fmsub_* (a, b, c)   : Return lane-wise Fused Multiply-Sub intrinsic  <a[i]> * <b[i]> - <c[i]>
+vec_max_*(a, b)         : Return lane-wise max(<a[i]>, <b[i]>)
+vec_min_*(a, b)         : Return lane-wise min(<a[i]>, <b[i]>)
+vec_cmp_eq_*(a, b)      : Return lane-wise if(<a[i]> == <b[i]>)
+vec_cmp_neq_*(a, b)     : Return lane-wise if(<a[i]> != <b[i]>)
+vec_cmp_lt_*(a, b)      : Return lane-wise if(<a[i]> <  <b[i]>)
+vec_cmp_le_*(a, b)      : Return lane-wise if(<a[i]> <= <b[i]>)
+vec_cmp_gt_*(a, b)      : Return lane-wise if(<a[i]> >  <b[i]>)
+vec_cmp_ge_*(a, b)      : Return lane-wise if(<a[i]> >= <b[i]>)
+vec_blend_*(a, b, m)    : Return lane-wise (<m[i]> == 1 ? <b[i]> : <a[i]>).
+vec_reduce_add_*(a)     : Return a single value sum(<a[i]>)
+vec_frsqrt_pf_*()       : Return scaling prefactor for vec_frsqrt_*()
+vec_frsqrt_*(r2)        : Return lane-wise fast reverse square root ( <r2[i]> == 0 ? 0 : 1/sqrt(<r2[i]>)/vec_frsqrt_pf_*() ).
+vec_log_*(a)            : Return lane-wise natural logarithm ln(<a[i]>)
+vec_log2_*(a)           : Return lane-wise base-2  logarithm log2(<a[i]>)
+vec_log10_*(a)          : Return lane-wise base-10 logarithm log10(<a[i]>)
+vec_exp_*(a)            : Return lane-wise e^(<a[i]>)
+vec_exp2_*(a)           : Return lane-wise 2^(<a[i]>)
+vec_exp10_*(a)          : Return lane-wise 10^(<a[i]>)
+vec_pow_*(a, b)         : Return lane-wise (<a[i]>)^(<b[i]>)
+vec_sin_*(a)            : Return lane-wise sin(<a[i]>)
+vec_cos_*(a)            : Return lane-wise cos(<a[i]>)
+
+Reference:
+1. Intel Intrinsic Guide    : https://software.intel.com/sites/landingpage/IntrinsicsGuide/
+2. Compiler Explorer        : https://godbolt.org/
+3. AVX vec_reduce_add_s     : https://stackoverflow.com/questions/13219146/how-to-sum-m256-horizontally
+4. AVX vec_reduce_add_d     : https://www.oipapio.com/question-771803
+5. Fast inverse square root : https://github.com/dmalhotra/pvfmm/blob/develop/include/intrin_wrapper.hpp
+6. GCC SIMD math functions  : https://stackoverflow.com/questions/40475140/mathematical-functions-for-simd-registers
+================================================================================ */ 
+
 #ifndef __X86_INTRIN_WRAPPER_H__
 #define __X86_INTRIN_WRAPPER_H__
 
 #include <math.h>
 #include <x86intrin.h>
-
-/*
-    Naming: vec_<operation>_<s/d>, suffix s is for float, d is for double 
-    vec_zero_*       : Set an intrinsic vector to zero
-    vec_set1_*       : Set all lanes of an intrinsic vector to a value
-    vec_bcast_*      : Set all lanes of an intrinsic vector to the 1st value in an address
-    vec_load_*       : Load an intrinsic vector from an address aligned to required bits
-    vec_loadu_*      : Load an intrinsic vector from an address which may not aligned to required bits
-    vec_store_*      : Store an intrinsic vector to an address aligned to required bits
-    vec_storeu_*     : Store an intrinsic vector to an address which may not aligned to required bits
-    vec_add_*        : Add two intrinsic vectors a + b
-    vec_sub_*        : Subtract intrinsic vector a by b
-    vec_mul_*        : Multiply two intrinsic vectors a * b
-    vec_div_*        : Divide intrinsic vector a by b
-    vec_sqrt_*       : Return the square root of an intrinsic vector's each lane
-    vec_fmadd_*      : Fused Multiply-Add intrinsic vectors a * b + c
-    vec_fnmadd_*     : Fused negative Multiply-Add intrinsic vectors -(a * b) + c
-    vec_fmsub_*      : Fused Multiply-Sub intrinsic vectors a * b - c
-    vec_max_*        : Return the maximum values of each lane in two intrinsic vectors 
-    vec_min_*        : Return the minimum values of each lane in two intrinsic vectors   
-    vec_cmp_eq_*     : Return in each lane if a == b
-    vec_cmp_neq_*    : Return in each lane if a != b
-    vec_cmp_lt_*     : Return in each lane if a <  b
-    vec_cmp_le_*     : Return in each lane if a <= b
-    vec_cmp_gt_*     : Return in each lane if a >  b
-    vec_cmp_ge_*     : Return in each lane if a >= b
-    vec_blend_*      : Blend elements from two intrinsic vectors a, b using mask, mask == 1 --> use b, else use a
-    vec_reduce_add_* : Return the sum of values in an intrinsic vector
-    vec_arsqrt_*     : Approximate reverse square root, returns 0 if r2 == 0
-    vec_rsqrt_ntit_* : Newton iteration step for reverse square root,
-                       rsqrt' = 0.5 * rsqrt * (C - r2 * rsqrt^2),
-                       0.5 is ignored here and need to be adjusted outside. 
-    vec_frsqrt_pf_*  : Return the scaling prefactor for vec_frsqrt_*()
-    vec_frsqrt_*     : Fast reverse square root using Newton iteration, 
-                       returns 0 if r2 == 0, otherwise result need to be 
-                       multipled with vec_ntfrac_*() to get the correct one.
-    vec_log_*        : Return the natural logarithm of each lane 
-    vec_log2_*       : Return the base-2  logarithm of each lane 
-    vec_log10_*      : Return the base-10 logarithm of each lane 
-    vec_exp_*        : Return the exponential value of e  raised to the power of values in each lane
-    vec_exp2_*       : Return the exponential value of 2  raised to the power of values in each lane
-    vec_exp10_*      : Return the exponential value of 10 raised to the power of values in each lane
-    vec_pow_*        : Return the exponential value of a  raised to the power of b      in each lane
-
-    Reference:
-    1. Intel Intrinsic Guide: https://software.intel.com/sites/landingpage/IntrinsicsGuide/
-    2. Compiler Explorer: https://godbolt.org/
-    3. For AVX vec_reduce_add_s: https://stackoverflow.com/questions/13219146/how-to-sum-m256-horizontally
-    4. For AVX vec_reduce_add_d: https://www.oipapio.com/question-771803
-    5. For fast inverse square root: https://en.wikipedia.org/wiki/Fast_inverse_square_root
-    6. For GCC SIMD math functions: https://stackoverflow.com/questions/40475140/mathematical-functions-for-simd-registers
-*/ 
 
 #ifdef __cplusplus
 extern "C" {
@@ -84,13 +93,13 @@ extern "C" {
 union vec8f
 {
     __m256 v;
-    float f[4];
+    float  f[SIMD_LEN_S];
 };
 
 union vec4d
 {
     __m256d v;
-    double d[4];
+    double  d[SIMD_LEN_D];
 };
 
 static inline __m256  vec_zero_s() { return _mm256_setzero_ps(); }
@@ -234,7 +243,15 @@ static inline __m256d vec_exp10_d(const __m256d a) { return _mm256_exp10_pd(a); 
 
 static inline __m256  vec_pow_s  (const __m256  a, const __m256  b) { return _mm256_pow_ps(a, b); }
 static inline __m256d vec_pow_d  (const __m256d a, const __m256d b) { return _mm256_pow_pd(a, b); }
+
+static inline __m256  vec_sin_s  (const __m256  a) { return _mm256_sin_ps(a);   }
+static inline __m256d vec_sin_d  (const __m256d a) { return _mm256_sin_pd(a);   }
+
+static inline __m256  vec_cos_s  (const __m256  a) { return _mm256_cos_ps(a);   }
+static inline __m256d vec_cos_d  (const __m256d a) { return _mm256_cos_pd(a);   }
+
 #else  // Else of "#ifdef __INTEL_COMPILER"
+
 #if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 22
 __m256  _ZGVdN8v_logf(__m256  a);
 __m256d _ZGVdN4v_log (__m256d a);
@@ -250,20 +267,32 @@ __m256  _ZGVdN8vv_powf(__m256  a, __m256  b);
 __m256d _ZGVdN4vv_pow (__m256d a, __m256d b);
 static inline __m256  vec_pow_s  (const __m256  a, const __m256  b) { return _ZGVdN8vv_powf(a, b); }
 static inline __m256d vec_pow_d  (const __m256d a, const __m256d b) { return _ZGVdN4vv_pow (a, b); }
+
+__m256  _ZGVdN8v_sinf(__m256  a);
+__m256d _ZGVdN4v_sin (__m256d a);
+static inline __m256  vec_sin_s  (const __m256  a) { return _ZGVdN8v_sinf(a);   }
+static inline __m256d vec_sin_d  (const __m256d a) { return _ZGVdN4v_sin (a);   }
+
+__m256  _ZGVdN8v_cosf(__m256  a);
+__m256d _ZGVdN4v_cos (__m256d a);
+static inline __m256  vec_cos_s  (const __m256  a) { return _ZGVdN8v_cosf(a);   }
+static inline __m256d vec_cos_d  (const __m256d a) { return _ZGVdN4v_cos (a);   }
+
 #else   // Else of "#if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 22"
+
 #warning Your compiler or GLIBC does not support vectorized log(), pow(), and exp(), x86_intrin_wrapper.h will use simulated implementations. 
 static inline __m256  vec_log_s(__m256  x)
 {
     int i;
     union vec8f u = {x}, res;
-    for (i = 0; i < 8; i++) res.f[i] = logf(u.f[i]);
+    for (i = 0; i < SIMD_LEN_S; i++) res.f[i] = logf(u.f[i]);
     return res.v;
 }
 static inline __m256d vec_log_d(__m256d x)
 {
     int i;
     union vec4d u = {x}, res;
-    for (i = 0; i < 4; i++) res.d[i] = log(u.d[i]);
+    for (i = 0; i < SIMD_LEN_D; i++) res.d[i] = log(u.d[i]);
     return res.v;
 }
 
@@ -271,14 +300,14 @@ static inline __m256  vec_exp_s(__m256  x)
 {
     int i;
     union vec8f u = {x}, res;
-    for (i = 0; i < 8; i++) res.f[i] = expf(u.f[i]);
+    for (i = 0; i < SIMD_LEN_S; i++) res.f[i] = expf(u.f[i]);
     return res.v;
 }
 static inline __m256d vec_exp_d(__m256d x)
 {
     int i;
     union vec4d u = {x}, res;
-    for (i = 0; i < 4; i++) res.d[i] = exp(u.d[i]);
+    for (i = 0; i < SIMD_LEN_D; i++) res.d[i] = exp(u.d[i]);
     return res.v;
 }
 
@@ -286,16 +315,47 @@ static inline __m256  vec_pow_s(__m256  a, __m256  b)
 {
     int i;
     union vec8f ua = {a}, ub = {b}, res;
-    for (i = 0; i < 8; i++) res.f[i] = pow(ua.f[i], ub.f[i]);
+    for (i = 0; i < SIMD_LEN_S; i++) res.f[i] = powf(ua.f[i], ub.f[i]);
     return res.v;
 }
 static inline __m256d vec_pow_d(__m256d a, __m256d b)
 {
     int i;
     union vec4d ua = {a}, ub = {b}, res;
-    for (i = 0; i < 4; i++) res.d[i] = pow(ua.d[i], ub.d[i]);
+    for (i = 0; i < SIMD_LEN_D; i++) res.d[i] = pow(ua.d[i], ub.d[i]);
     return res.v;
 }
+
+static inline __m256  vec_sin_s(__m256  a, __m256  b)
+{
+    int i;
+    union vec8f ua = {a}, ub = {b}, res;
+    for (i = 0; i < SIMD_LEN_S; i++) res.f[i] = sinf(ua.f[i], ub.f[i]);
+    return res.v;
+}
+static inline __m256d vec_sin_d(__m256d a, __m256d b)
+{
+    int i;
+    union vec4d ua = {a}, ub = {b}, res;
+    for (i = 0; i < SIMD_LEN_D; i++) res.d[i] = sin(ua.d[i], ub.d[i]);
+    return res.v;
+}
+
+static inline __m256  vec_cos_s(__m256  a, __m256  b)
+{
+    int i;
+    union vec8f ua = {a}, ub = {b}, res;
+    for (i = 0; i < SIMD_LEN_S; i++) res.f[i] = cosf(ua.f[i], ub.f[i]);
+    return res.v;
+}
+static inline __m256d vec_cos_d(__m256d a, __m256d b)
+{
+    int i;
+    union vec4d ua = {a}, ub = {b}, res;
+    for (i = 0; i < SIMD_LEN_D; i++) res.d[i] = cos(ua.d[i], ub.d[i]);
+    return res.v;
+}
+
 #endif  // End of "#if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 22"
 #endif  // End of "#ifdef __INTEL_COMPILER"
 
@@ -316,13 +376,13 @@ static inline __m256d vec_pow_d(__m256d a, __m256d b)
 union vec16f
 {
     __m512 v;
-    float f[16];
+    float  f[SIMD_LEN_S];
 };
 
 union vec8d
 {
     __m512d v;
-    double d[8];
+    double  d[SIMD_LEN_D];
 };
 
 static inline __m512  vec_zero_s() { return _mm512_setzero_ps(); }
@@ -453,7 +513,15 @@ static inline __m512d vec_exp10_d(const __m512d a) { return _mm512_exp10_pd(a); 
 
 static inline __m512  vec_pow_s  (const __m512  a, const __m512  b) { return _mm512_pow_ps(a, b); }
 static inline __m512d vec_pow_d  (const __m512d a, const __m512d b) { return _mm512_pow_pd(a, b); }
+
+static inline __m512  vec_sin_s  (const __m512  a) { return _mm512_sin_ps(a);   }
+static inline __m512d vec_sin_d  (const __m512d a) { return _mm512_sin_pd(a);   }
+
+static inline __m512  vec_cos_s  (const __m512  a) { return _mm512_cos_ps(a);   }
+static inline __m512d vec_cos_d  (const __m512d a) { return _mm512_cos_pd(a);   }
+
 #else   // Else of "#ifdef __INTEL_COMPILER"
+
 #if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 22
 __m512  _ZGVeN16v_logf(__m512  a);
 __m512d _ZGVeN8v_log  (__m512d a);
@@ -469,20 +537,32 @@ __m512  _ZGVeN16vv_powf(__m512  a, __m512  b);
 __m512d _ZGVeN8vv_pow  (__m512d a, __m512d b);
 static inline __m512  vec_pow_s  (const __m512  a, const __m512  b) { return _ZGVeN16vv_powf(a, b); }
 static inline __m512d vec_pow_d  (const __m512d a, const __m512d b) { return _ZGVeN8vv_pow  (a, b); }
+
+__m512  _ZGVdN16v_sinf(__m512  a);
+__m512d _ZGVdN8v_sin  (__m512d a);
+static inline __m512  vec_sin_s  (const __m512  a) { return _ZGVdN16v_sinf(a);  }
+static inline __m512d vec_sin_d  (const __m512d a) { return _ZGVdN8v_sin  (a);  }
+
+__m512  _ZGVdN16v_cosf(__m512  a);
+__m512d _ZGVdN8v_cos  (__m512d a);
+static inline __m512  vec_cos_s  (const __m512  a) { return _ZGVdN16v_cosf(a);  }
+static inline __m512d vec_cos_d  (const __m512d a) { return _ZGVdN8v_cos (a);   }
+
 #else   // Else of "#if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 22"
+
 #warning Your compiler or GLIBC does not support vectorized log(), pow(), and exp(), x86_intrin_wrapper.h will use simulated implementations. 
 static inline __m512  vec_log_s(__m512  x)
 {
     int i;
     union vec16f u = {x}, res;
-    for (i = 0; i < 16; i++) res.f[i] = logf(u.f[i]);
+    for (i = 0; i < SIMD_LEN_S; i++) res.f[i] = logf(u.f[i]);
     return res.v;
 }
 static inline __m512d vec_log_d(__m512d x)
 {
     int i;
     union vec8d u = {x}, res;
-    for (i = 0; i < 8; i++) res.d[i] = log(u.d[i]);
+    for (i = 0; i < SIMD_LEN_D; i++) res.d[i] = log(u.d[i]);
     return res.v;
 }
 
@@ -490,14 +570,14 @@ static inline __m512  vec_exp_s(__m512  x)
 {
     int i;
     union vec16f u = {x}, res;
-    for (i = 0; i < 16; i++) res.f[i] = expf(u.f[i]);
+    for (i = 0; i < SIMD_LEN_S; i++) res.f[i] = expf(u.f[i]);
     return res.v;
 }
 static inline __m512d vec_exp_d(__m512d x)
 {
     int i;
     union vec8d u = {x}, res;
-    for (i = 0; i < 8; i++) res.d[i] = exp(u.d[i]);
+    for (i = 0; i < SIMD_LEN_D; i++) res.d[i] = exp(u.d[i]);
     return res.v;
 }
 
@@ -505,14 +585,44 @@ static inline __m512  vec_pow_s(__m512  a, __m512  b)
 {
     int i;
     union vec16f ua = {a}, ub = {b}, res;
-    for (i = 0; i < 16; i++) res.f[i] = pow(ua.f[i], ub.f[i]);
+    for (i = 0; i < SIMD_LEN_S; i++) res.f[i] = powf(ua.f[i], ub.f[i]);
     return res.v;
 }
 static inline __m512d vec_pow_d(__m512d a, __m512d b)
 {
     int i;
     union vec8d ua = {a}, ub = {b}, res;
-    for (i = 0; i < 8; i++) res.d[i] = pow(ua.d[i], ub.d[i]);
+    for (i = 0; i < SIMD_LEN_D; i++) res.d[i] = pow(ua.d[i], ub.d[i]);
+    return res.v;
+}
+
+static inline __m512  vec_sin_s(__m512  a, __m512  b)
+{
+    int i;
+    union vec16f ua = {a}, ub = {b}, res;
+    for (i = 0; i < SIMD_LEN_S; i++) res.f[i] = sinf(ua.f[i], ub.f[i]);
+    return res.v;
+}
+static inline __m512d vec_sin_d(__m512d a, __m512d b)
+{
+    int i;
+    union vec8d ua = {a}, ub = {b}, res;
+    for (i = 0; i < SIMD_LEN_D; i++) res.d[i] = sin(ua.d[i], ub.d[i]);
+    return res.v;
+}
+
+static inline __m512  vec_cos_s(__m512  a, __m512  b)
+{
+    int i;
+    union vec16f ua = {a}, ub = {b}, res;
+    for (i = 0; i < SIMD_LEN_S; i++) res.f[i] = cosf(ua.f[i], ub.f[i]);
+    return res.v;
+}
+static inline __m512d vec_cos_d(__m512d a, __m512d b)
+{
+    int i;
+    union vec8d ua = {a}, ub = {b}, res;
+    for (i = 0; i < SIMD_LEN_D; i++) res.d[i] = cos(ua.d[i], ub.d[i]);
     return res.v;
 }
 #endif  // End of "#if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 22"
@@ -536,7 +646,8 @@ static inline vec_f vec_exp10_s(const vec_f a) { return vec_exp_s(vec_mul_s(a, v
 static inline vec_d vec_exp10_d(const vec_d a) { return vec_exp_d(vec_mul_d(a, vec_set1_d(M_LN10))); }
 #endif  // End of #ifdef __INTEL_COMPILER
 
-
+// Newton iteration step for reverse square root, rsqrt' = 0.5 * rsqrt * (C - r2 * rsqrt^2),
+// 0.5 is ignored here and need to be adjusted outside. 
 static inline vec_f vec_rsqrt_ntit_s(const vec_f r2, vec_f rsqrt, const float  C_)
 {
     vec_f C  = vec_set1_s(C_);

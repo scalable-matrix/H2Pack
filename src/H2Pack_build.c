@@ -11,6 +11,7 @@
 #include "H2Pack_aux_structs.h"
 #include "H2Pack_ID_compress.h"
 #include "H2Pack_build.h"
+#include "DAG_task_queue.h"
 #include "utils.h"
 
 // Gather some columns from a matrix to another matrix
@@ -245,9 +246,7 @@ void H2P_generate_proxy_point_ID(
                 for (int j = 0; j < pt_dim; j++)
                     coord_0[j * Ny_size2] = tmp_coord0[j];
             }
-        }
-        else
-        {
+        } else {
             //  Case 2: when tol_norm is SMALL, densify the Ny_points as the proxy points. 
             H2P_dense_mat_resize(min_dist, ny, 1);
             DTYPE *coord_i = tmpA->data;
@@ -301,7 +300,7 @@ void H2P_generate_proxy_point_ID(
                     if ((point_in_box(pt_dim, tmp_coord1, L2) == 0) &&
                         (point_in_box(pt_dim, tmp_coord1, L3) == 1))
                         flag = 0;
-                }
+                }  // End of "while (flag == 1)"
                 DTYPE *coord_0 = pp_level->data + (2 * i);
                 DTYPE *coord_1 = pp_level->data + (2 * i + 1);
                 for (int j = 0; j < pt_dim; j++)
@@ -309,9 +308,9 @@ void H2P_generate_proxy_point_ID(
                     coord_0[j * Ny_size2] = tmp_coord0[j];
                     coord_1[j * Ny_size2] = tmp_coord1[j];
                 }
-            }
-        }
-    }
+            }  // End of "for (int i = 0; i < ny; i++)"
+        }  // End of "if (tol_norm > 1e-11)"
+    }  // End of "for (int level = start_level; level <= max_level; level++)"
     
     *pp_ = pp;
     H2P_int_vec_destroy(skel_idx);
@@ -396,7 +395,7 @@ void H2P_generate_proxy_point_surface(
                 index += 6;
             }
         }
-    }
+    }  // End of "if (pt_dim == 3)"
     if (pt_dim == 2)
     {
         DTYPE *x = unit_pp->data;
@@ -417,7 +416,7 @@ void H2P_generate_proxy_point_surface(
             x[index + 3] = 1.0;
             y[index + 3] = h_i;
         }
-    } 
+    }  // End of "if (pt_dim == 2)"
     
     // Scale proxy points on unit box surface to different size as
     // proxy points on different levels
@@ -450,7 +449,6 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     int    krnl_dim       = h2pack->krnl_dim;
     int    n_node         = h2pack->n_node;
     int    n_point        = h2pack->n_point;
-    int    n_leaf_node    = h2pack->n_leaf_node;
     int    n_thread       = h2pack->n_thread;
     int    max_child      = h2pack->max_child;
     int    max_adm_height = h2pack->max_adm_height;
@@ -458,9 +456,9 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     int    stop_type      = h2pack->QR_stop_type;
     int    *children      = h2pack->children;
     int    *n_child       = h2pack->n_child;
-    int    *height_n_node = h2pack->height_n_node;
-    int    *height_nodes  = h2pack->height_nodes;
     int    *node_level    = h2pack->node_level;
+    int    *node_height   = h2pack->node_height;
+    int    *parent        = h2pack->parent;
     int    *pt_cluster    = h2pack->pt_cluster;
     DTYPE  *coord         = h2pack->coord;
     DTYPE  *enbox         = h2pack->enbox;
@@ -490,177 +488,160 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     H2P_dense_mat_t *U       = h2pack->U;
     H2P_int_vec_t   *J       = h2pack->J;
     H2P_dense_mat_t *J_coord = h2pack->J_coord;
-    
-    // 2. Hierarchical construction height by height. max_adm_height is the 
-    //    highest position that still has admissible blocks, so we only need 
-    //    to compress matrix blocks to that height since higher blocks 
-    //    are inadmissible and cannot be compressed.
-    for (int i = 0; i <= max_adm_height; i++)
+
+    // 2. Construct a DAG_task_queue for the upward sweep
+    DAG_task_queue_t upward_tq;
+    int *DAG_src_ptr = (int*) malloc(sizeof(int) * (n_node + 1));
+    int *DAG_dst_idx = (int*) malloc(sizeof(int) * n_node);
+    assert(DAG_src_ptr != NULL && DAG_dst_idx != NULL);
+    for (int node = 0; node < n_node; node++)
     {
-        int *height_i_nodes = height_nodes + i * n_leaf_node;
-        int height_i_n_node = height_n_node[i];
-        int n_thread_i = MIN(height_i_n_node, n_thread);
-        
-        // (1) Update row indices associated with clusters at height i
-        if (i == 0)
-        {
-            // Leaf nodes, use all points
-            #pragma omp parallel num_threads(n_thread_i)
-            {
-                int tid = omp_get_thread_num();
-                thread_buf[tid]->timer = -get_wtime_sec();
-                #pragma omp for schedule(dynamic) nowait
-                for (int j = 0; j < height_n_node[i]; j++)
-                {
-                    int node = height_i_nodes[j];
-                    int pt_s = pt_cluster[node * 2];
-                    int pt_e = pt_cluster[node * 2 + 1];
-                    int node_npt = pt_e - pt_s + 1;
-                    H2P_int_vec_init(&J[node], node_npt);
-                    for (int k = 0; k < node_npt; k++)
-                        J[node]->data[k] = pt_s + k;
-                    J[node]->length = node_npt;
+        int height = node_height[node];
+        int level  = node_level[node];
+        DAG_src_ptr[node] = node;
+        if (height > max_adm_height || level < min_adm_level) DAG_dst_idx[node] = node;
+        else DAG_dst_idx[node] = parent[node];
+    }
+    DAG_src_ptr[n_node] = n_node;
+    DAG_task_queue_init(n_node, n_node, DAG_src_ptr, DAG_dst_idx, &upward_tq);
+    free(DAG_src_ptr);
+    free(DAG_dst_idx);
+    
+    // 3. Construct U for nodes whose height is not larger than max_adm_height
+    #pragma omp parallel num_threads(n_thread)
+    {
+        int tid = omp_get_thread_num();
+        H2P_dense_mat_t A_block = thread_buf[tid]->mat0;
+        H2P_dense_mat_t tmp_x   = thread_buf[tid]->mat1;
+        H2P_dense_mat_t QR_buff = thread_buf[tid]->mat1;
+        H2P_int_vec_t   sub_idx = thread_buf[tid]->idx0;
+        H2P_int_vec_t   ID_buff = thread_buf[tid]->idx1;
 
-                    H2P_dense_mat_init(&J_coord[node], pt_dim, node_npt);
-                    H2P_copy_matrix_block(pt_dim, node_npt, coord + pt_s, n_point, J_coord[node]->data, node_npt);
-                }
-                thread_buf[tid]->timer += get_wtime_sec();
-            }
-        } else {
-            // Non-leaf nodes, gather row indices from children nodes
-            #pragma omp parallel num_threads(n_thread_i)
-            {
-                int tid = omp_get_thread_num();
-                thread_buf[tid]->timer = -get_wtime_sec();
-                #pragma omp for schedule(dynamic) nowait
-                for (int j = 0; j < height_n_node[i]; j++)
-                {
-                    int node = height_i_nodes[j];
-                    int level = node_level[node];
-                    if (level < min_adm_level) continue;
-                    int n_child_node = n_child[node];
-                    int *child_nodes = children + node * max_child;
-                    int J_child_size = 0;
-                    for (int i_child = 0; i_child < n_child_node; i_child++)
-                    {
-                        int i_child_node = child_nodes[i_child];
-                        J_child_size += J[i_child_node]->length;
-                    }
-                    H2P_int_vec_init(&J[node], J_child_size);
-                    for (int i_child = 0; i_child < n_child_node; i_child++)
-                    {
-                        int i_child_node = child_nodes[i_child];
-                        H2P_int_vec_concatenate(J[node], J[i_child_node]);
-                    }
-                }
-                thread_buf[tid]->timer += get_wtime_sec();
-            }  // End of "pragma omp parallel"
-        }  // End of "if (i == 0)"
-        
-        // (2) Compression at height i
-        #pragma omp parallel num_threads(n_thread_i)
+        thread_buf[tid]->timer = -get_wtime_sec();
+        int node = DAG_task_queue_get_task(upward_tq);
+        while (node != -1)
         {
-            int tid = omp_get_thread_num();
-            H2P_dense_mat_t A_block = thread_buf[tid]->mat0;
-            H2P_dense_mat_t tmp_x   = thread_buf[tid]->mat1;
-            H2P_dense_mat_t QR_buff = thread_buf[tid]->mat1;
-            H2P_int_vec_t   sub_idx = thread_buf[tid]->idx0;
-            H2P_int_vec_t   ID_buff = thread_buf[tid]->idx1;
+            int height = node_height[node];
+            int level  = node_level[node];
             
-            thread_buf[tid]->timer -= get_wtime_sec();
-            #pragma omp for schedule(dynamic) nowait
-            for (int j = 0; j < height_n_node[i]; j++)
+            // (1) Update row indices associated with clusters for current node
+            if (height == 0)
             {
-                int node  = height_i_nodes[j];
-                int level = node_level[node];
-                if (level < min_adm_level) continue;
-                
-                // Gather coordinates of this node's points (== all children nodes' skeleton points)
-                H2P_dense_mat_resize(tmp_x, pt_dim, J[node]->length);
-                if (i == 0)
+                // Leaf nodes, use all points
+                int pt_s = pt_cluster[node * 2];
+                int pt_e = pt_cluster[node * 2 + 1];
+                int node_npt = pt_e - pt_s + 1;
+                H2P_int_vec_init(&J[node], node_npt);
+                for (int k = 0; k < node_npt; k++)
+                    J[node]->data[k] = pt_s + k;
+                J[node]->length = node_npt;
+                H2P_dense_mat_init(&J_coord[node], pt_dim, node_npt);
+                H2P_copy_matrix_block(pt_dim, node_npt, coord + pt_s, n_point, J_coord[node]->data, node_npt);
+            } else {
+                // Non-leaf nodes, gather row indices from children nodes
+                int n_child_node = n_child[node];
+                int *child_nodes = children + node * max_child;
+                int J_child_size = 0;
+                for (int i_child = 0; i_child < n_child_node; i_child++)
                 {
-                    tmp_x = J_coord[node];
-                } else {
-                    int n_child_node = n_child[node];
-                    int *child_nodes = children + node * max_child;
-                    int J_child_size = 0;
-                    for (int i_child = 0; i_child < n_child_node; i_child++)
-                    {
-                        int i_child_node = child_nodes[i_child];
-                        int src_ld = J_coord[i_child_node]->ncol;
-                        int dst_ld = tmp_x->ncol;
-                        DTYPE *src_mat = J_coord[i_child_node]->data;
-                        DTYPE *dst_mat = tmp_x->data + J_child_size; 
-                        H2P_copy_matrix_block(pt_dim, src_ld, src_mat, src_ld, dst_mat, dst_ld);
-                        J_child_size += J[i_child_node]->length;
-                    }
+                    int i_child_node = child_nodes[i_child];
+                    J_child_size += J[i_child_node]->length;
                 }
-                
-                // Shift points in this node so their center is at the original point
-                DTYPE *node_box = enbox + node * 2 * pt_dim;
-                int nrow = J[node]->length;
-                int ncol = pp[level]->ncol;
-                for (int k = 0; k < pt_dim; k++)
+                H2P_int_vec_init(&J[node], J_child_size);
+                for (int i_child = 0; i_child < n_child_node; i_child++)
                 {
-                    DTYPE box_center_k = node_box[k] + 0.5 * node_box[pt_dim + k];
-                    DTYPE *tmp_x_row_k = tmp_x->data + k * nrow;
-                    #pragma omp simd
-                    for (int l = 0; l < nrow; l++)
-                        tmp_x_row_k[l] -= box_center_k;
+                    int i_child_node = child_nodes[i_child];
+                    H2P_int_vec_concatenate(J[node], J[i_child_node]);
                 }
-                int A_blk_nrow = nrow * krnl_dim;
-                int A_blk_ncol = ncol * krnl_dim;
-                H2P_dense_mat_resize(A_block, A_blk_nrow, A_blk_ncol);
-                krnl_eval(
-                    tmp_x->data,     nrow, nrow,
-                    pp[level]->data, ncol, ncol, 
-                    krnl_param, A_block->data, A_block->ld
-                );
+            }  // End of "if (height == 0)"
 
-                // ID compress
-                // Note: A is transposed in ID compress, be careful when calculating the buffer size
-                if (krnl_dim == 1)
+            // (2) Gather coordinates of this node's points (== all children nodes' skeleton points)
+            H2P_dense_mat_resize(tmp_x, pt_dim, J[node]->length);
+            if (height == 0)
+            {
+                tmp_x = J_coord[node];
+            } else {
+                int n_child_node = n_child[node];
+                int *child_nodes = children + node * max_child;
+                int J_child_size = 0;
+                for (int i_child = 0; i_child < n_child_node; i_child++)
                 {
-                    H2P_dense_mat_resize(QR_buff, A_block->nrow, 1);
-                } else {
-                    int QR_buff_size = (2 * krnl_dim + 2) * A_block->ncol + (krnl_dim + 1) * A_block->nrow;
-                    H2P_dense_mat_resize(QR_buff, QR_buff_size, 1);
+                    int i_child_node = child_nodes[i_child];
+                    int src_ld = J_coord[i_child_node]->ncol;
+                    int dst_ld = tmp_x->ncol;
+                    DTYPE *src_mat = J_coord[i_child_node]->data;
+                    DTYPE *dst_mat = tmp_x->data + J_child_size; 
+                    H2P_copy_matrix_block(pt_dim, src_ld, src_mat, src_ld, dst_mat, dst_ld);
+                    J_child_size += J[i_child_node]->length;
                 }
-                H2P_int_vec_set_capacity(ID_buff, 4 * A_block->nrow);
-                H2P_ID_compress(
-                    A_block, stop_type, stop_param, &U[node], sub_idx, 
-                    1, QR_buff->data, ID_buff->data, krnl_dim
-                );
-                
-                // Choose the skeleton points of this node
-                for (int k = 0; k < sub_idx->length; k++)
-                    J[node]->data[k] = J[node]->data[sub_idx->data[k]];
-                J[node]->length = sub_idx->length;
-                H2P_dense_mat_init(&J_coord[node], pt_dim, sub_idx->length);
-                H2P_gather_matrix_columns(
-                    coord, n_point, J_coord[node]->data, J[node]->length, 
-                    pt_dim, J[node]->data, J[node]->length
-                );
-            }  // End of j loop
-            thread_buf[tid]->timer += get_wtime_sec();
-        }  // End of "pragma omp parallel"
-        
-        #ifdef PROFILING_OUTPUT
-        double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
-        for (int i = 0; i < n_thread_i; i++)
-        {
-            double thread_i_timer = thread_buf[i]->timer;
-            avg_t += thread_i_timer;
-            max_t = MAX(max_t, thread_i_timer);
-            min_t = MIN(min_t, thread_i_timer);
-        }
-        avg_t /= (double) n_thread_i;
-        printf("[PROFILING] Build U: height %d, %d/%d threads, %d nodes, ", i, n_thread_i, n_thread, height_n_node[i]);
-        printf("min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
-        #endif
-    }  // End of i loop
+            }  // End of "if (level == 0)"
+            
+            // (3) Shift points in this node so their center is at the original point
+            DTYPE *node_box = enbox + node * 2 * pt_dim;
+            int nrow = J[node]->length;
+            int ncol = pp[level]->ncol;
+            for (int k = 0; k < pt_dim; k++)
+            {
+                DTYPE box_center_k = node_box[k] + 0.5 * node_box[pt_dim + k];
+                DTYPE *tmp_x_row_k = tmp_x->data + k * nrow;
+                #pragma omp simd
+                for (int l = 0; l < nrow; l++)
+                    tmp_x_row_k[l] -= box_center_k;
+            }
+            int A_blk_nrow = nrow * krnl_dim;
+            int A_blk_ncol = ncol * krnl_dim;
+            H2P_dense_mat_resize(A_block, A_blk_nrow, A_blk_ncol);
+            krnl_eval(
+                tmp_x->data,     nrow, nrow,
+                pp[level]->data, ncol, ncol, 
+                krnl_param, A_block->data, A_block->ld
+            );
 
-    // 3. Initialize other not touched U J & add statistic info
+            // (4) ID compress 
+            // Note: A is transposed in ID compress, be careful when calculating the buffer size
+            if (krnl_dim == 1)
+            {
+                H2P_dense_mat_resize(QR_buff, A_block->nrow, 1);
+            } else {
+                int QR_buff_size = (2 * krnl_dim + 2) * A_block->ncol + (krnl_dim + 1) * A_block->nrow;
+                H2P_dense_mat_resize(QR_buff, QR_buff_size, 1);
+            }
+            H2P_int_vec_set_capacity(ID_buff, 4 * A_block->nrow);
+            H2P_ID_compress(
+                A_block, stop_type, stop_param, &U[node], sub_idx, 
+                1, QR_buff->data, ID_buff->data, krnl_dim
+            );
+            
+            // (5) Choose the skeleton points of this node
+            for (int k = 0; k < sub_idx->length; k++)
+                J[node]->data[k] = J[node]->data[sub_idx->data[k]];
+            J[node]->length = sub_idx->length;
+            H2P_dense_mat_init(&J_coord[node], pt_dim, sub_idx->length);
+            H2P_gather_matrix_columns(
+                coord, n_point, J_coord[node]->data, J[node]->length, 
+                pt_dim, J[node]->data, J[node]->length
+            );
+
+            // (6) Tell DAG_task_queue that this node is finished, and get next available node
+            DAG_task_queue_finish_task(upward_tq, node);
+            node = DAG_task_queue_get_task(upward_tq);
+        }  // End of "while (node != -1)"
+        thread_buf[tid]->timer += get_wtime_sec();
+    }  // End of "#pragma omp parallel num_thread(n_thread)"
+    #ifdef PROFILING_OUTPUT
+    double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
+    for (int i = 0; i < n_thread; i++)
+    {
+        double thread_i_timer = thread_buf[i]->timer;
+        avg_t += thread_i_timer;
+        max_t = MAX(max_t, thread_i_timer);
+        min_t = MIN(min_t, thread_i_timer);
+    }
+    avg_t /= (double) n_thread;
+    printf("[PROFILING] Build U: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
+    #endif
+
+    // 4. Initialize other not touched U J & add statistic info
     for (int i = 0; i < h2pack->n_UJ; i++)
     {
         if (U[i] == NULL)
@@ -684,12 +665,12 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
             J_coord[i]->ncol = 0;
             J_coord[i]->ld   = 0;
         }
-        //printf("Node %3d: %d skeleton points\n", i, J[i]->length);
-    }
+    }  // End of "for (int i = 0; i < h2pack->n_UJ; i++)"
     
     for (int i = 0; i < n_thread; i++)
         H2P_thread_buf_reset(thread_buf[i]);
     BLAS_SET_NUM_THREADS(n_thread);
+    DAG_task_queue_free(upward_tq);
 }
 
 // Partition work units into multiple blocks s.t. each block has 

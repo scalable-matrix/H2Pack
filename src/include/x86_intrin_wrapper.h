@@ -11,6 +11,7 @@ Tested platforms:
 4. Intel Xeon E5-2670,       AVX,     WSL Ubuntu 18.04.4 LTS, GCC 7.4.0
 5. Intel Xeon E5-1620,       AVX,     Ubuntu 18.04.4 LTS,     ICC 18.0.5, GCC 7.5.0
 6. AMD Threadripper 2950X,   AVX-2,   Ubuntu 18.04.4 LTS,     GCC 7.5.0  <-- Thanks to KaraRyougi@GitHub !
+7. Intel Core i5-7300U,      AVX-2,   macOS 10.15.4,          GCC 9.2.0
 
 Naming: vec_<operation>_<s/d>, suffix s is for float, d is for double 
 vec_zero_*()            : Set all lanes of a vector to zero and return this vector

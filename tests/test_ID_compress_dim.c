@@ -112,13 +112,14 @@ int main()
     for (int i = 0; i < A_nrow * A_ncol; i++)
         A0_fnorm += A->data[i] * A->data[i];
     
+    int n_thread = omp_get_max_threads();
     int QR_buff_size = (2 * kdim + 2) * A->ncol + (kdim + 1) * A->nrow;
     int   *ID_buff = (int *)   malloc(sizeof(int)   * A->nrow * 4);
     DTYPE *QR_buff = (DTYPE *) malloc(sizeof(DTYPE) * QR_buff_size);
     double st = get_wtime_sec();
     H2P_ID_compress(
         A, QR_REL_NRM, &tol_norm, &U, J, 
-        1, QR_buff, ID_buff, kdim
+        n_thread, QR_buff, ID_buff, kdim
     );
     double ut = get_wtime_sec() - st;
     printf("H2P_ID_compress used %.3lf s\n", ut);

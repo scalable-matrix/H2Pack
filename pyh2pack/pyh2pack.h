@@ -78,15 +78,15 @@ void direct_nbody(
     
     int blk_size = 256;
     int mat_size = blk_size * blk_size * krnl_dim * krnl_dim;
-    int nthreads = omp_get_max_threads();
-    DTYPE *buff  = (DTYPE*) malloc_aligned(sizeof(DTYPE) * nthreads * mat_size, 64);
+    int n_thread = omp_get_max_threads();
+    DTYPE *buff  = (DTYPE*) malloc_aligned(sizeof(DTYPE) * n_thread * mat_size, 64);
 
     double st = get_wtime_sec();
     #pragma omp parallel
     {
         int tid = omp_get_thread_num();
         int start_vec, n_vec;
-        calc_block_spos_len(n_vec_ext, nthreads, tid, &start_vec, &n_vec);
+        calc_block_spos_len(n_vec_ext, n_thread, tid, &start_vec, &n_vec);
         int start_point = start_vec * SIMD_LEN;
         int n_point1 = n_vec * SIMD_LEN;
         DTYPE *thread_buff = buff + tid * mat_size;

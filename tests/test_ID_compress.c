@@ -73,11 +73,11 @@ int main()
     DTYPE tol_norm;
     printf("norm_rel_tol: ");
     scanf("%lf", &tol_norm);
-    int nthreads = omp_get_max_threads();
+    int n_thread = omp_get_max_threads();
     int   *ID_buff = (int*)   malloc(sizeof(int)   * A->nrow * 4);
     DTYPE *QR_buff = (DTYPE*) malloc(sizeof(DTYPE) * A->nrow);
     assert(ID_buff != NULL && QR_buff != NULL);
-    H2P_ID_compress(A, QR_REL_NRM, &tol_norm, &U, J, nthreads, QR_buff, ID_buff, 1);  // Warm up
+    H2P_ID_compress(A, QR_REL_NRM, &tol_norm, &U, J, n_thread, QR_buff, ID_buff, 1);  // Warm up
     double ut = 0.0;
     for (int i = 0; i < 10; i++)
     {
@@ -86,7 +86,7 @@ int main()
         A->ncol = ncol;
         A->ld = ncol;
         double st = get_wtime_sec();
-        H2P_ID_compress(A, QR_REL_NRM, &tol_norm, &U, J, nthreads, QR_buff, ID_buff, 1);
+        H2P_ID_compress(A, QR_REL_NRM, &tol_norm, &U, J, n_thread, QR_buff, ID_buff, 1);
         double et = get_wtime_sec();
         ut += et - st;
     }

@@ -144,7 +144,7 @@ void H2P_generate_proxy_point_ID(
     H2P_dense_mat_init(&min_dist,  Nx_size, 1);
     H2P_int_vec_init(&skel_idx, Nx_size);
     srand48(time(NULL));
-    int nthreads = omp_get_max_threads();
+    int n_thread = omp_get_max_threads();
 
     // 3. Construct proxy points on each level
     DTYPE pow_2_level = 0.5;
@@ -208,7 +208,7 @@ void H2P_generate_proxy_point_ID(
         H2P_int_vec_set_capacity(ID_buff, 4 * tmpA->nrow);
         H2P_ID_compress(
             tmpA, QR_REL_NRM, &rel_tol, NULL, skel_idx, 
-            nthreads, QR_buff->data, ID_buff->data, krnl_dim
+            n_thread, QR_buff->data, ID_buff->data, krnl_dim
         );
         H2P_dense_mat_select_columns(Nx_points, skel_idx);
         
@@ -223,7 +223,7 @@ void H2P_generate_proxy_point_ID(
         H2P_int_vec_set_capacity(ID_buff, 4 * tmpA->nrow);
         H2P_ID_compress(
             tmpA, QR_REL_NRM, &rel_tol, NULL, skel_idx, 
-            nthreads, QR_buff->data, ID_buff->data, krnl_dim
+            n_thread, QR_buff->data, ID_buff->data, krnl_dim
         );
         H2P_dense_mat_select_columns(Ny_points, skel_idx);
         

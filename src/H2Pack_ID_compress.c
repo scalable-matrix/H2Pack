@@ -59,7 +59,7 @@ static inline void swap_DTYPE(DTYPE *x, DTYPE *y, int len)
 //   tol_rank : QR stopping parameter, maximum column rank, 
 //   tol_norm : QR stopping parameter, maximum column 2-norm
 //   rel_norm : If tol_norm is relative to the largest column 2-norm in A
-//   nthreads : Number of threads used in this function
+//   n_thread : Number of threads used in this function
 //   QR_buff  : Size A->ncol, working buffer for partial pivoting QR
 // Output parameters:
 //   A : Matrix R: [R11, R12; 0, R22]
@@ -67,7 +67,7 @@ static inline void swap_DTYPE(DTYPE *x, DTYPE *y, int len)
 //   r : Dimension of upper-triangular matrix R11
 void H2P_partial_pivot_QR(
     H2P_dense_mat_t A, const int tol_rank, const DTYPE tol_norm, 
-    const int rel_norm, int *p, int *r, const int nthreads, DTYPE *QR_buff
+    const int rel_norm, int *p, int *r, const int n_thread, DTYPE *QR_buff
 )
 {
     DTYPE *R = A->data;
@@ -76,13 +76,13 @@ void H2P_partial_pivot_QR(
     int ldR  = A->ld;
     int max_iter = MIN(nrow, ncol);
     
-    BLAS_SET_NUM_THREADS(nthreads);
+    BLAS_SET_NUM_THREADS(n_thread);
     
     DTYPE *col_norm = QR_buff; 
     
     // Find a column with largest 2-norm
-    #pragma omp parallel for if (nthreads > 1) \
-    num_threads(nthreads) schedule(static)
+    #pragma omp parallel for if (n_thread > 1) \
+    num_threads(n_thread) schedule(static)
     for (int j = 0; j < ncol; j++)
     {
         p[j] = j;
@@ -139,8 +139,8 @@ void H2P_partial_pivot_QR(
         DTYPE *R_block = R + (i + 1) * ldR + i;
         int R_block_nrow = h_len;
         int R_block_ncol = ncol - i - 1;
-        #pragma omp parallel for if (nthreads > 1) \
-        num_threads(nthreads) schedule(guided)
+        #pragma omp parallel for if (n_thread > 1) \
+        num_threads(n_thread) schedule(guided)
         for (int j = 0; j < R_block_ncol; j++)
         {
             int ji1 = j + i + 1;
@@ -190,14 +190,14 @@ void H2P_partial_pivot_QR(
     *r = rank;
 }
 
-// H2P_partial_pivot_QR operated on column blocks for tensor kernel matrix.
+// H2P_partial_pivot_QR_kdim operated on column blocks for tensor kernel matrix.
 // Each column block has kdim columns. In each step, we swap kdim columns 
 // and do kdim Householder orthogonalization.
 // Size of QR_buff: (2*kdim+2)*A->nrow + (kdim+1)*A->ncol
 // BLAS-3 approach, ref: https://doi.org/10.1145/1513895.1513904
 void H2P_partial_pivot_QR_kdim(
     H2P_dense_mat_t A, const int kdim, const int tol_rank, const DTYPE tol_norm, 
-    const int rel_norm, int *p, int *r, const int nthreads, DTYPE *QR_buff
+    const int rel_norm, int *p, int *r, const int n_thread, DTYPE *QR_buff
 )
 {
     DTYPE *R = A->data;
@@ -207,7 +207,7 @@ void H2P_partial_pivot_QR_kdim(
     int ldR  = A->ld;
     int max_iter = MIN(nrow, ncol) / kdim;
     
-    BLAS_SET_NUM_THREADS(nthreads);
+    BLAS_SET_NUM_THREADS(n_thread);
     
     for (int j = 0; j < ncol; j++) p[j] = j;
     
@@ -220,8 +220,8 @@ void H2P_partial_pivot_QR_kdim(
     DTYPE *WR   = WVV  + nrow;
     
     // Find a column with largest 2-norm as a scaling factor
-    #pragma omp parallel for if(nthreads > 1) \
-    num_threads(nthreads) schedule(static)
+    #pragma omp parallel for if(n_thread > 1) \
+    num_threads(n_thread) schedule(static)
     for (int j = 0; j < ncol; j++)
         blk_norm[j] = CBLAS_NRM2(nrow, R + j * ldR);
     
@@ -358,8 +358,8 @@ void H2P_partial_pivot_QR_kdim(
         }
         
         // 5. Update i-th column's 2-norm
-        #pragma omp parallel for if(nthreads > 1) \
-        num_threads(nthreads) schedule(guided)
+        #pragma omp parallel for if(n_thread > 1) \
+        num_threads(n_thread) schedule(guided)
         for (int j = i + 1; j < nblk; j++)
         {
             if (blk_norm[j] < stop_norm)
@@ -420,7 +420,7 @@ void H2P_partial_pivot_QR_kdim(
 //   A          : Target matrix, stored in column major
 //   stop_type  : Partial QR stop criteria: QR_RANK, QR_REL_NRM, or QR_ABS_NRM
 //   stop_param : Pointer to partial QR stop parameter
-//   nthreads   : Number of threads used in this function
+//   n_thread   : Number of threads used in this function
 //   QR_buff    : Working buffer for partial pivoting QR. If kdim == 1, size A->ncol.
 //                If kdim > 1, size (2*kdim+2)*A->nrow + (kdim+1)*A->ncol.
 //   kdim       : Dimension of tensor kernel's return (column block size)
@@ -429,7 +429,7 @@ void H2P_partial_pivot_QR_kdim(
 //   p : Matrix A column permutation array, A(:, p) = A * P
 void H2P_ID_QR(
     H2P_dense_mat_t A, const int stop_type, void *stop_param, int *p, 
-    const int nthreads, DTYPE *QR_buff, const int kdim
+    const int n_thread, DTYPE *QR_buff, const int kdim
 )
 {
     // Parse partial QR stop criteria and perform partial QR
@@ -462,12 +462,12 @@ void H2P_ID_QR(
     {
         H2P_partial_pivot_QR(
             A, tol_rank, tol_norm, rel_norm, 
-            p, &r, nthreads, QR_buff
+            p, &r, n_thread, QR_buff
         );
     } else {
         H2P_partial_pivot_QR_kdim(
             A, kdim, tol_rank, tol_norm, rel_norm, 
-            p, &r, nthreads, QR_buff
+            p, &r, n_thread, QR_buff
         );
     }
     
@@ -514,7 +514,7 @@ static void H2P_qsort_key_value(int *key, int *val, const int l, const int r)
 // matrix. Partial pivoting QR may need to be upgraded to SRRQR later. 
 void H2P_ID_compress(
     H2P_dense_mat_t A, const int stop_type, void *stop_param, H2P_dense_mat_t *U_, 
-    H2P_int_vec_t J, const int nthreads, DTYPE *QR_buff, int *ID_buff, const int kdim
+    H2P_int_vec_t J, const int n_thread, DTYPE *QR_buff, int *ID_buff, const int kdim
 )
 {
     // 1. Partial pivoting QR for A^T
@@ -525,7 +525,7 @@ void H2P_ID_compress(
     A->nrow = ncol;
     A->ncol = nrow;
     H2P_int_vec_set_capacity(J, nrow);
-    H2P_ID_QR(A, stop_type, stop_param, J->data, nthreads, QR_buff, kdim);
+    H2P_ID_QR(A, stop_type, stop_param, J->data, n_thread, QR_buff, kdim);
     H2P_dense_mat_t R = A; // Note: the output R stored in A is still stored in column major style
     int r = A->nrow;  // Obtained rank
     J->length = r;
@@ -569,7 +569,7 @@ void H2P_ID_compress(
             int ncol_R12 = nrow - r;
             // (2) Solve E = inv(R11) * R12, stored in R12 in column major style
             //     --> equals to what we need: E^T stored in row major style
-            BLAS_SET_NUM_THREADS(nthreads);
+            BLAS_SET_NUM_THREADS(n_thread);
             CBLAS_TRSM(
                 CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit,
                 nrow_R12, ncol_R12, 1.0, R11, R->ld, R12, R->ld

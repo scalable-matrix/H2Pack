@@ -564,6 +564,28 @@ void H2P_partition_points(
     for (int i = 0; i < h2pack->n_thread; i++)
         H2P_thread_buf_init(&h2pack->tb[i], h2pack->krnl_mat_size);
     
+    // 7. Construct a DAG_task_queue for upward sweep
+    int max_adm_height = h2pack->max_adm_height;
+    int min_adm_level  = h2pack->min_adm_level;
+    int *node_height   = h2pack->node_height;
+    int *node_level    = h2pack->node_level;
+    int *parent        = h2pack->parent;
+    int *DAG_src_ptr   = (int*) malloc(sizeof(int) * (n_node + 1));
+    int *DAG_dst_idx   = (int*) malloc(sizeof(int) * n_node);
+    assert(DAG_src_ptr != NULL && DAG_dst_idx != NULL);
+    for (int node = 0; node < n_node; node++)
+    {
+        int height = node_height[node];
+        int level  = node_level[node];
+        DAG_src_ptr[node] = node;
+        if (height > max_adm_height || level < min_adm_level) DAG_dst_idx[node] = node;
+        else DAG_dst_idx[node] = parent[node];
+    }
+    DAG_src_ptr[n_node] = n_node;
+    DAG_task_queue_init(n_node, n_node, DAG_src_ptr, DAG_dst_idx, &h2pack->upward_tq);
+    free(DAG_src_ptr);
+    free(DAG_dst_idx);
+
     et = get_wtime_sec();
     h2pack->timers[0] = et - st;
 }

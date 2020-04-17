@@ -8,6 +8,7 @@
 #include "H2Pack_config.h"
 #include "H2Pack_typedef.h"
 #include "H2Pack_aux_structs.h"
+#include "DAG_task_queue.h"
 
 // Initialize a H2Pack structure
 void H2P_init(
@@ -69,6 +70,7 @@ void H2P_init(
     h2pack->y0            = NULL;
     h2pack->y1            = NULL;
     h2pack->tb            = NULL;
+    h2pack->upward_tq     = NULL;
     
     H2P_int_vec_init(&h2pack->B_blk,  h2pack->n_thread * BD_NTASK_THREAD + 5);
     H2P_int_vec_init(&h2pack->D_blk0, h2pack->n_thread * BD_NTASK_THREAD + 5);
@@ -109,6 +111,7 @@ void H2P_destroy(H2Pack_t h2pack)
     free_aligned(h2pack->D_data);
     free(h2pack->xT);
     free(h2pack->yT);
+    DAG_task_queue_free(h2pack->upward_tq);
     
     if (h2pack->B_blk  != NULL) H2P_int_vec_destroy(h2pack->B_blk);
     if (h2pack->D_blk0 != NULL) H2P_int_vec_destroy(h2pack->D_blk0);

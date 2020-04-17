@@ -466,7 +466,8 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     void   *krnl_param    = h2pack->krnl_param;
     H2P_dense_mat_t  *pp  = h2pack->pp;
     H2P_thread_buf_t *thread_buf = h2pack->tb;
-    kernel_eval_fptr krnl_eval = h2pack->krnl_eval;
+    kernel_eval_fptr krnl_eval   = h2pack->krnl_eval;
+    DAG_task_queue_t upward_tq   = h2pack->upward_tq;
     void *stop_param = NULL;
     if (stop_type == QR_RANK) 
         stop_param = &h2pack->QR_stop_rank;
@@ -488,26 +489,8 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     H2P_dense_mat_t *U       = h2pack->U;
     H2P_int_vec_t   *J       = h2pack->J;
     H2P_dense_mat_t *J_coord = h2pack->J_coord;
-
-    // 2. Construct a DAG_task_queue for the upward sweep
-    DAG_task_queue_t upward_tq;
-    int *DAG_src_ptr = (int*) malloc(sizeof(int) * (n_node + 1));
-    int *DAG_dst_idx = (int*) malloc(sizeof(int) * n_node);
-    assert(DAG_src_ptr != NULL && DAG_dst_idx != NULL);
-    for (int node = 0; node < n_node; node++)
-    {
-        int height = node_height[node];
-        int level  = node_level[node];
-        DAG_src_ptr[node] = node;
-        if (height > max_adm_height || level < min_adm_level) DAG_dst_idx[node] = node;
-        else DAG_dst_idx[node] = parent[node];
-    }
-    DAG_src_ptr[n_node] = n_node;
-    DAG_task_queue_init(n_node, n_node, DAG_src_ptr, DAG_dst_idx, &upward_tq);
-    free(DAG_src_ptr);
-    free(DAG_dst_idx);
     
-    // 3. Construct U for nodes whose height is not larger than max_adm_height
+    // 2. Construct U for nodes whose height is not larger than max_adm_height
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
@@ -641,7 +624,7 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     printf("[PROFILING] Build U: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
     #endif
 
-    // 4. Initialize other not touched U J & add statistic info
+    // 3. Initialize other not touched U J & add statistic info
     for (int i = 0; i < h2pack->n_UJ; i++)
     {
         if (U[i] == NULL)
@@ -670,7 +653,6 @@ void H2P_build_UJ_proxy(H2Pack_t h2pack)
     for (int i = 0; i < n_thread; i++)
         H2P_thread_buf_reset(thread_buf[i]);
     BLAS_SET_NUM_THREADS(n_thread);
-    DAG_task_queue_free(upward_tq);
 }
 
 // Partition work units into multiple blocks s.t. each block has 

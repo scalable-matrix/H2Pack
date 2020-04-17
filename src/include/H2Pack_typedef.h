@@ -3,6 +3,7 @@
 
 #include "H2Pack_config.h"
 #include "H2Pack_aux_structs.h"
+#include "DAG_task_queue.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -127,6 +128,7 @@ struct H2Pack
     H2P_thread_buf_t  *tb;          // Size n_thread, thread-local buffer
     kernel_eval_fptr  krnl_eval;    // Pointer to kernel matrix evaluation function
     kernel_bimv_fptr  krnl_bimv;    // Pointer to kernel matrix bi-matvec function
+    DAG_task_queue_t  upward_tq;    // Upward sweep DAG task queue
 
     // Statistic data
     int    n_matvec;                // Number of performed matvec

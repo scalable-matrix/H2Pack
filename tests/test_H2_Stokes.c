@@ -256,7 +256,7 @@ int main(int argc, char **argv)
     }
     y0_norm  = DSQRT(y0_norm);
     err_norm = DSQRT(err_norm);
-    printf("For %d validating points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / y0_norm);
+    printf("For %d validation points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / y0_norm);
     
     free(x);
     free(y0);

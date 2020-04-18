@@ -25,58 +25,73 @@ void H2P_init(
     h2pack->max_child = 1 << pt_dim;
     h2pack->n_matvec  = 0;
     h2pack->is_H2ERI  = 0;
+    h2pack->is_HSS    = 0;
     memset(h2pack->mat_size,  0, sizeof(size_t) * 8);
     memset(h2pack->timers,    0, sizeof(double) * 9);
     memset(h2pack->JIT_flops, 0, sizeof(double) * 2);
     
+    h2pack->max_neighbor = 1;
+    for (int i = 0; i < pt_dim; i++) h2pack->max_neighbor *= 3;
+
     h2pack->QR_stop_type = QR_stop_type;
     if (QR_stop_type == QR_RANK) 
         memcpy(&h2pack->QR_stop_rank, QR_stop_param, sizeof(int));
     if ((QR_stop_type == QR_REL_NRM) || (QR_stop_type == QR_ABS_NRM))
         memcpy(&h2pack->QR_stop_tol,  QR_stop_param, sizeof(DTYPE));
     
-    h2pack->n_node        = 0;
-    h2pack->parent        = NULL;
-    h2pack->children      = NULL;
-    h2pack->pt_cluster    = NULL;
-    h2pack->mat_cluster   = NULL;
-    h2pack->n_child       = NULL;
-    h2pack->node_level    = NULL;
-    h2pack->node_height   = NULL;
-    h2pack->level_n_node  = NULL;
-    h2pack->level_nodes   = NULL;
-    h2pack->height_n_node = NULL;
-    h2pack->height_nodes  = NULL;
-    h2pack->r_inadm_pairs = NULL;
-    h2pack->r_adm_pairs   = NULL;
-    h2pack->node_n_r_adm  = NULL;
-    h2pack->coord_idx     = NULL;
-    h2pack->B_nrow        = NULL;
-    h2pack->B_ncol        = NULL;
-    h2pack->D_nrow        = NULL;
-    h2pack->D_ncol        = NULL;
-    h2pack->B_ptr         = NULL;
-    h2pack->D_ptr         = NULL;
-    h2pack->coord         = NULL;
-    h2pack->enbox         = NULL;
-    h2pack->B_data        = NULL;
-    h2pack->D_data        = NULL;
-    h2pack->xT            = NULL;
-    h2pack->yT            = NULL;
-    h2pack->J             = NULL;
-    h2pack->J_coord       = NULL;
-    h2pack->pp            = NULL;
-    h2pack->U             = NULL;
-    h2pack->y0            = NULL;
-    h2pack->y1            = NULL;
-    h2pack->tb            = NULL;
-    h2pack->upward_tq     = NULL;
+    h2pack->n_node              = 0;
+    h2pack->parent              = NULL;
+    h2pack->children            = NULL;
+    h2pack->pt_cluster          = NULL;
+    h2pack->mat_cluster         = NULL;
+    h2pack->n_child             = NULL;
+    h2pack->node_level          = NULL;
+    h2pack->node_height         = NULL;
+    h2pack->level_n_node        = NULL;
+    h2pack->level_nodes         = NULL;
+    h2pack->height_n_node       = NULL;
+    h2pack->height_nodes        = NULL;
+    h2pack->r_inadm_pairs       = NULL;
+    h2pack->r_adm_pairs         = NULL;
+    h2pack->HSS_r_inadm_pairs   = NULL;
+    h2pack->HSS_r_adm_pairs     = NULL;
+    h2pack->node_inadm_lists    = NULL;
+    h2pack->node_n_r_inadm      = NULL;
+    h2pack->node_n_r_adm        = NULL;
+    h2pack->coord_idx           = NULL;
+    h2pack->B_nrow              = NULL;
+    h2pack->B_ncol              = NULL;
+    h2pack->D_nrow              = NULL;
+    h2pack->D_ncol              = NULL;
+    h2pack->B_ptr               = NULL;
+    h2pack->D_ptr               = NULL;
+    h2pack->coord               = NULL;
+    h2pack->enbox               = NULL;
+    h2pack->B_data              = NULL;
+    h2pack->D_data              = NULL;
+    h2pack->xT                  = NULL;
+    h2pack->yT                  = NULL;
+    h2pack->J                   = NULL;
+    h2pack->J_coord             = NULL;
+    h2pack->pp                  = NULL;
+    h2pack->U                   = NULL;
+    h2pack->y0                  = NULL;
+    h2pack->y1                  = NULL;
+    h2pack->tb                  = NULL;
+    h2pack->upward_tq           = NULL;
     
     H2P_int_vec_init(&h2pack->B_blk,  h2pack->n_thread * BD_NTASK_THREAD + 5);
     H2P_int_vec_init(&h2pack->D_blk0, h2pack->n_thread * BD_NTASK_THREAD + 5);
     H2P_int_vec_init(&h2pack->D_blk1, h2pack->n_thread * BD_NTASK_THREAD + 5);
 
     *h2pack_ = h2pack;
+}
+
+// Run H2Pack in HSS mode (by default, H2Pack runs in H2 mode)
+void H2P_run_HSS(H2Pack_t h2pack) 
+{
+    if (h2pack == NULL) return;
+    h2pack->is_HSS = 1;
 }
 
 // Destroy a H2Pack structure
@@ -97,6 +112,10 @@ void H2P_destroy(H2Pack_t h2pack)
     free(h2pack->height_nodes);
     free(h2pack->r_inadm_pairs);
     free(h2pack->r_adm_pairs);
+    free(h2pack->HSS_r_inadm_pairs);
+    free(h2pack->HSS_r_adm_pairs);
+    free(h2pack->node_inadm_lists);
+    free(h2pack->node_n_r_inadm);
     free(h2pack->node_n_r_adm);
     free(h2pack->coord_idx);
     free(h2pack->B_nrow);

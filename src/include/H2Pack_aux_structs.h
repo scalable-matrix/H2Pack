@@ -216,10 +216,13 @@ void H2P_dense_mat_print(H2P_dense_mat_t mat);
 
 struct H2P_thread_buf
 {
-    H2P_int_vec_t   idx0, idx1;   // Used in H2P_build_UJ_proxy
-    H2P_dense_mat_t mat0, mat1;   // Used in H2P_build_UJ_proxy, H2P_matvec
-    DTYPE  *y;                    // Used in H2P_matvec
-    double timer;                 // Used for profiling
+    H2P_int_vec_t   idx0;   // H2P_build_H2_UJ_proxy, H2P_build_HSS_UJ_hybrid
+    H2P_int_vec_t   idx1;   // H2P_build_H2_UJ_proxy, H2P_build_HSS_UJ_hybrid
+    H2P_dense_mat_t mat0;   // H2P_build_H2_UJ_proxy, H2P_build_HSS_UJ_hybrid
+    H2P_dense_mat_t mat1;   // H2P_build_H2_UJ_proxy, H2P_build_HSS_UJ_hybrid, H2P_matvec
+    H2P_dense_mat_t mat2;   // H2P_build_HSS_UJ_hybrid
+    DTYPE  *y;              // Used in H2P_matvec
+    double timer;           // Used for profiling
 };
 typedef struct H2P_thread_buf* H2P_thread_buf_t;
 

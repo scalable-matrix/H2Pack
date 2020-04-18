@@ -344,7 +344,7 @@ void H2P_matvec_intmd_mult_AOT_task_block(
     const int i_blk, const DTYPE *x, DTYPE *y
 )
 {
-    int    *r_adm_pairs = h2pack->r_adm_pairs;
+    int    *r_adm_pairs = (h2pack->is_HSS) ? h2pack->HSS_r_adm_pairs : h2pack->r_adm_pairs;
     int    *node_level  = h2pack->node_level;
     int    *mat_cluster = h2pack->mat_cluster;
     int    *B_nrow      = h2pack->B_nrow;
@@ -658,7 +658,7 @@ void H2P_matvec_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x)
     int    n_node        = h2pack->n_node;
     int    n_point       = h2pack->n_point;
     int    n_thread      = h2pack->n_thread;
-    int    *r_adm_pairs  = h2pack->r_adm_pairs;
+    int    *r_adm_pairs  = (h2pack->is_HSS) ? h2pack->HSS_r_adm_pairs : h2pack->r_adm_pairs;
     int    *node_level   = h2pack->node_level;
     int    *pt_cluster   = h2pack->pt_cluster;
     int    *mat_cluster  = h2pack->mat_cluster;
@@ -992,7 +992,7 @@ void H2P_matvec_dense_mult1_AOT_task_block(
 )
 {
     int    n_leaf_node    = h2pack->n_leaf_node;
-    int    *r_inadm_pairs = h2pack->r_inadm_pairs;
+    int    *r_inadm_pairs = (h2pack->is_HSS) ? h2pack->HSS_r_inadm_pairs : h2pack->r_inadm_pairs;
     int    *mat_cluster   = h2pack->mat_cluster;
     int    *D_nrow        = h2pack->D_nrow;
     int    *D_ncol        = h2pack->D_ncol;
@@ -1096,7 +1096,7 @@ void H2P_matvec_dense_mult_JIT(H2Pack_t h2pack, const DTYPE *x)
     int    krnl_dim        = h2pack->krnl_dim;
     int    n_point         = h2pack->n_point;
     int    n_leaf_node     = h2pack->n_leaf_node;
-    int    *r_inadm_pairs  = h2pack->r_inadm_pairs;
+    int    *r_inadm_pairs  = (h2pack->is_HSS) ? h2pack->HSS_r_inadm_pairs : h2pack->r_inadm_pairs;
     int    *leaf_nodes     = h2pack->height_nodes;
     int    *pt_cluster     = h2pack->pt_cluster;
     int    *mat_cluster    = h2pack->mat_cluster;

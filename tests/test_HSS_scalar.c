@@ -6,6 +6,8 @@
 #include <time.h>
 #include <omp.h>
 
+//#include <ittnotify.h>
+
 #include "H2Pack.h"
 
 struct H2P_test_params
@@ -26,36 +28,57 @@ struct H2P_test_params test_params;
 
 void parse_params(int argc, char **argv)
 {
-    test_params.pt_dim = 3;
-    test_params.krnl_dim = 3;
-    
-    printf("Using 3D RPY kernel\n");
     if (argc < 2)
+    {
+        printf("Point dimension    = ");
+        scanf("%d", &test_params.pt_dim);
+    } else {
+        test_params.pt_dim = atoi(argv[1]);
+        printf("Point dimension    = %d\n", test_params.pt_dim);
+    }
+    test_params.krnl_dim = 1;
+    
+    if (argc < 3)
     {
         printf("Number of points   = ");
         scanf("%d", &test_params.n_point);
     } else {
-        test_params.n_point = atoi(argv[1]);
+        test_params.n_point = atoi(argv[2]);
         printf("Number of points   = %d\n", test_params.n_point);
     }
-    test_params.krnl_mat_size = test_params.n_point * test_params.krnl_dim;
+    test_params.krnl_mat_size = test_params.krnl_dim * test_params.n_point;
     
-    if (argc < 3)
+    if (argc < 4)
     {
         printf("QR relative tol    = ");
         scanf("%lf", &test_params.rel_tol);
     } else {
-        test_params.rel_tol = atof(argv[2]);
+        test_params.rel_tol = atof(argv[3]);
         printf("QR relative tol    = %e\n", test_params.rel_tol);
     }
     
-    if (argc < 4)
+    if (argc < 5)
     {
         printf("Just-In-Time B & D = ");
         scanf("%d", &test_params.BD_JIT);
     } else {
-        test_params.BD_JIT = atoi(argv[3]);
+        test_params.BD_JIT = atoi(argv[4]);
         printf("Just-In-Time B & D = %d\n", test_params.BD_JIT);
+    }
+    
+    if (argc < 6)
+    {
+        printf("Kernel function ID = ");
+        scanf("%d", &test_params.kernel_id);
+    } else {
+        test_params.kernel_id = atoi(argv[5]);
+        printf("Kernel function ID = %d\n", test_params.kernel_id);
+    }
+    switch (test_params.kernel_id)
+    {
+        case 0: printf("Using Laplace kernel : k(x, y) = 1 / |x - y|  \n"); break;
+        case 1: printf("Using Gaussian kernel : k(x, y) = exp(-|x - y|^2) \n"); break;
+        case 2: printf("Using 3/2 Matern kernel : k(x, y) = (1 + k) * exp(-k), where k = sqrt(3) * |x - y| \n"); break;
     }
     
     test_params.coord = (DTYPE*) malloc_aligned(sizeof(DTYPE) * test_params.n_point * test_params.pt_dim, 64);
@@ -64,13 +87,13 @@ void parse_params(int argc, char **argv)
     // Note: coordinates need to be stored in column-major style, i.e. test_params.coord 
     // is row-major and each column stores the coordinate of a point. 
     int need_gen = 1;
-    if (argc >= 5)
+    if (argc >= 7)
     {
         DTYPE *tmp = (DTYPE*) malloc(sizeof(DTYPE) * test_params.n_point * test_params.pt_dim);
-        if (strstr(argv[4], ".csv") != NULL)
+        if (strstr(argv[6], ".csv") != NULL)
         {
             printf("Reading coordinates from CSV file...");
-            FILE *inf = fopen(argv[4], "r");
+            FILE *inf = fopen(argv[6], "r");
             for (int i = 0; i < test_params.n_point; i++)
             {
                 for (int j = 0; j < test_params.pt_dim-1; j++) 
@@ -81,10 +104,10 @@ void parse_params(int argc, char **argv)
             printf(" done.\n");
             need_gen = 0;
         }
-        if (strstr(argv[4], ".bin") != NULL)
+        if (strstr(argv[6], ".bin") != NULL)
         {
             printf("Reading coordinates from binary file...");
-            FILE *inf = fopen(argv[4], "rb");
+            FILE *inf = fopen(argv[6], "rb");
             fread(tmp, sizeof(DTYPE), test_params.n_point * test_params.pt_dim, inf);
             fclose(inf);
             printf(" done.\n");
@@ -102,13 +125,37 @@ void parse_params(int argc, char **argv)
     {
         printf("Binary/CSV coordinate file not provided. Generating random coordinates in unit box...");
         for (int i = 0; i < test_params.n_point * test_params.pt_dim; i++)
-            test_params.coord[i] = drand48();
+            test_params.coord[i] = drand48();// + drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48() - 6)/sqrt(12);
         printf(" done.\n");
     }
     
-    test_params.krnl_eval       = RPY_eval_std;
-    test_params.krnl_bimv       = RPY_krnl_bimv_intrin_d;
-    test_params.krnl_bimv_flops = RPY_krnl_bimv_flop;
+    if (test_params.pt_dim == 3) 
+    {
+        switch (test_params.kernel_id)
+        {
+            case 0: 
+            { 
+                test_params.krnl_eval       = Coulomb_3d_eval_intrin_d; 
+                test_params.krnl_bimv       = Coulomb_3d_krnl_bimv_intrin_d; 
+                test_params.krnl_bimv_flops = Coulomb_3d_krnl_bimv_flop;
+                break;
+            }
+            case 1: 
+            {
+                test_params.krnl_eval       = Gaussian_3d_eval_intrin_d; 
+                test_params.krnl_bimv       = Gaussian_3d_krnl_bimv_intrin_d; 
+                test_params.krnl_bimv_flops = Gaussian_3d_krnl_bimv_flop;
+                break;
+            }
+            case 2: 
+            {
+                test_params.krnl_eval       = Matern_3d_eval_intrin_d; 
+                test_params.krnl_bimv       = Matern_3d_krnl_bimv_intrin_d; 
+                test_params.krnl_bimv_flops = Matern_3d_krnl_bimv_flop;
+                break;
+            }
+        }
+    }
 }
 
 void direct_nbody(
@@ -167,15 +214,19 @@ void direct_nbody(
 
 int main(int argc, char **argv)
 {
+    //__itt_pause();
     srand48(time(NULL));
     
     parse_params(argc, argv);
+    
+    double st, et;
 
     H2Pack_t h2pack;
     
     H2P_init(&h2pack, test_params.pt_dim, test_params.krnl_dim, QR_REL_NRM, &test_params.rel_tol);
+    H2P_run_HSS(h2pack);
     
-    H2P_partition_points(h2pack, test_params.n_point, test_params.coord, 300, 0);
+    H2P_partition_points(h2pack, test_params.n_point, test_params.coord, 0, 0);
     
     // Check if point index permutation is correct in H2Pack
     DTYPE coord_diff_sum = 0.0;
@@ -193,25 +244,22 @@ int main(int argc, char **argv)
 
     H2P_dense_mat_t *pp;
     DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * test_params.pt_dim + test_params.pt_dim];
-    int start_level = 2;
-    int num_pp = ceil(-log10(test_params.rel_tol)) - 1;
-    if (num_pp < 4 ) num_pp = 4;
-    if (num_pp > 10) num_pp = 10;
-    num_pp = 6 * num_pp * num_pp;
-    H2P_generate_proxy_point_surface(
-        test_params.pt_dim, num_pp, h2pack->max_level, 
-        start_level, max_L, &pp
-    );
+    void *krnl_param = NULL;  // We don't need kernel parameters yet
     
-    double eta = 1.0;
-    double a   = 1.0;
-    double krnl_param[2] = {eta, a};
+    st = get_wtime_sec();
+    H2P_generate_proxy_point_ID(
+        test_params.pt_dim, test_params.krnl_dim, test_params.rel_tol, h2pack->max_level, 
+        h2pack->min_adm_level, max_L, krnl_param, test_params.krnl_eval, &pp
+    );
+    et = get_wtime_sec();
+    printf("H2Pack generate proxy points used %.3lf (s)\n", et - st);
+    
     H2P_build(
         h2pack, pp, test_params.BD_JIT, krnl_param, 
         test_params.krnl_eval, test_params.krnl_bimv, test_params.krnl_bimv_flops
     );
     
-    int n_check_pt = 10000, check_pt_s;
+    int n_check_pt = 50000, check_pt_s;
     if (n_check_pt > test_params.n_point)
     {
         n_check_pt = test_params.n_point;
@@ -227,8 +275,8 @@ int main(int argc, char **argv)
     y0 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_dim * n_check_pt);
     y1 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
     assert(x != NULL && y0 != NULL && y1 != NULL);
-    for (int i = 0; i < test_params.krnl_mat_size; i++) x[i] = drand48();
-    
+    for (int i = 0; i < test_params.krnl_mat_size; i++) x[i] = (drand48() + drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48() - 6)/sqrt(12);
+
     // Get reference results
     direct_nbody(
         krnl_param, test_params.krnl_eval, test_params.pt_dim, test_params.krnl_dim, 
@@ -237,12 +285,14 @@ int main(int argc, char **argv)
     );
     
     // Warm up, reset timers, and test the matvec performance
-    H2P_matvec(h2pack, x, y1); 
+    H2P_matvec(h2pack, x, y1);
     h2pack->n_matvec = 0;
     memset(h2pack->timers + 4, 0, sizeof(double) * 5);
+    //__itt_resume();
     for (int i = 0; i < 10; i++) 
         H2P_matvec(h2pack, x, y1);
-
+    //__itt_pause();
+    
     H2P_print_statistic(h2pack);
     
     // Verify H2 matvec results
@@ -255,7 +305,7 @@ int main(int argc, char **argv)
     }
     y0_norm  = DSQRT(y0_norm);
     err_norm = DSQRT(err_norm);
-    printf("For %d validation points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / y0_norm);
+    printf("For %d validation points: ||y_{HSS} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / y0_norm);
     
     free(x);
     free(y0);

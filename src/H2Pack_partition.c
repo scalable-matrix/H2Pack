@@ -250,9 +250,9 @@ H2P_tree_node_t H2P_bisection_partition_points(
 }
 
 // Convert a linked list H2 tree to arrays
-// Input parameters:
+// Input parameter:
 //   node   : Current node of linked list H2 tree
-// Output parameters:
+// Output parameter:
 //   h2pack : H2Pack structure with H2 tree partitioning in arrays
 void H2P_tree_to_array(H2P_tree_node_t node, H2Pack_t h2pack)
 {
@@ -323,7 +323,7 @@ int H2P_check_box_admissible(
 }
 
 // Calculate reduced (in)admissible pairs of a H2 tree
-// Input parameter:
+// Input parameters:
 //   h2pack : H2Pack structure with H2 tree partitioning in arrays
 //   alpha  : Admissible pair coefficient
 //   n0, n1 : Node pair
@@ -441,6 +441,76 @@ void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0
     }
 }
 
+// Calculate the inadmissible node list for each node, required by HSS construction
+// Input parameter:
+//   h2pack : H2Pack structure with H2 tree partitioning in arrays
+// Output parameter:
+//   h2pack : H2Pack structure with calculated node inadmissible lists
+void H2P_calc_node_inadm_lists(H2Pack_t h2pack)
+{
+    int   pt_dim        = h2pack->pt_dim;
+    int   max_neighbor  = h2pack->max_neighbor;
+    int   n_node        = h2pack->n_node;
+    int   max_level     = h2pack->max_level;
+    int   min_adm_level = h2pack->min_adm_level;
+    int   n_leaf_node   = h2pack->n_leaf_node;
+    int   *leaf_nodes   = h2pack->height_nodes;
+    int   *node_level   = h2pack->node_level;
+    int   *level_n_node = h2pack->level_n_node;
+    int   *level_nodes  = h2pack->level_nodes;
+    DTYPE *enbox        = h2pack->enbox;
+
+    H2P_int_vec_t target_list;
+    H2P_int_vec_init(&target_list, 2 * n_leaf_node);
+    int *node_inadm_lists = (int*) malloc(sizeof(int) * n_node * max_neighbor);
+    int *node_n_r_inadm   = (int*) malloc(sizeof(int) * n_node);
+    assert(node_inadm_lists != NULL && node_n_r_inadm != NULL);
+    memset(node_n_r_inadm, 0, sizeof(int) * n_node);
+
+    for (int i = max_level; i >= min_adm_level; i--)
+    {
+        // 1. Prepare target node list of this level
+        target_list->length = 0;
+        int *level_i_nodes = level_nodes + i * n_leaf_node;
+        // (1) All nodes on this level
+        for (int j = 0; j < level_n_node[i]; j++)
+            H2P_int_vec_push_back(target_list, level_i_nodes[j]);
+        // (2) All leaf nodes higher than this level
+        for (int j = 0; j < n_leaf_node; j++)
+        {
+            int leaf_j = leaf_nodes[j];
+            if (node_level[leaf_j] < i) 
+                H2P_int_vec_push_back(target_list, leaf_j);
+        }
+
+        // 2. Find H2 inadmissble nodes in the target node list
+        for (int j = 0; j < level_n_node[i]; j++)
+        {
+            int node = level_i_nodes[j];
+            DTYPE *node_enbox = enbox + node * 2 * pt_dim;
+            int *node_inadm_list = node_inadm_lists + node * max_neighbor;
+            int n_r_inadm = 0;
+            for (int k = 0; k < target_list->length; k++)
+            {
+                int target_k = target_list->data[k];
+                DTYPE *target_enbox = enbox + target_k * 2 * pt_dim;
+                int is_H2_adm  = H2P_check_box_admissible(node_enbox, target_enbox, pt_dim, ALPHA_H2);
+                int is_HSS_adm = H2P_check_box_admissible(node_enbox, target_enbox, pt_dim, ALPHA_HSS);
+                if (is_H2_adm == 0 && is_HSS_adm == 1 && target_k != node)
+                {
+                    node_inadm_list[n_r_inadm] = target_k;
+                    n_r_inadm++;
+                }
+                node_n_r_inadm[node] = n_r_inadm;
+            }
+        }
+    }
+
+    h2pack->node_inadm_lists = node_inadm_lists;
+    h2pack->node_n_r_inadm   = node_n_r_inadm;
+    H2P_int_vec_destroy(target_list);
+}
+
 // Partition points for a H2 tree
 void H2P_partition_points(
     H2Pack_t h2pack, const int n_point, const DTYPE *coord, 
@@ -516,7 +586,7 @@ void H2P_partition_points(
     h2pack->parent[h2pack->root_idx] = -1;  // Root node doesn't have parent
     H2P_tree_node_destroy(root);  // We don't need the linked list H2 tree anymore
     
-    // in H2ERI, mat_cluster and krnl_mat_size will be set outside and we don't need xT, yT
+    // In H2ERI, mat_cluster and krnl_mat_size will be set outside and we don't need xT, yT
     if (h2pack->is_H2ERI == 0)
     {
         for (int i = 0; i < n_node; i++)
@@ -541,8 +611,7 @@ void H2P_partition_points(
     partition_vars.min_adm_level  = h2pack->max_level;
     partition_vars.max_adm_height = 0;
     H2P_calc_reduced_adm_pairs(h2pack, ALPHA_H2, h2pack->root_idx, h2pack->root_idx);
-    if (h2pack->min_adm_level == 0)
-        h2pack->min_adm_level = partition_vars.min_adm_level;
+    h2pack->min_adm_level  = partition_vars.min_adm_level;
     h2pack->max_adm_height = partition_vars.max_adm_height;
     
     // 5. Copy reduced (in)admissible pairs from H2P_int_vec to h2pack arrays
@@ -557,6 +626,36 @@ void H2P_partition_points(
     memcpy(h2pack->r_adm_pairs,   partition_vars.r_adm_pairs->data,   r_adm_pair_msize);
     H2P_int_vec_destroy(partition_vars.r_inadm_pairs);
     H2P_int_vec_destroy(partition_vars.r_adm_pairs);
+
+    if (h2pack->is_HSS == 1)
+    {
+        // Calculate reduced HSS (in)admissible pairs
+        int estimated_n_pair = h2pack->n_node * h2pack->max_child;
+        H2P_int_vec_init(&partition_vars.r_inadm_pairs, estimated_n_pair);
+        H2P_int_vec_init(&partition_vars.r_adm_pairs,   estimated_n_pair);
+        h2pack->min_adm_level = 0;
+        partition_vars.min_adm_level  = h2pack->max_level;
+        partition_vars.max_adm_height = 0;
+        H2P_calc_reduced_adm_pairs(h2pack, ALPHA_HSS, h2pack->root_idx, h2pack->root_idx);
+        h2pack->min_adm_level  = partition_vars.min_adm_level;
+        h2pack->max_adm_height = partition_vars.max_adm_height;
+
+        // Copy reduced HSS (in)admissible pairs from H2P_int_vec to h2pack arrays
+        h2pack->HSS_n_r_inadm_pair = partition_vars.r_inadm_pairs->length / 2;
+        h2pack->HSS_n_r_adm_pair   = partition_vars.r_adm_pairs->length   / 2;
+        size_t HSS_r_inadm_pair_msize = sizeof(int) * h2pack->HSS_n_r_inadm_pair * 2;
+        size_t HSS_r_adm_pair_msize   = sizeof(int) * h2pack->HSS_n_r_adm_pair   * 2;
+        h2pack->HSS_r_inadm_pairs = (int*) malloc(HSS_r_inadm_pair_msize);
+        h2pack->HSS_r_adm_pairs   = (int*) malloc(HSS_r_adm_pair_msize);
+        assert(h2pack->HSS_r_inadm_pairs != NULL && h2pack->HSS_r_adm_pairs != NULL);
+        memcpy(h2pack->HSS_r_inadm_pairs, partition_vars.r_inadm_pairs->data, HSS_r_inadm_pair_msize);
+        memcpy(h2pack->HSS_r_adm_pairs,   partition_vars.r_adm_pairs->data,   HSS_r_adm_pair_msize);
+        H2P_int_vec_destroy(partition_vars.r_inadm_pairs);
+        H2P_int_vec_destroy(partition_vars.r_adm_pairs);
+
+        // Calculate inadmissible node list for each node
+        H2P_calc_node_inadm_lists(h2pack);
+    }
     
     // 6. Initialize thread-local buffer
     h2pack->tb = (H2P_thread_buf_t*) malloc(sizeof(H2P_thread_buf_t) * h2pack->n_thread);

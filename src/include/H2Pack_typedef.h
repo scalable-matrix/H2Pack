@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 // Pointer to function that evaluates a kernel matrix using given sets of points.
-// The kernel function must by stmmetric.
+// The kernel function must by symmetric.
 // Input parameters:
 //   coord0     : Matrix, size dim-by-ld0, coordinates of the 1st point set
 //   ld0        : Leading dimension of coord0, should be >= n0
@@ -75,17 +75,21 @@ struct H2Pack
     int    n_node;                  // Number of nodes in this H2 tree
     int    root_idx;                // Index of the root node (== n_node - 1, save it for convenience)
     int    n_leaf_node;             // Number of leaf nodes in this H2 tree
-    int    max_child;               // Maximum number of children per node, == 2^dim
+    int    max_child;               // Maximum number of children per node, == 2^pt_dim
+    int    max_neighbor;            // Maximum number of neighbor nodes per node, == 2^pt_dim
     int    max_level;               // Maximum level of this H2 tree, (root = 0, total max_level + 1 levels)
     int    min_adm_level;           // Minimum level of reduced admissible pair
     int    max_adm_height;          // Maximum height of reduced admissible pair
     int    n_r_inadm_pair;          // Number of reduced inadmissible pairs 
     int    n_r_adm_pair;            // Number of reduced admissible pairs 
+    int    HSS_n_r_inadm_pair;      // Number of reduced inadmissible pairs in HSS mode
+    int    HSS_n_r_adm_pair;        // Number of reduced admissible pairs in HSS mode
     int    n_UJ;                    // Number of projection matrices & skeleton row sets, == n_node
     int    n_B;                     // Number of generator matrices
     int    n_D;                     // Number of dense blocks
     int    BD_JIT;                  // If B and D matrices are computed just-in-time in matvec
     int    is_H2ERI;                // If H2Pack is called from H2ERI
+    int    is_HSS;                  // If H2Pack is running in HSS mode
     int    *parent;                 // Size n_node, parent index of each node
     int    *children;               // Size n_node * max_child, indices of a node's children nodes
     int    *pt_cluster;             // Size n_node * 2, start and end (included) indices of points belong to each node
@@ -99,7 +103,11 @@ struct H2Pack
     int    *height_nodes;           // Size (max_level+1) * n_leaf_node, indices of nodes of each height
     int    *r_inadm_pairs;          // Size unknown, reduced inadmissible pairs 
     int    *r_adm_pairs;            // Size unknown, reduced admissible pairs 
-    int    *node_n_r_adm;           // Size n_node, number of reduced admissible pairs of a node
+    int    *HSS_r_inadm_pairs;      // Size unknown, reduced inadmissible pairs in HSS mode
+    int    *HSS_r_adm_pairs;        // Size unknown, reduced admissible pairs in HSS mode
+    int    *node_inadm_lists;       // Size n_node * max_neighbor, lists of each node's inadmissible nodes
+    int    *node_n_r_inadm;         // Size n_node, numbers of each node's reduced inadmissible nodes
+    int    *node_n_r_adm;           // Size n_node, numbers of each node's reduced admissible nodes
     int    *coord_idx;              // Size n_point, original index of each point
     int    *B_nrow;                 // Size n_B, numbers of rows of generator matrices
     int    *B_ncol;                 // Size n_B, numbers of columns of generator matrices
@@ -110,12 +118,12 @@ struct H2Pack
     void   *krnl_param;             // Pointer to kernel function parameter array
     DTYPE  max_leaf_size;           // Maximum size of a leaf node's box
     DTYPE  QR_stop_tol;             // Partial QR stop column norm tolerance
-    DTYPE  *coord;                  // Size n_point * dim, sorted point coordinates
-    DTYPE  *enbox;                  // Size n_node * (2*dim), enclosing box data of each node
+    DTYPE  *coord;                  // Size n_point * pt_dim, sorted point coordinates
+    DTYPE  *enbox;                  // Size n_node * (2*pt_dim), enclosing box data of each node
     DTYPE  *B_data;                 // Size unknown, data of generator matrices
     DTYPE  *D_data;                 // Size unknown, data of dense blocks in the original matrix
     DTYPE  *xT;                     // Size krnl_mat_size, use for transpose matvec input  "matrix" when krnl_dim > 1
-    DTYPE  *yT;                     // Size krnl_mat_size, use for transpose matevc output "matrix" when krnl_dim > 1
+    DTYPE  *yT;                     // Size krnl_mat_size, use for transpose matvec output "matrix" when krnl_dim > 1
     H2P_int_vec_t     B_blk;        // Size BD_NTASK_THREAD * n_thread, B matrices task partitioning
     H2P_int_vec_t     D_blk0;       // Size BD_NTASK_THREAD * n_thread, diagonal blocks in D matrices task partitioning
     H2P_int_vec_t     D_blk1;       // Size BD_NTASK_THREAD * n_thread, inadmissible blocks in D matrices task partitioning
@@ -150,6 +158,12 @@ void H2P_init(
     H2Pack_t *h2pack_, const int pt_dim, const int krnl_dim, 
     const int QR_stop_type, void *QR_stop_param
 );
+
+// Run H2Pack in HSS mode (by default, H2Pack runs in H2 mode). This function 
+// should be called after H2P_init() and before H2P_partition_points().
+// Input & output parameter:
+//   h2pack  : H2Pack structure to be configured
+void H2P_run_HSS(H2Pack_t h2pack);
 
 // Destroy a H2Pack structure
 // Input parameter:

@@ -248,7 +248,7 @@ int main(int argc, char **argv)
     st = get_wtime_sec();
     H2P_generate_proxy_point_ID(
         test_params.pt_dim, test_params.krnl_dim, test_params.rel_tol, h2pack->max_level, 
-        2, max_L, krnl_param, test_params.krnl_eval, &pp
+        h2pack->min_adm_level, max_L, krnl_param, test_params.krnl_eval, &pp
     );
     et = get_wtime_sec();
     printf("H2Pack generate proxy points used %.3lf (s)\n", et - st);
@@ -304,7 +304,7 @@ int main(int argc, char **argv)
     }
     y0_norm  = DSQRT(y0_norm);
     err_norm = DSQRT(err_norm);
-    printf("For %d validating points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / y0_norm);
+    printf("For %d validation points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / y0_norm);
     
     free(x);
     free(y0);

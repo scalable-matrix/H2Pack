@@ -156,6 +156,34 @@ void parse_params(int argc, char **argv)
             }
         }
     }
+
+    if (test_params.pt_dim == 2) 
+    {
+        switch (test_params.kernel_id)
+        {
+            case 0: 
+            { 
+                test_params.krnl_eval       = Coulomb_2d_eval_intrin_d; 
+                test_params.krnl_bimv       = Coulomb_2d_krnl_bimv_intrin_d; 
+                test_params.krnl_bimv_flops = Coulomb_2d_krnl_bimv_flop;
+                break;
+            }
+            case 1: 
+            {
+                test_params.krnl_eval       = Gaussian_2d_eval_intrin_d; 
+                test_params.krnl_bimv       = Gaussian_2d_krnl_bimv_intrin_d; 
+                test_params.krnl_bimv_flops = Gaussian_2d_krnl_bimv_flop;
+                break;
+            }
+            case 2: 
+            {
+                test_params.krnl_eval       = Matern_2d_eval_intrin_d; 
+                test_params.krnl_bimv       = Matern_2d_krnl_bimv_intrin_d; 
+                test_params.krnl_bimv_flops = Matern_2d_krnl_bimv_flop;
+                break;
+            }
+        }
+    }
 }
 
 void direct_nbody(

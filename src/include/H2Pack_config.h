@@ -15,6 +15,8 @@
 #define DEXP             exp            // Exponential function
 #define DFLOOR           floor          // Floor function
 #define DSQRT            sqrt           // Sqrt function
+#define CBLAS_NRM2       cblas_dnrm2    // CBLAS vector 2-norm 
+#define CBLAS_DOT        cblas_ddot     // CBLAS vector dot product
 #define CBLAS_GEMV       cblas_dgemv    // CBLAS matrix-vector multiplication
 #define CBLAS_GEMM       cblas_dgemm    // CBLAS matrix-matrix multiplication
 #define CBLAS_GER        cblas_dger     // CBLAS matrix rank-1 update
@@ -30,6 +32,8 @@
 #define DEXP             expf
 #define DFLOOR           floorf
 #define DSQRT            sqrtf    
+#define CBLAS_NRM2       cblas_snrm2    // CBLAS vector 2-norm 
+#define CBLAS_DOT        cblas_sdot     // CBLAS vector dot product
 #define CBLAS_GEMV       cblas_sgemv
 #define CBLAS_GEMM       cblas_sgemm
 #define CBLAS_GER        cblas_sger

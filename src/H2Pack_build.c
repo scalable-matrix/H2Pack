@@ -499,11 +499,11 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
-        H2P_dense_mat_t A_block = thread_buf[tid]->mat0;
-        H2P_dense_mat_t tmp_x   = thread_buf[tid]->mat1;
-        H2P_dense_mat_t QR_buff = thread_buf[tid]->mat1;
-        H2P_int_vec_t   sub_idx = thread_buf[tid]->idx0;
-        H2P_int_vec_t   ID_buff = thread_buf[tid]->idx1;
+        H2P_dense_mat_t A_block         = thread_buf[tid]->mat0;
+        H2P_dense_mat_t node_skel_coord = thread_buf[tid]->mat1;
+        H2P_dense_mat_t QR_buff         = thread_buf[tid]->mat1;
+        H2P_int_vec_t   sub_idx         = thread_buf[tid]->idx0;
+        H2P_int_vec_t   ID_buff         = thread_buf[tid]->idx1;
 
         thread_buf[tid]->timer = -get_wtime_sec();
         int node = DAG_task_queue_get_task(upward_tq);
@@ -543,11 +543,11 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
                 }
             }  // End of "if (height == 0)"
 
-            // (2) Gather coordinates of this node's points (== all children nodes' skeleton points)
-            H2P_dense_mat_resize(tmp_x, pt_dim, J[node]->length);
+            // (2) Gather current node's skeleton points (== all children nodes' skeleton points)
+            H2P_dense_mat_resize(node_skel_coord, pt_dim, J[node]->length);
             if (height == 0)
             {
-                tmp_x = J_coord[node];
+                node_skel_coord = J_coord[node];
             } else {
                 int n_child_node = n_child[node];
                 int *child_nodes = children + node * max_child;
@@ -556,32 +556,32 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
                 {
                     int i_child_node = child_nodes[i_child];
                     int src_ld = J_coord[i_child_node]->ncol;
-                    int dst_ld = tmp_x->ncol;
+                    int dst_ld = node_skel_coord->ncol;
                     DTYPE *src_mat = J_coord[i_child_node]->data;
-                    DTYPE *dst_mat = tmp_x->data + J_child_size; 
+                    DTYPE *dst_mat = node_skel_coord->data + J_child_size; 
                     H2P_copy_matrix_block(pt_dim, src_ld, src_mat, src_ld, dst_mat, dst_ld);
                     J_child_size += J[i_child_node]->length;
                 }
             }  // End of "if (level == 0)"
             
-            // (3) Shift points in this node so their center is at the original point
+            // (3) Shift current node's skeleton points so their center is at the original point
             DTYPE *node_box = enbox + node * 2 * pt_dim;
-            int nrow = J[node]->length;
-            int ncol = pp[level]->ncol;
+            int node_skel_npt = J[node]->length;
+            int node_pp_npt   = pp[level]->ncol;
             for (int k = 0; k < pt_dim; k++)
             {
                 DTYPE box_center_k = node_box[k] + 0.5 * node_box[pt_dim + k];
-                DTYPE *tmp_x_row_k = tmp_x->data + k * nrow;
+                DTYPE *node_skel_coord_k = node_skel_coord->data + k * node_skel_npt;
                 #pragma omp simd
-                for (int l = 0; l < nrow; l++)
-                    tmp_x_row_k[l] -= box_center_k;
+                for (int l = 0; l < node_skel_npt; l++)
+                    node_skel_coord_k[l] -= box_center_k;
             }
-            int A_blk_nrow = nrow * krnl_dim;
-            int A_blk_ncol = ncol * krnl_dim;
+            int A_blk_nrow = node_skel_npt * krnl_dim;
+            int A_blk_ncol = node_pp_npt   * krnl_dim;
             H2P_dense_mat_resize(A_block, A_blk_nrow, A_blk_ncol);
             krnl_eval(
-                tmp_x->data,     nrow, nrow,
-                pp[level]->data, ncol, ncol, 
+                node_skel_coord->data, node_skel_npt, node_skel_npt,
+                pp[level]->data,       node_pp_npt,   node_pp_npt, 
                 krnl_param, A_block->data, A_block->ld
             );
 
@@ -781,17 +781,16 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
             }  // End of "pragma omp parallel"
         }  // End of "if (i == 0)"
         
-        // (2) Compression at height i
         #pragma omp parallel num_threads(n_thread_i)
         {
             int tid = omp_get_thread_num();
-            H2P_int_vec_t   inadm_skel_idx = thread_buf[tid]->idx0;
-            H2P_int_vec_t   sub_idx        = thread_buf[tid]->idx0;
-            H2P_int_vec_t   ID_buff        = thread_buf[tid]->idx1;
-            H2P_dense_mat_t tmp_x          = thread_buf[tid]->mat0;
-            H2P_dense_mat_t inadm_skel_xyz = thread_buf[tid]->mat1;
-            H2P_dense_mat_t A_block        = thread_buf[tid]->mat2;
-            H2P_dense_mat_t QR_buff        = thread_buf[tid]->mat1;
+            H2P_int_vec_t   inadm_skel_idx   = thread_buf[tid]->idx0;
+            H2P_int_vec_t   sub_idx          = thread_buf[tid]->idx0;
+            H2P_int_vec_t   ID_buff          = thread_buf[tid]->idx1;
+            H2P_dense_mat_t node_skel_coord  = thread_buf[tid]->mat0;
+            H2P_dense_mat_t inadm_skel_coord = thread_buf[tid]->mat1;
+            H2P_dense_mat_t A_block          = thread_buf[tid]->mat2;
+            H2P_dense_mat_t QR_buff          = thread_buf[tid]->mat1;
             
             thread_buf[tid]->timer -= get_wtime_sec();
             #pragma omp for schedule(dynamic) nowait
@@ -800,42 +799,8 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                 int node  = height_i_nodes[j];
                 int level = node_level[node];
                 if (level < min_adm_level) continue;
-                
-                // A. Gather coordinates of this node's points (== all children nodes' skeleton points)
-                H2P_dense_mat_resize(tmp_x, pt_dim, J[node]->length);
-                if (i == 0)
-                {
-                    tmp_x = J_coord[node];
-                } else {
-                    int n_child_node = n_child[node];
-                    int *child_nodes = children + node * max_child;
-                    int J_child_size = 0;
-                    for (int i_child = 0; i_child < n_child_node; i_child++)
-                    {
-                        int i_child_node = child_nodes[i_child];
-                        int src_ld = J_coord[i_child_node]->ncol;
-                        int dst_ld = tmp_x->ncol;
-                        DTYPE *src_mat = J_coord[i_child_node]->data;
-                        DTYPE *dst_mat = tmp_x->data + J_child_size; 
-                        H2P_copy_matrix_block(pt_dim, src_ld, src_mat, src_ld, dst_mat, dst_ld);
-                        J_child_size += J[i_child_node]->length;
-                    }
-                }
-                
-                // B. Shift points in this node so their center is at the original point
-                DTYPE *node_box = enbox + node * 2 * pt_dim;
-                int nrow = J[node]->length;
-                int ncol_pp = pp[level]->ncol;
-                for (int k = 0; k < pt_dim; k++)
-                {
-                    DTYPE box_center_k = node_box[k] + 0.5 * node_box[pt_dim + k];
-                    DTYPE *tmp_x_row_k = tmp_x->data + k * nrow;
-                    #pragma omp simd
-                    for (int l = 0; l < nrow; l++)
-                        tmp_x_row_k[l] -= box_center_k;
-                }
 
-                // C. Gather skeleton points from all inadmissible nodes and shift their centers to the original point
+                // (2) Calculate the number of skeleton points from all inadmissible nodes
                 int n_r_inadm = node_n_r_inadm[node];
                 int inadm_skel_npt = 0;
                 inadm_skel_idx->length = 0;
@@ -848,39 +813,76 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                         H2P_int_vec_concatenate(inadm_skel_idx, J[inadm_node_k]);
                     }
                     inadm_skel_npt = inadm_skel_idx->length;
-                    H2P_dense_mat_resize(inadm_skel_xyz, 3, inadm_skel_npt);
-                    for (int k = 0; k < inadm_skel_npt; k++)
+                }
+                
+                // (3) Gather current node's skeleton points (== all children nodes' skeleton points)
+                H2P_dense_mat_resize(node_skel_coord, pt_dim, J[node]->length);
+                if (i == 0)
+                {
+                    node_skel_coord = J_coord[node];
+                } else {
+                    int n_child_node = n_child[node];
+                    int *child_nodes = children + node * max_child;
+                    int J_child_size = 0;
+                    for (int i_child = 0; i_child < n_child_node; i_child++)
                     {
-                        for (int l = 0; l < pt_dim; l++)
-                        {
-                            DTYPE box_center_l = node_box[l] + 0.5 * node_box[pt_dim + l];
-                            DTYPE coord_skel_k_l = coord[l * n_point + inadm_skel_idx->data[k]];
-                            inadm_skel_xyz->data[l * inadm_skel_npt + k] = coord_skel_k_l - box_center_l;
-                        }
+                        int i_child_node = child_nodes[i_child];
+                        int src_ld = J_coord[i_child_node]->ncol;
+                        int dst_ld = node_skel_coord->ncol;
+                        DTYPE *src_mat = J_coord[i_child_node]->data;
+                        DTYPE *dst_mat = node_skel_coord->data + J_child_size; 
+                        H2P_copy_matrix_block(pt_dim, src_ld, src_mat, src_ld, dst_mat, dst_ld);
+                        J_child_size += J[i_child_node]->length;
                     }
                 }
+                
+                // (4) Shift points in this node so their center is at the original point
+                DTYPE *node_box = enbox + node * 2 * pt_dim;
+                int node_skel_npt = J[node]->length;
+                int node_pp_npt = pp[level]->ncol;
+                for (int k = 0; k < pt_dim; k++)
+                {
+                    DTYPE box_center_k = node_box[k] + 0.5 * node_box[pt_dim + k];
+                    DTYPE *node_skel_coord_k = node_skel_coord->data + k * node_skel_npt;
+                    #pragma omp simd
+                    for (int l = 0; l < node_skel_npt; l++)
+                        node_skel_coord_k[l] -= box_center_k;
+                }
 
-                // D. Build the hybrid matrix block
-                int A_blk_nrow = nrow * krnl_dim;
-                int A_blk_ncol = (ncol_pp + inadm_skel_npt) * krnl_dim;
-                H2P_dense_mat_resize(A_block, A_blk_nrow, A_blk_ncol);
-                // Proxy point block
-                krnl_eval(
-                    tmp_x->data, nrow, nrow,
-                    pp[level]->data, ncol_pp, ncol_pp, 
-                    krnl_param, A_block->data, A_block->ld
-                );
-                // Inadmissible node skeleton point block
+                // (5) Gather skeleton points from all inadmissible nodes and shift their centers to 
+                //     the original point. We also put proxy points into inadm_skel_coord.
+                H2P_dense_mat_resize(inadm_skel_coord, pt_dim, inadm_skel_npt + node_pp_npt);
                 if (inadm_skel_npt > 0)
                 {
-                    krnl_eval(
-                        tmp_x->data, nrow, nrow,
-                        inadm_skel_xyz->data, inadm_skel_npt, inadm_skel_npt, 
-                        krnl_param, A_block->data + ncol_pp * krnl_dim, A_block->ld
+                    for (int k = 0; k < pt_dim; k++)
+                    {
+                        DTYPE box_center_k = node_box[k] + 0.5 * node_box[pt_dim + k];
+                        DTYPE *coord_k = coord + k * n_point;
+                        DTYPE *inadm_skel_coord_k = inadm_skel_coord->data + k * inadm_skel_coord->ld;
+                        #pragma omp simd 
+                        for (int l = 0; l < inadm_skel_npt; l++)
+                            inadm_skel_coord_k[l] = coord_k[inadm_skel_idx->data[l]] - box_center_k;
+                    }
+                }
+                if (node_pp_npt > 0)
+                {
+                    H2P_copy_matrix_block(
+                        pt_dim, node_pp_npt, pp[level]->data, pp[level]->ld, 
+                        inadm_skel_coord->data + inadm_skel_npt, inadm_skel_coord->ld
                     );
                 }
 
-                // E. ID compress
+                // (6) Build the hybrid matrix block
+                int A_blk_nrow = node_skel_npt * krnl_dim;
+                int A_blk_ncol = inadm_skel_coord->ncol * krnl_dim;
+                H2P_dense_mat_resize(A_block, A_blk_nrow, A_blk_ncol);
+                krnl_eval(
+                    node_skel_coord->data,  node_skel_coord->ncol,  node_skel_coord->ld,
+                    inadm_skel_coord->data, inadm_skel_coord->ncol, inadm_skel_coord->ld, 
+                    krnl_param, A_block->data, A_block->ld
+                );
+
+                // (7) ID compress
                 // Note: A is transposed in ID compress, be careful when calculating the buffer size
                 if (krnl_dim == 1)
                 {
@@ -895,7 +897,7 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                     1, QR_buff->data, ID_buff->data, krnl_dim
                 );
                 
-                // F. Choose the skeleton points of this node
+                // (8) Choose the skeleton points of this node
                 for (int k = 0; k < sub_idx->length; k++)
                     J[node]->data[k] = J[node]->data[sub_idx->data[k]];
                 J[node]->length = sub_idx->length;

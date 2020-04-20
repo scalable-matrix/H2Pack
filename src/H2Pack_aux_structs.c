@@ -179,6 +179,7 @@ void H2P_dense_mat_normalize_columns(H2P_dense_mat_t mat, H2P_dense_mat_t workbu
     H2P_dense_mat_resize(workbuf, 1, ncol);
     DTYPE *inv_2norm = workbuf->data;
     
+    /*
     #pragma omp simd
     for (int icol = 0; icol < ncol; icol++) 
         inv_2norm[icol] = mat->data[icol] * mat->data[icol];
@@ -193,6 +194,11 @@ void H2P_dense_mat_normalize_columns(H2P_dense_mat_t mat, H2P_dense_mat_t workbu
     #pragma omp simd
     for (int icol = 0; icol < ncol; icol++) 
         inv_2norm[icol] = 1.0 / DSQRT(inv_2norm[icol]);
+    */
+
+    // Slower, but more accurate
+    for (int icol = 0; icol < ncol; icol++)
+        inv_2norm[icol] = 1.0 / CBLAS_NRM2(nrow, mat->data + icol, ncol);
     
     for (int irow = 0; irow < nrow; irow++)
     {

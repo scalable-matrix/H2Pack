@@ -675,13 +675,15 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
     int    n_leaf_node       = h2pack->n_leaf_node;
     int    n_thread          = h2pack->n_thread;
     int    max_child         = h2pack->max_child;
-    int    max_adm_height    = h2pack->max_adm_height;
+    int    max_level         = h2pack->max_level;
     int    min_adm_level     = h2pack->min_adm_level;
     int    stop_type         = h2pack->QR_stop_type;
     int    *children         = h2pack->children;
     int    *n_child          = h2pack->n_child;
-    int    *height_n_node    = h2pack->height_n_node;
-    int    *height_nodes     = h2pack->height_nodes;
+    int    *node_height      = h2pack->node_height;
+    int    *level_n_node     = h2pack->level_n_node;
+    int    *level_nodes      = h2pack->level_nodes;
+    int    *leaf_nodes       = h2pack->height_nodes;
     int    *node_level       = h2pack->node_level;
     int    *pt_cluster       = h2pack->pt_cluster;
     int    *node_n_r_inadm   = h2pack->node_n_r_inadm;
@@ -715,71 +717,59 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
     H2P_int_vec_t   *J       = h2pack->J;
     H2P_dense_mat_t *J_coord = h2pack->J_coord;
     
-    // 2. Hierarchical construction height by height. max_adm_height is the 
-    //    highest position that still has admissible blocks, so we only need 
-    //    to compress matrix blocks to that height since higher blocks 
-    //    are inadmissible and cannot be compressed.
-    for (int i = 0; i <= max_adm_height; i++)
+    // 2. Initialize the row indices for leaf nodes: all points in that box
+    for (int j = 0; j < n_leaf_node; j++)
     {
-        int *height_i_nodes = height_nodes + i * n_leaf_node;
-        int height_i_n_node = height_n_node[i];
-        int n_thread_i = MIN(height_i_n_node, n_thread);
-        
-        // (1) Update row indices associated with clusters at height i
-        if (i == 0)
-        {
-            // Leaf nodes, use all points
-            #pragma omp parallel num_threads(n_thread_i)
-            {
-                int tid = omp_get_thread_num();
-                thread_buf[tid]->timer = -get_wtime_sec();
-                #pragma omp for schedule(dynamic) nowait
-                for (int j = 0; j < height_n_node[i]; j++)
-                {
-                    int node = height_i_nodes[j];
-                    int pt_s = pt_cluster[node * 2];
-                    int pt_e = pt_cluster[node * 2 + 1];
-                    int node_npt = pt_e - pt_s + 1;
-                    H2P_int_vec_init(&J[node], node_npt);
-                    for (int k = 0; k < node_npt; k++)
-                        J[node]->data[k] = pt_s + k;
-                    J[node]->length = node_npt;
+        int node = leaf_nodes[j];
+        int pt_s = pt_cluster[node * 2];
+        int pt_e = pt_cluster[node * 2 + 1];
+        int node_npt = pt_e - pt_s + 1;
+        H2P_int_vec_init(&J[node], node_npt);
+        for (int k = 0; k < node_npt; k++)
+            J[node]->data[k] = pt_s + k;
+        J[node]->length = node_npt;
+        H2P_dense_mat_init(&J_coord[node], pt_dim, node_npt);
+        H2P_copy_matrix_block(pt_dim, node_npt, coord + pt_s, n_point, J_coord[node]->data, node_npt);
+    }
 
-                    H2P_dense_mat_init(&J_coord[node], pt_dim, node_npt);
-                    H2P_copy_matrix_block(pt_dim, node_npt, coord + pt_s, n_point, J_coord[node]->data, node_npt);
-                }
-                thread_buf[tid]->timer += get_wtime_sec();
-            }
-        } else {
-            // Non-leaf nodes, gather row indices from children nodes
-            #pragma omp parallel num_threads(n_thread_i)
+    // 3. Hierarchical construction level by level. min_adm_level is the 
+    //    highest level that still has admissible blocks, so we only need 
+    //    to compress matrix blocks to that level since higher blocks 
+    //    are inadmissible and cannot be compressed.
+    for (int i = max_level; i >= min_adm_level; i--)
+    {
+        int *level_i_nodes = level_nodes + i * n_leaf_node;
+        int level_i_n_node = level_n_node[i];
+        int n_thread_i = MIN(level_i_n_node, n_thread);
+        int level = i;
+
+        // (1) Update row indices associated with clusters at level i
+        #pragma omp parallel num_threads(n_thread_i)
+        {
+            int tid = omp_get_thread_num();
+            thread_buf[tid]->timer = -get_wtime_sec();
+            #pragma omp for schedule(dynamic) nowait
+            for (int j = 0; j < level_i_n_node; j++)
             {
-                int tid = omp_get_thread_num();
-                thread_buf[tid]->timer = -get_wtime_sec();
-                #pragma omp for schedule(dynamic) nowait
-                for (int j = 0; j < height_n_node[i]; j++)
+                int node = level_i_nodes[j];
+                int n_child_node = n_child[node];
+                if (n_child_node == 0) continue;  // J[node] has already been prepared for leaf node
+                int *child_nodes = children + node * max_child;
+                int J_child_size = 0;
+                for (int i_child = 0; i_child < n_child_node; i_child++)
                 {
-                    int node = height_i_nodes[j];
-                    int level = node_level[node];
-                    if (level < min_adm_level) continue;
-                    int n_child_node = n_child[node];
-                    int *child_nodes = children + node * max_child;
-                    int J_child_size = 0;
-                    for (int i_child = 0; i_child < n_child_node; i_child++)
-                    {
-                        int i_child_node = child_nodes[i_child];
-                        J_child_size += J[i_child_node]->length;
-                    }
-                    H2P_int_vec_init(&J[node], J_child_size);
-                    for (int i_child = 0; i_child < n_child_node; i_child++)
-                    {
-                        int i_child_node = child_nodes[i_child];
-                        H2P_int_vec_concatenate(J[node], J[i_child_node]);
-                    }
+                    int i_child_node = child_nodes[i_child];
+                    J_child_size += J[i_child_node]->length;
                 }
-                thread_buf[tid]->timer += get_wtime_sec();
-            }  // End of "pragma omp parallel"
-        }  // End of "if (i == 0)"
+                H2P_int_vec_init(&J[node], J_child_size);
+                for (int i_child = 0; i_child < n_child_node; i_child++)
+                {
+                    int i_child_node = child_nodes[i_child];
+                    H2P_int_vec_concatenate(J[node], J[i_child_node]);
+                }
+            }
+            thread_buf[tid]->timer += get_wtime_sec();
+        }
         
         #pragma omp parallel num_threads(n_thread_i)
         {
@@ -794,11 +784,10 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
             
             thread_buf[tid]->timer -= get_wtime_sec();
             #pragma omp for schedule(dynamic) nowait
-            for (int j = 0; j < height_n_node[i]; j++)
+            for (int j = 0; j < level_i_n_node; j++)
             {
-                int node  = height_i_nodes[j];
-                int level = node_level[node];
-                if (level < min_adm_level) continue;
+                int node = level_i_nodes[j];
+                int height = node_height[node];
 
                 // (2) Calculate the number of skeleton points from all inadmissible nodes
                 int n_r_inadm = node_n_r_inadm[node];
@@ -810,6 +799,16 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                     for (int k = 0; k < n_r_inadm; k++)
                     {
                         int inadm_node_k = inadm_list[k];
+                        if (J[inadm_node_k] == NULL)
+                        {
+                            int k_level = node_level[k];
+                            printf(
+                                "[FATAL] Node %3d (lvl %2d): near field node %3d (lvl %2d) skeleton point not ready!\n",
+                                node, level, inadm_node_k, k_level
+                            );
+                            fflush(stdout);
+                        }
+                        assert(J[inadm_node_k] != NULL);
                         H2P_int_vec_concatenate(inadm_skel_idx, J[inadm_node_k]);
                     }
                     inadm_skel_npt = inadm_skel_idx->length;
@@ -817,7 +816,7 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                 
                 // (3) Gather current node's skeleton points (== all children nodes' skeleton points)
                 H2P_dense_mat_resize(node_skel_coord, pt_dim, J[node]->length);
-                if (i == 0)
+                if (height == 0)
                 {
                     node_skel_coord = J_coord[node];
                 } else {
@@ -881,6 +880,7 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                     inadm_skel_coord->data, inadm_skel_coord->ncol, inadm_skel_coord->ld, 
                     krnl_param, A_block->data, A_block->ld
                 );
+                H2P_dense_mat_normalize_columns(A_block, inadm_skel_coord);
 
                 // (7) ID compress
                 // Note: A is transposed in ID compress, be careful when calculating the buffer size

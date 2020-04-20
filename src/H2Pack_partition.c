@@ -10,7 +10,7 @@
 #include "H2Pack_aux_structs.h"
 #include "utils.h"
 
-// Use this structure as a namespace for global variables in this file
+// Use this structure as a name space for global variables in this file
 struct H2P_partition_vars
 {
     int curr_po_idx;    // Post-order traversal index
@@ -483,7 +483,7 @@ void H2P_calc_node_inadm_lists(H2Pack_t h2pack)
                 H2P_int_vec_push_back(target_list, leaf_j);
         }
 
-        // 2. Find H2 inadmissble nodes in the target node list
+        // 2. Find H2 inadmissible nodes in the target node list
         for (int j = 0; j < level_n_node[i]; j++)
         {
             int node = level_i_nodes[j];

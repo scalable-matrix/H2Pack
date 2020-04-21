@@ -121,6 +121,103 @@ int point_in_box(const int pt_dim, DTYPE *coord, DTYPE L)
     return res;
 }
 
+// Generate a random sparse matrix A for calculating y^T := A^T * x^T,
+// where A is a random sparse matrix that has no more than max_nnz_col 
+// random +1/-1 nonzeros in each column with random position, x and y 
+// are row-major matrices. Each row of x/y is a column of x^T/y^T. We 
+// can just use SpMV to calculate y^T(:, i) := A^T * x^T(:, i).
+// Input parameters:
+//   max_nnz_col : Maximum number of nonzeros in each column of A
+//   k, n        : A is k-by-n sparse matrix
+// Output parameters:
+//   A_valbuf : Buffer for storing nonzeros of A^T
+//   A_idxbuf : Buffer for storing CSR row_ptr and col_idx arrays of A^T. 
+//              A_idxbuf->data[0 : n] stores row_ptr, A_idxbuf->data[n+1 : end]
+//              stores col_idx.
+void H2P_gen_rand_sparse_mat_trans(
+    const int max_nnz_col, const int k, const int n, 
+    H2P_dense_mat_t A_valbuf, H2P_int_vec_t A_idxbuf
+)
+{
+    // Note: we calculate y^T := A^T * x^T. Since x/y is row-major, 
+    // each of its row is a column of x^T/y^T. We can just use SpMV
+    // to calculate y^T(:, i) := A^T * x^T(:, i). 
+
+    int rand_nnz_col = (max_nnz_col <= k) ? max_nnz_col : k;
+    int nnz = n * rand_nnz_col;
+    H2P_dense_mat_resize(A_valbuf, 1, nnz);
+    H2P_int_vec_set_capacity(A_idxbuf, (n + 1) + nnz + k);
+    DTYPE *val = A_valbuf->data;
+    int *row_ptr = A_idxbuf->data;
+    int *col_idx = row_ptr + (n + 1);
+    int *flag = col_idx + nnz; 
+    memset(flag, 0, sizeof(int) * k);
+    for (int i = 0; i < nnz; i++) 
+        val[i] = 2.0 * (rand() & 1) - 1.0;
+    for (int i = 0; i <= n; i++) 
+        row_ptr[i] = i * rand_nnz_col;
+    for (int i = 0; i < n; i++)
+    {
+        int cnt = 0;
+        int *row_i_cols = col_idx + i * rand_nnz_col;
+        while (cnt < rand_nnz_col)
+        {
+            int col = rand() % k;
+            if (flag[col] == 0) 
+            {
+                flag[col] = 1;
+                row_i_cols[cnt] = col;
+                cnt++;
+            }
+        }
+        for (int j = 0; j < rand_nnz_col; j++)
+            flag[row_i_cols[j]] = 0;
+    }
+    A_idxbuf->length = (n + 1) + nnz;
+}
+
+// Calculate y^T := A^T * x^T, where A is a sparse matrix, 
+// x and y are row-major matrices. Since x/y is row-major, 
+// each of its row is a column of x^T/y^T. We can just use SpMV
+// to calculate y^T(:, i) := A^T * x^T(:, i).
+// Input parameters:
+//   m, n, k  : x is m-by-k matrix, A is k-by-n sparse matrix
+//   A_valbuf : Buffer for storing nonzeros of A^T
+//   A_idxbuf : Buffer for storing CSR row_ptr and col_idx arrays of A^T. 
+//              A_idxbuf->data[0 : n] stores row_ptr, A_idxbuf->data[n+1 : end]
+//              stores col_idx.
+//   x, ldx   : m-by-k row-major dense matrix, leading dimension ldx
+//   ldy      : Leading dimension of y
+// Output parameters:
+//   y        : m-by-n row-major dense matrix, leading dimension ldy
+void H2P_calc_sparse_mm_trans(
+    const int m, const int n, const int k,
+    H2P_dense_mat_t A_valbuf, H2P_int_vec_t A_idxbuf,
+    double *x, const int ldx, double *y, const int ldy
+)
+{
+    double *val = A_valbuf->data;
+    int *row_ptr = A_idxbuf->data;
+    int *col_idx = row_ptr + (m + 1);
+    // Doing a naive OpenMP CSR SpMM here is good enough, using MKL SpBLAS is actually
+    // slower, probably due to the cost of optimizing the storage of sparse matrix
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < m; i++)
+    {
+        double *x_i = x + i * ldx;
+        double *y_i = y + i * ldy;
+        
+        for (int j = 0; j < n; j++)
+        {
+            double res = 0.0;
+            #pragma omp simd
+            for (int l = row_ptr[j]; l < row_ptr[j+1]; l++)
+                res += val[l] * x_i[col_idx[l]];
+            y_i[j] = res;
+        }
+    }
+}
+
 // Generate proxy points for constructing H2 projection and skeleton matrices
 // using ID compress for any kernel function
 void H2P_generate_proxy_point_ID(
@@ -140,11 +237,13 @@ void H2P_generate_proxy_point_ID(
     H2P_int_vec_t skel_idx;
     H2P_dense_mat_init(&Nx_points, pt_dim,  Nx_size);
     H2P_dense_mat_init(&Ny_points, pt_dim,  Ny_size);
-    H2P_dense_mat_init(&tmpA,      Nx_size, Ny_size);
+    H2P_dense_mat_init(&tmpA,      Nx_size * krnl_dim, Ny_size * krnl_dim);
     H2P_dense_mat_init(&min_dist,  Nx_size, 1);
     H2P_int_vec_init(&skel_idx, Nx_size);
     srand48(time(NULL));
     int n_thread = omp_get_max_threads();
+
+    double other_t, krnl_t, spmm_t, ID_t, st, et;
 
     // 3. Construct proxy points on each level
     DTYPE pow_2_level = 0.5;
@@ -162,6 +261,10 @@ void H2P_generate_proxy_point_ID(
             pow_2_level *= 2.0;
             continue;
         }
+        other_t = 0.0;
+        krnl_t  = 0.0;
+        spmm_t  = 0.0;
+        ID_t    = 0.0;
 
         // (1) Decide box sizes: Nx points are in box1, Ny points are in box3
         //     but not in box2 (points in box2 are inadmissible to Nx points)
@@ -175,6 +278,7 @@ void H2P_generate_proxy_point_ID(
         DTYPE L3 = 2.0 * semi_L3;
         
         // (2) Generate Nx and Ny points
+        st = get_wtime_sec();
         H2P_dense_mat_resize(Nx_points, pt_dim, Nx_size);
         for (int i = 0; i < Nx_size * pt_dim; i++)
         {
@@ -199,28 +303,55 @@ void H2P_generate_proxy_point_ID(
             for (int j = 0; j < pt_dim; j++)
                 Ny_i[j * Ny_size] = tmp_coord[j];
         }
+        et = get_wtime_sec();
+        other_t += et - st;
 
         // (3) Use ID to select skeleton points in Nx first, then use the
         //     skeleton Nx points to select skeleton Ny points
-
         DTYPE rel_tol = tol_norm < 1e-11 ? 1e-14 : tol_norm * 1e-2;
-        
+        // (3.1) Use sparsity + randomize to reduce the cost of Nx points selection
+        //       Using a dense Gaussian random matrix is also OK, but might generate
+        //       less proxy points. For accuracy, we use a sparse one. 
+        st = get_wtime_sec();
         H2P_eval_kernel_matrix_OMP(krnl_param, krnl_eval, krnl_dim, Nx_points, Ny_points, tmpA);
+        et = get_wtime_sec();
+        krnl_t += et - st;
+        H2P_int_vec_t   rndmat_idx = ID_buff;
+        H2P_dense_mat_t rndmat_val = QR_buff;
+        H2P_dense_mat_t tmpA1      = min_dist;
+        st = get_wtime_sec();
+        H2P_gen_rand_sparse_mat_trans(32, tmpA->ncol, tmpA->nrow, rndmat_val, rndmat_idx);
+        H2P_dense_mat_resize(tmpA1, tmpA->nrow, tmpA->nrow);
+        H2P_calc_sparse_mm_trans(
+            tmpA->nrow, tmpA->nrow, tmpA->ncol, rndmat_val, rndmat_idx,
+            tmpA->data, tmpA->ld, tmpA1->data, tmpA1->ld
+        );
+        et = get_wtime_sec();
+        spmm_t += et - st;
         if (krnl_dim == 1)
         {
-            H2P_dense_mat_resize(QR_buff, tmpA->nrow, 1);
+            H2P_dense_mat_resize(QR_buff, tmpA1->nrow, 1);
         } else {
-            int QR_buff_size = (2 * krnl_dim + 2) * tmpA->ncol + (krnl_dim + 1) * tmpA->nrow;
+            int QR_buff_size = (2 * krnl_dim + 2) * tmpA1->ncol + (krnl_dim + 1) * tmpA1->nrow;
             H2P_dense_mat_resize(QR_buff, QR_buff_size, 1);
         }
-        H2P_int_vec_set_capacity(ID_buff, 4 * tmpA->nrow);
+        H2P_int_vec_set_capacity(ID_buff, 4 * tmpA1->nrow);
+        st = get_wtime_sec();
         H2P_ID_compress(
-            tmpA, QR_REL_NRM, &rel_tol, NULL, skel_idx, 
+            tmpA1, QR_REL_NRM, &rel_tol, NULL, skel_idx, 
             n_thread, QR_buff->data, ID_buff->data, krnl_dim
         );
+        et = get_wtime_sec();
+        ID_t += et - st;
+        st = get_wtime_sec();
         H2P_dense_mat_select_columns(Nx_points, skel_idx);
-        
+        et = get_wtime_sec();
+        other_t += et - st;
+        // (3.2) Use the skeleton points to select the proxy points Ny
+        st = get_wtime_sec();
         H2P_eval_kernel_matrix_OMP(krnl_param, krnl_eval, krnl_dim, Ny_points, Nx_points, tmpA);
+        et = get_wtime_sec();
+        krnl_t += et - st;
         if (krnl_dim == 1)
         {
             H2P_dense_mat_resize(QR_buff, tmpA->nrow, 1);
@@ -229,13 +360,20 @@ void H2P_generate_proxy_point_ID(
             H2P_dense_mat_resize(QR_buff, QR_buff_size, 1);
         }
         H2P_int_vec_set_capacity(ID_buff, 4 * tmpA->nrow);
+        st = get_wtime_sec();
         H2P_ID_compress(
             tmpA, QR_REL_NRM, &rel_tol, NULL, skel_idx, 
             n_thread, QR_buff->data, ID_buff->data, krnl_dim
         );
+        et = get_wtime_sec();
+        ID_t += et - st;
+        st = get_wtime_sec();
         H2P_dense_mat_select_columns(Ny_points, skel_idx);
+        et = get_wtime_sec();
+        other_t += et - st;
         
         // (4) Set up the proxy points
+        st = get_wtime_sec();
         int ny = skel_idx->length;
         if (tol_norm > 1e-11)
         {
@@ -318,6 +456,12 @@ void H2P_generate_proxy_point_ID(
                 }
             }  // End of "for (int i = 0; i < ny; i++)"
         }  // End of "if (tol_norm > 1e-11)"
+        et = get_wtime_sec();
+        other_t += et - st;
+        #ifdef PROFILING_OUTPUT
+        printf("%s: Level %d : Nx, Npp = %d, %d\n", __FUNCTION__, level, Ny_points->ncol, pp[level]->ncol);
+        //printf("    kernel, SpMM, ID, other time = %.3lf, %.3lf, %.3lf, %.3lf s\n", krnl_t, spmm_t, ID_t, other_t);
+        #endif
     }  // End of "for (int level = start_level; level <= max_level; level++)"
     
     *pp_ = pp;

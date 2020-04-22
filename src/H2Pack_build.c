@@ -218,6 +218,43 @@ void H2P_calc_sparse_mm_trans(
     }
 }
 
+// Generate normal distribution random number, Marsaglia polar method
+// Input parameters:
+//   mu, sigma : Normal distribution parameters
+//   nelem     : Number of random numbers to be generated
+// Output parameter:
+//   x : Array, size nelem, generated random numbers
+void H2P_gen_normal_distribution(const double mu, const double sigma, const int nelem, double *x)
+{
+    double u1, u2, w, mult, x1, x2;
+    for (int i = 0; i < nelem - 1; i += 2)
+    {
+        do 
+        {
+            u1 = drand48() * 2.0 - 1.0;
+            u2 = drand48() * 2.0 - 1.0;
+            w  = u1 * u1 + u2 * u2;
+        } while (w >= 1.0 || w <= 1e-15);
+        mult = sqrt((-2.0 * log(w)) / w);
+        x1 = u1 * mult;
+        x2 = u2 * mult;
+        x[i]   = mu + sigma * x1;
+        x[i+1] = mu + sigma * x2;
+    }
+    if (nelem % 2)
+    {
+        do 
+        {
+            u1 = drand48() * 2.0 - 1.0;
+            u2 = drand48() * 2.0 - 1.0;
+            w  = u1 * u1 + u2 * u2;
+        } while (w >= 1.0 || w <= 1e-15);
+        mult = sqrt((-2.0 * log(w)) / w);
+        x1 = u1 * mult;
+        x[nelem - 1] = mu + sigma * x1;
+    }
+}
+
 // Generate proxy points for constructing H2 projection and skeleton matrices
 // using ID compress for any kernel function
 void H2P_generate_proxy_point_ID(
@@ -1025,6 +1062,21 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                     krnl_param, A_block->data, A_block->ld
                 );
                 H2P_dense_mat_normalize_columns(A_block, inadm_skel_coord);
+                if (A_blk_ncol > 3 * A_blk_nrow)
+                {
+                    H2P_dense_mat_t A_block1 = node_skel_coord;
+                    H2P_dense_mat_t rand_mat = inadm_skel_coord;
+                    H2P_dense_mat_resize(A_block1, A_blk_nrow, A_blk_nrow);
+                    H2P_dense_mat_resize(rand_mat, A_blk_ncol, A_blk_nrow);
+                    H2P_gen_normal_distribution(0.0, 1.0, A_blk_ncol * A_blk_nrow, rand_mat->data);
+                    CBLAS_GEMM(
+                        CblasRowMajor, CblasNoTrans, CblasNoTrans, A_blk_nrow, A_blk_nrow, A_blk_ncol, 
+                        1.0, A_block->data, A_block->ld, rand_mat->data, rand_mat->ld, 
+                        0.0, A_block1->data,  A_block1->ld
+                    );
+                    H2P_dense_mat_resize(A_block, A_blk_nrow, A_blk_nrow);
+                    H2P_copy_matrix_block(A_blk_nrow, A_blk_nrow, A_block1->data, A_block1->ld, A_block->data, A_block->ld);
+                }
 
                 // (7) ID compress
                 // Note: A is transposed in ID compress, be careful when calculating the buffer size

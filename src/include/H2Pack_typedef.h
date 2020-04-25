@@ -109,6 +109,13 @@ struct H2Pack
     int    *node_n_r_inadm;         // Size n_node, numbers of each node's reduced inadmissible nodes
     int    *node_n_r_adm;           // Size n_node, numbers of each node's reduced admissible nodes
     int    *coord_idx;              // Size n_point, original index of each point
+    int    *B_p2i_rowptr;           // Size n_node+1, row_ptr array of the CSR matrix for mapping B{i, j} to a B block index
+    int    *B_p2i_colidx;           // Size n_B, col_idx array of the CSR matrix for mapping B{i, j} to a B block index
+    int    *B_p2i_val;              // Size n_B, val array of the CSR matrix for mapping B{i, j} to a B block index
+    int    *D_p2i_rowptr;           // Size n_node+1, row_ptr array of the CSR matrix for mapping D{i, j} to a D block index
+    int    *D_p2i_colidx;           // Size n_D, col_idx array of the CSR matrix for mapping D{i, j} to a D block index
+    int    *D_p2i_val;              // Size n_D, val array of the CSR matrix for mapping D{i, j} to a D block index
+    int    *ULV_Ls;                 // Size n_node, splitting point of each ULV_L[i], (1 : ULV_Ls[i], 1 : ULV_Ls[i]) are I
     int    *B_nrow;                 // Size n_B, numbers of rows of generator matrices
     int    *B_ncol;                 // Size n_B, numbers of columns of generator matrices
     int    *D_nrow;                 // Size n_D, numbers of rows of dense blocks in the original matrix
@@ -128,11 +135,14 @@ struct H2Pack
     H2P_int_vec_t     D_blk0;       // Size BD_NTASK_THREAD * n_thread, diagonal blocks in D matrices task partitioning
     H2P_int_vec_t     D_blk1;       // Size BD_NTASK_THREAD * n_thread, inadmissible blocks in D matrices task partitioning
     H2P_int_vec_t     *J;           // Size n_node, skeleton row sets
-    H2P_dense_mat_t   *J_coord;     // Size n_node, Coordinate of J points
-    H2P_dense_mat_t   *pp;          // Size max_level + 1, proxy points on each level for generating U and J
+    H2P_int_vec_t     *ULV_idx;     // Size n_node, indices of the sub-matrix which ULV_Q and ULV_L performs on for each node in global sense
+    H2P_dense_mat_t   *J_coord;     // Size n_node, coordinate of J points
+    H2P_dense_mat_t   *pp;          // Size max_level+1, proxy points on each level for generating U and J
     H2P_dense_mat_t   *U;           // Size n_node, Projection matrices
     H2P_dense_mat_t   *y0;          // Size n_node, temporary arrays used in matvec
     H2P_dense_mat_t   *y1;          // Size n_node, temporary arrays used in matvec
+    H2P_dense_mat_t   *ULV_Q;       // Size n_node, HSS ULV factorization orthogonal matrix w.r.t. each node's basis
+    H2P_dense_mat_t   *ULV_L;       // Size n_node, HSS ULV factorization Cholesky factor w.r.t. each node's diagonal block
     H2P_thread_buf_t  *tb;          // Size n_thread, thread-local buffer
     kernel_eval_fptr  krnl_eval;    // Pointer to kernel matrix evaluation function
     kernel_bimv_fptr  krnl_bimv;    // Pointer to kernel matrix bi-matvec function

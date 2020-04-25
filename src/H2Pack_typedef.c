@@ -59,6 +59,13 @@ void H2P_init(
     h2pack->node_n_r_inadm      = NULL;
     h2pack->node_n_r_adm        = NULL;
     h2pack->coord_idx           = NULL;
+    h2pack->B_p2i_rowptr        = NULL;
+    h2pack->B_p2i_colidx        = NULL;
+    h2pack->B_p2i_val           = NULL;
+    h2pack->D_p2i_rowptr        = NULL;
+    h2pack->D_p2i_colidx        = NULL;
+    h2pack->D_p2i_val           = NULL;
+    h2pack->ULV_Ls              = NULL;
     h2pack->B_nrow              = NULL;
     h2pack->B_ncol              = NULL;
     h2pack->D_nrow              = NULL;
@@ -72,11 +79,14 @@ void H2P_init(
     h2pack->xT                  = NULL;
     h2pack->yT                  = NULL;
     h2pack->J                   = NULL;
+    h2pack->ULV_idx             = NULL;
     h2pack->J_coord             = NULL;
     h2pack->pp                  = NULL;
     h2pack->U                   = NULL;
     h2pack->y0                  = NULL;
     h2pack->y1                  = NULL;
+    h2pack->ULV_Q               = NULL;
+    h2pack->ULV_L               = NULL;
     h2pack->tb                  = NULL;
     h2pack->upward_tq           = NULL;
     
@@ -118,6 +128,13 @@ void H2P_destroy(H2Pack_t h2pack)
     free(h2pack->node_n_r_inadm);
     free(h2pack->node_n_r_adm);
     free(h2pack->coord_idx);
+    free(h2pack->B_p2i_rowptr);
+    free(h2pack->B_p2i_colidx);
+    free(h2pack->B_p2i_val);
+    free(h2pack->D_p2i_rowptr);
+    free(h2pack->D_p2i_colidx);
+    free(h2pack->D_p2i_val);
+    free(h2pack->ULV_Ls);
     free(h2pack->B_nrow);
     free(h2pack->B_ncol);
     free(h2pack->D_nrow);
@@ -152,6 +169,13 @@ void H2P_destroy(H2Pack_t h2pack)
         free(h2pack->J);
     }
     
+    if (h2pack->ULV_idx != NULL)
+    {
+        for (int i = 0; i < h2pack->n_node; i++)
+            H2P_int_vec_destroy(h2pack->ULV_idx[i]);
+        free(h2pack->ULV_idx);
+    }
+
     if (h2pack->J_coord != NULL)
     {
         for (int i = 0; i < h2pack->n_UJ; i++)
@@ -165,6 +189,17 @@ void H2P_destroy(H2Pack_t h2pack)
         for (int i = 0; i < h2pack->n_UJ; i++)
             H2P_dense_mat_destroy(h2pack->U[i]);
         free(h2pack->U);
+    }
+
+    if (h2pack->ULV_Q != NULL)
+    {
+        for (int i = 0; i < h2pack->n_node; i++)
+        {
+            H2P_dense_mat_destroy(h2pack->ULV_Q[i]);
+            H2P_dense_mat_destroy(h2pack->ULV_L[i]);
+        }
+        free(h2pack->ULV_Q);
+        free(h2pack->ULV_L);
     }
     
     // If we don't run H2P_matvec, h2pack->y0 == h2pack->y1 == NULL

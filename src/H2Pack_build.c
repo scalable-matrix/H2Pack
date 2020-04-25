@@ -1184,6 +1184,59 @@ void H2P_partition_workload(
     blk_displs->length = idx;
 }
 
+static void qsort_int_pair(int *key, int *val, int l, int r)
+{
+    int i = l, j = r, tmp_key, tmp_val;
+    int mid_key = key[(l + r) / 2];
+    while (i <= j)
+    {
+        while (key[i] < mid_key) i++;
+        while (key[j] > mid_key) j--;
+        if (i <= j)
+        {
+            tmp_key = key[i]; key[i] = key[j]; key[j] = tmp_key;
+            tmp_val = val[i]; val[i] = val[j]; val[j] = tmp_val;
+            i++;  j--;
+        }
+    }
+    if (i < r) qsort_int_pair(key, val, i, r);
+    if (j > l) qsort_int_pair(key, val, l, j);
+}
+
+// Convert a COO matrix to a CSR matrix 
+// Input parameters:
+//   nrow          : Number of rows
+//   nnz           : Number of nonzeros in the matrix
+//   row, col, val : Size nnz, COO matrix
+// Output parameters:
+//   row_ptr, col_idx, val_ : Size nrow+1, nnz, nnz, CSR matrix
+static void H2P_int_COO_to_CSR(
+    const int nrow, const int nnz, const int *row, const int *col, 
+    const int *val, int *row_ptr, int *col_idx, int *val_
+)
+{
+    // Get the number of non-zeros in each row
+    memset(row_ptr, 0, sizeof(int) * (nrow + 1));
+    for (int i = 0; i < nnz; i++) row_ptr[row[i] + 1]++;
+    // Calculate the displacement of 1st non-zero in each row
+    for (int i = 2; i <= nrow; i++) row_ptr[i] += row_ptr[i - 1];
+    // Use row_ptr to bucket sort col[] and val[]
+    for (int i = 0; i < nnz; i++)
+    {
+        int idx = row_ptr[row[i]];
+        col_idx[idx] = col[i];
+        val_[idx] = val[i];
+        row_ptr[row[i]]++;
+    }
+    // Reset row_ptr
+    for (int i = nrow; i >= 1; i--) row_ptr[i] = row_ptr[i - 1];
+    row_ptr[0] = 0;
+    // Sort the non-zeros in each row according to column indices
+    #pragma omp parallel for
+    for (int i = 0; i < nrow; i++)
+        qsort_int_pair(col_idx, val_, row_ptr[i], row_ptr[i + 1] - 1);
+}
+
 // Build H2 generator matrices
 // Input parameter:
 //   h2pack : H2Pack structure with H2 projection matrices
@@ -1227,6 +1280,12 @@ void H2P_build_B(H2Pack_t h2pack)
     int    *B_ncol = h2pack->B_ncol;
     size_t *B_ptr  = h2pack->B_ptr;
     assert(h2pack->B_nrow != NULL && h2pack->B_ncol != NULL && h2pack->B_ptr != NULL);
+
+    int B_pair_cnt = 0;
+    int *B_pair_i = (int*) malloc(sizeof(int) * h2pack->n_B * 2);
+    int *B_pair_j = (int*) malloc(sizeof(int) * h2pack->n_B * 2);
+    int *B_pair_v = (int*) malloc(sizeof(int) * h2pack->n_B * 2);
+    assert(B_pair_i != NULL && B_pair_j != NULL && B_pair_v != NULL);
     
     // 2. Partition B matrices into multiple blocks s.t. each block has approximately
     //    the same workload (total size of B matrices in a block)
@@ -1271,6 +1330,10 @@ void H2P_build_B(H2Pack_t h2pack)
         //Bi_size = (Bi_size + N_DTYPE_64B - 1) / N_DTYPE_64B * N_DTYPE_64B;
         B_total_size += Bi_size;
         B_ptr[i + 1] = Bi_size;
+        B_pair_i[B_pair_cnt] = node0;
+        B_pair_j[B_pair_cnt] = node1;
+        B_pair_v[B_pair_cnt] = i + 1;
+        B_pair_cnt++;
         // Add Statistic info
         mat_size[4]  += B_nrow[i] * B_ncol[i];
         mat_size[4]  += 2 * (B_nrow[i] + B_ncol[i]);
@@ -1280,6 +1343,17 @@ void H2P_build_B(H2Pack_t h2pack)
     H2P_partition_workload(n_r_adm_pair, B_ptr + 1, B_total_size, n_thread * BD_ntask_thread, B_blk);
     for (int i = 1; i <= n_r_adm_pair; i++) B_ptr[i] += B_ptr[i - 1];
     mat_size[1] = B_total_size;
+
+    h2pack->B_p2i_rowptr = (int*) malloc(sizeof(int) * (n_node + 1));
+    h2pack->B_p2i_colidx = (int*) malloc(sizeof(int) * h2pack->n_B * 2);
+    h2pack->B_p2i_val    = (int*) malloc(sizeof(int) * h2pack->n_B * 2);
+    assert(h2pack->B_p2i_rowptr != NULL);
+    assert(h2pack->B_p2i_colidx != NULL);
+    assert(h2pack->B_p2i_val    != NULL);
+    H2P_int_COO_to_CSR(
+        n_node, B_pair_cnt, B_pair_i, B_pair_j, B_pair_v, 
+        h2pack->B_p2i_rowptr, h2pack->B_p2i_colidx, h2pack->B_p2i_val
+    );
 
     if (BD_JIT == 1) return;
 
@@ -1377,6 +1451,7 @@ void H2P_build_D(H2Pack_t h2pack)
 {
     int    BD_JIT          = h2pack->BD_JIT;
     int    krnl_dim        = h2pack->krnl_dim;
+    int    n_node          = h2pack->n_node;
     int    n_thread        = h2pack->n_thread;
     int    n_point         = h2pack->n_point;
     int    n_leaf_node     = h2pack->n_leaf_node;
@@ -1411,6 +1486,12 @@ void H2P_build_D(H2Pack_t h2pack)
     int    *D_ncol = h2pack->D_ncol;
     size_t *D_ptr  = h2pack->D_ptr;
     assert(h2pack->D_nrow != NULL && h2pack->D_ncol != NULL && h2pack->D_ptr != NULL);
+
+    int D_pair_cnt = 0;
+    int *D_pair_i = (int*) malloc(sizeof(int) * h2pack->n_D * 2);
+    int *D_pair_j = (int*) malloc(sizeof(int) * h2pack->n_D * 2);
+    int *D_pair_v = (int*) malloc(sizeof(int) * h2pack->n_D * 2);
+    assert(D_pair_i != NULL && D_pair_j != NULL && D_pair_v != NULL);
     
     // 2. Partition D matrices into multiple blocks s.t. each block has approximately
     //    the same workload (total size of D matrices in a block)
@@ -1428,6 +1509,10 @@ void H2P_build_D(H2Pack_t h2pack)
         //Di_size = (Di_size + N_DTYPE_64B - 1) / N_DTYPE_64B * N_DTYPE_64B;
         D_ptr[i + 1] = Di_size;
         D0_total_size += Di_size;
+        D_pair_i[D_pair_cnt] = node;
+        D_pair_j[D_pair_cnt] = node;
+        D_pair_v[D_pair_cnt] = i + 1;
+        D_pair_cnt++;
         // Add statistic info
         mat_size[6] += D_nrow[i] * D_ncol[i];
         mat_size[6] += D_nrow[i] + D_ncol[i];
@@ -1453,6 +1538,10 @@ void H2P_build_D(H2Pack_t h2pack)
         //Di_size = (Di_size + N_DTYPE_64B - 1) / N_DTYPE_64B * N_DTYPE_64B;
         D_ptr[ii + 1] = Di_size;
         D1_total_size += Di_size;
+        D_pair_i[D_pair_cnt] = node0;
+        D_pair_j[D_pair_cnt] = node1;
+        D_pair_v[D_pair_cnt] = ii + 1;
+        D_pair_cnt++;
         // Add statistic info
         mat_size[6] += D_nrow[ii] * D_ncol[ii];
         mat_size[6] += 2 * (D_nrow[ii] + D_ncol[ii]);
@@ -1462,6 +1551,17 @@ void H2P_build_D(H2Pack_t h2pack)
     for (int i = 1; i <= n_leaf_node + n_r_inadm_pair; i++) D_ptr[i] += D_ptr[i - 1];
     mat_size[2] = D0_total_size + D1_total_size;
     
+    h2pack->D_p2i_rowptr = (int*) malloc(sizeof(int) * (n_node + 1));
+    h2pack->D_p2i_colidx = (int*) malloc(sizeof(int) * h2pack->n_D * 2);
+    h2pack->D_p2i_val    = (int*) malloc(sizeof(int) * h2pack->n_D * 2);
+    assert(h2pack->D_p2i_rowptr != NULL);
+    assert(h2pack->D_p2i_colidx != NULL);
+    assert(h2pack->D_p2i_val    != NULL);
+    H2P_int_COO_to_CSR(
+        n_node, D_pair_cnt, D_pair_i, D_pair_j, D_pair_v, 
+        h2pack->D_p2i_rowptr, h2pack->D_p2i_colidx, h2pack->D_p2i_val
+    );
+
     if (BD_JIT == 1) return;
     
     h2pack->D_data = (DTYPE*) malloc_aligned(sizeof(DTYPE) * (D0_total_size + D1_total_size), 64);

@@ -1,6 +1,7 @@
 LIB   = libH2Pack.a
 OBJS  = H2Pack_typedef.o utils.o H2Pack_aux_structs.o H2Pack_ID_compress.o \
-        H2Pack_partition.o H2Pack_build.o H2Pack_matvec.o DAG_task_queue.o
+        H2Pack_partition.o H2Pack_build.o H2Pack_matvec.o DAG_task_queue.o \
+        H2Pack_HSS_ULV.o
 
 USE_MKL      = 1
 USE_OPENBLAS = 0
@@ -54,6 +55,9 @@ H2Pack_build.o: ./include/*.h H2Pack_build.c
 
 H2Pack_matvec.o: ./include/*.h H2Pack_matvec.c
 	$(CC) $(CFLAGS) H2Pack_matvec.c -c 
+
+H2Pack_HSS_ULV.o: ./include/*.h H2Pack_HSS_ULV.c
+	$(CC) $(CFLAGS) H2Pack_HSS_ULV.c -c 
 
 DAG_task_queue.o: ./include/*.h DAG_task_queue.c
 	$(CC) $(CFLAGS) DAG_task_queue.c -c 

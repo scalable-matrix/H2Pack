@@ -9,6 +9,7 @@
 #define DTYPE_SIZE       DOUBLE_SIZE    // Matrix data type: double or float
 
 #if DTYPE_SIZE == DOUBLE_SIZE           // Functions for double data type
+
 #define DTYPE            double         // Data type
 #define DABS             fabs           // Abs function
 #define DLOG             log            // Logarithm function
@@ -21,25 +22,36 @@
 #define CBLAS_GEMM       cblas_dgemm    // CBLAS matrix-matrix multiplication
 #define CBLAS_GER        cblas_dger     // CBLAS matrix rank-1 update
 #define CBLAS_TRSM       cblas_dtrsm    // CBLAS triangle solve
+#define LAPACK_GEQRF     LAPACKE_dgeqrf // LAPACK QR factorization
+#define LAPACK_ORMQR     LAPACKE_dormqr // LAPACK QR Q matrix multiples another matrix
+#define LAPACK_POTRF     LAPACKE_dpotrf // LAPACK Cholesky factorization
+#define LAPACK_POTRS     LAPACKE_dpotrs // LAPACK linear system solve using Cholesky factorization
 #define N_DTYPE_64B      8              // 8 double == 64 bytes, for alignment
 #define SIMD_LEN         SIMD_LEN_D     // SIMD vector length
+
 #endif
 
 #if DTYPE_SIZE == FLOAT_SIZE            // Functions for float data type
+
 #define DTYPE            float
 #define DABS             fabsf
 #define DLOG             logf
 #define DEXP             expf
 #define DFLOOR           floorf
 #define DSQRT            sqrtf    
-#define CBLAS_NRM2       cblas_snrm2    // CBLAS vector 2-norm 
-#define CBLAS_DOT        cblas_sdot     // CBLAS vector dot product
+#define CBLAS_NRM2       cblas_snrm2
+#define CBLAS_DOT        cblas_sdot
 #define CBLAS_GEMV       cblas_sgemv
 #define CBLAS_GEMM       cblas_sgemm
 #define CBLAS_GER        cblas_sger
 #define CBLAS_TRSM       cblas_strsm
+#define LAPACK_GEQRF     LAPACKE_sgeqrf
+#define LAPACK_ORMQR     LAPACKE_sormqr
+#define LAPACK_POTRF     LAPACKE_spotrf
+#define LAPACK_POTRS     LAPACKE_spotrs
 #define N_DTYPE_64B      16
 #define SIMD_LEN         SIMD_LEN_S
+
 #endif
 
 #define QR_RANK          0              // Partial QR stop criteria: maximum rank

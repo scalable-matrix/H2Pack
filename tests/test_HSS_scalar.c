@@ -125,7 +125,11 @@ void parse_params(int argc, char **argv)
     {
         printf("Binary/CSV coordinate file not provided. Generating random coordinates in unit box...");
         for (int i = 0; i < test_params.n_point * test_params.pt_dim; i++)
-            test_params.coord[i] = drand48();// + drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48() - 6)/sqrt(12);
+        {
+            test_params.coord[i] = drand48();
+            // Approximate normal distribution
+            //test_params.coord[i] = drand48() + drand48() + drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48() - 6)/sqrt(12);
+        }
         printf(" done.\n");
     }
     
@@ -298,44 +302,74 @@ int main(int argc, char **argv)
     }
     printf("Calculating direct n-body reference result for points %d -> %d\n", check_pt_s, check_pt_s + n_check_pt - 1);
     
-    DTYPE *x, *y0, *y1;
-    x  = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
+    DTYPE *x0, *x1, *y0, *y1;
+    x0 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
+    x1 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
     y0 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_dim * n_check_pt);
     y1 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
-    assert(x != NULL && y0 != NULL && y1 != NULL);
-    for (int i = 0; i < test_params.krnl_mat_size; i++) x[i] = (drand48() + drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48() - 6)/sqrt(12);
+    assert(x0 != NULL && x1 != NULL && y0 != NULL && y1 != NULL);
+    for (int i = 0; i < test_params.krnl_mat_size; i++) 
+    {
+        x0[i] = drand48();
+        // Approximate normal distribution
+        //x0[i] = (drand48() + drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48() - 6)/sqrt(12);
+    }
 
     // Get reference results
     direct_nbody(
         krnl_param, test_params.krnl_eval, test_params.pt_dim, test_params.krnl_dim, 
-        h2pack->coord,              test_params.n_point, test_params.n_point, x, 
+        h2pack->coord,              test_params.n_point, test_params.n_point, x0, 
         h2pack->coord + check_pt_s, test_params.n_point, n_check_pt,          y0
     );
     
     // Warm up, reset timers, and test the matvec performance
-    H2P_matvec(h2pack, x, y1);
+    H2P_matvec(h2pack, x0, y1);
     h2pack->n_matvec = 0;
     memset(h2pack->timers + 4, 0, sizeof(double) * 5);
     //__itt_resume();
     for (int i = 0; i < 10; i++) 
-        H2P_matvec(h2pack, x, y1);
+        H2P_matvec(h2pack, x0, y1);
     //__itt_pause();
     
     H2P_print_statistic(h2pack);
     
-    // Verify H2 matvec results
-    DTYPE y0_norm = 0.0, err_norm = 0.0;
+    // Verify HSS matvec results
+    DTYPE ref_norm = 0.0, err_norm = 0.0;
     for (int i = 0; i < test_params.krnl_dim * n_check_pt; i++)
     {
         DTYPE diff = y1[test_params.krnl_dim * check_pt_s + i] - y0[i];
-        y0_norm  += y0[i] * y0[i];
+        ref_norm += y0[i] * y0[i];
         err_norm += diff * diff;
     }
-    y0_norm  = DSQRT(y0_norm);
+    ref_norm = DSQRT(ref_norm);
     err_norm = DSQRT(err_norm);
-    printf("For %d validation points: ||y_{HSS} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / y0_norm);
+    printf("For %d validation points: ||y_{HSS} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / ref_norm);
     
-    free(x);
+    // Test ULV Cholesky factorization
+    const DTYPE shift = 1000;
+    st = get_wtime_sec();
+    H2P_HSS_ULV_Cholesky_factorize(h2pack, shift);
+    et = get_wtime_sec();
+    printf("H2P_HSS_ULV_Cholesky_factorize used %.3lf sec\n", et - st);
+
+    for (int i = 0; i < test_params.krnl_mat_size; i++) y1[i] += shift * x0[i];
+    st = get_wtime_sec();
+    H2P_HSS_ULV_Cholesky_solve(h2pack, 3, y1, x1);
+    et = get_wtime_sec();
+    ref_norm = 0.0; 
+    err_norm = 0.0;
+    for (int i = 0; i < test_params.krnl_mat_size; i++)
+    {
+        DTYPE diff = x1[i] - x0[i];
+        ref_norm += x0[i] * x0[i];
+        err_norm += diff * diff;
+    }
+    ref_norm = DSQRT(ref_norm);
+    err_norm = DSQRT(err_norm);
+    printf("H2P_HSS_ULV_Cholesky_solve     used %.3lf sec, relerr = %e\n", et - st, err_norm / ref_norm);
+
+    free(x0);
+    free(x1);
     free(y0);
     free(y1);
     free_aligned(test_params.coord);

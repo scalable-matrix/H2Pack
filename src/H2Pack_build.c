@@ -897,6 +897,8 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
     H2P_dense_mat_t *U       = h2pack->U;
     H2P_int_vec_t   *J       = h2pack->J;
     H2P_dense_mat_t *J_coord = h2pack->J_coord;
+
+    double *U_timers = (double*) malloc(sizeof(double) * n_thread * 8);
     
     // 2. Initialize the row indices for leaf nodes: all points in that box
     for (int j = 0; j < n_leaf_node; j++)
@@ -962,6 +964,8 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
             H2P_dense_mat_t inadm_skel_coord = thread_buf[tid]->mat1;
             H2P_dense_mat_t A_block          = thread_buf[tid]->mat2;
             H2P_dense_mat_t QR_buff          = thread_buf[tid]->mat1;
+
+            double st, et, krnl_t = 0.0, randn_t = 0.0, gemm_t = 0.0, QR_t = 0.0, other_t = 0.0;
             
             thread_buf[tid]->timer -= get_wtime_sec();
             #pragma omp for schedule(dynamic) nowait
@@ -971,6 +975,7 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                 int height = node_height[node];
 
                 // (2) Calculate the number of skeleton points from all inadmissible nodes
+                st = get_wtime_sec();
                 int n_r_inadm = node_n_r_inadm[node];
                 int inadm_skel_npt = 0;
                 inadm_skel_idx->length = 0;
@@ -994,8 +999,11 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                     }
                     inadm_skel_npt = inadm_skel_idx->length;
                 }
+                et = get_wtime_sec();
+                other_t += et - st;
                 
                 // (3) Gather current node's skeleton points (== all children nodes' skeleton points)
+                st = get_wtime_sec();
                 H2P_dense_mat_resize(node_skel_coord, pt_dim, J[node]->length);
                 if (height == 0)
                 {
@@ -1015,8 +1023,11 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                         J_child_size += J[i_child_node]->length;
                     }
                 }
+                et = get_wtime_sec();
+                other_t += et - st;
                 
                 // (4) Shift points in this node so their center is at the original point
+                st = get_wtime_sec();
                 DTYPE *node_box = enbox + node * 2 * pt_dim;
                 int node_skel_npt = J[node]->length;
                 int node_pp_npt = pp[level]->ncol;
@@ -1028,9 +1039,12 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                     for (int l = 0; l < node_skel_npt; l++)
                         node_skel_coord_k[l] -= box_center_k;
                 }
+                et = get_wtime_sec();
+                other_t += et - st;
 
                 // (5) Gather skeleton points from all inadmissible nodes and shift their centers to 
                 //     the original point. We also put proxy points into inadm_skel_coord.
+                st = get_wtime_sec();
                 H2P_dense_mat_resize(inadm_skel_coord, pt_dim, inadm_skel_npt + node_pp_npt);
                 if (inadm_skel_npt > 0)
                 {
@@ -1051,8 +1065,11 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                         inadm_skel_coord->data + inadm_skel_npt, inadm_skel_coord->ld
                     );
                 }
+                et = get_wtime_sec();
+                other_t += et - st;
 
                 // (6) Build the hybrid matrix block
+                st = get_wtime_sec();
                 int A_blk_nrow = node_skel_npt * krnl_dim;
                 int A_blk_ncol = inadm_skel_coord->ncol * krnl_dim;
                 H2P_dense_mat_resize(A_block, A_blk_nrow, A_blk_ncol);
@@ -1062,13 +1079,20 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                     krnl_param, A_block->data, A_block->ld
                 );
                 H2P_dense_mat_normalize_columns(A_block, inadm_skel_coord);
-                if (A_blk_ncol > 3 * A_blk_nrow)
+                et = get_wtime_sec();
+                krnl_t += et - st;
+                if (A_blk_ncol > 2 * A_blk_nrow)
                 {
+                    st = get_wtime_sec();
                     H2P_dense_mat_t A_block1 = node_skel_coord;
                     H2P_dense_mat_t rand_mat = inadm_skel_coord;
                     H2P_dense_mat_resize(A_block1, A_blk_nrow, A_blk_nrow);
                     H2P_dense_mat_resize(rand_mat, A_blk_ncol, A_blk_nrow);
                     H2P_gen_normal_distribution(0.0, 1.0, A_blk_ncol * A_blk_nrow, rand_mat->data);
+                    et = get_wtime_sec();
+                    randn_t += et - st;
+
+                    st = get_wtime_sec();
                     CBLAS_GEMM(
                         CblasRowMajor, CblasNoTrans, CblasNoTrans, A_blk_nrow, A_blk_nrow, A_blk_ncol, 
                         1.0, A_block->data, A_block->ld, rand_mat->data, rand_mat->ld, 
@@ -1076,10 +1100,13 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                     );
                     H2P_dense_mat_resize(A_block, A_blk_nrow, A_blk_nrow);
                     H2P_copy_matrix_block(A_blk_nrow, A_blk_nrow, A_block1->data, A_block1->ld, A_block->data, A_block->ld);
+                    et = get_wtime_sec();
+                    gemm_t += et - st;
                 }
 
                 // (7) ID compress
                 // Note: A is transposed in ID compress, be careful when calculating the buffer size
+                st = get_wtime_sec();
                 if (krnl_dim == 1)
                 {
                     H2P_dense_mat_resize(QR_buff, A_block->nrow, 1);
@@ -1092,8 +1119,11 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                     A_block, stop_type, stop_param, &U[node], sub_idx, 
                     1, QR_buff->data, ID_buff->data, krnl_dim
                 );
+                et = get_wtime_sec();
+                QR_t += et - st;
                 
                 // (8) Choose the skeleton points of this node
+                st = get_wtime_sec();
                 for (int k = 0; k < sub_idx->length; k++)
                     J[node]->data[k] = J[node]->data[sub_idx->data[k]];
                 J[node]->length = sub_idx->length;
@@ -1102,8 +1132,16 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                     coord, n_point, J_coord[node]->data, J[node]->length, 
                     pt_dim, J[node]->data, J[node]->length
                 );
+                et = get_wtime_sec();
+                other_t += et - st;
             }  // End of j loop
             thread_buf[tid]->timer += get_wtime_sec();
+            double *timers = U_timers + tid * 8;
+            timers[0] = krnl_t;
+            timers[1] = randn_t;
+            timers[2] = gemm_t;
+            timers[3] = QR_t;
+            timers[4] = other_t;
         }  // End of "pragma omp parallel"
         
         #ifdef PROFILING_OUTPUT
@@ -1116,8 +1154,18 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
             min_t = MIN(min_t, thread_i_timer);
         }
         avg_t /= (double) n_thread_i;
-        printf("[PROFILING] Build U: height %d, %d/%d threads, %d nodes, ", i, n_thread_i, n_thread, height_n_node[i]);
+        printf("[PROFILING] Build U: level %d, %d/%d threads, %d nodes, ", i, n_thread_i, n_thread, level_n_node[i]);
         printf("min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
+        printf("[PROFILING] Build U subroutine time consumption:\n");
+        printf("tid, kernel eval, randn gen, gemm, ID compress, misc, total\n");
+        for (int tid = 0; tid < n_thread_i; tid++)
+        {
+            double *timers = U_timers + 8 * tid;
+            printf(
+                "%3d, %6.3lf, %6.3lf, %6.3lf, %6.3lf, %6.3lf, %6.3lf\n",
+                tid, timers[0], timers[1], timers[2], timers[3], timers[4], thread_buf[tid]->timer
+            );
+        }
         #endif
     }  // End of i loop
 
@@ -1148,6 +1196,8 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
         //printf("Node %3d: %d skeleton points\n", i, J[i]->length);
     }
     
+    free(U_timers);
+
     for (int i = 0; i < n_thread; i++)
         H2P_thread_buf_reset(thread_buf[i]);
     BLAS_SET_NUM_THREADS(n_thread);

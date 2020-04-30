@@ -234,8 +234,7 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
             H2P_dense_mat_t tmpU   = thread_buf[tid]->mat0;
             H2P_dense_mat_t tmpD   = thread_buf[tid]->mat1;
             H2P_dense_mat_t tmpB   = thread_buf[tid]->mat2;
-            H2P_dense_mat_t tmpM;
-            H2P_dense_mat_init(&tmpM, 1024, 1);
+            H2P_dense_mat_t tmpM   = thread_buf[tid]->mat2;
 
             #pragma omp for
             for (int j = 0; j < level_i_n_node; j++)
@@ -482,8 +481,6 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                     }
                 }
             }  // End of j loop
-
-            H2P_dense_mat_destroy(tmpM);
         }  // End of "#pragma omp parallel"
     }  // End of i loop
 

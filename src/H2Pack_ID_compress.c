@@ -9,24 +9,6 @@
 #include "H2Pack_aux_structs.h"
 #include "utils.h"
 
-static inline DTYPE CBLAS_NRM2(const int n, const DTYPE *x)
-{
-    DTYPE res = 0.0;
-    #pragma omp simd
-    for (int i = 0; i < n; i++) 
-        res += x[i] * x[i];
-    return DSQRT(res);
-}
-
-static inline DTYPE CBLAS_DOT(const int n, const DTYPE *x, const DTYPE *y)
-{
-    DTYPE res = 0.0;
-    #pragma omp simd
-    for (int i = 0; i < n; i++) 
-        res += x[i] * y[i];
-    return res;
-}
-
 static inline void swap_int(int *x, int *y, int len)
 {
     int tmp;
@@ -86,7 +68,7 @@ void H2P_partial_pivot_QR(
     for (int j = 0; j < ncol; j++)
     {
         p[j] = j;
-        col_norm[j] = CBLAS_NRM2(nrow, R + j * ldR);
+        col_norm[j] = CBLAS_NRM2(nrow, R + j * ldR, 1);
     }
     DTYPE norm_p = 0.0;
     int pivot = 0;
@@ -129,9 +111,9 @@ void H2P_partial_pivot_QR(
         int h_len_m1 = h_len - 1;
         DTYPE *h_vec = R + i * ldR + i;
         DTYPE sign   = (h_vec[0] > 0.0) ? 1.0 : -1.0;
-        DTYPE h_norm = CBLAS_NRM2(h_len, h_vec);
+        DTYPE h_norm = CBLAS_NRM2(h_len, h_vec, 1);
         h_vec[0] = h_vec[0] + sign * h_norm;
-        DTYPE inv_h_norm = 1.0 / CBLAS_NRM2(h_len, h_vec);
+        DTYPE inv_h_norm = 1.0 / CBLAS_NRM2(h_len, h_vec, 1);
         #pragma omp simd
         for (int j = 0; j < h_len; j++) h_vec[j] *= inv_h_norm;
         
@@ -146,7 +128,7 @@ void H2P_partial_pivot_QR(
             int ji1 = j + i + 1;
             
             DTYPE *R_block_j = R_block + j * ldR;
-            DTYPE h_Rj = 2.0 * CBLAS_DOT(R_block_nrow, h_vec, R_block_j);
+            DTYPE h_Rj = 2.0 * CBLAS_DOT(R_block_nrow, h_vec, 1, R_block_j, 1);
             
             // 4. Orthogonalize columns right to the i-th column
             #pragma omp simd
@@ -163,7 +145,7 @@ void H2P_partial_pivot_QR(
             tmp = col_norm[ji1] * col_norm[ji1] - tmp;
             if (tmp <= 1e-10)
             {
-                col_norm[ji1] = CBLAS_NRM2(h_len_m1, R_block_j + 1);
+                col_norm[ji1] = CBLAS_NRM2(h_len_m1, R_block_j + 1, 1);
             } else {
                 // Fast update 2-norm when the new column norm is not so small
                 col_norm[ji1] = DSQRT(tmp);
@@ -223,7 +205,7 @@ void H2P_partial_pivot_QR_kdim(
     #pragma omp parallel for if(n_thread > 1) \
     num_threads(n_thread) schedule(static)
     for (int j = 0; j < ncol; j++)
-        blk_norm[j] = CBLAS_NRM2(nrow, R + j * ldR);
+        blk_norm[j] = CBLAS_NRM2(nrow, R + j * ldR, 1);
     
     // Find a column block with largest 2-norm as the first pivot
     DTYPE norm_p = 0.0;
@@ -280,9 +262,9 @@ void H2P_partial_pivot_QR_kdim(
             int h_len    = nrow - ii;
             DTYPE *h_vec = R + ii * ldR + ii;
             DTYPE sign   = (h_vec[0] > 0.0) ? 1.0 : -1.0;
-            DTYPE h_norm = CBLAS_NRM2(h_len, h_vec);
+            DTYPE h_norm = CBLAS_NRM2(h_len, h_vec, 1);
             h_vec[0] = h_vec[0] + sign * h_norm;
-            DTYPE inv_h_norm = 1.0 / CBLAS_NRM2(h_len, h_vec);
+            DTYPE inv_h_norm = 1.0 / CBLAS_NRM2(h_len, h_vec, 1);
             #pragma omp simd
             for (int j = 0; j < h_len; j++) h_vec[j] *= inv_h_norm;
             
@@ -296,7 +278,7 @@ void H2P_partial_pivot_QR_kdim(
                 //int ji1 = j + ii + 1;
                 
                 DTYPE *R_block_j = R_block + j * ldR;
-                DTYPE h_Rj = 2.0 * CBLAS_DOT(R_block_nrow, h_vec, R_block_j);
+                DTYPE h_Rj = 2.0 * CBLAS_DOT(R_block_nrow, h_vec, 1, R_block_j, 1);
                 
                 // Orthogonalize columns right to the ii-th column
                 #pragma omp simd
@@ -387,7 +369,7 @@ void H2P_partial_pivot_QR_kdim(
                 {
                     // R((i + 1) * kdim, j * kdim + k)
                     DTYPE *R_block_k = R + (j*kdim+k) * ldR + (i+1) * kdim;
-                    DTYPE tmp1 = CBLAS_NRM2(nrm_len, R_block_k);
+                    DTYPE tmp1 = CBLAS_NRM2(nrm_len, R_block_k, 1);
                     tmp += tmp1 * tmp1;
                 }
                 blk_norm[j] = DSQRT(tmp);

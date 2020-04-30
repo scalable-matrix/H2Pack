@@ -156,6 +156,34 @@ void parse_params(int argc, char **argv)
             }
         }
     }
+
+    if (test_params.pt_dim == 2) 
+    {
+        switch (test_params.kernel_id)
+        {
+            case 0: 
+            { 
+                test_params.krnl_eval       = Coulomb_2d_eval_intrin_d; 
+                test_params.krnl_bimv       = Coulomb_2d_krnl_bimv_intrin_d; 
+                test_params.krnl_bimv_flops = Coulomb_2d_krnl_bimv_flop;
+                break;
+            }
+            case 1: 
+            {
+                test_params.krnl_eval       = Gaussian_2d_eval_intrin_d; 
+                test_params.krnl_bimv       = Gaussian_2d_krnl_bimv_intrin_d; 
+                test_params.krnl_bimv_flops = Gaussian_2d_krnl_bimv_flop;
+                break;
+            }
+            case 2: 
+            {
+                test_params.krnl_eval       = Matern_2d_eval_intrin_d; 
+                test_params.krnl_bimv       = Matern_2d_krnl_bimv_intrin_d; 
+                test_params.krnl_bimv_flops = Matern_2d_krnl_bimv_flop;
+                break;
+            }
+        }
+    }
 }
 
 void direct_nbody(
@@ -248,7 +276,7 @@ int main(int argc, char **argv)
     st = get_wtime_sec();
     H2P_generate_proxy_point_ID(
         test_params.pt_dim, test_params.krnl_dim, test_params.rel_tol, h2pack->max_level, 
-        2, max_L, krnl_param, test_params.krnl_eval, &pp
+        h2pack->min_adm_level, max_L, krnl_param, test_params.krnl_eval, &pp
     );
     et = get_wtime_sec();
     printf("H2Pack generate proxy points used %.3lf (s)\n", et - st);
@@ -304,7 +332,7 @@ int main(int argc, char **argv)
     }
     y0_norm  = DSQRT(y0_norm);
     err_norm = DSQRT(err_norm);
-    printf("For %d validating points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / y0_norm);
+    printf("For %d validation points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / y0_norm);
     
     free(x);
     free(y0);

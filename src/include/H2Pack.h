@@ -16,11 +16,14 @@
 // H2Pack ID compression
 #include "H2Pack_ID_compress.h"
 
-// H2Pack build H2 representation
+// H2Pack build H2/HSS representation
 #include "H2Pack_build.h"
 
-// H2Pack H2 representation matrix-vector multiplication
+// H2Pack H2/HSS fast matrix-vector multiplication
 #include "H2Pack_matvec.h"
+
+// H2Pack HSS ULV decomposition and solve
+#include "H2Pack_HSS_ULV.h"
 
 // H2Pack optimized kernels
 #include "H2Pack_kernels.h"

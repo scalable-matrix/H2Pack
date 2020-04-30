@@ -179,6 +179,7 @@ void H2P_dense_mat_normalize_columns(H2P_dense_mat_t mat, H2P_dense_mat_t workbu
     H2P_dense_mat_resize(workbuf, 1, ncol);
     DTYPE *inv_2norm = workbuf->data;
     
+    /*
     #pragma omp simd
     for (int icol = 0; icol < ncol; icol++) 
         inv_2norm[icol] = mat->data[icol] * mat->data[icol];
@@ -193,6 +194,11 @@ void H2P_dense_mat_normalize_columns(H2P_dense_mat_t mat, H2P_dense_mat_t workbu
     #pragma omp simd
     for (int icol = 0; icol < ncol; icol++) 
         inv_2norm[icol] = 1.0 / DSQRT(inv_2norm[icol]);
+    */
+
+    // Slower, but more accurate
+    for (int icol = 0; icol < ncol; icol++)
+        inv_2norm[icol] = 1.0 / CBLAS_NRM2(nrow, mat->data + icol, ncol);
     
     for (int irow = 0; irow < nrow; irow++)
     {
@@ -227,6 +233,7 @@ void H2P_thread_buf_init(H2P_thread_buf_t *thread_buf_, const int krnl_mat_size)
     H2P_int_vec_init(&thread_buf->idx1, 1024);
     H2P_dense_mat_init(&thread_buf->mat0, 1024, 1);
     H2P_dense_mat_init(&thread_buf->mat1, 1024, 1);
+    H2P_dense_mat_init(&thread_buf->mat2, 1024, 1);
     thread_buf->y = (DTYPE*) malloc_aligned(sizeof(DTYPE) * krnl_mat_size, 64);
     assert(thread_buf->y != NULL);
     *thread_buf_ = thread_buf;
@@ -239,6 +246,7 @@ void H2P_thread_buf_destroy(H2P_thread_buf_t thread_buf)
     H2P_int_vec_destroy(thread_buf->idx1);
     H2P_dense_mat_destroy(thread_buf->mat0);
     H2P_dense_mat_destroy(thread_buf->mat1);
+    H2P_dense_mat_destroy(thread_buf->mat2);
     free_aligned(thread_buf->y);
 }
 
@@ -253,6 +261,7 @@ void H2P_thread_buf_reset(H2P_thread_buf_t thread_buf)
     H2P_int_vec_set_capacity(thread_buf->idx1, 1024);
     H2P_dense_mat_resize(thread_buf->mat0, 1024, 1);
     H2P_dense_mat_resize(thread_buf->mat1, 1024, 1);
+    H2P_dense_mat_resize(thread_buf->mat2, 1024, 1);
 }
 
 // ------------------------------------------------------------------- // 

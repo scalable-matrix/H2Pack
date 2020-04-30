@@ -79,6 +79,7 @@ void parse_params(int argc, char **argv)
         case 0: printf("Using Laplace kernel : k(x, y) = 1 / |x - y|  \n"); break;
         case 1: printf("Using Gaussian kernel : k(x, y) = exp(-|x - y|^2) \n"); break;
         case 2: printf("Using 3/2 Matern kernel : k(x, y) = (1 + k) * exp(-k), where k = sqrt(3) * |x - y| \n"); break;
+        case 3: printf("Using Quadratic kernel : k(x, y) = (1 + c * |x - y|^2)^a, c and a are set as 1.0 and -0.5 \n"); break;
     }
     
     test_params.coord = (DTYPE*) malloc_aligned(sizeof(DTYPE) * test_params.n_point * test_params.pt_dim, 64);
@@ -125,7 +126,12 @@ void parse_params(int argc, char **argv)
     {
         printf("Binary/CSV coordinate file not provided. Generating random coordinates in unit box...");
         for (int i = 0; i < test_params.n_point * test_params.pt_dim; i++)
-            test_params.coord[i] = drand48();// + drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48() - 6)/sqrt(12);
+        {
+            test_params.coord[i] = drand48();
+            // Make it similar to randn()
+            //test_params.coord[i] = (drand48() + drand48() + drand48() + drand48() + drand48() + drand48() +
+            //                        drand48() + drand48() + drand48() + drand48() + drand48() + drand48() - 6) / sqrt(12);
+        }
         printf(" done.\n");
     }
     
@@ -154,6 +160,13 @@ void parse_params(int argc, char **argv)
                 test_params.krnl_bimv_flops = Matern_3d_krnl_bimv_flop;
                 break;
             }
+            case 3: 
+            {
+                test_params.krnl_eval       = Quadratic_3d_eval_intrin_d; 
+                test_params.krnl_bimv       = Quadratic_3d_krnl_bimv_intrin_d; 
+                test_params.krnl_bimv_flops = Quadratic_3d_krnl_bimv_flop;
+                break;
+            }
         }
     }
 
@@ -180,6 +193,13 @@ void parse_params(int argc, char **argv)
                 test_params.krnl_eval       = Matern_2d_eval_intrin_d; 
                 test_params.krnl_bimv       = Matern_2d_krnl_bimv_intrin_d; 
                 test_params.krnl_bimv_flops = Matern_2d_krnl_bimv_flop;
+                break;
+            }
+            case 3: 
+            {
+                test_params.krnl_eval       = NULL; 
+                test_params.krnl_bimv       = NULL; 
+                test_params.krnl_bimv_flops = 0;
                 break;
             }
         }
@@ -271,7 +291,9 @@ int main(int argc, char **argv)
 
     H2P_dense_mat_t *pp;
     DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * test_params.pt_dim + test_params.pt_dim];
-    void *krnl_param = NULL;  // We don't need kernel parameters yet
+    DTYPE Quadratic_krnl_param[2] = {1.0, -0.5};
+    void *krnl_param = NULL;
+    if (test_params.kernel_id == 3) krnl_param = (void*) &Quadratic_krnl_param[0];
     
     st = get_wtime_sec();
     H2P_generate_proxy_point_ID(
@@ -302,7 +324,13 @@ int main(int argc, char **argv)
     y0 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_dim * n_check_pt);
     y1 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
     assert(x != NULL && y0 != NULL && y1 != NULL);
-    for (int i = 0; i < test_params.krnl_mat_size; i++) x[i] = (drand48() + drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48() - 6)/sqrt(12);
+    for (int i = 0; i < test_params.krnl_mat_size; i++) 
+    {
+        // x[i] = drand48();
+        // Make it similar to randn()
+        x[i] = (drand48() + drand48() + drand48() + drand48() + drand48() + drand48() + 
+                drand48() + drand48() + drand48() + drand48() + drand48() + drand48() - 6) / sqrt(12);
+    }
 
     // Get reference results
     direct_nbody(

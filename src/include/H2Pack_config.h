@@ -14,8 +14,9 @@
 #define DABS             fabs           // Abs function
 #define DLOG             log            // Logarithm function
 #define DEXP             exp            // Exponential function
-#define DFLOOR           floor          // Floor function
+#define DPOW             pow            // Power function
 #define DSQRT            sqrt           // Sqrt function
+#define DFLOOR           floor          // Floor function
 #define CBLAS_NRM2       cblas_dnrm2    // CBLAS vector 2-norm 
 #define CBLAS_DOT        cblas_ddot     // CBLAS vector dot product
 #define CBLAS_GEMV       cblas_dgemv    // CBLAS matrix-vector multiplication
@@ -37,8 +38,9 @@
 #define DABS             fabsf
 #define DLOG             logf
 #define DEXP             expf
-#define DFLOOR           floorf
+#define DPOW             powf
 #define DSQRT            sqrtf    
+#define DFLOOR           floorf
 #define CBLAS_NRM2       cblas_snrm2
 #define CBLAS_DOT        cblas_sdot
 #define CBLAS_GEMV       cblas_sgemv

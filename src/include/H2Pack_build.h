@@ -11,7 +11,7 @@ extern "C" {
 // using ID compress for any kernel function. 
 // This function is isolated because if the enclosing box for all points are fixed,
 // we only need to generate proxy points once and use them repeatedly.
-// Input parameter:
+// Input parameters:
 //   pt_dim      : Dimension of point coordinate
 //   krnl_dim    : Dimension of tensor kernel's return
 //   max_level   : Maximum level (included) of a H2 tree, (root level == 0)
@@ -30,7 +30,7 @@ void H2P_generate_proxy_point_ID(
 // H2 projection and skeleton matrices for SOME kernel function.
 // This function is isolated because if the enclosing box for all points are fixed,
 // we only need to generate proxy points once and use them repeatedly.
-// Input parameter:
+// Input parameters:
 //   pt_dim      : Dimension of point coordinate
 //   min_npts    : Minimum number of proxy points on the box surface
 //   max_level   : Maximum level (included) of a H2 tree, (root level == 0)
@@ -62,7 +62,7 @@ void H2P_partition_workload(
 );
 
 // Build H2 representation with a kernel function
-// Input parameter:
+// Input parameters:
 //   h2pack          : H2Pack structure with point partitioning info
 //   pp              : Array of proxy points for each level
 //   BD_JIT          : 0 or 1, if B and D matrices are computed just-in-time in matvec

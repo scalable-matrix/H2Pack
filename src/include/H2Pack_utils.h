@@ -13,6 +13,16 @@
 extern "C" {
 #endif
 
+// Check if two boxes are admissible 
+// Input parameters:
+//   box0, box1 : Box data, [0 : pt_dim-1] are coordinates of the box corner which is 
+//                closest to the original point, [pt_dim : 2*pt_dim-1] are box length
+//   pt_dim     : Dimension of point coordinate
+//   alpha      : Admissible pair coefficient
+// Output parameter:
+//   <return>   : If two boxes are admissible 
+int H2P_check_box_admissible(const DTYPE *box0, const DTYPE *box1, const int pt_dim, const DTYPE alpha);
+
 // Gather some columns from a matrix to another matrix
 // Input parameters:
 //   src_mat : Source matrix with required columns
@@ -95,7 +105,7 @@ void H2P_gen_rand_sparse_mat_trans(
 //              stores col_idx.
 //   x, ldx   : m-by-k row-major dense matrix, leading dimension ldx
 //   ldy      : Leading dimension of y
-// Output parameters:
+// Output parameter:
 //   y : m-by-n row-major dense matrix, leading dimension ldy
 void H2P_calc_sparse_mm_trans(
     const int m, const int n, const int k,

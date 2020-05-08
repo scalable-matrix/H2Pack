@@ -617,7 +617,7 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
     int    n_thread          = h2pack->n_thread;
     int    max_child         = h2pack->max_child;
     int    max_level         = h2pack->max_level;
-    int    min_adm_level     = h2pack->min_adm_level;
+    int    min_adm_level     = h2pack->HSS_min_adm_level;
     int    stop_type         = h2pack->QR_stop_type;
     int    *children         = h2pack->children;
     int    *n_child          = h2pack->n_child;

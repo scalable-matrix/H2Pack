@@ -209,7 +209,7 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                         }
                         if (info != 0)
                         {
-                            printf("[FATAL] Node %d potrf() return flag = %d, the target matrix is not SPD, consider adding a shift\n", node, info);
+                            printf("[FATAL] Node %d potrf() returned %d, target matrix is not SPD, current diagonal shift %.2lf is not enough\n", node, info, shift);
                             is_SPD = 0;
                         }
                         // LD21 = tmpL \ tmpD21;
@@ -264,7 +264,7 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                     }
                     if (info != 0)
                     {
-                        printf("[FATAL] Node %d potrf() return flag = %d, the target matrix is not SPD, consider adding a shift\n", node, info);
+                        printf("[FATAL] Node %d potrf() returned %d, target matrix is not SPD, current diagonal shift %.2lf is not enough\n", node, info, shift);
                         is_SPD = 0;
                     }
                 }  // End of "if (i > 0)"

@@ -12,7 +12,7 @@ extern "C" {
 // Input parameters:
 //   h2pack : H2Pack structure with constructed HSS representation
 //   shift  : Shift coefficient k to make (A + k * I) S.P.D.
-// Output parameters:
+// Output parameter:
 //   h2pack : H2Pack structure with ULV Cholesky factorization
 void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift);
 

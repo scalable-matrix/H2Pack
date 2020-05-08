@@ -61,7 +61,7 @@ void DAG_task_queue_finish_task(DAG_task_queue_t tq, const int task_id);
 // Reset the task queue in a DAG_task_queue structure. 
 // Input parameter:
 //   tq : Target DAG_task_queue structure
-// Output parameters:
+// Output parameter:
 //   tq : Target DAG_task_queue structure with updated task queue info
 void DAG_task_queue_reset(DAG_task_queue_t tq);
 

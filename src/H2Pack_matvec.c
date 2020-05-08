@@ -73,8 +73,6 @@ void H2P_matvec_fwd_transform(H2Pack_t h2pack, const DTYPE *x)
     int max_child      = h2pack->max_child;
     int n_node         = h2pack->n_node;
     int n_leaf_node    = h2pack->n_leaf_node;
-    int min_adm_level  = h2pack->min_adm_level;
-    int max_adm_height = h2pack->max_adm_height;
     int *children      = h2pack->children;
     int *n_child       = h2pack->n_child;
     int *height_n_node = h2pack->height_n_node;
@@ -82,6 +80,16 @@ void H2P_matvec_fwd_transform(H2Pack_t h2pack, const DTYPE *x)
     int *height_nodes  = h2pack->height_nodes;
     int *mat_cluster   = h2pack->mat_cluster;
     H2P_thread_buf_t *thread_buf = h2pack->tb;
+
+    int min_adm_level, max_adm_height;
+    if (h2pack->is_HSS == 0)
+    {
+        min_adm_level  = h2pack->min_adm_level;
+        max_adm_height = h2pack->max_adm_height;
+    } else {
+        min_adm_level  = h2pack->HSS_min_adm_level;
+        max_adm_height = h2pack->HSS_max_adm_height;
+    }
     
     // 1. Initialize y0 on the first run
     if (h2pack->y0 == NULL)
@@ -815,7 +823,7 @@ void H2P_matvec_bwd_transform(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
     int max_child       = h2pack->max_child;
     int n_leaf_node     = h2pack->n_leaf_node;
     int max_level       = h2pack->max_level;
-    int min_adm_level   = h2pack->min_adm_level;
+    int min_adm_level   = (h2pack->is_HSS) ? h2pack->HSS_min_adm_level : h2pack->min_adm_level;
     int *children       = h2pack->children;
     int *n_child        = h2pack->n_child;
     int *level_n_node   = h2pack->level_n_node;

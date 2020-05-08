@@ -10,6 +10,24 @@
 #include "H2Pack_utils.h"
 #include "utils.h"
 
+// Check if two boxes are admissible 
+int H2P_check_box_admissible(const DTYPE *box0, const DTYPE *box1, const int pt_dim, const DTYPE alpha)
+{
+    for (int i = 0; i < pt_dim; i++)
+    {
+        // Radius of each box's i-th dimension
+        DTYPE r0 = box0[pt_dim + i];
+        DTYPE r1 = box1[pt_dim + i];
+        // Center of each box's i-th dimension
+        DTYPE c0 = box0[i] + 0.5 * r0;
+        DTYPE c1 = box1[i] + 0.5 * r1;
+        DTYPE min_r = MIN(r0, r1);
+        DTYPE dist  = DABS(c0 - c1);
+        if (dist >= alpha * min_r + 0.5 * (r0 + r1)) return 1;
+    }
+    return 0;
+}
+
 // Gather some columns from a matrix to another matrix
 void H2P_gather_matrix_columns(
     DTYPE *src_mat, const int src_ld, DTYPE *dst_mat, const int dst_ld, 

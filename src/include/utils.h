@@ -35,7 +35,7 @@ double get_wtime_sec();
 //   nblk : Total number of blocks to be partitioned
 //   iblk : Index of the block whose start position we need.
 //          0 <= iblk <= nblk, iblk == 0/nblk return 0/len.
-// Output parameter:
+// Output parameters:
 //   *blk_spos : The start position of the iblk-th block
 //               -1 means invalid parameters
 //   *blk_len  : The length of the iblk-th block

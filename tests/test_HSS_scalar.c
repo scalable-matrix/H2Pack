@@ -281,7 +281,7 @@ int main(int argc, char **argv)
     st = get_wtime_sec();
     H2P_generate_proxy_point_ID(
         test_params.pt_dim, test_params.krnl_dim, test_params.rel_tol, h2pack->max_level, 
-        h2pack->min_adm_level, max_L, krnl_param, test_params.krnl_eval, &pp
+        h2pack->HSS_min_adm_level, max_L, krnl_param, test_params.krnl_eval, &pp
     );
     et = get_wtime_sec();
     printf("H2Pack generate proxy points used %.3lf (s)\n", et - st);
@@ -310,9 +310,10 @@ int main(int argc, char **argv)
     assert(x0 != NULL && x1 != NULL && y0 != NULL && y1 != NULL);
     for (int i = 0; i < test_params.krnl_mat_size; i++) 
     {
-        x0[i] = drand48();
-        // Approximate normal distribution
-        //x0[i] = (drand48() + drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48()+ drand48() - 6)/sqrt(12);
+        // x[i] = drand48();
+        // Make it similar to randn()
+        x0[i] = (drand48() + drand48() + drand48() + drand48() + drand48() + drand48() + 
+                 drand48() + drand48() + drand48() + drand48() + drand48() + drand48() - 6) / sqrt(12);
     }
 
     // Get reference results

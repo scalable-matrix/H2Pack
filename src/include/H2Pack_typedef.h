@@ -44,7 +44,7 @@ typedef void (*kernel_eval_fptr) (
 //   krnl_param : Pointer to kernel function parameter array
 //   x_in_0     : Vector, size >= n1, will be left multiplied by kernel_matrix(coord0, coord1)
 //   x_in_1     : Vector, size >= n0, will be left multiplied by kernel_matrix(coord1, coord0).
-// Output parameter:
+// Output parameters:
 //   x_out_0 : Vector, size >= n0, x_out_0 += kernel_matrix(coord0, coord1) * x_in_0
 //   x_out_1 : Vector, size >= n1, x_out_1 += kernel_matrix(coord1, coord0) * x_in_1
 // Performance optimization notes:
@@ -80,6 +80,8 @@ struct H2Pack
     int    max_level;               // Maximum level of this H2 tree, (root = 0, total max_level + 1 levels)
     int    min_adm_level;           // Minimum level of reduced admissible pair
     int    max_adm_height;          // Maximum height of reduced admissible pair
+    int    HSS_min_adm_level;       // Minimum level of reduced admissible pair in HSS mode
+    int    HSS_max_adm_height;      // Maximum height of reduced admissible pair in HSS mode
     int    n_r_inadm_pair;          // Number of reduced inadmissible pairs 
     int    n_r_adm_pair;            // Number of reduced admissible pairs 
     int    HSS_n_r_inadm_pair;      // Number of reduced inadmissible pairs in HSS mode
@@ -172,7 +174,7 @@ void H2P_init(
 // Run H2Pack in HSS mode (by default, H2Pack runs in H2 mode). This function 
 // should be called after H2P_init() and before H2P_partition_points().
 // Input & output parameter:
-//   h2pack  : H2Pack structure to be configured
+//   h2pack  : H2Pack structure to be configured (h2pack->is_HSS = 1)
 void H2P_run_HSS(H2Pack_t h2pack);
 
 // Destroy a H2Pack structure

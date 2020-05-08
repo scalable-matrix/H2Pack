@@ -8,174 +8,7 @@
 #include "H2Pack_config.h"
 #include "H2Pack_typedef.h"
 #include "H2Pack_aux_structs.h"
-
-// In H2Pack_build.c, I don't want to add the declaration of this function 
-// to H2Pack_build.h and expose it. 
-extern void H2P_copy_matrix_block(
-    const int nrow, const int ncol, DTYPE *src_mat, const int src_ld, 
-    DTYPE *dst_mat, const int dst_ld
-);
-
-// Transpose a nrow-by-ncol row-major matrix
-// Input parameters:
-//   nrow, ncol : Source matrix size
-//   src_mat    : Size >= nrow * src_ld, source matrix
-//   src_ld     : Leading dimension of the source matrix, >= ncol
-//   dst_ld     : Leading dimension of the destination matrix, >= nrow
-// Output parameter:
-//   dst_mat : Size >= ncol * dst_ld, destination matrix
-void H2P_transpose_mat(
-    const int nrow, const int ncol, DTYPE *src_mat, const int src_ld, 
-    DTYPE *dst_mat, const int dst_ld
-)
-{
-    for (int j = 0; j < ncol; j++)
-    {
-        DTYPE *dst_row = dst_mat + j * dst_ld;
-        DTYPE *src_col = src_mat + j;
-        for (int i = 0; i < nrow; i++)
-            dst_row[i] = src_col[i * src_ld];
-    }
-}
-
-// Get element A(row, col) from CSR matrix A
-// Input parameters:
-//   row_ptr, col_idx, val : CSR matrix arrays
-//   row, col : Target position
-// Output parameter:
-//   <return> : A(row, col) if exists, 0 if not
-int H2P_get_CSR_elem(
-    const int *row_ptr, const int *col_idx, const int *val,
-    const int row, const int col
-)
-{
-    int res = 0;
-    for (int i = row_ptr[row]; i < row_ptr[row + 1]; i++)
-    {
-        if (col_idx[i] == col) 
-        {
-            res = val[i];
-            break;
-        }
-    }
-    return res;
-}
-
-// Get D{node0, node1} from H2Pack
-// Input parameters:
-//   h2pack     : H2Pack structure
-//   node{0, 1} : Target node pair
-// Output parameter:
-//   Dij : Target D{node0, node1} block
-void H2P_get_Dij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_dense_mat_t Dij)
-{
-    int *D_p2i_rowptr = h2pack->D_p2i_rowptr;
-    int *D_p2i_colidx = h2pack->D_p2i_colidx;
-    int *D_p2i_val    = h2pack->D_p2i_val;
-    int D_idx = H2P_get_CSR_elem(D_p2i_rowptr, D_p2i_colidx, D_p2i_val, node0, node1);
-    if (D_idx == 0)
-    {
-        printf("[FATAL] D{%d, %d} does not exist!\n", node0, node1);
-        return;
-    }
-    D_idx--;
-    int D_nrow = h2pack->D_nrow[D_idx];
-    int D_ncol = h2pack->D_ncol[D_idx];
-    H2P_dense_mat_resize(Dij, D_nrow, D_ncol);
-    if (h2pack->BD_JIT == 0)
-    {
-        H2P_copy_matrix_block(D_nrow, D_ncol, h2pack->D_data + h2pack->D_ptr[D_idx], D_ncol, Dij->data, D_ncol);
-    } else {
-        int   n_point     = h2pack->n_point;
-        int   krnl_dim    = h2pack->krnl_dim;
-        int   *pt_cluster = h2pack->pt_cluster;
-        int   pt_s0       = pt_cluster[2 * node0];
-        int   pt_s1       = pt_cluster[2 * node1];
-        int   pt_e0       = pt_cluster[2 * node0 + 1];
-        int   pt_e1       = pt_cluster[2 * node1 + 1];
-        int   node0_npt   = pt_e0 - pt_s0 + 1;
-        int   node1_npt   = pt_e1 - pt_s1 + 1;
-        DTYPE *coord      = h2pack->coord;
-        h2pack->krnl_eval(
-            coord + pt_s0, n_point, node0_npt,
-            coord + pt_s1, n_point, node1_npt,
-            h2pack->krnl_param, Dij->data, node1_npt * krnl_dim
-        );
-    }
-}
-
-// Get B{node0, node1} from H2Pack
-// Input parameters:
-//   h2pack     : H2Pack structure
-//   node{0, 1} : Target node pair
-// Output parameter:
-//   Bij : Target B{node0, node1} block
-void H2P_get_Bij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_dense_mat_t Bij)
-{
-    int *B_p2i_rowptr = h2pack->B_p2i_rowptr;
-    int *B_p2i_colidx = h2pack->B_p2i_colidx;
-    int *B_p2i_val    = h2pack->B_p2i_val;
-    int B_idx = H2P_get_CSR_elem(B_p2i_rowptr, B_p2i_colidx, B_p2i_val, node0, node1);
-    if (B_idx == 0)
-    {
-        printf("[FATAL] B{%d, %d} does not exist!\n", node0, node1);
-        return;
-    }
-    B_idx--;
-    int B_nrow = h2pack->B_nrow[B_idx];
-    int B_ncol = h2pack->B_ncol[B_idx];
-    H2P_dense_mat_resize(Bij, B_nrow, B_ncol);
-    if (h2pack->BD_JIT == 0)
-    {
-        H2P_copy_matrix_block(B_nrow, B_ncol, h2pack->B_data + h2pack->B_ptr[B_idx], B_ncol, Bij->data, B_ncol);
-    } else {
-        int   n_point     = h2pack->n_point;
-        int   krnl_dim    = h2pack->krnl_dim;
-        int   *pt_cluster = h2pack->pt_cluster;
-        int   *node_level = h2pack->node_level;
-        int   level0      = node_level[node0];
-        int   level1      = node_level[node1];
-        DTYPE *coord      = h2pack->coord;
-        void  *krnl_param = h2pack->krnl_param;
-        kernel_eval_fptr krnl_eval = h2pack->krnl_eval;
-        H2P_dense_mat_t  *J_coord  = h2pack->J_coord;
-        // (1) Two nodes are of the same level, compress on both sides
-        if (level0 == level1)
-        {
-            krnl_eval(
-                J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
-                J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                krnl_param, Bij->data, J_coord[node1]->ncol * krnl_dim
-            );
-        }
-        // (2) node1 is a leaf node and its level is higher than node0's level, 
-        //     only compress on node0's side
-        if (level0 > level1)
-        {
-            int pt_s1 = pt_cluster[2 * node1];
-            int pt_e1 = pt_cluster[2 * node1 + 1];
-            int node1_npt = pt_e1 - pt_s1 + 1;
-            krnl_eval(
-                J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
-                coord + pt_s1, n_point, node1_npt, 
-                krnl_param, Bij->data, node1_npt * krnl_dim
-            );
-        }
-        // (3) node0 is a leaf node and its level is higher than node1's level, 
-        //     only compress on node1's side
-        if (level0 < level1)
-        {
-            int pt_s0 = pt_cluster[2 * node0];
-            int pt_e0 = pt_cluster[2 * node0 + 1];
-            int node0_npt = pt_e0 - pt_s0 + 1;
-            krnl_eval(
-                coord + pt_s0, n_point, node0_npt, 
-                J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                krnl_param, Bij->data, J_coord[node1]->ncol * krnl_dim
-            );
-        }
-    }
-}
+#include "H2Pack_utils.h"
 
 // Construct the ULV Cholesky factorization for a HSS matrix
 void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
@@ -312,7 +145,7 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                                 0.0, tmpD_kl, tmpD->ld
                             );
                             // tmpD(idx_l, idx_k) = tmpD(idx_k, idx_l)';
-                            H2P_transpose_mat(idx_k_len, idx_l_len, tmpD_kl, tmpD->ld, tmpD_lk, tmpD->ld);
+                            H2P_transpose_dmat(1, idx_k_len, idx_l_len, tmpD_kl, tmpD->ld, tmpD_lk, tmpD->ld);
                         }
                     }  // End of k loop
                     // if (level > 1), tmpU = tmpU * U{node}; end
@@ -399,7 +232,7 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                         DTYPE *L12 = ULV_L[node]->data + U_ncol;
                         DTYPE *L21 = ULV_L[node]->data + U_ncol * U_nrow;
                         DTYPE *L22 = ULV_L[node]->data + U_ncol * (U_nrow + 1);
-                        H2P_transpose_mat(U_diff, U_ncol, tmpD21, U_nrow, L12, U_nrow);
+                        H2P_transpose_dmat(1, U_diff, U_ncol, tmpD21, U_nrow, L12, U_nrow);
                         for (int k = 0; k < U_diff; k++)
                             memset(L21 + k * U_nrow, 0, sizeof(DTYPE) * U_ncol);
                         H2P_copy_matrix_block(U_diff, U_diff, tmpD22, U_nrow, L22, U_nrow);

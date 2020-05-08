@@ -9,6 +9,7 @@
 #include "H2Pack_typedef.h"
 #include "H2Pack_aux_structs.h"
 #include "H2Pack_matvec.h"
+#include "H2Pack_utils.h"
 #include "x86_intrin_wrapper.h"
 #include "utils.h"
 
@@ -64,55 +65,6 @@ void CBLAS_BI_GEMV(
     }
 }
 
-// Transpose a matrix
-// Input parameters:
-//   n_thread : Number of threads to use
-//   src_nrow : Number of rows of the source matrix
-//   src_ncol : Number of columns of the source matrix
-//   src      : Source matrix, size >= src_nrow * lds
-//   lds      : Leading dimension of source matrix
-//   ldd      : Leading dimension of destination matrix
-// Output parameter:
-//   dst : Destination matrix
-void H2P_transpose_dmat(
-    const int n_thread, const int src_nrow, const int src_ncol, 
-    const DTYPE *src, const int lds, DTYPE *dst, const int ldd
-)
-{
-    if (n_thread == 1)
-    {
-        for (int i = 0; i < src_ncol; i++)
-        {
-            DTYPE *dst_irow = dst + i * ldd;
-            for (int j = 0; j < src_nrow; j++)
-                dst_irow[j] = src[j * lds + i];
-        }
-    } else {
-        if (src_nrow > src_ncol)
-        {
-            #pragma omp parallel for if(n_thread > 1) num_threads(n_thread)
-            for (int i = 0; i < src_ncol; i++)
-            {
-                DTYPE *dst_irow = dst + i * ldd;
-                for (int j = 0; j < src_nrow; j++)
-                    dst_irow[j] = src[j * lds + i];
-            }
-        } else {
-            #pragma omp parallel num_threads(n_thread)
-            {
-                int tid = omp_get_thread_num();
-                int blk_spos, blk_len;
-                calc_block_spos_len(src_nrow, n_thread, tid, &blk_spos, &blk_len);
-                for (int i = 0; i < src_ncol; i++)
-                {
-                    DTYPE *dst_irow = dst + i * ldd;
-                    for (int j = blk_spos; j < blk_spos + blk_len; j++)
-                        dst_irow[j] = src[j * lds + i];
-                }
-            }
-        }
-    }
-}
 
 // H2 matvec forward transformation, calculate U_j^T * x_j
 void H2P_matvec_fwd_transform(H2Pack_t h2pack, const DTYPE *x)

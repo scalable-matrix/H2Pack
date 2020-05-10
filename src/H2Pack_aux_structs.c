@@ -6,6 +6,8 @@
 
 #include "H2Pack_config.h"
 #include "H2Pack_aux_structs.h"
+#include "H2Pack_utils.h"
+#include "linalg_lib_wrapper.h"
 #include "utils.h"
 
 // ========================== H2P_tree_node ========================== //
@@ -206,6 +208,116 @@ void H2P_dense_mat_normalize_columns(H2P_dense_mat_t mat, H2P_dense_mat_t workbu
         #pragma omp simd
         for (int icol = 0; icol < ncol; icol++) 
             mat_row[icol] *= inv_2norm[icol];
+    }
+}
+
+// Perform GEMM C := alpha * op(A) * op(B) + beta * C
+void H2P_dense_mat_gemm(
+    const DTYPE alpha, const DTYPE beta, const int transA, const int transB, 
+    H2P_dense_mat_t A, H2P_dense_mat_t B, H2P_dense_mat_t C
+)
+{
+    int M, N, KA, KB;
+    CBLAS_TRANSPOSE transA_, transB_;
+    if (transA == 0)
+    {
+        transA_ = CblasNoTrans;
+        M  = A->nrow;
+        KA = A->ncol;
+    } else {
+        transA_ = CblasTrans;
+        M  = A->ncol;
+        KA = A->nrow;
+    }
+    if (transB == 0)
+    {
+        transB_ = CblasNoTrans;
+        N  = B->ncol;
+        KB = B->nrow;
+    } else {
+        transB_ = CblasTrans;
+        N  = B->nrow;
+        KB = B->ncol;
+    }
+    assert(KA == KB);
+    if (beta == 0.0 && (C->nrow < M || C->ncol < N)) H2P_dense_mat_resize(C, M, N);
+    CBLAS_GEMM(
+        CblasRowMajor, transA_, transB_, M, N, KA,
+        alpha, A->data, A->ld, B->data, B->ld, 
+        beta,  C->data, C->ld
+    );
+}
+
+// Create a block diagonal matrix created by aligning the input matrices along the diagonal
+void H2P_dense_mat_blkdiag(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_mat_t new_mat)
+{
+    int nrow = 0, ncol = 0;
+    for (int i = 0; i < idx->length; i++)
+    {
+        H2P_dense_mat_t mat_i = mats[idx->data[i]];
+        nrow += mat_i->nrow;
+        ncol += mat_i->ncol;
+    }
+    H2P_dense_mat_resize(new_mat, nrow, ncol);
+    memset(new_mat->data, 0, sizeof(DTYPE) * nrow * ncol);
+    nrow = 0; ncol = 0;
+    for (int i = 0; i < idx->length; i++)
+    {
+        H2P_dense_mat_t mat_i = mats[idx->data[i]];
+        int nrow_i = mat_i->nrow;
+        int ncol_i = mat_i->ncol;
+        DTYPE *dst = new_mat->data + nrow * new_mat->ld + ncol;
+        H2P_copy_matrix_block(nrow_i, ncol_i, mat_i->data, mat_i->ld, dst, new_mat->ld);
+        nrow += nrow_i;
+        ncol += ncol_i;
+    }
+}
+
+// Vertically concatenates the input matrices
+void H2P_dense_mat_vertcat(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_mat_t new_mat)
+{
+    int nrow = 0, ncol = mats[idx->data[0]]->ncol;
+    for (int i = 0; i < idx->length; i++)
+    {
+        H2P_dense_mat_t mat_i = mats[idx->data[i]];
+        nrow += mat_i->nrow;
+        assert (mat_i->ncol == ncol);
+    }
+    H2P_dense_mat_resize(new_mat, nrow, ncol);
+    memset(new_mat->data, 0, sizeof(DTYPE) * nrow * ncol);
+    nrow = 0; ncol = 0;
+    for (int i = 0; i < idx->length; i++)
+    {
+        H2P_dense_mat_t mat_i = mats[idx->data[i]];
+        int nrow_i = mat_i->nrow;
+        int ncol_i = mat_i->ncol;
+        DTYPE *dst = new_mat->data + nrow * new_mat->ld;
+        H2P_copy_matrix_block(nrow_i, ncol_i, mat_i->data, mat_i->ld, dst, new_mat->ld);
+        nrow += nrow_i;
+    }
+}
+
+// Horizontally concatenates the input matrices
+void H2P_dense_mat_horzcat(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_mat_t new_mat)
+{
+    int nrow = mats[idx->data[0]]->nrow, ncol = 0;
+    for (int i = 0; i < idx->length; i++)
+    {
+        H2P_dense_mat_t mat_i = mats[idx->data[i]];
+        ncol += mat_i->ncol;
+        assert (mat_i->nrow == nrow);
+    }
+    H2P_dense_mat_resize(new_mat, nrow, ncol);
+    memset(new_mat->data, 0, sizeof(DTYPE) * nrow * ncol);
+    nrow = 0; ncol = 0;
+    for (int i = 0; i < idx->length; i++)
+    {
+        H2P_dense_mat_t mat_i = mats[idx->data[i]];
+        int nrow_i = mat_i->nrow;
+        int ncol_i = mat_i->ncol;
+        DTYPE *dst = new_mat->data + ncol;
+        H2P_copy_matrix_block(nrow_i, ncol_i, mat_i->data, mat_i->ld, dst, new_mat->ld);
+        ncol += mat_i->ncol;
     }
 }
 

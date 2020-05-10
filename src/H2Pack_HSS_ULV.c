@@ -69,7 +69,7 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
             H2P_dense_mat_t tmpB   = thread_buf[tid]->mat2;
             H2P_dense_mat_t tmpM   = thread_buf[tid]->mat2;
 
-            #pragma omp for
+            #pragma omp for schedule(dynamic)
             for (int j = 0; j < level_i_n_node; j++)
             {
                 if (!is_SPD) continue;

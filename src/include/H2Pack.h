@@ -25,6 +25,9 @@
 // H2Pack HSS ULV decomposition and solve
 #include "H2Pack_HSS_ULV.h"
 
+// H2Pack SPDHSS H2 build
+#include "H2Pack_SPDHSS_H2.h"
+
 // H2Pack optimized kernels
 #include "H2Pack_kernels.h"
 

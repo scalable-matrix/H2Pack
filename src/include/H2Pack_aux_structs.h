@@ -204,6 +204,34 @@ void H2P_dense_mat_select_columns(H2P_dense_mat_t mat, H2P_int_vec_t col_idx);
 //   mat     : H2P_dense_mat structure with normalized columns
 void H2P_dense_mat_normalize_columns(H2P_dense_mat_t mat, H2P_dense_mat_t workbuf);
 
+// Perform GEMM C := alpha * op(A) * op(B) + beta * C
+// Input parameters:
+//   alpha, beta    : Scaling factors
+//   transA, transB : If A / B need to be transposed
+//   A, B           : Source matrices
+// Output parameter:
+//   C : Result matrix, need to be properly resized before entering if beta != 0
+void H2P_dense_mat_gemm(
+    const DTYPE alpha, const DTYPE beta, const int transA, const int transB, 
+    H2P_dense_mat_t A, H2P_dense_mat_t B, H2P_dense_mat_t C
+);
+
+// Create a block diagonal matrix created by aligning the input matrices along the diagonal
+// Input parameters:
+//   mats : Size unknown, candidate H2P_dense_mat_t matrices
+//   idx  : Size unknown, indices of the input matrices in the candidate set
+// Output parameter:
+//   new_mat : The result matrix
+void H2P_dense_mat_blkdiag(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_mat_t new_mat);
+
+// Vertically concatenates the input matrices
+// Input / output parameters are the same as H2P_dense_mat_blkdiag()
+void H2P_dense_mat_vertcat(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_mat_t new_mat);
+
+// Horizontally concatenates the input matrices
+// Input / output parameters are the same as H2P_dense_mat_blkdiag()
+void H2P_dense_mat_horzcat(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_mat_t new_mat);
+
 // Print a H2P_dense_mat structure, for debugging
 // Input parameter:
 //   mat : H2P_dense_mat structure to be printed

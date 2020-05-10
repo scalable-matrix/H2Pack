@@ -43,24 +43,6 @@ void H2P_generate_proxy_point_surface(
     const int start_level, DTYPE max_L, H2P_dense_mat_t **pp_
 );
 
-// Partition work units into multiple blocks s.t. each block has 
-// approximately the same amount of work
-// Input parameters:
-//   n_work     : Number of work units
-//   work_sizes : Work size of each work unit
-//   total_size : Sum of work_sizes
-//   n_block    : Number of blocks to be partitioned, the final result
-//                may have fewer blocks
-// Output parameter:
-//   blk_displs : Indices of each block's first work unit. The actual 
-//                number of work units == blk_displs->length-1 because 
-//                blk_displs->data[0] == 0 and 
-//                blk_displs->data[blk_displs->length-1] == total_size. 
-void H2P_partition_workload(
-    const int n_work,  const size_t *work_sizes, const size_t total_size, 
-    const int n_block, H2P_int_vec_t blk_displs
-);
-
 // Build H2 representation with a kernel function
 // Input parameters:
 //   h2pack          : H2Pack structure with point partitioning info

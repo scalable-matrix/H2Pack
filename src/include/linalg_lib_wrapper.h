@@ -3,6 +3,10 @@
 
 // Wrapper for linear algebra library (BLAS, LAPACK)
 
+#if !defined(USE_MKL) && !defined(USE_OPENBLAS)
+#define USE_OPENBLAS
+#endif
+
 #ifdef USE_MKL
 #include <mkl.h>
 #define BLAS_SET_NUM_THREADS mkl_set_num_threads

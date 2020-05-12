@@ -63,9 +63,9 @@ void H2P_int_vec_destroy(H2P_int_vec_t int_vec)
 {
     if (int_vec == NULL) return;
     free(int_vec->data);
-    int_vec->data = NULL;
+    int_vec->data     = NULL;
     int_vec->capacity = 0;
-    int_vec->length = 0;
+    int_vec->length   = 0;
 }
 
 // Concatenate values in a H2P_int_vec to another H2P_int_vec
@@ -122,6 +122,9 @@ void H2P_dense_mat_destroy(H2P_dense_mat_t mat)
     free_aligned(mat->data);
     mat->data = NULL;
     mat->size = 0;
+    mat->nrow = 0;
+    mat->ncol = 0;
+    mat->ld   = 0;
 }
 
 // Permute rows in a H2P_dense_mat structure
@@ -284,7 +287,6 @@ void H2P_dense_mat_vertcat(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_m
         assert (mat_i->ncol == ncol);
     }
     H2P_dense_mat_resize(new_mat, nrow, ncol);
-    memset(new_mat->data, 0, sizeof(DTYPE) * nrow * ncol);
     nrow = 0; ncol = 0;
     for (int i = 0; i < idx->length; i++)
     {

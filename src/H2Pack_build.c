@@ -1081,6 +1081,10 @@ void H2P_build_B(H2Pack_t h2pack)
         h2pack->B_p2i_rowptr, h2pack->B_p2i_colidx, h2pack->B_p2i_val
     );
 
+    free(B_pair_i);
+    free(B_pair_j);
+    free(B_pair_v);
+
     if (BD_JIT == 1) return;
 
     // 3. Generate B matrices
@@ -1287,6 +1291,10 @@ void H2P_build_D(H2Pack_t h2pack)
         n_node, D_pair_cnt, D_pair_i, D_pair_j, D_pair_v, 
         h2pack->D_p2i_rowptr, h2pack->D_p2i_colidx, h2pack->D_p2i_val
     );
+
+    free(D_pair_i);
+    free(D_pair_j);
+    free(D_pair_v);
 
     if (BD_JIT == 1) return;
     

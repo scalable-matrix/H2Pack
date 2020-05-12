@@ -13,10 +13,10 @@ extern "C" {
 //   shift    : Diagonal shifting
 //   h2mat    : Constructed H2 matrix
 // Output parameter:
-//   *spdhss_ : The created SPD HSS matrix, A_{HSS} ~= A_{H2} + shift * I
+//   *hssmat_ : The constructed SPD HSS matrix, A_{HSS} ~= A_{H2} + shift * I
 void H2P_SPDHSS_H2_build(
     const int max_rank, const DTYPE shift, 
-    H2Pack_t h2mat, H2Pack_t *spdhss_
+    H2Pack_t h2mat, H2Pack_t *hssmat_
 );
 
 #ifdef __cplusplus

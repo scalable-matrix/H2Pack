@@ -496,13 +496,13 @@ void H2P_HSS_calc_adm_inadm_pairs(H2Pack_t h2pack)
     // Copy reduced HSS (in)admissible pairs from H2P_int_vec to h2pack arrays
     h2pack->HSS_n_r_inadm_pair = partition_vars.r_inadm_pairs->length / 2;
     h2pack->HSS_n_r_adm_pair   = partition_vars.r_adm_pairs->length   / 2;
-    size_t HSS_r_inadm_pair_msize = sizeof(int) * h2pack->HSS_n_r_inadm_pair * 2;
-    size_t HSS_r_adm_pair_msize   = sizeof(int) * h2pack->HSS_n_r_adm_pair   * 2;
-    h2pack->HSS_r_inadm_pairs = (int*) malloc(HSS_r_inadm_pair_msize);
-    h2pack->HSS_r_adm_pairs   = (int*) malloc(HSS_r_adm_pair_msize);
+    size_t HSS_r_inadm_pairs_msize = sizeof(int) * h2pack->HSS_n_r_inadm_pair * 2;
+    size_t HSS_r_adm_pairs_msize   = sizeof(int) * h2pack->HSS_n_r_adm_pair   * 2;
+    h2pack->HSS_r_inadm_pairs = (int*) malloc(HSS_r_inadm_pairs_msize);
+    h2pack->HSS_r_adm_pairs   = (int*) malloc(HSS_r_adm_pairs_msize);
     assert(h2pack->HSS_r_inadm_pairs != NULL && h2pack->HSS_r_adm_pairs != NULL);
-    memcpy(h2pack->HSS_r_inadm_pairs, partition_vars.r_inadm_pairs->data, HSS_r_inadm_pair_msize);
-    memcpy(h2pack->HSS_r_adm_pairs,   partition_vars.r_adm_pairs->data,   HSS_r_adm_pair_msize);
+    memcpy(h2pack->HSS_r_inadm_pairs, partition_vars.r_inadm_pairs->data, HSS_r_inadm_pairs_msize);
+    memcpy(h2pack->HSS_r_adm_pairs,   partition_vars.r_adm_pairs->data,   HSS_r_adm_pairs_msize);
     H2P_int_vec_destroy(partition_vars.r_inadm_pairs);
     H2P_int_vec_destroy(partition_vars.r_adm_pairs);
 
@@ -560,27 +560,30 @@ void H2P_partition_points(
     h2pack->n_leaf_node   = partition_vars.n_leaf_node;
     h2pack->max_child     = max_child;
     h2pack->max_level     = max_level++;
-    h2pack->parent        = malloc(sizeof(int) * n_node);
-    h2pack->children      = malloc(sizeof(int) * n_node * max_child);
-    h2pack->pt_cluster    = malloc(sizeof(int) * n_node * 2);
-    h2pack->mat_cluster   = malloc(sizeof(int) * n_node * 2);
-    h2pack->n_child       = malloc(sizeof(int) * n_node);
-    h2pack->node_level    = malloc(sizeof(int) * n_node);
-    h2pack->node_height   = malloc(sizeof(int) * n_node);
-    h2pack->level_n_node  = malloc(sizeof(int) * max_level);
-    h2pack->level_nodes   = malloc(sizeof(int) * max_level * h2pack->n_leaf_node);
-    h2pack->height_n_node = malloc(sizeof(int) * max_level);
-    h2pack->height_nodes  = malloc(sizeof(int) * max_level * h2pack->n_leaf_node);
-    h2pack->enbox         = malloc(sizeof(DTYPE) * n_node * 2 * pt_dim);
+    size_t int_n_node_msize    = sizeof(int)   * n_node;
+    size_t int_max_level_msize = sizeof(int)   * max_level;
+    size_t enbox_msize         = sizeof(DTYPE) * n_node * 2 * pt_dim;
+    h2pack->parent        = malloc(int_n_node_msize);
+    h2pack->children      = malloc(int_n_node_msize * max_child);
+    h2pack->pt_cluster    = malloc(int_n_node_msize * 2);
+    h2pack->mat_cluster   = malloc(int_n_node_msize * 2);
+    h2pack->n_child       = malloc(int_n_node_msize);
+    h2pack->node_level    = malloc(int_n_node_msize);
+    h2pack->node_height   = malloc(int_n_node_msize);
+    h2pack->level_n_node  = malloc(int_max_level_msize);
+    h2pack->level_nodes   = malloc(int_max_level_msize * h2pack->n_leaf_node);
+    h2pack->height_n_node = malloc(int_max_level_msize);
+    h2pack->height_nodes  = malloc(int_max_level_msize * h2pack->n_leaf_node);
+    h2pack->enbox         = malloc(enbox_msize);
     assert(h2pack->parent        != NULL && h2pack->children      != NULL);
-    assert(h2pack->pt_cluster    != NULL && h2pack->n_child       != NULL);
-    assert(h2pack->node_level    != NULL && h2pack->node_height   != NULL);
-    assert(h2pack->level_n_node  != NULL && h2pack->level_nodes   != NULL);
-    assert(h2pack->height_n_node != NULL && h2pack->height_nodes  != NULL);
-    assert(h2pack->enbox         != NULL && h2pack->mat_cluster   != NULL);
+    assert(h2pack->pt_cluster    != NULL && h2pack->mat_cluster   != NULL);
+    assert(h2pack->n_child       != NULL && h2pack->node_level    != NULL);
+    assert(h2pack->node_height   != NULL && h2pack->level_n_node  != NULL);
+    assert(h2pack->level_nodes   != NULL && h2pack->height_n_node != NULL);
+    assert(h2pack->height_nodes  != NULL && h2pack->enbox         != NULL);
     partition_vars.curr_leaf_idx = 0;
-    memset(h2pack->level_n_node,  0, sizeof(int) * max_level);
-    memset(h2pack->height_n_node, 0, sizeof(int) * max_level);
+    memset(h2pack->level_n_node,  0, int_max_level_msize);
+    memset(h2pack->height_n_node, 0, int_max_level_msize);
     H2P_tree_to_array(root, h2pack);
     h2pack->parent[h2pack->root_idx] = -1;  // Root node doesn't have parent
     H2P_tree_node_destroy(root);  // We don't need the linked list H2 tree anymore
@@ -616,13 +619,13 @@ void H2P_partition_points(
     // 5. Copy reduced (in)admissible pairs from H2P_int_vec to h2pack arrays
     h2pack->n_r_inadm_pair = partition_vars.r_inadm_pairs->length / 2;
     h2pack->n_r_adm_pair   = partition_vars.r_adm_pairs->length   / 2;
-    size_t r_inadm_pair_msize = sizeof(int) * h2pack->n_r_inadm_pair * 2;
-    size_t r_adm_pair_msize   = sizeof(int) * h2pack->n_r_adm_pair   * 2;
-    h2pack->r_inadm_pairs = (int*) malloc(r_inadm_pair_msize);
-    h2pack->r_adm_pairs   = (int*) malloc(r_adm_pair_msize);
+    size_t r_inadm_pairs_msize = sizeof(int) * h2pack->n_r_inadm_pair * 2;
+    size_t r_adm_pairs_msize   = sizeof(int) * h2pack->n_r_adm_pair   * 2;
+    h2pack->r_inadm_pairs = (int*) malloc(r_inadm_pairs_msize);
+    h2pack->r_adm_pairs   = (int*) malloc(r_adm_pairs_msize);
     assert(h2pack->r_inadm_pairs != NULL && h2pack->r_adm_pairs != NULL);
-    memcpy(h2pack->r_inadm_pairs, partition_vars.r_inadm_pairs->data, r_inadm_pair_msize);
-    memcpy(h2pack->r_adm_pairs,   partition_vars.r_adm_pairs->data,   r_adm_pair_msize);
+    memcpy(h2pack->r_inadm_pairs, partition_vars.r_inadm_pairs->data, r_inadm_pairs_msize);
+    memcpy(h2pack->r_adm_pairs,   partition_vars.r_adm_pairs->data,   r_adm_pairs_msize);
     H2P_int_vec_destroy(partition_vars.r_inadm_pairs);
     H2P_int_vec_destroy(partition_vars.r_adm_pairs);
 

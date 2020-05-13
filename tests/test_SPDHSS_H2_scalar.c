@@ -124,6 +124,9 @@ void parse_params(int argc, char **argv)
     }
     if (need_gen == 1)
     {
+        //srand48(19241112);
+        DTYPE prefac = DPOW((double) test_params.n_point, 1.0 / (double) test_params.pt_dim);
+        printf("Random point coordinate scaling prefactor = %.3lf\n", prefac);
         printf("Binary/CSV coordinate file not provided. Generating random coordinates in unit box...");
         for (int i = 0; i < test_params.n_point * test_params.pt_dim; i++)
         {
@@ -131,6 +134,7 @@ void parse_params(int argc, char **argv)
             // Make it similar to randn()
             //test_params.coord[i] = (drand48() + drand48() + drand48() + drand48() + drand48() + drand48() +
             //                        drand48() + drand48() + drand48() + drand48() + drand48() + drand48() - 6) / sqrt(12);
+            test_params.coord[i] *= prefac;
         }
         printf(" done.\n");
     }
@@ -309,10 +313,6 @@ int main(int argc, char **argv)
         test_params.krnl_eval, test_params.krnl_bimv, test_params.krnl_bimv_flops
     );
 
-    const int max_rank = 100;
-    const DTYPE shift = 0.0;
-    H2P_SPDHSS_H2_build(max_rank, shift, h2mat, &hssmat);
-    
     int n_check_pt = 50000, check_pt_s;
     if (n_check_pt > test_params.n_point)
     {
@@ -356,9 +356,6 @@ int main(int argc, char **argv)
     printf("H2 matrix:\n");
     H2P_print_statistic(h2mat);
 
-    printf("SPDHSS matrix:\n");
-    H2P_print_statistic(hssmat);
-    
     // Verify H2 matvec results
     DTYPE y0_norm = 0.0, err_norm = 0.0;
     for (int i = 0; i < test_params.krnl_dim * n_check_pt; i++)
@@ -370,7 +367,12 @@ int main(int argc, char **argv)
     y0_norm  = DSQRT(y0_norm);
     err_norm = DSQRT(err_norm);
     printf("For %d validation points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / y0_norm);
-    
+
+    printf("Constructing SPDHSS from H2\n");
+    const int max_rank = 100;
+    const DTYPE shift = 0.0;
+    H2P_SPDHSS_H2_build(max_rank, shift, h2mat, &hssmat);
+ 
     // Check HSS matvec accuracy
     H2P_matvec(hssmat, x, y0);
     y0_norm = 0.0; 
@@ -384,6 +386,9 @@ int main(int argc, char **argv)
     y0_norm  = DSQRT(y0_norm);
     err_norm = DSQRT(err_norm);
     printf("||y_{SPDHSS} - y_{H2}||_2 / ||y_{H2}||_2 = %e\n", err_norm / y0_norm);
+
+    printf("SPDHSS matrix:\n");
+    H2P_print_statistic(hssmat);
 
     free(x);
     free(y0);

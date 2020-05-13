@@ -241,7 +241,7 @@ void H2P_matvec_init_y1(H2Pack_t h2pack)
 {
     int n_node = h2pack->n_node;
     int n_thread = h2pack->n_thread;
-    int *node_n_r_adm = h2pack->node_n_r_adm;
+    int *node_n_r_adm = (h2pack->is_HSS == 1) ? h2pack->node_n_r_inadm : h2pack->node_n_r_adm;
     H2P_dense_mat_t *U = h2pack->U;
     if (h2pack->y1 == NULL)
     {

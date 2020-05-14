@@ -130,10 +130,10 @@ void parse_params(int argc, char **argv)
         printf("Binary/CSV coordinate file not provided. Generating random coordinates in unit box...");
         for (int i = 0; i < test_params.n_point * test_params.pt_dim; i++)
         {
-            test_params.coord[i] = drand48();
+            //test_params.coord[i] = drand48();
             // Make it similar to randn()
-            //test_params.coord[i] = (drand48() + drand48() + drand48() + drand48() + drand48() + drand48() +
-            //                        drand48() + drand48() + drand48() + drand48() + drand48() + drand48() - 6) / sqrt(12);
+            test_params.coord[i] = (drand48() + drand48() + drand48() + drand48() + drand48() + drand48() +
+                                    drand48() + drand48() + drand48() + drand48() + drand48() + drand48() - 6) / sqrt(12);
             test_params.coord[i] *= prefac;
         }
         printf(" done.\n");

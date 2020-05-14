@@ -358,7 +358,7 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_t h2mat, const int n_vec, H2P_dense_mat_t *
                 // Yk_mat(idx1, col_idx) = Yk_mat(idx1, col_idx) + Bij * y0{c2};
                 CBLAS_GEMM(
                     CblasRowMajor, CblasNoTrans, CblasNoTrans, Bij->nrow, y0_1->ncol, Bij->ncol, 
-                    1.0, Bij->data, Bij->ld, y0_1->data, y0_1->nrow, 1.0, Yk_mat_blk0, Yk_mat_ld
+                    1.0, Bij->data, Bij->ld, y0_1->data, y0_1->ld, 1.0, Yk_mat_blk0, Yk_mat_ld
                 );
                 // Yk_mat(idx2, col_idx) = Yk_mat(idx2, col_idx) + exU{c2} * (Bij' * vec(idx1, :));
                 H2P_dense_mat_resize(tmpM, Bij->ncol, n_vec);
@@ -461,6 +461,11 @@ void H2P_SPDHSS_H2_gather_HSS_B(
 {
     int nrow = 0, ncol = 0;
     int B_idx_00 = HSS_B_pair2idx[blk0[0] * n_node + blk1[0]];
+    if (B_idx_00 == -1)
+    {
+        printf("[FATAL] %s error: pair (%d, %d) B_idx_ij == -1\n", __FUNCTION__, blk0[0], blk1[0]);
+        return;
+    }
     int nrow0 = HSS_B[B_idx_00]->nrow;
     int ncol0 = HSS_B[B_idx_00]->ncol;
     
@@ -470,7 +475,7 @@ void H2P_SPDHSS_H2_gather_HSS_B(
         int B_idx_i0 = HSS_B_pair2idx[blk0[i] * n_node + blk1[0]];
         if (B_idx_i0 == -1)
         {
-            printf("[FATAL] %s error: pair (%d, %d) B_idx_i0 == -1\n", __FUNCTION__, blk0[i], blk1[0]);
+            printf("[FATAL] %s error: pair (%d, %d) B_idx_ij == -1\n", __FUNCTION__, blk0[i], blk1[0]);
             return;
         }
         if (HSS_B[B_idx_i0]->ncol != ncol0)
@@ -490,7 +495,7 @@ void H2P_SPDHSS_H2_gather_HSS_B(
         int B_idx_0j = HSS_B_pair2idx[blk0[0] * n_node + blk1[j]];
         if (B_idx_0j == -1)
         {
-            printf("[FATAL] %s error: pair (%d, %d) B_idx_i0 == -1\n", __FUNCTION__, blk0[0], blk1[j]);
+            printf("[FATAL] %s error: pair (%d, %d) B_idx_ij == -1\n", __FUNCTION__, blk0[0], blk1[j]);
             return;
         }
         if (HSS_B[B_idx_0j]->nrow != nrow0)
@@ -609,7 +614,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             H2P_get_Bij_block(h2mat, node0, node1, H2_Bij);
             if (H2_Bij->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 1.1\n", __FUNCTION__);
+                printf("[FATAL] %s bug in case 1.1, pair (%d, %d)\n", __FUNCTION__, node0, node1);
                 H2P_dense_mat_destroy(H2_Bij);
                 H2P_dense_mat_destroy(tmpM);
                 return;
@@ -644,7 +649,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             H2P_get_Dij_block(h2mat, node0, node1, H2_Dij);
             if (H2_Dij->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 1.2\n", __FUNCTION__);
+                printf("[FATAL] %s bug in case 1.2, pair (%d, %d)\n", __FUNCTION__, node0, node1);
                 H2P_dense_mat_destroy(H2_Dij);
                 H2P_dense_mat_destroy(tmpM);
                 return;
@@ -694,7 +699,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             );
             if (tmpB->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 1.3\n", __FUNCTION__);
+                printf("[FATAL] %s bug in case 1.3, pair (%d, %d)\n", __FUNCTION__, node0, node1);
                 H2P_dense_mat_destroy(tmpB);
                 H2P_dense_mat_destroy(tmpM0);
                 H2P_dense_mat_destroy(tmpM1);
@@ -746,7 +751,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             );
             if (tmpB->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 1.4\n", __FUNCTION__);
+                printf("[FATAL] %s bug in case 1.4, pair (%d, %d)\n", __FUNCTION__, node0, node1);
                 H2P_dense_mat_destroy(tmpB);
                 H2P_dense_mat_destroy(tmpM0);
                 H2P_dense_mat_destroy(tmpM1);
@@ -800,7 +805,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             );
             if (tmpB->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 1.5\n", __FUNCTION__);
+                printf("[FATAL] %s bug in case 1.5, pair (%d, %d)\n", __FUNCTION__, node0, node1);
                 H2P_dense_mat_destroy(tmpB);
                 H2P_dense_mat_destroy(tmpM0);
                 H2P_dense_mat_destroy(tmpM1);
@@ -844,7 +849,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
         // Note: node1 must be a leaf node
         if (n_child1 > 0)
         {
-            printf("[FATAL] %s bug in case 2\n", __FUNCTION__);
+            printf("[FATAL] %s bug in case 2, pair (%d, %d)\n", __FUNCTION__, node0, node1);
             return;
         }  // End of "if (n_child1 > 0)"
 
@@ -857,7 +862,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             H2P_get_Bij_block(h2mat, node0, node1, H2_Bij);
             if (H2_Bij->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 2.1\n", __FUNCTION__);
+                printf("[FATAL] %s bug in case 2.1, pair (%d, %d)\n", __FUNCTION__, node0, node1);
                 H2P_dense_mat_destroy(H2_Bij);
                 return;
             }
@@ -883,7 +888,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             H2P_get_Dij_block(h2mat, node0, node1, H2_Dij);
             if (H2_Dij->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 2.2\n", __FUNCTION__);
+                printf("[FATAL] %s bug in case 2.2, pair (%d, %d)\n", __FUNCTION__, node0, node1);
                 H2P_dense_mat_destroy(H2_Dij);
                 return;
             }
@@ -916,7 +921,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             );
             if (tmpB->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 2.3\n", __FUNCTION__);
+                printf("[FATAL] %s bug in case 2.3, pair (%d, %d)\n", __FUNCTION__, node0, node1);
                 H2P_dense_mat_destroy(tmpB);
                 H2P_dense_mat_destroy(tmpM);
                 return;
@@ -946,7 +951,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
         // Note: node0 must be a leaf node
         if (n_child0 > 0)
         {
-            printf("[FATAL] %s bug in case 3\n", __FUNCTION__);
+            printf("[FATAL] %s bug in case 3, pair (%d, %d)\n", __FUNCTION__, node0, node1);
             return;
         }
 
@@ -959,7 +964,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             H2P_get_Bij_block(h2mat, node0, node1, H2_Bij);
             if (H2_Bij->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 3.1\n", __FUNCTION__);
+                printf("[FATAL] %s bug in case 3.1, pair (%d, %d)\n", __FUNCTION__, node0, node1);
                 H2P_dense_mat_destroy(H2_Bij);
                 return;
             }
@@ -985,7 +990,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             H2P_get_Dij_block(h2mat, node0, node1, H2_Dij);
             if (H2_Dij->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 3.2\n", __FUNCTION__);
+                printf("[FATAL] %s bug in case 3.2, pair (%d, %d)\n", __FUNCTION__, node0, node1);
                 H2P_dense_mat_destroy(H2_Dij);
                 return;
             }
@@ -1020,7 +1025,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             );
             if (tmpB->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 3.3\n", __FUNCTION__);
+                printf("[FATAL] %s bug in case 3.3, pair (%d, %d)\n", __FUNCTION__, node0, node1);
                 H2P_dense_mat_destroy(tmpB);
                 H2P_dense_mat_destroy(tmpM);
                 return;
@@ -1107,9 +1112,10 @@ void H2P_SPDHSS_H2_get_level_HSS_Bij_pairs(H2Pack_t h2mat, H2P_int_vec_t **level
     }
     n_HSS_Bij_pair += level_pairs->length / 2;
 
-    H2P_int_vec_t prev_pairs, work_buf;
-    H2P_int_vec_init(&prev_pairs, 1024);
-    H2P_int_vec_init(&work_buf,   1024);
+    H2P_int_vec_t prev_pairs, prev_pairs1, work_buf;
+    H2P_int_vec_init(&prev_pairs,  1024);
+    H2P_int_vec_init(&prev_pairs1, 1024);
+    H2P_int_vec_init(&work_buf,    1024);
     for (int i = max_level - 1; i >= 1; i--)
     {
         H2P_int_vec_t prev_pairs0 = level_HSS_Bij_pairs[i + 1];
@@ -1124,42 +1130,48 @@ void H2P_SPDHSS_H2_get_level_HSS_Bij_pairs(H2Pack_t h2mat, H2P_int_vec_t **level
                 prev_pairs->data[k] = parent[prev_pairs->data[k]];
         }
 
-        // prev_pairs = unique(prev_pairs, 'rows');
         // prev_pairs = prev_pairs(prev_pairs(:, 1) ~= prev_pairs(:, 2), :);
+        // prev_pairs = unique(prev_pairs, 'rows');
         H2P_int_vec_set_capacity(work_buf, prev_pairs->length);
         int n_prev_pair = prev_pairs->length / 2;
         int *key = work_buf->data;
         int *val = work_buf->data + n_prev_pair;
         int *pp_data = prev_pairs->data;
+        int valid_cnt = 0;
         for (int k = 0; k < n_prev_pair; k++)
         {
-            key[k] = pp_data[2 * k] * (n_node + 1) + pp_data[2 * k + 1];
-            val[k] = k;
+            int node0 = pp_data[2 * k];
+            int node1 = pp_data[2 * k + 1];
+            if (node0 == node1) continue;
+            key[valid_cnt] = node0 * n_node + node1;
+            val[valid_cnt] = k;
+            valid_cnt++;
         }
-        qsort_int_key_val(key, val, 0, n_prev_pair - 1);
+        qsort_int_key_val(key, val, 0, valid_cnt - 1);
+        H2P_int_vec_set_capacity(prev_pairs1, valid_cnt * 2);
+        int *pp1_data = prev_pairs1->data;
         int cnt = 0, curr_key = -19241112;
-        for (int k = 0; k < n_prev_pair; k++)
+        for (int k = 0; k < valid_cnt; k++)
         {
             if (curr_key != key[k])
             {
                 curr_key = key[k];
-                int node0 = pp_data[2 * val[k]];
-                int node1 = pp_data[2 * val[k] + 1];
-                if (node0 != node1)  // Do we really need this?
-                {
-                    pp_data[2 * cnt]     = node0;
-                    pp_data[2 * cnt + 1] = node1;
-                    cnt++;
-                }
+                int pair_k = val[k];
+                int node0 = pp_data[2 * pair_k];
+                int node1 = pp_data[2 * pair_k + 1];
+                pp1_data[2 * cnt]     = node0;
+                pp1_data[2 * cnt + 1] = node1;
+                //if (i == 2 && node0 == 43) printf("prev_pair %d: (%d, %d), key = %d\n", cnt, node0, node1, key[k]);
+                cnt++;
             }
         }  // End of k loop
-        prev_pairs->length = 2 * cnt;
+        prev_pairs1->length = 2 * cnt;
 
         // level_HSS_Bij_pairs{i} = [prev_pairs; inadm_blks; adm_blks];
         H2P_int_vec_init(&level_HSS_Bij_pairs[i], 1024);
         level_pairs = level_HSS_Bij_pairs[i];
-        for (int k = 0; k < prev_pairs->length; k++)
-            H2P_int_vec_push_back(level_pairs, prev_pairs->data[k]);
+        for (int k = 0; k < prev_pairs1->length; k++)
+            H2P_int_vec_push_back(level_pairs, prev_pairs1->data[k]);
         for (int k = 0; k < H2_n_r_inadm_pairs; k++)
         {
             if (inadm_max_level[k] != i) continue;
@@ -1177,6 +1189,7 @@ void H2P_SPDHSS_H2_get_level_HSS_Bij_pairs(H2Pack_t h2mat, H2P_int_vec_t **level
     level_HSS_Bij_pairs[0] = NULL;
 
     H2P_int_vec_destroy(prev_pairs);
+    H2P_int_vec_destroy(prev_pairs1);
     H2P_int_vec_destroy(work_buf);
     free(inadm_max_level);
     free(adm_max_level);
@@ -1600,7 +1613,8 @@ void H2P_SPDHSS_H2_build(
         {
             int node0 = level_i_HSS_Bij_pairs->data[2 * j];
             int node1 = level_i_HSS_Bij_pairs->data[2 * j + 1];
-            HSS_B_pair2idx[node0 * n_node + node1] = HSS_B_idx;
+            int pair_idx = node0 * n_node + node1;
+            HSS_B_pair2idx[pair_idx] = HSS_B_idx;
             HSS_B_idx++;
         }
     }
@@ -1691,16 +1705,16 @@ void H2P_SPDHSS_H2_build(
                         CblasRowMajor, CblasLeft, CblasLower, CblasNoTrans, CblasNonUnit,
                         tmpY->nrow, tmpY->ncol, 1.0, S[node]->data, S[node]->ld, tmpY->data, tmpY->ld
                     );
-                    // tmpQ_ncol = min([size(tmpY), max_rank]);
+                    // V_ncol = min([size(tmpY), max_rank]);
                     // [tmpQ, ~, ~] = qr(tmpY, 0);
-                    // V{node} = tmpQ(:, 1 : tmpQ_ncol);
+                    // V{node} = tmpQ(:, 1 : V_ncol);
                     int tmpQ_ncol = MIN(tmpY->nrow, tmpY->ncol);
-                    tmpQ_ncol = MIN(tmpQ_ncol, max_rank);
+                    int V_ncol = MIN(tmpQ_ncol, max_rank);
                     H2P_dense_mat_t tmpQ = tmpY;
                     LAPACK_GEQRF(LAPACK_ROW_MAJOR, tmpQ->nrow, tmpQ->ncol, tmpQ->data, tmpQ->ld, tau);
-                    LAPACK_ORGQR(LAPACK_ROW_MAJOR, tmpQ->nrow, tmpQ->ncol, tmpQ->ncol, tmpQ->data, tmpQ->ld, tau);
-                    H2P_dense_mat_init(&V[node], tmpQ->nrow, tmpQ_ncol);
-                    H2P_copy_matrix_block(tmpQ->nrow, tmpQ_ncol, tmpQ->data, tmpQ->ld, V[node]->data, V[node]->ld);
+                    LAPACK_ORGQR(LAPACK_ROW_MAJOR, tmpQ->nrow, tmpQ_ncol, tmpQ_ncol, tmpQ->data, tmpQ->ld, tau);
+                    H2P_dense_mat_init(&V[node], tmpQ->nrow, V_ncol);
+                    H2P_copy_matrix_block(tmpQ->nrow, V_ncol, tmpQ->data, tmpQ->ld, V[node]->data, V[node]->ld);
                     // HSS_U{node} = S{node} * V{node};
                     H2P_dense_mat_init(&HSS_U[node], S[node]->nrow, V[node]->ncol);
                     CBLAS_GEMM(
@@ -1902,12 +1916,12 @@ void H2P_SPDHSS_H2_build(
                     // [tmpQ, ~, ~] = qr(tmpY, 0);
                     // V{node} = tmpQ(:, 1 : tmpQ_ncol);
                     int tmpQ_ncol = MIN(tmpY->nrow, tmpY->ncol);
-                    tmpQ_ncol = MIN(tmpQ_ncol, max_rank);
+                    int V_ncol = MIN(tmpQ_ncol, max_rank);
                     tmpQ = tmpY;
                     LAPACK_GEQRF(LAPACK_ROW_MAJOR, tmpQ->nrow, tmpQ->ncol, tmpQ->data, tmpQ->ld, tau);
-                    LAPACK_ORGQR(LAPACK_ROW_MAJOR, tmpQ->nrow, tmpQ->ncol, tmpQ->ncol, tmpQ->data, tmpQ->ld, tau);
-                    H2P_dense_mat_init(&V[node], tmpQ->nrow, tmpQ_ncol);
-                    H2P_copy_matrix_block(tmpQ->nrow, tmpQ_ncol, tmpQ->data, tmpQ->ld, V[node]->data, V[node]->ld);
+                    LAPACK_ORGQR(LAPACK_ROW_MAJOR, tmpQ->nrow, tmpQ_ncol, tmpQ_ncol, tmpQ->data, tmpQ->ld, tau);
+                    H2P_dense_mat_init(&V[node], tmpQ->nrow, V_ncol);
+                    H2P_copy_matrix_block(tmpQ->nrow, V_ncol, tmpQ->data, tmpQ->ld, V[node]->data, V[node]->ld);
                     // HSS_U{node} = tmpM * V{node};
                     H2P_dense_mat_init(&HSS_U[node], tmpM->nrow, V[node]->ncol);
                     CBLAS_GEMM(

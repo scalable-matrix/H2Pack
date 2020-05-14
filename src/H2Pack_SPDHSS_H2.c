@@ -1682,7 +1682,7 @@ void H2P_SPDHSS_H2_build(
                     if (info != 0)
                     {
                         printf(
-                            "[FATAL] %s: Node %d potrf() returned %d, source H2 matrix is not SPD," 
+                            "[FATAL] %s: Node %d potrf() returned %d, source H2 matrix is not SPD, " 
                             "current diagonal shifting %lf is not enough\n", __FUNCTION__, node, info, shift
                         );
                         is_SPD = 0;

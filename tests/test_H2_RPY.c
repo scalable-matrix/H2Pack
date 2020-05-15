@@ -210,8 +210,9 @@ int main(int argc, char **argv)
         h2pack, pp, test_params.BD_JIT, krnl_param, 
         test_params.krnl_eval, test_params.krnl_bimv, test_params.krnl_bimv_flops
     );
+    printf("H2 matrix construction finished\n");
     
-    int n_check_pt = 10000, check_pt_s;
+    int n_check_pt = 9999, check_pt_s;
     if (n_check_pt > test_params.n_point)
     {
         n_check_pt = test_params.n_point;

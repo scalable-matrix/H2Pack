@@ -3,7 +3,8 @@ INC     = -I../src/include   #-I$(VTUNE_AMPLIFIER_2018_DIR)/include
 
 USE_MKL      = 0
 USE_OPENBLAS = 1
-OPENBLAS_INSTALL_DIR = /usr/local/opt/openblas
+#OPENBLAS_INSTALL_DIR = /usr/local/opt/openblas
+OPENBLAS_INSTALL_DIR = /opt/OpenBLAS
 
 CC      = gcc
 DEF     = -DUSE_AVX
@@ -28,7 +29,7 @@ ifeq ($(USE_OPENBLAS), 1)
 DEF     += -DUSE_OPENBLAS
 LIB     += $(OPENBLAS_INSTALL_DIR)/lib/libopenblas.a
 INC     += -I$(OPENBLAS_INSTALL_DIR)/include
-LDFLAGS += -fopenmp -lm
+LDFLAGS += -fopenmp -lm -lgfortran -L/usr/lib/gcc/x86_64-linux-gnu/7/
 endif
 
 SRCS = $(wildcard *.c)

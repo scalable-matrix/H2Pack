@@ -83,7 +83,11 @@ int main(int argc, char **argv)
     y0 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_dim * n_check_pt);
     y1 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
     assert(x != NULL && y0 != NULL && y1 != NULL);
-    for (int i = 0; i < test_params.krnl_mat_size; i++) x[i] = drand48();
+    for (int i = 0; i < test_params.krnl_mat_size; i++) 
+    {
+        //x[i] = (DTYPE) pseudo_randn();
+        x[i] = (DTYPE) drand48();
+    }
     
     // Get reference results
     direct_nbody(

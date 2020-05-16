@@ -20,7 +20,7 @@ int main(int argc, char **argv)
     srand48(time(NULL));
     
     parse_scalar_params(argc, argv);
-    
+
     double st, et;
 
     H2Pack_t h2pack;
@@ -82,10 +82,8 @@ int main(int argc, char **argv)
     assert(x0 != NULL && x1 != NULL && y0 != NULL && y1 != NULL);
     for (int i = 0; i < test_params.krnl_mat_size; i++) 
     {
-        // x[i] = drand48();
-        // Make it similar to randn()
-        x0[i] = (drand48() + drand48() + drand48() + drand48() + drand48() + drand48() + 
-                 drand48() + drand48() + drand48() + drand48() + drand48() + drand48() - 6) / sqrt(12);
+        x0[i] = (DTYPE) pseudo_randn();
+        //x0[i] = (DTYPE) drand48();
     }
 
     // Get reference results
@@ -119,7 +117,7 @@ int main(int argc, char **argv)
     printf("For %d validation points: ||y_{HSS} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / ref_norm);
     
     // Test ULV Cholesky factorization
-    const DTYPE shift = 1000;
+    const DTYPE shift = 0;
     st = get_wtime_sec();
     H2P_HSS_ULV_Cholesky_factorize(h2pack, shift);
     et = get_wtime_sec();

@@ -15,6 +15,13 @@ struct H2P_test_params
 };
 struct H2P_test_params test_params;
 
+static double pseudo_randn()
+{
+    double res = 0.0;
+    for (int i = 0; i < 12; i++) res += drand48();
+    return (res - 6.0) / 12.0;
+}
+
 void parse_scalar_params(int argc, char **argv)
 {
     if (argc < 2)
@@ -113,15 +120,16 @@ void parse_scalar_params(int argc, char **argv)
     }
     if (need_gen == 1)
     {
+        DTYPE prefac = DPOW((DTYPE) test_params.n_point, 1.0 / (DTYPE) test_params.pt_dim);
         printf("Binary/CSV coordinate file not provided. Generating random coordinates in unit box...");
         for (int i = 0; i < test_params.n_point * test_params.pt_dim; i++)
         {
-            // Make it similar to randn()
-            test_params.coord[i] = (drand48() + drand48() + drand48() + drand48() + drand48() + drand48() +
-                                    drand48() + drand48() + drand48() + drand48() + drand48() + drand48() - 6) / sqrt(12);
-            //test_params.coord[i] = drand48();
+            test_params.coord[i] = (DTYPE) pseudo_randn();
+            //test_params.coord[i] = (DTYPE) drand48();
+            test_params.coord[i] *= prefac;
         }
         printf(" done.\n");
+        printf("Random coordinate scaling prefactor = %e\n", prefac);
     }
     
     if (test_params.pt_dim == 3) 
@@ -194,4 +202,3 @@ void parse_scalar_params(int argc, char **argv)
         }
     }
 }
-

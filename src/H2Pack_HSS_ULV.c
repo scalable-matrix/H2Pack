@@ -52,7 +52,6 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
         D_mid[i]   = NULL;
     }
 
-    // Non-root node construction
     int is_SPD = 1;
     for (int i = max_level; i >= 0; i--)
     {
@@ -67,7 +66,7 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
             H2P_dense_mat_t tmpU   = thread_buf[tid]->mat0;
             H2P_dense_mat_t tmpD   = thread_buf[tid]->mat1;
             H2P_dense_mat_t tmpB   = thread_buf[tid]->mat2;
-            H2P_dense_mat_t tmpM   = thread_buf[tid]->mat2;
+            H2P_dense_mat_t tmpM   = thread_buf[tid]->mat0;
 
             #pragma omp for schedule(dynamic)
             for (int j = 0; j < level_i_n_node; j++)
@@ -100,9 +99,8 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                         U_nrow += D_mid[child_k]->nrow;
                     }
                     // (2) Build the compressed diagonal block
-                    H2P_dense_mat_resize(tmpU, U_nrow, U_nrow);
+                    // Build tmpD, we need tmpB and tmpM (same buffer as tmpU, so we build tmpU later)
                     H2P_dense_mat_resize(tmpD, U_nrow, U_nrow);
-                    memset(tmpU->data, 0, sizeof(DTYPE) * U_nrow * U_nrow);
                     memset(tmpD->data, 0, sizeof(DTYPE) * U_nrow * U_nrow);
                     for (int k = 0; k < node_n_child; k++)
                     {
@@ -115,11 +113,6 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                         H2P_copy_matrix_block(
                             D_mid[child_k]->nrow, D_mid[child_k]->ncol, D_mid[child_k]->data, 
                             D_mid[child_k]->ld, tmpD->data + idx_k_s * (tmpD->ld + 1), tmpD->ld
-                        );
-                        // tmpU(idx_k, idx_k) = U_mid{child_k};
-                        H2P_copy_matrix_block(
-                            U_mid[child_k]->nrow, U_mid[child_k]->ncol, U_mid[child_k]->data, 
-                            U_mid[child_k]->ld, tmpU->data + idx_k_s * (tmpU->ld + 1), tmpU->ld
                         );
                         // Off-diagonal blocks
                         for (int l = k + 1; l < node_n_child; l++)
@@ -148,21 +141,41 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                             H2P_transpose_dmat(1, idx_k_len, idx_l_len, tmpD_kl, tmpD->ld, tmpD_lk, tmpD->ld);
                         }
                     }  // End of k loop
+                    // Build tmpU, now tmpM is no long used
+                    H2P_dense_mat_resize(tmpU, U_nrow, U_nrow);
+                    memset(tmpU->data, 0, sizeof(DTYPE) * U_nrow * U_nrow);
+                    for (int k = 0; k < node_n_child; k++)
+                    {
+                        int child_k = node_children[k];
+                        // idx_k = offset(k) : offset(k+1)-1;
+                        int idx_k_s = offset[k];
+                        int idx_k_len = offset[k + 1] - idx_k_s;
+                        // Diagonal blocks
+                        // tmpU(idx_k, idx_k) = U_mid{child_k};
+                        H2P_copy_matrix_block(
+                            U_mid[child_k]->nrow, U_mid[child_k]->ncol, U_mid[child_k]->data, 
+                            U_mid[child_k]->ld, tmpU->data + idx_k_s * (tmpU->ld + 1), tmpU->ld
+                        );
+                    }  // End of k loop
                     // if (level > 1), tmpU = tmpU * U{node}; end
+                    // tmpU (tmpM, mat0) and tmpD (mat1) are used, use tmpB (mat2) as buffer
                     if (i > 0)
                     {
-                        H2P_dense_mat_resize(tmpM, tmpU->nrow, U[node]->ncol);
+                        H2P_dense_mat_resize(tmpB, tmpU->nrow, U[node]->ncol);
+                        assert(tmpU->ncol == U[node]->nrow);
                         CBLAS_GEMM(
-                            CblasRowMajor, CblasNoTrans, CblasNoTrans, tmpM->nrow, tmpM->ncol, tmpU->ncol,
-                            1.0, tmpU->data, tmpU->ld, U[node]->data, U[node]->ld, 0.0, tmpM->data, tmpM->ld
+                            CblasRowMajor, CblasNoTrans, CblasNoTrans, tmpB->nrow, tmpB->ncol, tmpU->ncol,
+                            1.0, tmpU->data, tmpU->ld, U[node]->data, U[node]->ld, 0.0, tmpB->data, tmpB->ld
                         );
-                        H2P_dense_mat_resize(tmpU, tmpM->nrow, tmpM->ncol);
-                        H2P_copy_matrix_block(tmpM->nrow, tmpM->ncol, tmpM->data, tmpM->ld, tmpU->data, tmpU->ld);
+                        H2P_dense_mat_resize(tmpU, tmpB->nrow, tmpB->ncol);
+                        H2P_copy_matrix_block(tmpB->nrow, tmpB->ncol, tmpB->data, tmpB->ld, tmpU->data, tmpU->ld);
                     }
                 }  // End of "if (node_n_child == 0)"
                 U_nrow = tmpU->nrow;
                 U_ncol = tmpU->ncol;
                 U_diff = U_nrow - U_ncol;
+                assert(tmpD->nrow == U_nrow);
+                assert(U_diff >= 0);
 
                 // 2. Cholesky factorization
                 // size(tmpU) = [U_nrow, U_ncol]
@@ -209,7 +222,8 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                         }
                         if (info != 0)
                         {
-                            printf("[FATAL] Node %d potrf() returned %d, target matrix is not SPD, current diagonal shift %.2lf is not enough\n", node, info, shift);
+                            printf("[FATAL] Node %d potrf() returned %d, ", node, info);
+                            printf("target matrix is not SPD, current diagonal shift %.2lf is not enough\n", shift);
                             is_SPD = 0;
                         }
                         // LD21 = tmpL \ tmpD21;
@@ -264,7 +278,8 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                     }
                     if (info != 0)
                     {
-                        printf("[FATAL] Node %d potrf() returned %d, target matrix is not SPD, current diagonal shift %.2lf is not enough\n", node, info, shift);
+                        printf("[FATAL] Node %d potrf() returned %d, ", node, info);
+                        printf("target matrix is not SPD, current diagonal shift %.2lf is not enough\n", shift);
                         is_SPD = 0;
                     }
                 }  // End of "if (i > 0)"
@@ -414,7 +429,7 @@ void H2P_HSS_ULV_Cholesky_solve(H2Pack_t h2pack, const int op, const DTYPE *b, D
                         CblasRowMajor, CblasNoTrans, I_size, L_size, 
                         -1.0, L12, L->ld, x2, 1, 1.0, x1, 1
                     );
-                    // x(idx) = L{node} \ x(idx);
+                    // x(idx) = [x1; x2];
                     for (int k = 0; k < idx->length; k++) x[idx->data[k]] = x0->data[k];
                 }  // End of j loop
             }  // End of "#pragma omp parallel"

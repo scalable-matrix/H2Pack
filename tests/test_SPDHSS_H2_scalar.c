@@ -14,6 +14,13 @@
 
 #include "direct_nbody.h"
 
+#include "pcg.h"
+
+void HSS_ULV_Chol_precond(H2Pack_t hssmat, const DTYPE *b, DTYPE *x)
+{
+    H2P_HSS_ULV_Cholesky_solve(hssmat, 3, b, x);
+}
+
 int main(int argc, char **argv)
 {
     //__itt_pause();
@@ -154,6 +161,28 @@ int main(int argc, char **argv)
 
     printf("SPDHSS matrix:\n");
     H2P_print_statistic(hssmat);
+
+    // Preconditioned CG test
+    for (int i = 0; i < test_params.krnl_mat_size; i++)
+    {
+        y0[i] = drand48();
+        x0[i] = 0.0;
+        x1[i] = 0.0;
+    }
+    printf("Starting PCG solve without preconditioner...\n");
+    int flag0, flag1, iter0, iter1;
+    DTYPE relres0, relres1;
+    pcg(
+        test_params.krnl_mat_size, 1e-6, 50, 
+        H2P_matvec, h2mat, y0, NULL, NULL, x0,
+        &flag0, &relres0, &iter0, NULL
+    );
+    printf("Starting PCG solve with SPDHSS preconditioner...\n");
+    pcg(
+        test_params.krnl_mat_size, 1e-6, 50, 
+        H2P_matvec, h2mat, y0, HSS_ULV_Chol_precond, hssmat, x1,
+        &flag1, &relres1, &iter1, NULL
+    );
 
     free(x0);
     free(x1);

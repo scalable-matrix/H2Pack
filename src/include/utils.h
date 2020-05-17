@@ -1,6 +1,6 @@
 // @brief    : Implementations of some helper functions I use here and there
 // @author   : Hua Huang <huangh223@gatech.edu>
-// @modified : 2020-02-10
+// @modified : 2020-05-16
 
 #ifndef __HUANGH223_UTILS_H__
 #define __HUANGH223_UTILS_H__
@@ -15,13 +15,41 @@ extern "C" {
 #define MIN(a, b)  ((a) < (b) ? (a) : (b))
 #define MAX(a, b)  ((a) > (b) ? (a) : (b))
 
-#define DBG_PRINTF(fmt, args...)                   \
-    do                                             \
-    {                                              \
-        fprintf(stdout, "%s, line %d: "fmt,        \
-                __FILE__, __LINE__, ##args);       \
-        fflush(stdout);                            \
+#define DEBUG_PRINTF(fmt, args...)                  \
+    do                                              \
+    {                                               \
+        fprintf(stdout, "[DEBUG] %s, %d: "fmt,      \
+                __FILE__, __LINE__, ##args);        \
+        fflush(stdout);                             \
     } while (0)
+
+#define WARNING_PRINTF(fmt, args...)                \
+    do                                              \
+    {                                               \
+        fprintf(stdout, "[WARNING] %s, %d: "fmt,    \
+                __FILE__, __LINE__, ##args);        \
+        fflush(stdout);                             \
+    } while (0)
+
+#define ERROR_PRINTF(fmt, args...)                  \
+    do                                              \
+    {                                               \
+        fprintf(stderr, "[ERROR] %s, %d: "fmt,      \
+                __FILE__, __LINE__, ##args);        \
+        fflush(stderr);                             \
+    } while (0)
+
+#define ASSERT_PRINTF(expr, fmt, args...)           \
+    do                                              \
+    {                                               \
+        if (!(expr))                                \
+        {                                           \
+            fprintf(stderr, "[FATAL] %s, %d: "fmt,  \
+                    __FILE__, __LINE__, ##args);    \
+            fflush(stderr);                         \
+            assert(expr);                           \
+        }                                           \
+    } while (0)                                     \
 
 // Get wall-clock time in seconds
 // Output parameter:

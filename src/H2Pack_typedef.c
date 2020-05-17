@@ -17,7 +17,7 @@ void H2P_init(
 )
 {
     H2Pack_t h2pack = (H2Pack_t) malloc(sizeof(struct H2Pack));
-    assert(h2pack != NULL);
+    ASSERT_PRINTF(h2pack != NULL, "Failed to allocate H2Pack structure\n");
     
     h2pack->n_thread  = omp_get_max_threads();
     h2pack->pt_dim    = pt_dim;

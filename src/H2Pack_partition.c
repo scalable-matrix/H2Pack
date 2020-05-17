@@ -118,7 +118,10 @@ H2P_tree_node_t H2P_bisection_partition_points(
     // 3. Bisection partition points in current box
     int *rel_idx   = (int*) malloc(sizeof(int) * node_npts * pt_dim);
     int *child_idx = (int*) malloc(sizeof(int) * node_npts);
-    assert(rel_idx != NULL && child_idx != NULL);
+    ASSERT_PRINTF(
+        rel_idx != NULL && child_idx != NULL, 
+        "Failed to allocate index arrays of size %d for bisection partioning\n", node_npts * (pt_dim + 1)
+    );
     memset(child_idx, 0, sizeof(int) * node_npts);
     int pow2 = 1;
     for (int j = 0; j < pt_dim; j++)
@@ -142,7 +145,11 @@ H2P_tree_node_t H2P_bisection_partition_points(
     int *sub_rel_idx   = (int*) malloc(sizeof(int) * max_child * pt_dim);
     int *sub_node_npts = (int*) malloc(sizeof(int) * max_child);
     int *sub_displs    = (int*) malloc(sizeof(int) * (max_child + 1));
-    assert(sub_rel_idx != NULL && sub_node_npts != NULL && sub_displs != NULL);
+    ASSERT_PRINTF(
+        sub_rel_idx != NULL && sub_node_npts != NULL && sub_displs != NULL,
+        "Failed to allocate working buffer of size %d for sub-nodes\n",
+        max_child * (pt_dim + 2)
+    );
     memset(sub_node_npts, 0, sizeof(int) * max_child);
     for (int i = 0; i < node_npts; i++)
     {
@@ -179,7 +186,11 @@ H2P_tree_node_t H2P_bisection_partition_points(
     int n_child = 0;
     DTYPE *sub_box      = (DTYPE*) malloc(sizeof(DTYPE) * max_child * pt_dim * 2);
     int   *sub_coord_se = (int*)   malloc(sizeof(int)   * max_child * 2);
-    assert(sub_box != NULL && sub_coord_se != NULL);
+    ASSERT_PRINTF(
+        sub_box != NULL && sub_coord_se != NULL,
+        "Failed to allocate working buffer of size %d for sub-nodes\n",
+        max_child * (pt_dim + 1) * 2
+    );
     sub_displs[0] = 0;
     for (int i = 1; i <= max_child; i++)
         sub_displs[i] = sub_displs[i - 1] + sub_node_npts[i - 1];
@@ -429,7 +440,10 @@ void H2P_calc_node_inadm_lists(H2Pack_t h2pack)
     H2P_int_vec_init(&target_list, 2 * n_leaf_node);
     int *node_inadm_lists = (int*) malloc(sizeof(int) * n_node * max_neighbor);
     int *node_n_r_inadm   = (int*) malloc(sizeof(int) * n_node);
-    assert(node_inadm_lists != NULL && node_n_r_inadm != NULL);
+    ASSERT_PRINTF(
+        node_inadm_lists != NULL && node_n_r_inadm != NULL,
+        "Failed to allocate node inadmissible list array of size %d", n_node * max_neighbor
+    );
     memset(node_n_r_inadm, 0, sizeof(int) * n_node);
 
     for (int i = max_level; i >= min_adm_level; i--)
@@ -491,7 +505,7 @@ void H2P_HSS_calc_adm_inadm_pairs(H2Pack_t h2pack)
     h2pack->min_adm_level      = H2_min_adm_level;
     h2pack->HSS_min_adm_level  = partition_vars.min_adm_level;
     h2pack->HSS_max_adm_height = partition_vars.max_adm_height;
-    assert(h2pack->HSS_min_adm_level == 1);
+    ASSERT_PRINTF(h2pack->HSS_min_adm_level == 1, "HSS matrix minimal admissible level should be 1!\n");
 
     // Copy reduced HSS (in)admissible pairs from H2P_int_vec to h2pack arrays
     h2pack->HSS_n_r_inadm_pair = partition_vars.r_inadm_pairs->length / 2;
@@ -500,7 +514,11 @@ void H2P_HSS_calc_adm_inadm_pairs(H2Pack_t h2pack)
     size_t HSS_r_adm_pairs_msize   = sizeof(int) * h2pack->HSS_n_r_adm_pair   * 2;
     h2pack->HSS_r_inadm_pairs = (int*) malloc(HSS_r_inadm_pairs_msize);
     h2pack->HSS_r_adm_pairs   = (int*) malloc(HSS_r_adm_pairs_msize);
-    assert(h2pack->HSS_r_inadm_pairs != NULL && h2pack->HSS_r_adm_pairs != NULL);
+    ASSERT_PRINTF(
+        h2pack->HSS_r_inadm_pairs != NULL && h2pack->HSS_r_adm_pairs != NULL,
+        "Failed to allocate arrays of size %d and %d for HSS (in)admissible pairs\n",
+        h2pack->HSS_n_r_inadm_pair * 2, h2pack->HSS_n_r_adm_pair   * 2
+    );
     memcpy(h2pack->HSS_r_inadm_pairs, partition_vars.r_inadm_pairs->data, HSS_r_inadm_pairs_msize);
     memcpy(h2pack->HSS_r_adm_pairs,   partition_vars.r_adm_pairs->data,   HSS_r_adm_pairs_msize);
     H2P_int_vec_destroy(partition_vars.r_inadm_pairs);
@@ -532,14 +550,22 @@ void H2P_partition_points(
     h2pack->max_leaf_size   = max_leaf_size;
     h2pack->coord_idx = (int*)   malloc(sizeof(int)   * n_point);
     h2pack->coord     = (DTYPE*) malloc(sizeof(DTYPE) * n_point * pt_dim);
-    assert(h2pack->coord != NULL && h2pack->coord_idx != NULL);
+    ASSERT_PRINTF(
+        h2pack->coord != NULL && h2pack->coord_idx != NULL,
+        "Failed to allocate matrix of size %d * %d for storing point coordinates\n", 
+        pt_dim, n_point
+    );
     memcpy(h2pack->coord, coord, sizeof(DTYPE) * n_point * pt_dim);
     for (int i = 0; i < n_point; i++) h2pack->coord_idx[i] = i;
     
     // 2. Partition points for H2 tree using linked list 
     int   *coord_idx_tmp = (int*)   malloc(sizeof(int)   * n_point);
     DTYPE *coord_tmp     = (DTYPE*) malloc(sizeof(DTYPE) * n_point * pt_dim);
-    assert(coord_tmp != NULL && coord_idx_tmp != NULL);
+    ASSERT_PRINTF(
+        coord_tmp != NULL && coord_idx_tmp != NULL,
+        "Failed to allocate matrix of size %d * %d for temporarily storing point coordinates\n", 
+        pt_dim, n_point
+    );
     partition_vars.curr_po_idx = 0;
     partition_vars.max_level   = 0;
     partition_vars.n_leaf_node = 0;
@@ -575,12 +601,18 @@ void H2P_partition_points(
     h2pack->height_n_node = malloc(int_max_level_msize);
     h2pack->height_nodes  = malloc(int_max_level_msize * h2pack->n_leaf_node);
     h2pack->enbox         = malloc(enbox_msize);
-    assert(h2pack->parent        != NULL && h2pack->children      != NULL);
-    assert(h2pack->pt_cluster    != NULL && h2pack->mat_cluster   != NULL);
-    assert(h2pack->n_child       != NULL && h2pack->node_level    != NULL);
-    assert(h2pack->node_height   != NULL && h2pack->level_n_node  != NULL);
-    assert(h2pack->level_nodes   != NULL && h2pack->height_n_node != NULL);
-    assert(h2pack->height_nodes  != NULL && h2pack->enbox         != NULL);
+    ASSERT_PRINTF(h2pack->parent        != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
+    ASSERT_PRINTF(h2pack->children      != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
+    ASSERT_PRINTF(h2pack->pt_cluster    != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
+    ASSERT_PRINTF(h2pack->mat_cluster   != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
+    ASSERT_PRINTF(h2pack->n_child       != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
+    ASSERT_PRINTF(h2pack->node_level    != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
+    ASSERT_PRINTF(h2pack->node_height   != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
+    ASSERT_PRINTF(h2pack->level_n_node  != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
+    ASSERT_PRINTF(h2pack->level_nodes   != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
+    ASSERT_PRINTF(h2pack->height_n_node != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
+    ASSERT_PRINTF(h2pack->height_nodes  != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
+    ASSERT_PRINTF(h2pack->enbox         != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
     partition_vars.curr_leaf_idx = 0;
     memset(h2pack->level_n_node,  0, int_max_level_msize);
     memset(h2pack->height_n_node, 0, int_max_level_msize);
@@ -623,7 +655,11 @@ void H2P_partition_points(
     size_t r_adm_pairs_msize   = sizeof(int) * h2pack->n_r_adm_pair   * 2;
     h2pack->r_inadm_pairs = (int*) malloc(r_inadm_pairs_msize);
     h2pack->r_adm_pairs   = (int*) malloc(r_adm_pairs_msize);
-    assert(h2pack->r_inadm_pairs != NULL && h2pack->r_adm_pairs != NULL);
+    ASSERT_PRINTF(
+        h2pack->r_inadm_pairs != NULL && h2pack->r_adm_pairs != NULL,
+        "Failed to allocate arrays of sizes %d and %d for storing (in)admissible pairs\n",
+        h2pack->n_r_inadm_pair * 2, h2pack->n_r_adm_pair   * 2
+    );
     memcpy(h2pack->r_inadm_pairs, partition_vars.r_inadm_pairs->data, r_inadm_pairs_msize);
     memcpy(h2pack->r_adm_pairs,   partition_vars.r_adm_pairs->data,   r_adm_pairs_msize);
     H2P_int_vec_destroy(partition_vars.r_inadm_pairs);
@@ -631,7 +667,7 @@ void H2P_partition_points(
 
     // 6. Initialize thread-local buffer
     h2pack->tb = (H2P_thread_buf_t*) malloc(sizeof(H2P_thread_buf_t) * h2pack->n_thread);
-    assert(h2pack->tb != NULL);
+    ASSERT_PRINTF(h2pack->tb != NULL, "Failed to allocate %d thread buffers\n", h2pack->n_thread);
     for (int i = 0; i < h2pack->n_thread; i++)
         H2P_thread_buf_init(&h2pack->tb[i], h2pack->krnl_mat_size);
     
@@ -643,7 +679,10 @@ void H2P_partition_points(
     int *parent        = h2pack->parent;
     int *DAG_src_ptr   = (int*) malloc(sizeof(int) * (n_node + 1));
     int *DAG_dst_idx   = (int*) malloc(sizeof(int) * n_node);
-    assert(DAG_src_ptr != NULL && DAG_dst_idx != NULL);
+    ASSERT_PRINTF(
+        DAG_src_ptr != NULL && DAG_dst_idx != NULL, 
+        "Failed to allocate working buffer for DAG task queue construction\n"
+    );
     for (int node = 0; node < n_node; node++)
     {
         int height = node_height[node];

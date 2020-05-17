@@ -17,10 +17,13 @@ void H2P_tree_node_init(H2P_tree_node_t *node_, const int dim)
 {
     const int max_child = 1 << dim;
     H2P_tree_node_t node = (H2P_tree_node_t) malloc(sizeof(struct H2P_tree_node));
-    assert(node != NULL);
+    ASSERT_PRINTF(node != NULL, "Failed to allocate H2P_tree_node structure\n");
     node->children = (void**) malloc(sizeof(H2P_tree_node_t) * max_child);
-    node->enbox = (DTYPE*) malloc(sizeof(DTYPE) * dim * 2);
-    assert(node->children != NULL && node->enbox != NULL);
+    node->enbox    = (DTYPE*) malloc(sizeof(DTYPE) * dim * 2);
+    ASSERT_PRINTF(
+        node->children != NULL && node->enbox != NULL,
+        "Failed to allocate arrays in a H2P_tree_node structure\n"
+    );
     for (int i = 0; i < max_child; i++) 
         node->children[i] = NULL;
     *node_ = node;
@@ -50,11 +53,11 @@ void H2P_int_vec_init(H2P_int_vec_t *int_vec_, int capacity)
 {
     if (capacity < 0) capacity = 128;
     H2P_int_vec_t int_vec = (H2P_int_vec_t) malloc(sizeof(struct H2P_int_vec));
-    assert(int_vec != NULL);
+    ASSERT_PRINTF(int_vec != NULL, "Failed to allocate H2P_int_vec structure\n");
+    int_vec->data = (int*) malloc(sizeof(int) * capacity);
+    ASSERT_PRINTF(int_vec->data != NULL, "Failed to allocate integer vector of size %d\n", capacity);
     int_vec->capacity = capacity;
     int_vec->length = 0;
-    int_vec->data = (int*) malloc(sizeof(int) * capacity);
-    assert(int_vec->data != NULL);
     *int_vec_ = int_vec;
 }
 
@@ -98,7 +101,7 @@ void H2P_int_vec_gather(H2P_int_vec_t src_vec, H2P_int_vec_t idx, H2P_int_vec_t 
 void H2P_dense_mat_init(H2P_dense_mat_t *mat_, const int nrow, const int ncol)
 {
     H2P_dense_mat_t mat = (H2P_dense_mat_t) malloc(sizeof(struct H2P_dense_mat));
-    assert(mat != NULL);
+    ASSERT_PRINTF(mat != NULL, "Failed to allocate H2P_dense_mat structure\n");
     
     mat->nrow = MAX(0, nrow);
     mat->ncol = MAX(0, ncol);
@@ -107,7 +110,7 @@ void H2P_dense_mat_init(H2P_dense_mat_t *mat_, const int nrow, const int ncol)
     if (mat->size > 0)
     {
         mat->data = malloc_aligned(sizeof(DTYPE) * mat->size, 64);
-        assert(mat->data != NULL);
+        ASSERT_PRINTF(mat->data != NULL, "Failed to allocate %d * %d dense matrix\n", nrow, ncol);
     } else {
         mat->data = NULL;
     }
@@ -131,7 +134,7 @@ void H2P_dense_mat_destroy(H2P_dense_mat_t mat)
 void H2P_dense_mat_permute_rows(H2P_dense_mat_t mat, const int *p)
 {
     DTYPE *mat_dst = (DTYPE*) malloc_aligned(sizeof(DTYPE) * mat->nrow * mat->ncol, 64);
-    assert(mat_dst != NULL);
+    ASSERT_PRINTF(mat_dst != NULL, "Failed to allocate buffer of size %d * %d\n", mat->nrow, mat->ncol);
     
     for (int irow = 0; irow < mat->nrow; irow++)
     {
@@ -242,7 +245,11 @@ void H2P_dense_mat_gemm(
         N  = B->nrow;
         KB = B->ncol;
     }
-    assert(KA == KB);
+    if (KA != KB)
+    {
+        ERROR_PRINTF("GEMM size mismatched: A[%d * %d], B[%d * %d]\n", M, KA, KB, N);
+        return;
+    }
     if (beta == 0.0 && (C->nrow < M || C->ncol < N)) H2P_dense_mat_resize(C, M, N);
     CBLAS_GEMM(
         CblasRowMajor, transA_, transB_, M, N, KA,
@@ -283,8 +290,12 @@ void H2P_dense_mat_vertcat(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_m
     for (int i = 0; i < idx->length; i++)
     {
         H2P_dense_mat_t mat_i = mats[idx->data[i]];
+        if (mat_i->ncol != ncol)
+        {
+            ERROR_PRINTF("%d-th matrix has %d columns, 1st matrix has %d columns\n", i+1, mat_i->ncol, ncol);
+            return;
+        }
         nrow += mat_i->nrow;
-        assert (mat_i->ncol == ncol);
     }
     H2P_dense_mat_resize(new_mat, nrow, ncol);
     nrow = 0; ncol = 0;
@@ -306,8 +317,12 @@ void H2P_dense_mat_horzcat(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_m
     for (int i = 0; i < idx->length; i++)
     {
         H2P_dense_mat_t mat_i = mats[idx->data[i]];
+        if (mat_i->nrow != nrow)
+        {
+            ERROR_PRINTF("%d-th matrix has %d rows, 1st matrix has %d rows\n", i+1, mat_i->nrow, nrow);
+            return;
+        }
         ncol += mat_i->ncol;
-        assert (mat_i->nrow == nrow);
     }
     H2P_dense_mat_resize(new_mat, nrow, ncol);
     memset(new_mat->data, 0, sizeof(DTYPE) * nrow * ncol);
@@ -342,14 +357,14 @@ void H2P_dense_mat_print(H2P_dense_mat_t mat)
 void H2P_thread_buf_init(H2P_thread_buf_t *thread_buf_, const int krnl_mat_size)
 {
     H2P_thread_buf_t thread_buf = (H2P_thread_buf_t) malloc(sizeof(struct H2P_thread_buf));
-    assert(thread_buf != NULL);
+    ASSERT_PRINTF(thread_buf != NULL, "Failed to allocate H2P_thread_buf structure\n");
     H2P_int_vec_init(&thread_buf->idx0, 1024);
     H2P_int_vec_init(&thread_buf->idx1, 1024);
     H2P_dense_mat_init(&thread_buf->mat0, 1024, 1);
     H2P_dense_mat_init(&thread_buf->mat1, 1024, 1);
     H2P_dense_mat_init(&thread_buf->mat2, 1024, 1);
     thread_buf->y = (DTYPE*) malloc_aligned(sizeof(DTYPE) * krnl_mat_size, 64);
-    assert(thread_buf->y != NULL);
+    ASSERT_PRINTF(thread_buf->y != NULL, "Failed to allocate y of size %d in H2P_thread_buf\n", krnl_mat_size);
     *thread_buf_ = thread_buf;
 }
 

@@ -32,7 +32,7 @@ void H2P_build_explicit_U(H2Pack_t h2pack, H2P_dense_mat_t **exU_)
     H2P_thread_buf_t *thread_buf = h2pack->tb;
 
     H2P_dense_mat_t *exU = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
-    assert(exU != NULL);
+    ASSERT_PRINTF(exU != NULL, "Failed to allocate %d explicit U matrices\n", n_node);
     memset(exU, 0, sizeof(H2P_dense_mat_t) * n_node);
 
     for (int i = max_level; i >= 1; i--)
@@ -181,7 +181,7 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_t h2mat, const int n_vec, H2P_dense_mat_t *
 
     // 3. H2 matvec upward sweep
     H2P_dense_mat_t *y0 = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
-    assert(y0 != NULL);
+    ASSERT_PRINTF(y0 != NULL, "Failed to allocate %d working matrices\n", n_node);
     for (int i = 0; i < n_node; i++) y0[i] = NULL;
     for (int i = max_level; i >= min_adm_level; i--)
     {
@@ -395,8 +395,8 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_t h2mat, const int n_vec, H2P_dense_mat_t *
 
     // 6. Repack Yk_mat into Yk
     H2P_dense_mat_t *Yk = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node * max_level);
+    ASSERT_PRINTF(Yk != NULL, "Failed to allocate %d * %d Yk matrices\n", n_node, max_level);
     for (int i = 0; i < n_node * max_level; i++) Yk[i] = NULL;
-    assert(Yk != NULL);
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
@@ -463,7 +463,7 @@ void H2P_SPDHSS_H2_gather_HSS_B(
     int B_idx_00 = HSS_B_pair2idx[blk0[0] * n_node + blk1[0]];
     if (B_idx_00 == -1)
     {
-        printf("[FATAL] %s error: pair (%d, %d) B_idx_ij == -1\n", __FUNCTION__, blk0[0], blk1[0]);
+        ERROR_PRINTF("SPDHSS_B{%d, %d} does not exist!\n", blk0[0], blk1[0]);
         return;
     }
     int nrow0 = HSS_B[B_idx_00]->nrow;
@@ -475,14 +475,14 @@ void H2P_SPDHSS_H2_gather_HSS_B(
         int B_idx_i0 = HSS_B_pair2idx[blk0[i] * n_node + blk1[0]];
         if (B_idx_i0 == -1)
         {
-            printf("[FATAL] %s error: pair (%d, %d) B_idx_ij == -1\n", __FUNCTION__, blk0[i], blk1[0]);
+            ERROR_PRINTF("SPDHSS_B{%d, %d} does not exist!\n", blk0[i], blk1[0]);
             return;
         }
         if (HSS_B[B_idx_i0]->ncol != ncol0)
         {
-            printf(
-                "[FATAL] %s error: pair (%d, %d) ncol = %d, expected %d\n", 
-                __FUNCTION__, blk0[i], blk1[0], HSS_B[B_idx_i0]->ncol, ncol0
+            ERROR_PRINTF(
+                "SPDHSS_B{%d, %d} ncol = %d, expected %d\n", 
+                blk0[i], blk1[0], HSS_B[B_idx_i0]->ncol, ncol0
             );
             return;
         }
@@ -495,14 +495,14 @@ void H2P_SPDHSS_H2_gather_HSS_B(
         int B_idx_0j = HSS_B_pair2idx[blk0[0] * n_node + blk1[j]];
         if (B_idx_0j == -1)
         {
-            printf("[FATAL] %s error: pair (%d, %d) B_idx_ij == -1\n", __FUNCTION__, blk0[0], blk1[j]);
+            ERROR_PRINTF("SPDHSS_B{%d, %d} does not exist!\n", blk0[0], blk1[j]);
             return;
         }
         if (HSS_B[B_idx_0j]->nrow != nrow0)
         {
-            printf(
-                "[FATAL] %s error: pair (%d, %d) nrow = %d, expected %d\n", 
-                __FUNCTION__, blk0[0], blk1[j], HSS_B[B_idx_0j]->nrow, nrow0
+            ERROR_PRINTF(
+                "SPDHSS_B{%d, %d} nrow = %d, expected %d\n", 
+                blk0[0], blk1[j], HSS_B[B_idx_0j]->nrow, nrow0
             );
             return;
         }
@@ -523,7 +523,7 @@ void H2P_SPDHSS_H2_gather_HSS_B(
             int B_idx_ij = HSS_B_pair2idx[blk0[i] * n_node + blk1[j]];
             if (B_idx_ij == -1)
             {
-                printf("[FATAL] %s error: pair (%d, %d) B_idx_ij == -1\n", __FUNCTION__, blk0[i], blk1[j]);
+                ERROR_PRINTF("SPDHSS_B{%d, %d} does not exist!\n", blk0[i], blk1[j]);
                 return;
             }
             DTYPE *tmpB_ij = tmpB->data + s_row * tmpB->ld + s_col;
@@ -614,7 +614,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             H2P_get_Bij_block(h2mat, node0, node1, H2_Bij);
             if (H2_Bij->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 1.1, pair (%d, %d)\n", __FUNCTION__, node0, node1);
+                ERROR_PRINTF("Bug in case 1.1, node pair (%d, %d)\n", node0, node1);
                 H2P_dense_mat_destroy(H2_Bij);
                 H2P_dense_mat_destroy(tmpM);
                 return;
@@ -649,7 +649,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             H2P_get_Dij_block(h2mat, node0, node1, H2_Dij);
             if (H2_Dij->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 1.2, pair (%d, %d)\n", __FUNCTION__, node0, node1);
+                ERROR_PRINTF("Bug in case 1.2, node pair (%d, %d)\n", node0, node1);
                 H2P_dense_mat_destroy(H2_Dij);
                 H2P_dense_mat_destroy(tmpM);
                 return;
@@ -699,7 +699,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             );
             if (tmpB->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 1.3, pair (%d, %d)\n", __FUNCTION__, node0, node1);
+                ERROR_PRINTF("Bug in case 1.3, node pair (%d, %d)\n", node0, node1);
                 H2P_dense_mat_destroy(tmpB);
                 H2P_dense_mat_destroy(tmpM0);
                 H2P_dense_mat_destroy(tmpM1);
@@ -751,7 +751,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             );
             if (tmpB->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 1.4, pair (%d, %d)\n", __FUNCTION__, node0, node1);
+                ERROR_PRINTF("Bug in case 1.4, node pair (%d, %d)\n", node0, node1);
                 H2P_dense_mat_destroy(tmpB);
                 H2P_dense_mat_destroy(tmpM0);
                 H2P_dense_mat_destroy(tmpM1);
@@ -805,7 +805,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             );
             if (tmpB->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 1.5, pair (%d, %d)\n", __FUNCTION__, node0, node1);
+                ERROR_PRINTF("Bug in case 1.5, node pair (%d, %d)\n", node0, node1);
                 H2P_dense_mat_destroy(tmpB);
                 H2P_dense_mat_destroy(tmpM0);
                 H2P_dense_mat_destroy(tmpM1);
@@ -849,7 +849,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
         // Note: node1 must be a leaf node
         if (n_child1 > 0)
         {
-            printf("[FATAL] %s bug in case 2, pair (%d, %d)\n", __FUNCTION__, node0, node1);
+            ERROR_PRINTF("Bug in case 2, node pair (%d, %d)\n", node0, node1);
             return;
         }  // End of "if (n_child1 > 0)"
 
@@ -862,7 +862,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             H2P_get_Bij_block(h2mat, node0, node1, H2_Bij);
             if (H2_Bij->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 2.1, pair (%d, %d)\n", __FUNCTION__, node0, node1);
+                ERROR_PRINTF("Bug in case 2.1, node pair (%d, %d)\n", node0, node1);
                 H2P_dense_mat_destroy(H2_Bij);
                 return;
             }
@@ -888,7 +888,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             H2P_get_Dij_block(h2mat, node0, node1, H2_Dij);
             if (H2_Dij->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 2.2, pair (%d, %d)\n", __FUNCTION__, node0, node1);
+                ERROR_PRINTF("Bug in case 2.2, node pair (%d, %d)\n", node0, node1);
                 H2P_dense_mat_destroy(H2_Dij);
                 return;
             }
@@ -921,7 +921,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             );
             if (tmpB->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 2.3, pair (%d, %d)\n", __FUNCTION__, node0, node1);
+                ERROR_PRINTF("Bug in case 2.3, node pair (%d, %d)\n", node0, node1);
                 H2P_dense_mat_destroy(tmpB);
                 H2P_dense_mat_destroy(tmpM);
                 return;
@@ -951,7 +951,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
         // Note: node0 must be a leaf node
         if (n_child0 > 0)
         {
-            printf("[FATAL] %s bug in case 3, pair (%d, %d)\n", __FUNCTION__, node0, node1);
+            ERROR_PRINTF("Bug in case 3, node pair (%d, %d)\n", node0, node1);
             return;
         }
 
@@ -964,7 +964,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             H2P_get_Bij_block(h2mat, node0, node1, H2_Bij);
             if (H2_Bij->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 3.1, pair (%d, %d)\n", __FUNCTION__, node0, node1);
+                ERROR_PRINTF("Bug in case 3.1, node pair (%d, %d)\n", node0, node1);
                 H2P_dense_mat_destroy(H2_Bij);
                 return;
             }
@@ -990,7 +990,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             H2P_get_Dij_block(h2mat, node0, node1, H2_Dij);
             if (H2_Dij->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 3.2, pair (%d, %d)\n", __FUNCTION__, node0, node1);
+                ERROR_PRINTF("Bug in case 3.2, node pair (%d, %d)\n", node0, node1);
                 H2P_dense_mat_destroy(H2_Dij);
                 return;
             }
@@ -1025,7 +1025,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             );
             if (tmpB->nrow == 0)
             {
-                printf("[FATAL] %s bug in case 3.3, pair (%d, %d)\n", __FUNCTION__, node0, node1);
+                ERROR_PRINTF("Bug in case 3.3, node pair (%d, %d)\n", node0, node1);
                 H2P_dense_mat_destroy(tmpB);
                 H2P_dense_mat_destroy(tmpM);
                 return;
@@ -1077,7 +1077,10 @@ void H2P_SPDHSS_H2_get_level_HSS_Bij_pairs(H2Pack_t h2mat, H2P_int_vec_t **level
     H2P_int_vec_t *level_HSS_Bij_pairs = (H2P_int_vec_t*) malloc(sizeof(H2P_int_vec_t) * n_level);
     int *inadm_max_level = (int*) malloc(sizeof(int) * H2_n_r_inadm_pairs);
     int *adm_max_level   = (int*) malloc(sizeof(int) * H2_n_r_adm_pairs);
-    assert(level_HSS_Bij_pairs != NULL && inadm_max_level != NULL && adm_max_level != NULL);
+    ASSERT_PRINTF(
+        level_HSS_Bij_pairs != NULL && inadm_max_level != NULL && adm_max_level != NULL,
+        "Failed to allocate arrays for storing new SPDHSS Bij pairs\n"
+    );
     // inadm_max_lvl = max(node_lvl(H2_r_near_pair), [], 2);
     // adm_max_lvl   = max(node_lvl(H2_r_far_pair), [], 2);
     for (int i = 0; i < H2_n_r_inadm_pairs; i++)
@@ -1161,7 +1164,6 @@ void H2P_SPDHSS_H2_get_level_HSS_Bij_pairs(H2Pack_t h2mat, H2P_int_vec_t **level
                 int node1 = pp_data[2 * pair_k + 1];
                 pp1_data[2 * cnt]     = node0;
                 pp1_data[2 * cnt + 1] = node1;
-                //if (i == 2 && node0 == 43) printf("prev_pair %d: (%d, %d), key = %d\n", cnt, node0, node1, key[k]);
                 cnt++;
             }
         }  // End of k loop
@@ -1251,15 +1253,18 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
     hssmat->height_n_node = malloc(int_n_level_msize);
     hssmat->height_nodes  = malloc(int_n_level_msize * h2mat->n_leaf_node);
     hssmat->enbox         = malloc(enbox_msize);
-    hssmat->xT            = malloc(xT_yT_msize);
-    hssmat->yT            = malloc(xT_yT_msize);
-    assert(hssmat->parent        != NULL && hssmat->children      != NULL);
-    assert(hssmat->pt_cluster    != NULL && hssmat->mat_cluster   != NULL);
-    assert(hssmat->n_child       != NULL && hssmat->node_level    != NULL);
-    assert(hssmat->node_height   != NULL && hssmat->level_n_node  != NULL);
-    assert(hssmat->level_nodes   != NULL && hssmat->height_n_node != NULL);
-    assert(hssmat->height_nodes  != NULL && hssmat->enbox         != NULL);
-    assert(hssmat->xT            != NULL && hssmat->yT            != NULL);
+    ASSERT_PRINTF(hssmat->parent        != NULL, "Failed to allocate arrays for storing hierarchical partioning tree in SPDHSS\n");
+    ASSERT_PRINTF(hssmat->children      != NULL, "Failed to allocate arrays for storing hierarchical partioning tree in SPDHSS\n");
+    ASSERT_PRINTF(hssmat->pt_cluster    != NULL, "Failed to allocate arrays for storing hierarchical partioning tree in SPDHSS\n");
+    ASSERT_PRINTF(hssmat->mat_cluster   != NULL, "Failed to allocate arrays for storing hierarchical partioning tree in SPDHSS\n");
+    ASSERT_PRINTF(hssmat->n_child       != NULL, "Failed to allocate arrays for storing hierarchical partioning tree in SPDHSS\n");
+    ASSERT_PRINTF(hssmat->node_level    != NULL, "Failed to allocate arrays for storing hierarchical partioning tree in SPDHSS\n");
+    ASSERT_PRINTF(hssmat->node_height   != NULL, "Failed to allocate arrays for storing hierarchical partioning tree in SPDHSS\n");
+    ASSERT_PRINTF(hssmat->level_n_node  != NULL, "Failed to allocate arrays for storing hierarchical partioning tree in SPDHSS\n");
+    ASSERT_PRINTF(hssmat->level_nodes   != NULL, "Failed to allocate arrays for storing hierarchical partioning tree in SPDHSS\n");
+    ASSERT_PRINTF(hssmat->height_n_node != NULL, "Failed to allocate arrays for storing hierarchical partioning tree in SPDHSS\n");
+    ASSERT_PRINTF(hssmat->height_nodes  != NULL, "Failed to allocate arrays for storing hierarchical partioning tree in SPDHSS\n");
+    ASSERT_PRINTF(hssmat->enbox         != NULL, "Failed to allocate arrays for storing hierarchical partioning tree in SPDHSS\n");
     memcpy(hssmat->parent       , h2mat->parent       , int_n_node_msize);
     memcpy(hssmat->children     , h2mat->children     , int_n_node_msize * max_child);
     memcpy(hssmat->pt_cluster   , h2mat->pt_cluster   , int_n_node_msize * 2);
@@ -1293,10 +1298,13 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
     hssmat->node_inadm_lists  = (int*) malloc(int_n_node_msize * h2mat->max_neighbor);
     hssmat->node_n_r_inadm    = (int*) malloc(int_n_node_msize);
     hssmat->node_n_r_adm      = (int*) malloc(int_n_node_msize);
-    assert(hssmat->r_inadm_pairs     != NULL && hssmat->r_adm_pairs     != NULL);
-    assert(hssmat->HSS_r_inadm_pairs != NULL && hssmat->HSS_r_adm_pairs != NULL);
-    assert(hssmat->node_inadm_lists  != NULL && hssmat->node_n_r_inadm  != NULL);
-    assert(hssmat->node_n_r_adm      != NULL);
+    ASSERT_PRINTF(hssmat->r_inadm_pairs     != NULL, "Failed to allocate arrays for storing (in)admissible pairs in SPDHSS\n");
+    ASSERT_PRINTF(hssmat->r_adm_pairs       != NULL, "Failed to allocate arrays for storing (in)admissible pairs in SPDHSS\n");
+    ASSERT_PRINTF(hssmat->HSS_r_inadm_pairs != NULL, "Failed to allocate arrays for storing (in)admissible pairs in SPDHSS\n");
+    ASSERT_PRINTF(hssmat->HSS_r_adm_pairs   != NULL, "Failed to allocate arrays for storing (in)admissible pairs in SPDHSS\n");
+    ASSERT_PRINTF(hssmat->node_inadm_lists  != NULL, "Failed to allocate arrays for storing (in)admissible pairs in SPDHSS\n");
+    ASSERT_PRINTF(hssmat->node_n_r_inadm    != NULL, "Failed to allocate arrays for storing (in)admissible pairs in SPDHSS\n");
+    ASSERT_PRINTF(hssmat->node_n_r_adm      != NULL, "Failed to allocate arrays for storing (in)admissible pairs in SPDHSS\n");
     memcpy(hssmat->r_inadm_pairs    , h2mat->r_inadm_pairs    , r_inadm_pairs_msize);
     memcpy(hssmat->r_adm_pairs      , h2mat->r_adm_pairs      , r_adm_pairs_msize);
     memcpy(hssmat->HSS_r_inadm_pairs, h2mat->HSS_r_inadm_pairs, HSS_r_inadm_pairs_msize);
@@ -1307,7 +1315,7 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
 
     // 4. Initialize thread-local buffer
     hssmat->tb = (H2P_thread_buf_t*) malloc(sizeof(H2P_thread_buf_t) * hssmat->n_thread);
-    assert(hssmat->tb != NULL);
+    ASSERT_PRINTF(hssmat->tb != NULL, "Failed to allocate %d thread buffers in SPDHSS\n", hssmat->n_thread);
     for (int i = 0; i < hssmat->n_thread; i++)
         H2P_thread_buf_init(&hssmat->tb[i], hssmat->krnl_mat_size);
 
@@ -1350,8 +1358,14 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
     int    *B_nrow   = (int*)    malloc(int_r_adm_pairs_msize);
     int    *B_ncol   = (int*)    malloc(int_r_adm_pairs_msize);
     size_t *B_ptr    = (size_t*) malloc(sizeof(size_t) * (HSS_n_r_adm_pair + 1));
-    assert(B_nrow   != NULL && B_ncol   != NULL && B_ptr    != NULL);
-    assert(B_pair_i != NULL && B_pair_j != NULL && B_pair_v != NULL);
+    ASSERT_PRINTF(
+        B_nrow   != NULL && B_ncol   != NULL && B_ptr    != NULL,
+        "Failed to allocate %d SPDHSS B matrices infomation array\n", HSS_n_r_adm_pair
+    );
+    ASSERT_PRINTF(
+        B_pair_i != NULL && B_pair_j != NULL && B_pair_v != NULL,
+        "Failed to allocate working buffer for SPDHSS B matrices indexing\n"
+    );
     hssmat->n_B    = HSS_n_r_adm_pair;
     hssmat->B_nrow = B_nrow;
     hssmat->B_ncol = B_ncol;
@@ -1365,12 +1379,7 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
         int node0  = HSS_r_adm_pairs[2 * i];
         int node1  = HSS_r_adm_pairs[2 * i + 1];
         int HSS_B_idx = HSS_B_pair2idx[node0 * n_node + node1];
-        if (HSS_B_idx == -1)
-        {
-            printf("[FATAL] pair %d HSS_B(%d, %d) (idx %d) does not exists!\n", i, node0, node1, HSS_B_idx);
-            fflush(stdout);
-            assert(HSS_B_idx >= 0);
-        }
+        ASSERT_PRINTF(HSS_B_idx >= 0, "SPDHSS_B{%d, %d} does not exist!\n", node0, node1);
         H2P_dense_mat_t HSS_Bi = HSS_B[HSS_B_idx];
         B_nrow[i] = HSS_Bi->nrow;
         B_ncol[i] = HSS_Bi->ncol;
@@ -1392,16 +1401,16 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
     hssmat->B_p2i_rowptr = (int*) malloc(sizeof(int) * (n_node + 1));
     hssmat->B_p2i_colidx = (int*) malloc(int_r_adm_pairs_msize * 2);
     hssmat->B_p2i_val    = (int*) malloc(int_r_adm_pairs_msize * 2);
-    assert(hssmat->B_p2i_rowptr != NULL);
-    assert(hssmat->B_p2i_colidx != NULL);
-    assert(hssmat->B_p2i_val    != NULL);
+    ASSERT_PRINTF(hssmat->B_p2i_rowptr != NULL, "Failed to allocate arrays for SPDHSS B matrices indexing\n");
+    ASSERT_PRINTF(hssmat->B_p2i_colidx != NULL, "Failed to allocate arrays for SPDHSS B matrices indexing\n");
+    ASSERT_PRINTF(hssmat->B_p2i_val    != NULL, "Failed to allocate arrays for SPDHSS B matrices indexing\n");
     H2P_int_COO_to_CSR(
         n_node, B_pair_cnt, B_pair_i, B_pair_j, B_pair_v, 
         hssmat->B_p2i_rowptr, hssmat->B_p2i_colidx, hssmat->B_p2i_val
     );
 
     hssmat->B_data = (DTYPE*) malloc_aligned(sizeof(DTYPE) * B_total_size, 64);
-    assert(hssmat->B_data != NULL);
+    ASSERT_PRINTF(hssmat->B_data != NULL, "Failed to allocate space for storing all %zu SPDHSS B matrices elements\n", B_total_size);
     DTYPE *B_data = hssmat->B_data;
     const int n_B_blk = B_blk->length - 1;
     #pragma omp parallel num_threads(n_thread)
@@ -1441,8 +1450,14 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
     int    *D_nrow   = (int*)    malloc(int_n_leaf_node_msize);
     int    *D_ncol   = (int*)    malloc(int_n_leaf_node_msize);
     size_t *D_ptr    = (size_t*) malloc(sizeof(size_t) * (n_leaf_node + 1));
-    assert(D_nrow   != NULL && D_ncol   != NULL && D_ptr    != NULL);
-    assert(D_pair_i != NULL && D_pair_j != NULL && D_pair_v != NULL);
+    ASSERT_PRINTF(
+        D_nrow   != NULL && D_ncol   != NULL && D_ptr    != NULL,
+        "Failed to allocate %d SPDHSS D matrices infomation array\n", n_leaf_node
+    );
+    ASSERT_PRINTF(
+        D_pair_i != NULL && D_pair_j != NULL && D_pair_v != NULL,
+        "Failed to allocate working buffer for SPDHSS D matrices indexing\n"
+    );
     hssmat->n_D    = n_leaf_node;
     hssmat->D_nrow = D_nrow;
     hssmat->D_ncol = D_ncol;
@@ -1455,12 +1470,7 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
     {
         int node = leaf_nodes[i];
         int HSS_D_idx = HSS_D_pair2idx[node];
-        if (HSS_D_idx == -1)
-        {
-            printf("[FATAL] pair %d HSS_D(%d, %d) (idx %d) does not exists!\n", i, node, node, HSS_D_idx);
-            fflush(stdout);
-            assert(HSS_D_idx >= 0);
-        }
+        ASSERT_PRINTF(HSS_D_idx >= 0, "SPDHSS_B{%d, %d} does not exist!\n", node, node);
         H2P_dense_mat_t HSS_Di = HSS_D[HSS_D_idx];
         D_nrow[i] = HSS_Di->nrow;
         D_ncol[i] = HSS_Di->ncol;
@@ -1485,16 +1495,16 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
     hssmat->D_p2i_rowptr = (int*) malloc(sizeof(int) * (n_node + 1));
     hssmat->D_p2i_colidx = (int*) malloc(int_n_leaf_node_msize * 2);
     hssmat->D_p2i_val    = (int*) malloc(int_n_leaf_node_msize * 2);
-    assert(hssmat->D_p2i_rowptr != NULL);
-    assert(hssmat->D_p2i_colidx != NULL);
-    assert(hssmat->D_p2i_val    != NULL);
+    ASSERT_PRINTF(hssmat->D_p2i_rowptr != NULL, "Failed to allocate arrays for SPDHSS D matrices indexing\n");
+    ASSERT_PRINTF(hssmat->D_p2i_colidx != NULL, "Failed to allocate arrays for SPDHSS D matrices indexing\n");
+    ASSERT_PRINTF(hssmat->D_p2i_val    != NULL, "Failed to allocate arrays for SPDHSS D matrices indexing\n");
     H2P_int_COO_to_CSR(
         n_node, D_pair_cnt, D_pair_i, D_pair_j, D_pair_v, 
         hssmat->D_p2i_rowptr, hssmat->D_p2i_colidx, hssmat->D_p2i_val
     );
 
     hssmat->D_data = (DTYPE*) malloc_aligned(sizeof(DTYPE) * D_total_size, 64);
-    assert(hssmat->D_data != NULL);
+    ASSERT_PRINTF(hssmat->D_data != NULL, "Failed to allocate space for storing all %zu SPDHSS B matrices elements\n", D_total_size);
     DTYPE *D_data = hssmat->D_data;
     const int n_D0_blk = D_blk0->length - 1;
     #pragma omp parallel num_threads(n_thread)
@@ -1541,7 +1551,7 @@ void H2P_SPDHSS_H2_build(
 {
     if (h2mat == NULL || h2mat->U == NULL || h2mat->is_HSS)
     {
-        printf("[FATAL] %s: h2mat not constructed or configured as HSS!\n", __FUNCTION__);
+        ERROR_PRINTF("Input h2mat is not constructed or configured as HSS\n");
         return;
     }
 
@@ -1585,8 +1595,13 @@ void H2P_SPDHSS_H2_build(
     H2P_dense_mat_t *HSS_U = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
     H2P_dense_mat_t *HSS_B = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_HSS_Bij_pair);
     H2P_dense_mat_t *HSS_D = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_leaf_node);
-    assert(S != NULL && V != NULL && W != NULL && Minv != NULL);
-    assert(HSS_U != NULL && HSS_B != NULL && HSS_D != NULL);
+    ASSERT_PRINTF(
+        S != NULL && V != NULL && W != NULL && Minv != NULL,
+        "Failed to allocate %d working arrays for SPDHSS construction\n", 4 * n_node
+    );
+    ASSERT_PRINTF(HSS_U != NULL, "Failed to allocate %d SPDHSS U matrices\n", n_node);
+    ASSERT_PRINTF(HSS_B != NULL, "Failed to allocate %d SPDHSS B matrices\n", n_HSS_Bij_pair);
+    ASSERT_PRINTF(HSS_D != NULL, "Failed to allocate %d SPDHSS D matrices\n", n_leaf_node);
     for (int i = 0; i < n_node; i++)
     {
         S[i]     = NULL;
@@ -1681,10 +1696,7 @@ void H2P_SPDHSS_H2_build(
                     }
                     if (info != 0)
                     {
-                        printf(
-                            "[FATAL] %s: Node %d potrf() returned %d, source H2 matrix is not SPD, " 
-                            "current diagonal shifting %lf is not enough\n", __FUNCTION__, node, info, shift
-                        );
+                        ERROR_PRINTF("Node %d potrf() returned %d, target matrix with shifting %.2lf is not SPD\n", node, info, shift);
                         is_SPD = 0;
                         continue;
                     }
@@ -1696,11 +1708,11 @@ void H2P_SPDHSS_H2_build(
                     DTYPE *tau = tmpY->data + node_Yk[0]->nrow * node_Yk[0]->ncol;
                     tmpY->nrow--;
                     H2P_copy_matrix_block(tmpY->nrow, tmpY->ncol, node_Yk[0]->data, node_Yk[0]->ld, tmpY->data, tmpY->ld);
-                    if (tmpY->nrow != S[node]->nrow)
-                    {
-                        printf("[FATAL] %s:%d  tmpY->nrow != S[%d]->nrow!\n", __FUNCTION__, __LINE__, node);
-                        assert(tmpY->nrow == S[node]->nrow);
-                    }
+                    ASSERT_PRINTF(
+                        tmpY->nrow == S[node]->nrow, 
+                        "Node %d: tmpY->nrow (%d) mismatch S->nrow (%d)\n",
+                        node, tmpY->nrow, S[node]->nrow
+                    );
                     CBLAS_TRSM(
                         CblasRowMajor, CblasLeft, CblasLower, CblasNoTrans, CblasNonUnit,
                         tmpY->nrow, tmpY->ncol, 1.0, S[node]->data, S[node]->ld, tmpY->data, tmpY->ld
@@ -1752,11 +1764,11 @@ void H2P_SPDHSS_H2_build(
                         H2P_dense_mat_t tmpM = tmpQ;
                         H2P_dense_mat_resize(tmpM, H2_U_node->nrow, H2_U_node->ncol);
                         H2P_copy_matrix_block(H2_U_node->nrow, H2_U_node->ncol, H2_U_node->data, H2_U_node->ld, tmpM->data, tmpM->ld);
-                        if (tmpM->nrow != S[node]->nrow)
-                        {
-                            printf("[FATAL] %s:%d  tmpM->nrow != S[%d]->nrow!\n", __FUNCTION__, __LINE__, node);
-                            assert(tmpM->nrow == S[node]->nrow);
-                        }
+                        ASSERT_PRINTF(
+                            tmpM->nrow == S[node]->nrow, 
+                            "Node %d: H2_U->nrow (%d) mismatch S->nrow (%d)\n",
+                            node, tmpM->nrow, S[node]->nrow
+                        );
                         CBLAS_TRSM(
                             CblasRowMajor, CblasLeft, CblasLower, CblasNoTrans, CblasNonUnit,
                             tmpM->nrow, tmpM->ncol, 1.0, S[node]->data, S[node]->ld, tmpM->data, tmpM->ld
@@ -1820,8 +1832,7 @@ void H2P_SPDHSS_H2_build(
                     info = LAPACK_SYEVD(LAPACK_ROW_MAJOR, 'V', 'U', tmpQ->nrow, tmpQ->data, tmpQ->ld, tmpE_diag);
                     if (info != 0)
                     {
-                        printf("[FATAL] %s: node %d intermediate diagonal matrix cannot be diagonalized!\n", __FUNCTION__, node);
-                        fflush(stdout);
+                        ERROR_PRINTF("Node %d intermediate diagonal matrix cannot be diagonalized\n", node);
                         is_SPD = 0;
                         continue;
                     }
@@ -1829,9 +1840,8 @@ void H2P_SPDHSS_H2_build(
                     for (int k = 0; k < tmpQ->nrow; k++) min_diag = MIN(min_diag, tmpE_diag[k]);
                     if (min_diag <= -1.0)
                     {
-                        printf("[FATAL] %s: node %d diagonal block has eigenvalues %e <= -1, ", __FUNCTION__, node, min_diag);
-                        printf("source H2 matrix is not SPD, current shifting %.2lf is not enough\n", shift);
-                        fflush(stdout);
+                        ERROR_PRINTF("Node %d intermediate diagonal matrix has eigenvalue %e < -1\n", node, min_diag);
+                        ERROR_PRINTF("Source H2 matrix with shifting %.3lf is not SPD\n", shift);
                         is_SPD = 0;
                         continue;
                     }
@@ -1903,11 +1913,11 @@ void H2P_SPDHSS_H2_build(
                     DTYPE *tmpY_data = tmpY->data;
                     DTYPE *tau = tmpY->data + Minv[node]->nrow * node_Yk[0]->ncol;
                     tmpY->nrow--;
-                    if (Minv[node]->ncol != node_Yk[0]->nrow)
-                    {
-                        printf("[FATAL] %s:%d  Minv[%d]->ncol != node_Yk[0]->nrow!\n", __FUNCTION__, __LINE__, node);
-                        assert(Minv[node]->ncol == node_Yk[0]->nrow);
-                    }
+                    ASSERT_PRINTF(
+                        Minv[node]->ncol == node_Yk[0]->nrow,
+                        "Node %d: Minv->ncol (%d) mismatch node_Yk[0]->nrow (%d)\n",
+                        node, Minv[node]->ncol, node_Yk[0]->nrow
+                    );
                     CBLAS_GEMM(
                         CblasRowMajor, CblasNoTrans, CblasNoTrans, Minv[node]->nrow, tmpY->ncol, Minv[node]->ncol,
                         1.0, Minv[node]->data, Minv[node]->ld, node_Yk[0]->data, node_Yk[0]->ld, 0.0, tmpY->data, tmpY->ld
@@ -1941,21 +1951,21 @@ void H2P_SPDHSS_H2_build(
                         H2P_dense_mat_t node_Yk_k0 = node_Yk[k - 1];
                         H2P_dense_mat_t node_Yk_k  = node_Yk[k];
                         H2P_dense_mat_resize(tmpM, Minv[node]->nrow, node_Yk_k->ncol);
-                        if (Minv[node]->ncol != node_Yk_k->nrow)
-                        {
-                            printf("[FATAL] %s:%d  Minv[%d]->ncol != node_Yk_k->nrow!\n", __FUNCTION__, __LINE__, node);
-                            assert(Minv[node]->ncol == node_Yk_k->nrow);
-                        }
+                        ASSERT_PRINTF(
+                            Minv[node]->ncol == node_Yk_k->nrow,
+                            "Node %d: Minv->ncol (%d) mismatch node_Yk[%d]->nrow (%d)",
+                            node, Minv[node]->ncol, k, node_Yk_k->nrow
+                        );
                         CBLAS_GEMM(
                             CblasRowMajor, CblasNoTrans, CblasNoTrans, Minv[node]->nrow, node_Yk_k->ncol, Minv[node]->ncol,
                             1.0, Minv[node]->data, Minv[node]->ld, node_Yk_k->data, node_Yk_k->ld, 0.0, tmpM->data, tmpM->ld
                         );
                         H2P_dense_mat_resize(node_Yk_k0, V[node]->ncol, tmpM->ncol);
-                        if (V[node]->nrow != Minv[node]->nrow)
-                        {
-                            printf("[FATAL] %s:%d  V[%d]->nrow != Minv[%d]->nrow!\n", __FUNCTION__, __LINE__, node, node);
-                            assert(Minv[node]->ncol == node_Yk_k->nrow);
-                        }
+                        ASSERT_PRINTF(
+                            V[node]->nrow == Minv[node]->nrow,
+                            "Node %d: V->nrow (%d) mismatch tmpM->ncol (%d)\n", 
+                            node, V[node]->nrow, Minv[node]->nrow
+                        );
                         CBLAS_GEMM(
                             CblasRowMajor, CblasTrans, CblasNoTrans, V[node]->ncol, tmpM->ncol, V[node]->nrow,
                             1.0, V[node]->data, V[node]->ld, tmpM->data, tmpM->ld, 0.0, node_Yk_k0->data, node_Yk_k0->ld
@@ -1980,23 +1990,31 @@ void H2P_SPDHSS_H2_build(
                         child_idx->length = n_child_node;
                         H2P_dense_mat_blkdiag(W, child_idx, tmpW);
                         H2P_dense_mat_resize(tmpM0, tmpW->nrow, H2_U_node->ncol);
-                        if (tmpW->ncol != H2_U_node->nrow)
-                        {
-                            printf("[FATAL] %s:%d  tmpW->ncol (%d) != H2_U[%d]->nrow (%d)!\n", __FUNCTION__, __LINE__, tmpW->ncol, node, H2_U_node->nrow);
-                            assert(tmpW->ncol == H2_U_node->nrow);
-                        }
+                        ASSERT_PRINTF(
+                            tmpW->ncol == H2_U_node->nrow,
+                            "Node %d: tmpW->ncol (%d) mismatch H2_U->nrow (%d)\n",
+                            node, tmpW->ncol, H2_U_node->nrow
+                        );
                         CBLAS_GEMM(
                             CblasRowMajor, CblasNoTrans, CblasNoTrans, tmpW->nrow, H2_U_node->ncol, tmpW->ncol,
                             1.0, tmpW->data, tmpW->ld, H2_U_node->data, H2_U_node->ld, 0.0, tmpM0->data, tmpM0->ld
                         );
                         H2P_dense_mat_resize(tmpM1, Minv[node]->nrow, tmpM0->ncol);
-                        assert(Minv[node]->ncol == tmpM0->nrow);
+                        ASSERT_PRINTF(
+                            Minv[node]->ncol == tmpM0->nrow,
+                            "Node %d: Minv->ncol (%d) mismatch tmpM0->nrow (%d)\n",
+                            node, Minv[node]->ncol, tmpM0->nrow
+                        );
                         CBLAS_GEMM(
                             CblasRowMajor, CblasNoTrans, CblasNoTrans, Minv[node]->nrow, tmpM0->ncol, Minv[node]->ncol, 
                             1.0, Minv[node]->data, Minv[node]->ld, tmpM0->data, tmpM0->ld, 0.0, tmpM1->data, tmpM1->ld
                         );
                         H2P_dense_mat_init(&W[node], V[node]->ncol, tmpM1->ncol);
-                        assert(V[node]->nrow == tmpM1->nrow);
+                        ASSERT_PRINTF(
+                            V[node]->nrow == tmpM1->nrow,
+                            "Node %d: V->nrow (%d) mismatch tmpM1->nrow (%d)\n",
+                            node, V[node]->nrow, tmpM1->nrow
+                        );
                         CBLAS_GEMM(
                             CblasRowMajor, CblasTrans, CblasNoTrans, V[node]->ncol, tmpM1->ncol, V[node]->nrow,
                             1.0, V[node]->data, V[node]->ld, tmpM1->data, tmpM1->ld, 0.0, W[node]->data, W[node]->ld

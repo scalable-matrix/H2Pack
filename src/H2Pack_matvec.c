@@ -95,7 +95,10 @@ void H2P_matvec_fwd_transform(H2Pack_t h2pack, const DTYPE *x)
     if (h2pack->y0 == NULL)
     {
         h2pack->y0 = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
-        assert(h2pack->y0 != NULL);
+        ASSERT_PRINTF(
+            h2pack->y0 != NULL, 
+            "Failed to allocate %d H2P_dense_mat_t for H2 matvec buffer\n", n_node
+        );
         H2P_dense_mat_t *y0 = h2pack->y0;
         H2P_dense_mat_t *U  = h2pack->U;
         for (int node = 0; node < n_node; node++)
@@ -246,7 +249,10 @@ void H2P_matvec_init_y1(H2Pack_t h2pack)
     if (h2pack->y1 == NULL)
     {
         h2pack->y1 = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
-        assert(h2pack->y1 != NULL);
+        ASSERT_PRINTF(
+            h2pack->y1 != NULL,
+            "Failed to allocate %d H2P_dense_mat_t for H2 matvec buffer\n", n_node
+        );
         for (int i = 0; i < n_node; i++) 
             H2P_dense_mat_init(&h2pack->y1[i], 0, 0);
     }

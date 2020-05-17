@@ -75,9 +75,9 @@ static inline void H2P_int_vec_set_capacity(H2P_int_vec_t int_vec, const int cap
 {
     if (capacity > int_vec->capacity)
     {
+        int *new_data = (int*) malloc(sizeof(int) * capacity);
+        ASSERT_PRINTF(new_data != NULL, "Failed to reallocate integer vector of size %d", capacity);
         int_vec->capacity = capacity;
-        int *new_data = (int*) malloc(sizeof(int) * int_vec->capacity);
-        assert(new_data != NULL);
         memcpy(new_data, int_vec->data, sizeof(int) * int_vec->length);
         free(int_vec->data);
         int_vec->data = new_data;
@@ -159,10 +159,10 @@ static inline void H2P_dense_mat_resize(H2P_dense_mat_t mat, const int nrow, con
     mat->ld   = ncol;
     if (new_size > mat->size)
     {
-        mat->size = new_size;
         free_aligned(mat->data);
-        mat->data = malloc_aligned(sizeof(DTYPE) * mat->size, 64);
-        assert(mat->data != NULL);
+        mat->data = malloc_aligned(sizeof(DTYPE) * new_size, 64);
+        ASSERT_PRINTF(mat->data != NULL, "Failed to reallocate %d * %d dense matrix\n", nrow, ncol);
+        mat->size = new_size;
     }
 }
 

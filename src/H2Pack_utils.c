@@ -283,7 +283,7 @@ void H2P_get_Bij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_de
     int B_idx = H2P_get_int_CSR_elem(B_p2i_rowptr, B_p2i_colidx, B_p2i_val, node0, node1);
     if (B_idx == 0)
     {
-        printf("[FATAL] B{%d, %d} does not exist!\n", node0, node1);
+        ERROR_PRINTF("B{%d, %d} does not exist!\n", node0, node1);
         return;
     }
     B_idx--;
@@ -351,7 +351,7 @@ void H2P_get_Dij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_de
     int D_idx = H2P_get_int_CSR_elem(D_p2i_rowptr, D_p2i_colidx, D_p2i_val, node0, node1);
     if (D_idx == 0)
     {
-        printf("[FATAL] D{%d, %d} does not exist!\n", node0, node1);
+        ERROR_PRINTF("D{%d, %d} does not exist!\n", node0, node1);
         return;
     }
     D_idx--;

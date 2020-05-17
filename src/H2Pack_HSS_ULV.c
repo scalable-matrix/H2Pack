@@ -15,7 +15,7 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
 {
     if (!h2pack->is_HSS)
     {
-        printf("[FATAL] %s failed: H2Pack is not running in HSS mode!\n", __FUNCTION__);
+        ERROR_PRINTF("H2Pack is not running in HSS mode!\n");
         return;
     }
 
@@ -41,8 +41,10 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
     ULV_L   = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
     U_mid   = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
     D_mid   = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
-    assert(ULV_Ls != NULL && ULV_idx != NULL && ULV_Q != NULL && ULV_L != NULL);
-    assert(U_mid != NULL && D_mid != NULL);
+    ASSERT_PRINTF(
+        ULV_Ls != NULL && ULV_idx != NULL && ULV_Q != NULL && ULV_L != NULL && U_mid != NULL && D_mid != NULL,
+        "Failed to allocate matrices for HSS ULV Cholesky factorization\n"
+    );
     for (int i = 0; i < n_node; i++)
     {
         ULV_idx[i] = NULL;
@@ -162,7 +164,6 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                     if (i > 0)
                     {
                         H2P_dense_mat_resize(tmpB, tmpU->nrow, U[node]->ncol);
-                        assert(tmpU->ncol == U[node]->nrow);
                         CBLAS_GEMM(
                             CblasRowMajor, CblasNoTrans, CblasNoTrans, tmpB->nrow, tmpB->ncol, tmpU->ncol,
                             1.0, tmpU->data, tmpU->ld, U[node]->data, U[node]->ld, 0.0, tmpB->data, tmpB->ld
@@ -174,8 +175,7 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                 U_nrow = tmpU->nrow;
                 U_ncol = tmpU->ncol;
                 U_diff = U_nrow - U_ncol;
-                assert(tmpD->nrow == U_nrow);
-                assert(U_diff >= 0);
+                ASSERT_PRINTF(U_nrow >= U_ncol, "tmpU has more columns (%d) than rows (%d)!\n", U_ncol, U_nrow);
 
                 // 2. Cholesky factorization
                 // size(tmpU) = [U_nrow, U_ncol]
@@ -222,9 +222,8 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                         }
                         if (info != 0)
                         {
-                            printf("[FATAL] Node %d potrf() returned %d, ", node, info);
-                            printf("target matrix is not SPD, current diagonal shift %.2lf is not enough\n", shift);
                             is_SPD = 0;
+                            ERROR_PRINTF("Node %d potrf() returned %d, target matrix with shifting %.2lf is not SPD\n", node, info, shift);
                         }
                         // LD21 = tmpL \ tmpD21;
                         // Here LD21 is stored in tmpD21
@@ -278,9 +277,8 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                     }
                     if (info != 0)
                     {
-                        printf("[FATAL] Node %d potrf() returned %d, ", node, info);
-                        printf("target matrix is not SPD, current diagonal shift %.2lf is not enough\n", shift);
                         is_SPD = 0;
+                        ERROR_PRINTF("Node %d potrf() returned %d, target matrix with shifting %.2lf is not SPD\n", node, info, shift);
                     }
                 }  // End of "if (i > 0)"
 
@@ -295,7 +293,11 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                     for (int k = 0; k < cluster_len; k++)
                         ULV_idx[node]->data[k] = cluster_s + k;
                     ULV_idx[node]->length = cluster_len;
-                    assert(ULV_idx[node]->length == ULV_L[node]->nrow);
+                    ASSERT_PRINTF(
+                        ULV_idx[node]->length == ULV_L[node]->nrow, 
+                        "Node %d ULV_idx length %d mismatch ULV_L size %d", 
+                        node, ULV_idx[node]->length, ULV_L[node]->nrow
+                    );
                 } else {
                     int idx_size = 0;
                     for (int k = 0; k < node_n_child; k++)
@@ -313,7 +315,11 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                         idx_size += D_mid[child_k]->nrow;
                     }
                     ULV_idx[node]->length = idx_size;
-                    assert(ULV_idx[node]->length == ULV_L[node]->nrow);
+                    ASSERT_PRINTF(
+                        ULV_idx[node]->length == ULV_L[node]->nrow, 
+                        "Node %d ULV_idx length %d mismatch ULV_L size %d", 
+                        node, ULV_idx[node]->length, ULV_L[node]->nrow
+                    );
                 }  // End of "if (node_n_child == 0)"
 
                 // 4. Free U_mid{child_k} and D_mid{child_k} since we no longer need them
@@ -351,17 +357,17 @@ void H2P_HSS_ULV_Cholesky_solve(H2Pack_t h2pack, const int op, const DTYPE *b, D
 {
     if (!h2pack->is_HSS)
     {
-        printf("[FATAL] %s failed: H2Pack is not running in HSS mode!\n", __FUNCTION__);
+        ERROR_PRINTF("H2Pack is not running in HSS mode!\n");
         return;
     }
     if (h2pack->ULV_idx == NULL)
     {
-        printf("[FATAL] %s failed: need to call H2P_HSS_ULV_Cholesky_factorize() first!\n", __FUNCTION__);
+        ERROR_PRINTF("Need to call H2P_HSS_ULV_Cholesky_factorize() first!\n");
         return;
     }
     if (op < 1 || op > 3) 
     {
-        printf("[FATAL] %s failed: invalid <op> value\n", __FUNCTION__);
+        ERROR_PRINTF("Invalid operation type %d, should be 1, 2, or 3\n", op);
         return;
     }
 
@@ -399,7 +405,6 @@ void H2P_HSS_ULV_Cholesky_solve(H2Pack_t h2pack, const int op, const DTYPE *b, D
                     H2P_int_vec_t   idx = ULV_idx[node];
                     H2P_dense_mat_t Q   = ULV_Q[node];
                     H2P_dense_mat_t L   = ULV_L[node];
-                    assert(idx->length == L->nrow);
                     int I_size = ULV_Ls[node];
                     int L_size = L->nrow - I_size;
                     // b0 = Q{node}' * x(idx);
@@ -483,7 +488,6 @@ void H2P_HSS_ULV_Cholesky_solve(H2Pack_t h2pack, const int op, const DTYPE *b, D
                     H2P_int_vec_t   idx = ULV_idx[node];
                     H2P_dense_mat_t Q   = ULV_Q[node];
                     H2P_dense_mat_t L   = ULV_L[node];
-                    assert(idx->length == L->nrow);
                     int I_size = ULV_Ls[node];
                     int L_size = L->nrow - I_size;
                     // b0 = x(idx);

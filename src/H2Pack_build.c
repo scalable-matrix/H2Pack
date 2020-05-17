@@ -1070,6 +1070,10 @@ void H2P_build_B(H2Pack_t h2pack)
         B_pair_j[B_pair_cnt] = node1;
         B_pair_v[B_pair_cnt] = i + 1;
         B_pair_cnt++;
+        B_pair_i[B_pair_cnt] = node1;
+        B_pair_j[B_pair_cnt] = node0;
+        B_pair_v[B_pair_cnt] = -(i + 1);
+        B_pair_cnt++;
         // Add Statistic info
         mat_size[4]  += B_nrow[i] * B_ncol[i];
         mat_size[4]  += 2 * (B_nrow[i] + B_ncol[i]);
@@ -1231,9 +1235,10 @@ void H2P_build_D(H2Pack_t h2pack)
     );
 
     int D_pair_cnt = 0;
-    int *D_pair_i = (int*) malloc(sizeof(int) * h2pack->n_D * 2);
-    int *D_pair_j = (int*) malloc(sizeof(int) * h2pack->n_D * 2);
-    int *D_pair_v = (int*) malloc(sizeof(int) * h2pack->n_D * 2);
+    int n_Dij_pair = n_leaf_node + 2 * n_r_inadm_pair;
+    int *D_pair_i = (int*) malloc(sizeof(int) * n_Dij_pair);
+    int *D_pair_j = (int*) malloc(sizeof(int) * n_Dij_pair);
+    int *D_pair_v = (int*) malloc(sizeof(int) * n_Dij_pair);
     ASSERT_PRINTF(
         D_pair_i != NULL && D_pair_j != NULL && D_pair_v != NULL,
         "Failed to allocate working buffer for D matrices indexing\n"
@@ -1288,6 +1293,10 @@ void H2P_build_D(H2Pack_t h2pack)
         D_pair_j[D_pair_cnt] = node1;
         D_pair_v[D_pair_cnt] = ii + 1;
         D_pair_cnt++;
+        D_pair_i[D_pair_cnt] = node1;
+        D_pair_j[D_pair_cnt] = node0;
+        D_pair_v[D_pair_cnt] = -(ii + 1);
+        D_pair_cnt++;
         // Add statistic info
         mat_size[6] += D_nrow[ii] * D_ncol[ii];
         mat_size[6] += 2 * (D_nrow[ii] + D_ncol[ii]);
@@ -1298,8 +1307,8 @@ void H2P_build_D(H2Pack_t h2pack)
     mat_size[2] = D0_total_size + D1_total_size;
     
     h2pack->D_p2i_rowptr = (int*) malloc(sizeof(int) * (n_node + 1));
-    h2pack->D_p2i_colidx = (int*) malloc(sizeof(int) * h2pack->n_D * 2);
-    h2pack->D_p2i_val    = (int*) malloc(sizeof(int) * h2pack->n_D * 2);
+    h2pack->D_p2i_colidx = (int*) malloc(sizeof(int) * n_Dij_pair);
+    h2pack->D_p2i_val    = (int*) malloc(sizeof(int) * n_Dij_pair);
     ASSERT_PRINTF(h2pack->D_p2i_rowptr != NULL, "Failed to allocate arrays for D matrices indexing\n");
     ASSERT_PRINTF(h2pack->D_p2i_colidx != NULL, "Failed to allocate arrays for D matrices indexing\n");
     ASSERT_PRINTF(h2pack->D_p2i_val    != NULL, "Failed to allocate arrays for D matrices indexing\n");

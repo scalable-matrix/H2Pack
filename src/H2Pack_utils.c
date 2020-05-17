@@ -281,10 +281,18 @@ void H2P_get_Bij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_de
     int *B_p2i_colidx = h2pack->B_p2i_colidx;
     int *B_p2i_val    = h2pack->B_p2i_val;
     int B_idx = H2P_get_int_CSR_elem(B_p2i_rowptr, B_p2i_colidx, B_p2i_val, node0, node1);
+    int need_trans = 0, node0_ = node0, node1_ = node1;
     if (B_idx == 0)
     {
         ERROR_PRINTF("B{%d, %d} does not exist!\n", node0, node1);
         return;
+    }
+    if (B_idx < 0)
+    {
+        need_trans = 1;
+        B_idx  = -B_idx;
+        node0_ = node1;
+        node1_ = node0;
     }
     B_idx--;
     int B_nrow = h2pack->B_nrow[B_idx];
@@ -298,8 +306,8 @@ void H2P_get_Bij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_de
         int   krnl_dim    = h2pack->krnl_dim;
         int   *pt_cluster = h2pack->pt_cluster;
         int   *node_level = h2pack->node_level;
-        int   level0      = node_level[node0];
-        int   level1      = node_level[node1];
+        int   level0      = node_level[node0_];
+        int   level1      = node_level[node1_];
         DTYPE *coord      = h2pack->coord;
         void  *krnl_param = h2pack->krnl_param;
         kernel_eval_fptr krnl_eval = h2pack->krnl_eval;
@@ -308,20 +316,20 @@ void H2P_get_Bij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_de
         if (level0 == level1)
         {
             krnl_eval(
-                J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
-                J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                krnl_param, Bij->data, J_coord[node1]->ncol * krnl_dim
+                J_coord[node0_]->data, J_coord[node0_]->ncol, J_coord[node0_]->ncol,
+                J_coord[node1_]->data, J_coord[node1_]->ncol, J_coord[node1_]->ncol,
+                krnl_param, Bij->data, J_coord[node1_]->ncol * krnl_dim
             );
         }
         // (2) node1 is a leaf node and its level is higher than node0's level, 
         //     only compress on node0's side
         if (level0 > level1)
         {
-            int pt_s1 = pt_cluster[2 * node1];
-            int pt_e1 = pt_cluster[2 * node1 + 1];
+            int pt_s1 = pt_cluster[2 * node1_];
+            int pt_e1 = pt_cluster[2 * node1_ + 1];
             int node1_npt = pt_e1 - pt_s1 + 1;
             krnl_eval(
-                J_coord[node0]->data, J_coord[node0]->ncol, J_coord[node0]->ncol,
+                J_coord[node0_]->data, J_coord[node0_]->ncol, J_coord[node0_]->ncol,
                 coord + pt_s1, n_point, node1_npt, 
                 krnl_param, Bij->data, node1_npt * krnl_dim
             );
@@ -330,16 +338,17 @@ void H2P_get_Bij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_de
         //     only compress on node1's side
         if (level0 < level1)
         {
-            int pt_s0 = pt_cluster[2 * node0];
-            int pt_e0 = pt_cluster[2 * node0 + 1];
+            int pt_s0 = pt_cluster[2 * node0_];
+            int pt_e0 = pt_cluster[2 * node0_ + 1];
             int node0_npt = pt_e0 - pt_s0 + 1;
             krnl_eval(
                 coord + pt_s0, n_point, node0_npt, 
-                J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
-                krnl_param, Bij->data, J_coord[node1]->ncol * krnl_dim
+                J_coord[node1_]->data, J_coord[node1_]->ncol, J_coord[node1_]->ncol,
+                krnl_param, Bij->data, J_coord[node1_]->ncol * krnl_dim
             );
         }
     }
+    if (need_trans) Bij->ld = -Bij->ld;
 }
 
 // Get D{node0, node1} from a H2Pack structure
@@ -349,10 +358,18 @@ void H2P_get_Dij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_de
     int *D_p2i_colidx = h2pack->D_p2i_colidx;
     int *D_p2i_val    = h2pack->D_p2i_val;
     int D_idx = H2P_get_int_CSR_elem(D_p2i_rowptr, D_p2i_colidx, D_p2i_val, node0, node1);
+    int need_trans = 0, node0_ = node0, node1_ = node1;
     if (D_idx == 0)
     {
         ERROR_PRINTF("D{%d, %d} does not exist!\n", node0, node1);
         return;
+    }
+    if (D_idx < 0)
+    {
+        need_trans = 1;
+        D_idx  = -D_idx;
+        node0_ = node1;
+        node1_ = node0;
     }
     D_idx--;
     int D_nrow = h2pack->D_nrow[D_idx];
@@ -365,10 +382,10 @@ void H2P_get_Dij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_de
         int   n_point     = h2pack->n_point;
         int   krnl_dim    = h2pack->krnl_dim;
         int   *pt_cluster = h2pack->pt_cluster;
-        int   pt_s0       = pt_cluster[2 * node0];
-        int   pt_s1       = pt_cluster[2 * node1];
-        int   pt_e0       = pt_cluster[2 * node0 + 1];
-        int   pt_e1       = pt_cluster[2 * node1 + 1];
+        int   pt_s0       = pt_cluster[2 * node0_];
+        int   pt_s1       = pt_cluster[2 * node1_];
+        int   pt_e0       = pt_cluster[2 * node0_ + 1];
+        int   pt_e1       = pt_cluster[2 * node1_ + 1];
         int   node0_npt   = pt_e0 - pt_s0 + 1;
         int   node1_npt   = pt_e1 - pt_s1 + 1;
         DTYPE *coord      = h2pack->coord;
@@ -378,6 +395,7 @@ void H2P_get_Dij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_de
             h2pack->krnl_param, Dij->data, node1_npt * krnl_dim
         );
     }
+    if (need_trans) Dij->ld = -Dij->ld;
 }
 
 // Partition work units into multiple blocks s.t. each block has 

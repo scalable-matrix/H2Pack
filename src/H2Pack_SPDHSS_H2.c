@@ -28,6 +28,7 @@ void H2P_build_explicit_U(H2Pack_t h2pack, H2P_dense_mat_t **exU_)
     int *children     = h2pack->children;
     int *level_nodes  = h2pack->level_nodes;
     int *level_n_node = h2pack->level_n_node;
+    int *mat_cluster  = h2pack->mat_cluster;
     H2P_dense_mat_t  *U = h2pack->U;
     H2P_thread_buf_t *thread_buf = h2pack->tb;
 
@@ -54,18 +55,23 @@ void H2P_build_explicit_U(H2Pack_t h2pack, H2P_dense_mat_t **exU_)
                 int n_child_node = n_child[node];
                 H2P_dense_mat_t U_node = U[node];
 
+                int s_row = mat_cluster[2 * node];
+                int n_row = mat_cluster[2 * node + 1] - s_row + 1;
+
                 if (U_node->nrow == 0) continue;
                 if (n_child_node == 0)
                 {
                     H2P_dense_mat_init(&exU[node], U_node->nrow, U_node->ncol);
+                    ASSERT_PRINTF(n_row == exU[node]->nrow, "Node %d: mat_cluster has %d rows, but exU[node] has %d rows\n", node, n_row, exU[node]->nrow);
                     H2P_copy_matrix_block(U_node->nrow, U_node->ncol, U_node->data, U_node->ld, exU[node]->data, exU[node]->ld);
                 } else {
                     // TODO: don't use H2P_dense_mat_blkdiag(), apply children nodes' U directly
                     int *child_nodes = children + node * max_child;
                     memcpy(idx->data, child_nodes, sizeof(int) * n_child_node);
                     idx->length = n_child_node;
-                    H2P_dense_mat_blkdiag(U, idx, bd_U);
+                    H2P_dense_mat_blkdiag(exU, idx, bd_U);
                     H2P_dense_mat_init(&exU[node], bd_U->nrow, U_node->ncol);
+                    ASSERT_PRINTF(n_row == exU[node]->nrow, "Node %d: mat_cluster has %d rows, but exU[node] has %d rows\n", node, n_row, bd_U->nrow);
                     CBLAS_GEMM(
                         CblasRowMajor, CblasNoTrans, CblasNoTrans, bd_U->nrow, U_node->ncol, U_node->nrow,
                         1.0, bd_U->data, bd_U->ld, U_node->data, U_node->ld, 0.0, exU[node]->data, exU[node]->ld
@@ -137,24 +143,33 @@ int H2P_tree_common_ancestor_level(
 //          a matrix of n_vec columns
 void H2P_SPDHSS_H2_acc_matvec(H2Pack_t h2mat, const int n_vec, H2P_dense_mat_t **Yk_)
 {
-    int n_node         = h2mat->n_node;
-    int n_leaf_node    = h2mat->n_leaf_node;
-    int n_thread       = h2mat->n_thread;
-    int n_r_inadm_pair = h2mat->n_r_inadm_pair;
-    int n_r_adm_pair   = h2mat->n_r_adm_pair;
-    int max_level      = h2mat->max_level;
-    int max_child      = h2mat->max_child;
-    int min_adm_level  = h2mat->min_adm_level;
-    int *parent        = h2mat->parent;
-    int *n_child       = h2mat->n_child;
-    int *children      = h2mat->children;
-    int *level_nodes   = h2mat->level_nodes;
-    int *level_n_node  = h2mat->level_n_node;
-    int *leaf_nodes    = h2mat->height_nodes;
-    int *node_level    = h2mat->node_level;
-    int *r_adm_pairs   = h2mat->r_adm_pairs;
-    int *r_inadm_pairs = h2mat->r_inadm_pairs;
-    int *mat_cluster   = h2mat->mat_cluster;
+    int n_node              = h2mat->n_node;
+    int n_leaf_node         = h2mat->n_leaf_node;
+    int n_thread            = h2mat->n_thread;
+    int n_r_inadm_pair      = h2mat->n_r_inadm_pair;
+    int n_r_adm_pair        = h2mat->n_r_adm_pair;
+    int max_level           = h2mat->max_level;
+    int max_child           = h2mat->max_child;
+    int max_neighbor        = h2mat->max_neighbor;
+    int min_adm_level       = h2mat->min_adm_level;
+    int *parent             = h2mat->parent;
+    int *n_child            = h2mat->n_child;
+    int *children           = h2mat->children;
+    int *level_nodes        = h2mat->level_nodes;
+    int *level_n_node       = h2mat->level_n_node;
+    int *leaf_nodes         = h2mat->height_nodes;
+    int *node_level         = h2mat->node_level;
+    int *r_adm_pairs        = h2mat->r_adm_pairs;
+    int *r_inadm_pairs      = h2mat->r_inadm_pairs;
+    int *mat_cluster        = h2mat->mat_cluster;
+    int *node_inadm_lists   = h2mat->node_inadm_lists;
+    int *node_n_r_inadm     = h2mat->node_n_r_inadm;
+    int *B_p2i_rowptr       = h2mat->B_p2i_rowptr;
+    int *B_p2i_colidx       = h2mat->B_p2i_colidx;
+    int *B_p2i_val          = h2mat->B_p2i_val;
+    int *D_p2i_rowptr       = h2mat->D_p2i_rowptr;
+    int *D_p2i_colidx       = h2mat->D_p2i_colidx;
+    int *D_p2i_val          = h2mat->D_p2i_val;
     H2P_dense_mat_t  *U = h2mat->U;
     H2P_thread_buf_t *thread_buf = h2mat->tb;
 
@@ -239,139 +254,162 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_t h2mat, const int n_vec, H2P_dense_mat_t *
         int tid = omp_get_thread_num();
         H2P_int_vec_t   work = thread_buf[tid]->idx0;
         H2P_dense_mat_t Dij  = thread_buf[tid]->mat0;
+        H2P_dense_mat_t Dij0 = thread_buf[tid]->mat1;
         H2P_dense_mat_t Bij  = thread_buf[tid]->mat0;
+        H2P_dense_mat_t Bij0 = thread_buf[tid]->mat1;
         H2P_dense_mat_t tmpM = thread_buf[tid]->mat1;
         H2P_int_vec_set_capacity(work, 2 * max_level + 4);
 
         // 4.1 Inadmissible pairs
-        #pragma omp for schedule(dynamic, 16)
-        for (int i = 0; i < n_r_inadm_pair; i++)
+        #pragma omp for schedule(dynamic)
+        for (int node0 = 0; node0 < n_node; node0++)
         {
-            int node0 = r_inadm_pairs[2 * i];
-            int node1 = r_inadm_pairs[2 * i + 1];
-            if (node0 == node1) continue;  // Do we really need this?
-            int ca_level = H2P_tree_common_ancestor_level(parent, node_level, max_level+1, node0, node1, work->data) + 1;
-            int s_col  = n_vec * (ca_level - 1);
-            int n_col  = n_vec;
             int s_row0 = mat_cluster[2 * node0];
             int e_row0 = mat_cluster[2 * node0 + 1];
             int n_row0 = e_row0 - s_row0 + 1;
-            int s_row1 = mat_cluster[2 * node1];
-            int e_row1 = mat_cluster[2 * node1 + 1];
-            int n_row1 = e_row1 - s_row1 + 1;
-            H2P_get_Dij_block(h2mat, node0, node1, Dij);
-            DTYPE *Yk_mat_blk0 = Yk_mat + s_row0 * Yk_mat_ld + s_col;
-            DTYPE *Yk_mat_blk1 = Yk_mat + s_row1 * Yk_mat_ld + s_col;
-            DTYPE *vec_blk0    = vec + s_row0 * n_vec;
-            DTYPE *vec_blk1    = vec + s_row1 * n_vec;
-            // Yk_mat(idx1, col_idx) = Yk_mat(idx1, col_idx) + D{D_idx}  * vec(idx2, :);
-            CBLAS_GEMM(
-                CblasRowMajor, CblasNoTrans, CblasNoTrans, n_row0, n_vec, n_row1,
-                1.0, Dij->data, Dij->ld, vec_blk1, n_vec, 1.0, Yk_mat_blk0, Yk_mat_ld
-            );
-            // Yk_mat(idx2, col_idx) = Yk_mat(idx2, col_idx) + D{D_idx}' * vec(idx1, :);
-            CBLAS_GEMM(
-                CblasRowMajor, CblasTrans, CblasNoTrans, n_row1, n_vec, n_row0,
-                1.0, Dij->data, Dij->ld, vec_blk0, n_vec, 1.0, Yk_mat_blk1, Yk_mat_ld
-            );
-        }  // End of i loop
+            for (int i = D_p2i_rowptr[node0]; i < D_p2i_rowptr[node0 + 1]; i++)
+            {
+                int node1 = D_p2i_colidx[i];
+                if (node0 == node1) continue;  // Do we really need this?
+                int ca_level = H2P_tree_common_ancestor_level(parent, node_level, max_level+1, node0, node1, work->data) + 1;
+                int s_col  = n_vec * (ca_level - 1);
+                int s_row1 = mat_cluster[2 * node1];
+                int e_row1 = mat_cluster[2 * node1 + 1];
+                int n_row1 = e_row1 - s_row1 + 1;
+                DTYPE *Yk_mat_blk0 = Yk_mat + s_row0 * Yk_mat_ld + s_col;
+                DTYPE *vec_blk1    = vec + s_row1 * n_vec;
+                H2P_get_Dij_block(h2mat, node0, node1, Dij0);
+                if (Dij0->ld > 0)
+                {
+                    H2P_dense_mat_resize(Dij, Dij0->nrow, Dij0->ncol);
+                    H2P_copy_matrix_block(Dij0->nrow, Dij0->ncol, Dij0->data, Dij0->ld, Dij->data, Dij->ld);
+                } else {
+                    Dij0->ld = -Dij0->ld;
+                    H2P_dense_mat_resize(Dij, Dij0->ncol, Dij0->nrow);
+                    H2P_transpose_dmat(1, Dij0->nrow, Dij0->ncol, Dij0->data, Dij0->ld, Dij->data, Dij->ld);
+                }
 
+                // We only handle: 
+                //     Yk_mat(idx1, col_idx) = Yk_mat(idx1, col_idx) + D{D_idx}  * vec(idx2, :);
+                // it's symmetric operation:
+                //     Yk_mat(idx2, col_idx) = Yk_mat(idx2, col_idx) + D{D_idx}' * vec(idx1, :);
+                // is handled by double counting node inadmissible pairs
+                ASSERT_PRINTF(
+                    Dij->nrow == n_row0 && Dij->ncol == n_row1,
+                    "D{%d, %d} has size %d * %d, expected %d * %d\n", 
+                    node0, node1, Dij->nrow, Dij->ncol, n_row0, n_row1
+                );
+                CBLAS_GEMM(
+                    CblasRowMajor, CblasNoTrans, CblasNoTrans, n_row0, n_vec, n_row1,
+                    1.0, Dij->data, Dij->ld, vec_blk1, n_vec, 1.0, Yk_mat_blk0, Yk_mat_ld
+                );
+            }  // End of i loop
+        }  // End of node0 loop
+        
         // 4.2 Admissible pairs
-        #pragma omp for schedule(dynamic, 16)
-        for (int i = 0; i < n_r_adm_pair; i++)
+        #pragma omp for schedule(dynamic)
+        for (int node0 = 0; node0 < n_node; node0++)
         {
-            int node0 = r_adm_pairs[2 * i];
-            int node1 = r_adm_pairs[2 * i + 1];
-            if (node0 == node1) continue;  // Do we really need this?
-            int ca_level = H2P_tree_common_ancestor_level(parent, node_level, max_level+1, node0, node1, work->data) + 1;
-            int s_col  = n_vec * (ca_level - 1);
-            int n_col  = n_vec;
             int s_row0 = mat_cluster[2 * node0];
             int e_row0 = mat_cluster[2 * node0 + 1];
             int n_row0 = e_row0 - s_row0 + 1;
-            int s_row1 = mat_cluster[2 * node1];
-            int e_row1 = mat_cluster[2 * node1 + 1];
-            int n_row1 = e_row1 - s_row1 + 1;
-            H2P_get_Bij_block(h2mat, node0, node1, Bij);
-            DTYPE *Yk_mat_blk0 = Yk_mat + s_row0 * Yk_mat_ld + s_col;
-            DTYPE *Yk_mat_blk1 = Yk_mat + s_row1 * Yk_mat_ld + s_col;
-            DTYPE *vec_blk0    = vec + s_row0 * n_vec;
-            DTYPE *vec_blk1    = vec + s_row1 * n_vec;
-
             int level0 = node_level[node0];
-            int level1 = node_level[node1];
-            H2P_dense_mat_t y0_0  = y0[node0];
-            H2P_dense_mat_t y0_1  = y0[node1];
             H2P_dense_mat_t exU_0 = exU[node0];
-            H2P_dense_mat_t exU_1 = exU[node1];
-
-            // A. Two nodes are of the same level, compress on both side
-            if (level0 == level1)
+            for (int i = B_p2i_rowptr[node0]; i < B_p2i_rowptr[node0 + 1]; i++)
             {
-                // Yk_mat(idx1, col_idx) = Yk_mat(idx1, col_idx) + exU{c1} * (Bij  * y0{c2});
-                H2P_dense_mat_resize(tmpM, Bij->nrow, y0_1->ncol);
-                CBLAS_GEMM(
-                    CblasRowMajor, CblasNoTrans, CblasNoTrans, Bij->nrow, y0_1->ncol, Bij->ncol,
-                    1.0, Bij->data, Bij->ld, y0_1->data, y0_1->ld, 0.0, tmpM->data, tmpM->ld
-                );
-                CBLAS_GEMM(
-                    CblasRowMajor, CblasNoTrans, CblasNoTrans, exU_0->nrow, tmpM->ncol, exU_0->ncol,
-                    1.0, exU_0->data, exU_0->ld, tmpM->data, tmpM->ld, 1.0, Yk_mat_blk0, Yk_mat_ld
-                );
-                // Yk_mat(idx2, col_idx) = Yk_mat(idx2, col_idx) + exU{c2} * (Bij' * y0{c1});
-                H2P_dense_mat_resize(tmpM, Bij->ncol, y0_0->ncol);
-                CBLAS_GEMM(
-                    CblasRowMajor, CblasTrans, CblasNoTrans, Bij->ncol, y0_0->ncol, Bij->nrow, 
-                    1.0, Bij->data, Bij->ld, y0_0->data, y0_0->ld, 0.0, tmpM->data, tmpM->ld
-                );
-                CBLAS_GEMM(
-                    CblasRowMajor, CblasNoTrans, CblasNoTrans, exU_1->nrow, tmpM->ncol, exU_1->ncol, 
-                    1.0, exU_1->data, exU_1->ld, tmpM->data, tmpM->ld, 1.0, Yk_mat_blk1, Yk_mat_ld
-                );
-            }  // End of "if (level0 == level1)"
+                int node1 = B_p2i_colidx[i];
+                if (node0 == node1) continue;  // Do we really need this?
+                int ca_level = H2P_tree_common_ancestor_level(parent, node_level, max_level+1, node0, node1, work->data) + 1;
+                int s_col  = n_vec * (ca_level - 1);
+                int s_row1 = mat_cluster[2 * node1];
+                int e_row1 = mat_cluster[2 * node1 + 1];
+                int n_row1 = e_row1 - s_row1 + 1;
+                int level1 = node_level[node1];
+                H2P_get_Bij_block(h2mat, node0, node1, Bij0);
+                if (Bij0->ld > 0)
+                {
+                    H2P_dense_mat_resize(Bij, Bij0->nrow, Bij0->ncol);
+                    H2P_copy_matrix_block(Bij0->nrow, Bij0->ncol, Bij0->data, Bij0->ld, Bij->data, Bij->ld);
+                } else {
+                    Bij0->ld = -Bij0->ld;
+                    H2P_dense_mat_resize(Bij, Bij0->ncol, Bij0->nrow);
+                    H2P_transpose_dmat(1, Bij0->nrow, Bij0->ncol, Bij0->data, Bij0->ld, Bij->data, Bij->ld);
+                }
+                H2P_dense_mat_t y0_1 = y0[node1];
+                DTYPE *Yk_mat_blk0 = Yk_mat + s_row0 * Yk_mat_ld + s_col;
+                DTYPE *vec_blk1    = vec + s_row1 * n_vec;
 
-            // B. node1 is a leaf node and its level is larger than node0,
-            //    only compress on node0's side
-            if (level0 > level1)
-            {
-                // Yk_mat(idx1, col_idx) = Yk_mat(idx1, col_idx) + exU{c1} * (Bij * vec(idx2, :));
-                H2P_dense_mat_resize(tmpM, Bij->nrow, n_vec);
-                CBLAS_GEMM(
-                    CblasRowMajor, CblasNoTrans, CblasNoTrans, Bij->nrow, n_vec, Bij->ncol,
-                    1.0, Bij->data, Bij->ld, vec_blk1, n_vec, 0.0, tmpM->data, tmpM->ld
-                );
-                CBLAS_GEMM(
-                    CblasRowMajor, CblasNoTrans, CblasNoTrans, exU_0->nrow, tmpM->ncol, exU_0->ncol,
-                    1.0, exU_0->data, exU_0->ld, tmpM->data, tmpM->ld, 1.0, Yk_mat_blk0, Yk_mat_ld
-                );
-                // Yk_mat(idx2, col_idx) = Yk_mat(idx2, col_idx) + Bij' * y0{c1};
-                CBLAS_GEMM(
-                    CblasRowMajor, CblasTrans, CblasNoTrans, Bij->ncol, y0_0->ncol, Bij->nrow, 
-                    1.0, Bij->data, Bij->ld, y0_0->data, y0_0->ld, 1.0, Yk_mat_blk1, Yk_mat_ld
-                );
-            }  // End of "if (level0 > level1)"
+                // We only handle the update on Yk_mat_blk0, the symmetric operations for 
+                // updateing Yk_mat_blk1 is handled by double counting the inadmissible pairs
 
-            // C. node0 is a leaf node and its level is larger than node1,
-            //    only compress on node1's side
-            if (level0 < level1)
-            {
-                // Yk_mat(idx1, col_idx) = Yk_mat(idx1, col_idx) + Bij * y0{c2};
-                CBLAS_GEMM(
-                    CblasRowMajor, CblasNoTrans, CblasNoTrans, Bij->nrow, y0_1->ncol, Bij->ncol, 
-                    1.0, Bij->data, Bij->ld, y0_1->data, y0_1->ld, 1.0, Yk_mat_blk0, Yk_mat_ld
-                );
-                // Yk_mat(idx2, col_idx) = Yk_mat(idx2, col_idx) + exU{c2} * (Bij' * vec(idx1, :));
-                H2P_dense_mat_resize(tmpM, Bij->ncol, n_vec);
-                CBLAS_GEMM(
-                    CblasRowMajor, CblasTrans, CblasNoTrans, Bij->ncol, n_vec, Bij->nrow, 
-                    1.0, Bij->data, Bij->ld, vec_blk0, n_vec, 0.0, tmpM->data, tmpM->ld
-                );
-                CBLAS_GEMM(
-                    CblasRowMajor, CblasNoTrans, CblasNoTrans, exU_1->nrow, tmpM->ncol, exU_1->ncol,
-                    1.0, exU_1->data, exU_1->ld, tmpM->data, tmpM->ld, 1.0, Yk_mat_blk1, Yk_mat_ld
-                );
-            }  // End of "if (level0 < level1)"
-        }  // End of i loop 
+                // A. Two nodes are of the same level, compress on both side
+                if (level0 == level1)
+                {
+                    // Yk_mat(idx1, col_idx) = Yk_mat(idx1, col_idx) + exU{c1} * (Bij  * y0{c2});
+                    ASSERT_PRINTF(
+                        exU_0->ncol == Bij->nrow && Bij->ncol == y0_1->nrow,
+                        "Pair (%d, %d) GEMM size mismatch: [%d, %d] * [%d, %d] * [%d, %d]\n",
+                        node0, node1, exU_0->nrow, exU_0->ncol, Bij->nrow, Bij->ncol, y0_1->nrow, y0_1->ncol
+                    );
+                    ASSERT_PRINTF(
+                        n_row0 == exU_0->nrow && n_vec == y0_1->ncol, 
+                        "Pair (%d, %d) matrix addition size mismatch: expected [%d, %d], got [%d, %d]\n",
+                        node0, node1, n_row0, n_vec, exU_0->nrow, y0_1->ncol
+                    );
+                    H2P_dense_mat_resize(tmpM, Bij->nrow, y0_1->ncol);
+                    CBLAS_GEMM(
+                        CblasRowMajor, CblasNoTrans, CblasNoTrans, Bij->nrow, y0_1->ncol, Bij->ncol,
+                        1.0, Bij->data, Bij->ld, y0_1->data, y0_1->ld, 0.0, tmpM->data, tmpM->ld
+                    );
+                    CBLAS_GEMM(
+                        CblasRowMajor, CblasNoTrans, CblasNoTrans, exU_0->nrow, tmpM->ncol, exU_0->ncol,
+                        1.0, exU_0->data, exU_0->ld, tmpM->data, tmpM->ld, 1.0, Yk_mat_blk0, Yk_mat_ld
+                    );
+                }  // End of "if (level0 == level1)"
+
+                // B. node1 is a leaf node and its level is larger than node0,
+                //    only compress on node0's side
+                if (level0 > level1)
+                {
+                    // Yk_mat(idx1, col_idx) = Yk_mat(idx1, col_idx) + exU{c1} * (Bij * vec(idx2, :));
+                    ASSERT_PRINTF(
+                        exU_0->ncol == Bij->nrow && Bij->ncol == n_row1,
+                        "Pair (%d, %d) GEMM size mismatch: [%d, %d] * [%d, %d] * [%d, %d]\n",
+                        node0, node1, exU_0->nrow, exU_0->ncol, Bij->nrow, Bij->ncol, n_row1, n_vec
+                    );
+                    ASSERT_PRINTF(
+                        n_row0 == exU_0->nrow, 
+                        "Pair (%d, %d) matrix addition size mismatch: expected [%d, %d], got [%d, %d]\n",
+                        node0, node1, n_row0, n_vec, exU_0->nrow, n_vec
+                    );
+                    H2P_dense_mat_resize(tmpM, Bij->nrow, n_vec);
+                    CBLAS_GEMM(
+                        CblasRowMajor, CblasNoTrans, CblasNoTrans, Bij->nrow, n_vec, Bij->ncol,
+                        1.0, Bij->data, Bij->ld, vec_blk1, n_vec, 0.0, tmpM->data, tmpM->ld
+                    );
+                    CBLAS_GEMM(
+                        CblasRowMajor, CblasNoTrans, CblasNoTrans, exU_0->nrow, tmpM->ncol, exU_0->ncol,
+                        1.0, exU_0->data, exU_0->ld, tmpM->data, tmpM->ld, 1.0, Yk_mat_blk0, Yk_mat_ld
+                    );
+                }  // End of "if (level0 > level1)"
+
+                // C. node0 is a leaf node and its level is larger than node1,
+                //    only compress on node1's side
+                if (level0 < level1)
+                {
+                    // Yk_mat(idx1, col_idx) = Yk_mat(idx1, col_idx) + Bij * y0{c2};
+                    ASSERT_PRINTF(
+                        n_row0 == Bij->nrow && Bij->ncol == y0_1->nrow && y0_1->ncol == n_vec,
+                        "Pair (%d, %d) GEMM & matrix addition size mismatch: [%d, %d] + [%d, %d] * [%d, %d]\n",
+                        node0, node1, n_row0, n_vec, Bij->nrow, Bij->ncol, y0_1->nrow, y0_1->ncol
+                    );
+                    CBLAS_GEMM(
+                        CblasRowMajor, CblasNoTrans, CblasNoTrans, Bij->nrow, y0_1->ncol, Bij->ncol, 
+                        1.0, Bij->data, Bij->ld, y0_1->data, y0_1->ld, 1.0, Yk_mat_blk0, Yk_mat_ld
+                    );
+                }  // End of "if (level0 < level1)"
+            }  // End of i loop
+        }  // End of node 0 loop
     }  // End of "#pragma omp parallel"
 
     // 5. Accumulate the results in Yk_mat to lead nodes

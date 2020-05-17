@@ -1231,13 +1231,13 @@ void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
         }
     }
     et = get_wtime_sec();
-    h2pack->timers[8] += et - st;
+    h2pack->timers[_MV_RDC_TIMER_IDX] += et - st;
 
     // 2. Forward transformation, calculate U_j^T * x_j
     st = get_wtime_sec();
     H2P_matvec_fwd_transform(h2pack, x);
     et = get_wtime_sec();
-    h2pack->timers[4] += et - st;
+    h2pack->timers[_MV_FW_TIMER_IDX] += et - st;
     
     // 3. Intermediate multiplication, calculate B_{ij} * (U_j^T * x_j)
     st = get_wtime_sec();
@@ -1251,13 +1251,13 @@ void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
         H2P_matvec_intmd_mult_AOT(h2pack, x);
     }
     et = get_wtime_sec();
-    h2pack->timers[5] += et - st;
+    h2pack->timers[_MV_MID_TIMER_IDX] += et - st;
 
     // 4. Backward transformation, calculate U_i * (B_{ij} * (U_j^T * x_j))
     st = get_wtime_sec();
     H2P_matvec_bwd_transform(h2pack, x, y);
     et = get_wtime_sec();
-    h2pack->timers[6] += et - st;
+    h2pack->timers[_MV_BW_TIMER_IDX] += et - st;
     
     // 5. Dense multiplication, calculate D_i * x_i
     st = get_wtime_sec();
@@ -1269,7 +1269,7 @@ void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
         H2P_matvec_dense_mult_AOT(h2pack, x);
     }
     et = get_wtime_sec();
-    h2pack->timers[7] += et - st;
+    h2pack->timers[_MV_DEN_TIMER_IDX] += et - st;
     
     // 6. Reduce sum partial y results
     st = get_wtime_sec();
@@ -1287,17 +1287,17 @@ void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
             for (int i = blk_spos; i < blk_spos + blk_len; i++) y_[i] += y_src[i];
         }
     }
-    h2pack->mat_size[7] = (2 * n_thread + 1) * h2pack->krnl_mat_size;
+    h2pack->mat_size[_MV_RDC_SIZE_IDX] = (2 * n_thread + 1) * h2pack->krnl_mat_size;
     // We use xT here to hold the transpose of yT
     if (need_trans)
     {
         H2P_transpose_dmat(n_thread, krnl_dim, n_point, h2pack->yT, n_point, h2pack->xT, krnl_dim);
         #pragma omp parallel for simd
         for (int i = 0; i < krnl_mat_size; i++) y[i] += h2pack->xT[i];
-        h2pack->mat_size[7] += 4 * h2pack->krnl_mat_size;
+        h2pack->mat_size[_MV_RDC_SIZE_IDX] += 4 * h2pack->krnl_mat_size;
     }
     et = get_wtime_sec();
-    h2pack->timers[8] += et - st;
+    h2pack->timers[_MV_RDC_TIMER_IDX] += et - st;
 
     h2pack->n_matvec++;
 }

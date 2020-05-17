@@ -700,5 +700,5 @@ void H2P_partition_points(
     if (h2pack->is_HSS == 1) H2P_HSS_calc_adm_inadm_pairs(h2pack);
 
     et = get_wtime_sec();
-    h2pack->timers[0] = et - st;
+    h2pack->timers[_PT_TIMER_IDX] = et - st;
 }

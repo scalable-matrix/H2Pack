@@ -19,15 +19,16 @@ void H2P_init(
     H2Pack_t h2pack = (H2Pack_t) malloc(sizeof(struct H2Pack));
     ASSERT_PRINTF(h2pack != NULL, "Failed to allocate H2Pack structure\n");
     
-    h2pack->n_thread  = omp_get_max_threads();
-    h2pack->pt_dim    = pt_dim;
-    h2pack->krnl_dim  = krnl_dim;
-    h2pack->max_child = 1 << pt_dim;
-    h2pack->n_matvec  = 0;
-    h2pack->is_H2ERI  = 0;
-    h2pack->is_HSS    = 0;
-    memset(h2pack->mat_size,  0, sizeof(size_t) * 8);
-    memset(h2pack->timers,    0, sizeof(double) * 9);
+    h2pack->n_thread    = omp_get_max_threads();
+    h2pack->pt_dim      = pt_dim;
+    h2pack->krnl_dim    = krnl_dim;
+    h2pack->max_child   = 1 << pt_dim;
+    h2pack->n_matvec    = 0;
+    h2pack->n_ULV_solve = 0;
+    h2pack->is_H2ERI    = 0;
+    h2pack->is_HSS      = 0;
+    memset(h2pack->mat_size,  0, sizeof(size_t) * 11);
+    memset(h2pack->timers,    0, sizeof(double) * 11);
     memset(h2pack->JIT_flops, 0, sizeof(double) * 2);
     
     h2pack->max_neighbor = 1;
@@ -256,20 +257,22 @@ void H2P_print_statistic(H2Pack_t h2pack)
     }
     
     printf("==================== H2Pack storage info ====================\n");
-    double DTYPE_msize = sizeof(DTYPE);
-    double U_MB   = (double) h2pack->mat_size[0] * DTYPE_msize / 1048576.0;
-    double B_MB   = (double) h2pack->mat_size[1] * DTYPE_msize / 1048576.0;
-    double D_MB   = (double) h2pack->mat_size[2] * DTYPE_msize / 1048576.0;
-    double uw_MB  = (double) h2pack->mat_size[3] * DTYPE_msize / 1048576.0;
-    double mid_MB = (double) h2pack->mat_size[4] * DTYPE_msize / 1048576.0;
-    double dw_MB  = (double) h2pack->mat_size[5] * DTYPE_msize / 1048576.0;
-    double db_MB  = (double) h2pack->mat_size[6] * DTYPE_msize / 1048576.0;
-    double rd_MB  = (double) h2pack->mat_size[7] * DTYPE_msize / 1048576.0;
-    double mv_MB  = uw_MB + mid_MB + dw_MB + db_MB;
+    size_t *mat_size = h2pack->mat_size;
+    double DTYPE_MB = (double) sizeof(DTYPE) / 1048576.0;
+    double int_MB   = (double) sizeof(int)   / 1048576.0;
+    double U_MB   = (double) mat_size[_U_SIZE_IDX]      * DTYPE_MB;
+    double B_MB   = (double) mat_size[_B_SIZE_IDX]      * DTYPE_MB;
+    double D_MB   = (double) mat_size[_D_SIZE_IDX]      * DTYPE_MB;
+    double fw_MB  = (double) mat_size[_MV_FW_SIZE_IDX]  * DTYPE_MB;
+    double mid_MB = (double) mat_size[_MV_MID_SIZE_IDX] * DTYPE_MB;
+    double bw_MB  = (double) mat_size[_MV_BW_SIZE_IDX]  * DTYPE_MB;
+    double den_MB = (double) mat_size[_MV_DEN_SIZE_IDX] * DTYPE_MB;
+    double rdc_MB = (double) mat_size[_MV_RDC_SIZE_IDX] * DTYPE_MB;
+    double mv_MB  = fw_MB + mid_MB + bw_MB + den_MB;
     double UBD_k  = 0.0;
-    UBD_k += (double) h2pack->mat_size[0];
-    UBD_k += (double) h2pack->mat_size[1];
-    UBD_k += (double) h2pack->mat_size[2];
+    UBD_k += (double) mat_size[_U_SIZE_IDX];
+    UBD_k += (double) mat_size[_B_SIZE_IDX];
+    UBD_k += (double) mat_size[_D_SIZE_IDX];
     UBD_k /= (double) h2pack->krnl_mat_size;
     double y0y1_MB = 0.0, tb_MB = 0.0;
     for (int i = 0; i < h2pack->n_thread; i++)
@@ -277,8 +280,8 @@ void H2P_print_statistic(H2Pack_t h2pack)
         H2P_thread_buf_t tbi = h2pack->tb[i];
         double msize0 = (double) tbi->mat0->size     + (double) tbi->mat1->size;
         double msize1 = (double) tbi->idx0->capacity + (double) tbi->idx1->capacity;
-        tb_MB += DTYPE_msize * msize0 + (double) sizeof(int) * msize1;
-        tb_MB += DTYPE_msize * (double) h2pack->krnl_mat_size;
+        tb_MB += DTYPE_MB * msize0 + int_MB * msize1;
+        tb_MB += DTYPE_MB * (double) h2pack->krnl_mat_size;
     }
     if (h2pack->y0 != NULL && h2pack->y1 != NULL)
     {
@@ -286,17 +289,14 @@ void H2P_print_statistic(H2Pack_t h2pack)
         {
             H2P_dense_mat_t y0i = h2pack->y0[i];
             H2P_dense_mat_t y1i = h2pack->y1[i];
-            y0y1_MB += DTYPE_msize * (double) (y0i->size + y1i->ncol - 1);
-            tb_MB   += DTYPE_msize * (double) (y1i->size - y1i->ncol + 1);
+            y0y1_MB += DTYPE_MB * (double) (y0i->size + y1i->ncol - 1);
+            tb_MB   += DTYPE_MB * (double) (y1i->size - y1i->ncol + 1);
         }
     }
-    y0y1_MB /= 1048576.0;
-    tb_MB   /= 1048576.0;
-    printf("  * Just-In-Time B & D build  : %s\n", h2pack->BD_JIT ? "Yes (B & D not allocated)" : "No");
-    printf("  * H2 representation U, B, D : %.2lf, %.2lf, %.2lf (MB) \n", U_MB, B_MB, D_MB);
-    printf("  * Matvec auxiliary arrays   : %.2lf (MB) \n", y0y1_MB);
-    printf("  * Thread-local buffers      : %.2lf (MB) \n", tb_MB);
-    //printf("  * sizeof(U + B + D) / kms   : %.3lf \n", UBD_k);
+    printf("  * Just-In-Time B & D build      : %s\n", h2pack->BD_JIT ? "Yes (B & D not allocated)" : "No");
+    printf("  * H2 representation U, B, D     : %.2lf, %.2lf, %.2lf (MB) \n", U_MB, B_MB, D_MB);
+    printf("  * Matvec auxiliary arrays       : %.2lf (MB) \n", y0y1_MB);
+    printf("  * Thread-local buffers          : %.2lf (MB) \n", tb_MB);
     int max_node_rank = 0;
     double sum_node_rank = 0.0, non_empty_node = 0.0;
     for (int i = 0; i < h2pack->n_UJ; i++)
@@ -309,75 +309,91 @@ void H2P_print_statistic(H2Pack_t h2pack)
             max_node_rank   = (rank_i > max_node_rank) ? rank_i : max_node_rank;
         }
     }
-    printf("  * Max / Avg compressed rank : %d, %.0lf \n", max_node_rank, sum_node_rank / non_empty_node);
+    printf("  * Max / Avg compressed rank     : %d, %.0lf \n", max_node_rank, sum_node_rank / non_empty_node);
+
+    if (h2pack->is_HSS == 1)
+    {
+        double ULV_Q_MB = (double) mat_size[_ULV_Q_SIZE_IDX] * DTYPE_MB;
+        double ULV_L_MB = (double) mat_size[_ULV_L_SIZE_IDX] * DTYPE_MB;
+        double ULV_I_MB = (double) mat_size[_ULV_I_SIZE_IDX] * DTYPE_MB;
+        printf("  * HSS ULV factorization Q, L, I : %.2lf, %.2lf, %.2lf (MB) \n", ULV_Q_MB, ULV_L_MB, ULV_I_MB);
+    }
     
     printf("==================== H2Pack timing info =====================\n");
+    double *timers = h2pack->timers;
     double build_t = 0.0, matvec_t = 0.0;
     double d_n_matvec = (double) h2pack->n_matvec;
-    for (int i = 0; i < 4; i++) build_t += h2pack->timers[i];
-    printf("  * H2 construction time (sec) = %.3lf \n", build_t);
-    printf("      |----> Point partition   = %.3lf \n", h2pack->timers[0]);
-    printf("      |----> U construction    = %.3lf \n", h2pack->timers[1]);
-    printf("      |----> B construction    = %.3lf \n", h2pack->timers[2]);
-    printf("      |----> D construction    = %.3lf \n", h2pack->timers[3]);
-    
+    build_t += timers[_PT_TIMER_IDX];
+    build_t += timers[_U_BUILD_TIMER_IDX];
+    build_t += timers[_B_BUILD_TIMER_IDX];
+    build_t += timers[_D_BUILD_TIMER_IDX];
+    printf("  * H2 construction time (sec)   = %.3lf \n", build_t);
+    printf("      |----> Point partition     = %.3lf \n", timers[_PT_TIMER_IDX]);
+    printf("      |----> U construction      = %.3lf \n", timers[_U_BUILD_TIMER_IDX]);
+    printf("      |----> B construction      = %.3lf \n", timers[_B_BUILD_TIMER_IDX]);
+    printf("      |----> D construction      = %.3lf \n", timers[_D_BUILD_TIMER_IDX]);
+
     if (h2pack->n_matvec == 0)
     {
         printf("H2Pack does not has matvec timings results yet.\n");
         return;
     }
     
-    for (int i = 4; i < 9; i++) 
-    {
-        h2pack->timers[i] /= d_n_matvec;
-        matvec_t += h2pack->timers[i];
-    }
+    double fw_t  = timers[_MV_FW_TIMER_IDX]  / d_n_matvec;
+    double mid_t = timers[_MV_MID_TIMER_IDX] / d_n_matvec;
+    double bw_t  = timers[_MV_BW_TIMER_IDX]  / d_n_matvec;
+    double den_t = timers[_MV_DEN_TIMER_IDX] / d_n_matvec;
+    double rdc_t = timers[_MV_RDC_TIMER_IDX] / d_n_matvec;
+    matvec_t = fw_t + mid_t + bw_t + den_t + rdc_t;
     printf(
         "  * H2 matvec average time (sec) = %.3lf, %.2lf GB/s\n", 
         matvec_t, mv_MB / matvec_t / 1024.0
     );
     printf(
-        "      |----> Upward sweep        = %.3lf, %.2lf GB/s\n", 
-        h2pack->timers[4], uw_MB  / h2pack->timers[4] / 1024.0
+        "      |----> Forward transformation      = %.3lf, %.2lf GB/s\n", 
+        fw_t, fw_MB / fw_t / 1024.0
     );
     if (h2pack->BD_JIT == 0)
     {
         printf(
-            "      |----> Intermediate sweep  = %.3lf, %.2lf GB/s\n", 
-            h2pack->timers[5], mid_MB / h2pack->timers[5] / 1024.0
+            "      |----> Intermediate multiplication = %.3lf, %.2lf GB/s\n", 
+            mid_t, mid_MB / mid_t / 1024.0
         );
     } else {
         double GFLOPS = h2pack->JIT_flops[0] / 1000000000.0;
         printf(
-            "      |----> Intermediate sweep  = %.3lf, %.2lf GFLOPS\n", 
-            h2pack->timers[5], GFLOPS / h2pack->timers[5]
+            "      |----> Intermediate multiplication = %.3lf, %.2lf GFLOPS\n", 
+            mid_t, GFLOPS / mid_t
         );
     }
     printf(
-        "      |----> Downward sweep      = %.3lf, %.2lf GB/s\n", 
-        h2pack->timers[6], dw_MB  / h2pack->timers[6] / 1024.0
+        "      |----> Backward transformation     = %.3lf, %.2lf GB/s\n", 
+        bw_t, bw_MB / bw_t / 1024.0
     );
     if (h2pack->BD_JIT == 0)
     {
         printf(
-            "      |----> Dense block sweep   = %.3lf, %.2lf GB/s\n", 
-            h2pack->timers[7], db_MB  / h2pack->timers[7] / 1024.0
+            "      |----> Dense multiplication        = %.3lf, %.2lf GB/s\n", 
+            den_t, den_MB / den_t / 1024.0
         );
     } else {
         double GFLOPS = h2pack->JIT_flops[1] / 1000000000.0;
         printf(
-            "      |----> Dense block sweep   = %.3lf, %.2lf GFLOPS\n", 
-            h2pack->timers[7], GFLOPS / h2pack->timers[7]
+            "      |----> Dense multiplication        = %.3lf, %.2lf GFLOPS\n", 
+            den_t, GFLOPS / den_t
         );
     }
     printf(
-        "      |----> OpenMP reduction    = %.3lf, %.2lf GB/s\n", 
-        h2pack->timers[8], rd_MB  / h2pack->timers[8] / 1024.0
+        "      |----> OpenMP reduction            = %.3lf, %.2lf GB/s\n", 
+        rdc_t, rdc_MB / rdc_t / 1024.0
     );
-    
-    // Restore the accumulated timings
-    for (int i = 4; i < 9; i++)
-        h2pack->timers[i] *= d_n_matvec;
+
+    if (h2pack->is_HSS == 1)
+    {
+        double ULV_solve_t = timers[_ULV_SLV_TIMER_IDX] / (double) h2pack->n_ULV_solve;
+        printf("  * HSS factorization time (sec) = %.3lf\n", timers[_ULV_FCT_TIMER_IDX]);
+        printf("  * HSS solve average time (sec) = %.3lf\n", ULV_solve_t);
+    }
     
     printf("=============================================================\n");
 }

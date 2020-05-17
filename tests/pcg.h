@@ -110,7 +110,7 @@ void pcg(
         if (res_vec != NULL) res_vec[iter] = r_2norm;
         iter++;
 
-        printf("%e\n", r_2norm / b_2norm);
+        //printf("%e\n", r_2norm / b_2norm);
     }  // End of while
     *flag_   = (r_2norm <= rn_stop) ? 0 : 1;
     *relres_ = r_2norm / b_2norm;

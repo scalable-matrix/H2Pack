@@ -32,6 +32,8 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
     H2P_dense_mat_t *U  = h2pack->U;
     H2P_thread_buf_t *thread_buf = h2pack->tb;
 
+    double st = get_wtime_sec();
+
     int *ULV_Ls;
     H2P_int_vec_t   *ULV_idx;
     H2P_dense_mat_t *ULV_Q, *ULV_L, *U_mid, *D_mid;
@@ -42,9 +44,14 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
     U_mid   = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
     D_mid   = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
     ASSERT_PRINTF(
-        ULV_Ls != NULL && ULV_idx != NULL && ULV_Q != NULL && ULV_L != NULL && U_mid != NULL && D_mid != NULL,
+        ULV_Ls != NULL && ULV_idx != NULL && ULV_Q != NULL && ULV_L != NULL,
         "Failed to allocate matrices for HSS ULV Cholesky factorization\n"
     );
+    ASSERT_PRINTF(
+        U_mid != NULL && D_mid != NULL,
+        "Failed to allocate work matrices for HSS ULV Cholesky factorization\n"
+    );
+    
     for (int i = 0; i < n_node; i++)
     {
         ULV_idx[i] = NULL;
@@ -54,6 +61,7 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
         D_mid[i]   = NULL;
     }
 
+    // Level by level factorization
     int is_SPD = 1;
     for (int i = max_level; i >= 0; i--)
     {
@@ -350,6 +358,22 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
     h2pack->ULV_idx = ULV_idx;
     h2pack->ULV_Q   = ULV_Q;
     h2pack->ULV_L   = ULV_L;
+
+    // Count the total sizes of Q, L, idx matrices
+    size_t ULV_Q_size = 0, ULV_L_size = 0, ULV_I_size = 0;
+    for (int i = 0; i < n_node; i++)
+    {
+        ULV_Q_size += ULV_Q[i]->nrow * ULV_Q[i]->ncol;
+        ULV_L_size += ULV_L[i]->nrow * ULV_L[i]->ncol;
+        ULV_I_size += ULV_idx[i]->length;
+    }
+    ULV_I_size += n_node;
+    h2pack->mat_size[_ULV_Q_SIZE_IDX] = ULV_Q_size;
+    h2pack->mat_size[_ULV_L_SIZE_IDX] = ULV_L_size;
+    h2pack->mat_size[_ULV_I_SIZE_IDX] = ULV_I_size;
+
+    double et = get_wtime_sec();  
+    h2pack->timers[_ULV_FCT_TIMER_IDX] = et - st;
 }
 
 // Solve the linear system A_{HSS} * x = b using the HSS ULV Cholesky factorization
@@ -382,8 +406,9 @@ void H2P_HSS_ULV_Cholesky_solve(H2Pack_t h2pack, const int op, const DTYPE *b, D
     H2P_dense_mat_t  *ULV_L   = h2pack->ULV_L;
     H2P_thread_buf_t *thread_buf = h2pack->tb;
 
+    double st = get_wtime_sec();
+
     memcpy(x, b, sizeof(DTYPE) * h2pack->krnl_mat_size);
-    
     int solve_LT = op & 1;
     if (solve_LT)
     {
@@ -522,4 +547,8 @@ void H2P_HSS_ULV_Cholesky_solve(H2Pack_t h2pack, const int op, const DTYPE *b, D
             }  // End of "#pragma omp parallel"
         }  // End of i loop 
     }  // End of "if (solve_L)"
+
+    double et = get_wtime_sec();
+    h2pack->n_ULV_solve++;
+    h2pack->timers[_ULV_SLV_TIMER_IDX] += et - st;
 }

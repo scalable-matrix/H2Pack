@@ -117,7 +117,7 @@ int main(int argc, char **argv)
     err_norm = DSQRT(err_norm);
     printf("For %d validation points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / ref_norm);
 
-    printf("Constructing SPDHSS from H2\n");
+    printf("\nConstructing SPDHSS from H2\n");
     const int max_rank = 100;
     const DTYPE shift = 0.0;
     H2P_SPDHSS_H2_build(max_rank, shift, h2mat, &hssmat);
@@ -138,15 +138,10 @@ int main(int argc, char **argv)
     printf("||y_{SPDHSS} - y_{H2}||_2 / ||y_{H2}||_2 = %e\n", err_norm / ref_norm);
 
     // Test ULV Cholesky factorization
-    st = get_wtime_sec();
     H2P_HSS_ULV_Cholesky_factorize(hssmat, shift);
-    et = get_wtime_sec();
-    printf("H2P_HSS_ULV_Cholesky_factorize used %.3lf sec\n", et - st);
 
     for (int i = 0; i < test_params.krnl_mat_size; i++) y1[i] += shift * x0[i];
-    st = get_wtime_sec();
     H2P_HSS_ULV_Cholesky_solve(hssmat, 3, y1, x1);
-    et = get_wtime_sec();
     ref_norm = 0.0; 
     err_norm = 0.0;
     for (int i = 0; i < test_params.krnl_mat_size; i++)
@@ -157,12 +152,10 @@ int main(int argc, char **argv)
     }
     ref_norm = DSQRT(ref_norm);
     err_norm = DSQRT(err_norm);
-    printf("H2P_HSS_ULV_Cholesky_solve     used %.3lf sec, relerr = %e\n", et - st, err_norm / ref_norm);
-
-    printf("SPDHSS matrix:\n");
-    H2P_print_statistic(hssmat);
+    printf("H2P_HSS_ULV_Cholesky_solve, relerr = %e\n", err_norm / ref_norm);
 
     // Preconditioned CG test
+    printf("\n");
     for (int i = 0; i < test_params.krnl_mat_size; i++)
     {
         y0[i] = drand48();
@@ -177,12 +170,17 @@ int main(int argc, char **argv)
         H2P_matvec, h2mat, y0, NULL, NULL, x0,
         &flag0, &relres0, &iter0, NULL
     );
+    printf("PCG stopped after %d iterations, relres = %e\n", iter0, relres0);
     printf("Starting PCG solve with SPDHSS preconditioner...\n");
     pcg(
         test_params.krnl_mat_size, 1e-6, 50, 
         H2P_matvec, h2mat, y0, HSS_ULV_Chol_precond, hssmat, x1,
         &flag1, &relres1, &iter1, NULL
     );
+    printf("PCG stopped after %d iterations, relres = %e\n", iter1, relres1);
+
+    printf("\nSPDHSS matrix:\n");
+    H2P_print_statistic(hssmat);
 
     free(x0);
     free(x1);

@@ -389,6 +389,12 @@ void H2P_generate_proxy_point_surface(
     *pp_ = pp;
 }
 
+#define _U_BUILD_KRNL_T_IDX     0
+#define _U_BUILD_QR_T_IDX       1
+#define _U_BUILD_OTHER_T_IDX    2
+#define _U_BUILD_RANDN_T_IDX    3
+#define _U_BUILD_GEMM_T_IDX     4
+
 // Build H2 projection matrices using proxy points
 // Input parameter:
 //   h2pack : H2Pack structure with point partitioning info
@@ -584,11 +590,11 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
             U[i]->ncol = 0;
             U[i]->ld   = 0;
         } else {
-            mat_size[0] += U[i]->nrow * U[i]->ncol;
-            mat_size[3] += U[i]->nrow * U[i]->ncol;
-            mat_size[3] += U[i]->nrow + U[i]->ncol;
-            mat_size[5] += U[i]->nrow * U[i]->ncol;
-            mat_size[5] += U[i]->nrow + U[i]->ncol;
+            mat_size[_U_SIZE_IDX]     += U[i]->nrow * U[i]->ncol;
+            mat_size[_MV_FW_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
+            mat_size[_MV_FW_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
+            mat_size[_MV_BW_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
+            mat_size[_MV_BW_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
         }
         if (J[i] == NULL) H2P_int_vec_init(&J[i], 1);
         if (J_coord[i] == NULL)
@@ -898,11 +904,11 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
             }  // End of j loop
             thread_buf[tid]->timer += get_wtime_sec();
             double *timers = U_timers + tid * 8;
-            timers[0] = krnl_t;
-            timers[1] = randn_t;
-            timers[2] = gemm_t;
-            timers[3] = QR_t;
-            timers[4] = other_t;
+            timers[_U_BUILD_KRNL_T_IDX]  = krnl_t;
+            timers[_U_BUILD_RANDN_T_IDX] = randn_t;
+            timers[_U_BUILD_GEMM_T_IDX]  = gemm_t;
+            timers[_U_BUILD_QR_T_IDX]    = QR_t;
+            timers[_U_BUILD_OTHER_T_IDX] = other_t;
         }  // End of "pragma omp parallel"
         
         #ifdef PROFILING_OUTPUT
@@ -924,7 +930,8 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
             double *timers = U_timers + 8 * tid;
             printf(
                 "%3d, %6.3lf, %6.3lf, %6.3lf, %6.3lf, %6.3lf, %6.3lf\n",
-                tid, timers[0], timers[1], timers[2], timers[3], timers[4], thread_buf[tid]->timer
+                tid, timers[_U_BUILD_KRNL_T_IDX], timers[_U_BUILD_RANDN_T_IDX], timers[_U_BUILD_GEMM_T_IDX], 
+                timers[_U_BUILD_QR_T_IDX], timers[_U_BUILD_OTHER_T_IDX], thread_buf[tid]->timer
             );
         }
         #endif
@@ -940,11 +947,11 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
             U[i]->ncol = 0;
             U[i]->ld   = 0;
         } else {
-            mat_size[0] += U[i]->nrow * U[i]->ncol;
-            mat_size[3] += U[i]->nrow * U[i]->ncol;
-            mat_size[3] += U[i]->nrow + U[i]->ncol;
-            mat_size[5] += U[i]->nrow * U[i]->ncol;
-            mat_size[5] += U[i]->nrow + U[i]->ncol;
+            mat_size[_U_SIZE_IDX]     += U[i]->nrow * U[i]->ncol;
+            mat_size[_MV_FW_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
+            mat_size[_MV_FW_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
+            mat_size[_MV_BW_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
+            mat_size[_MV_BW_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
         }
         if (J[i] == NULL) H2P_int_vec_init(&J[i], 1);
         if (J_coord[i] == NULL)
@@ -1075,14 +1082,14 @@ void H2P_build_B(H2Pack_t h2pack)
         B_pair_v[B_pair_cnt] = -(i + 1);
         B_pair_cnt++;
         // Add Statistic info
-        mat_size[4]  += B_nrow[i] * B_ncol[i];
-        mat_size[4]  += 2 * (B_nrow[i] + B_ncol[i]);
-        JIT_flops[0] += (double)(krnl_bimv_flops) * (double)(node0_npt * node1_npt);
+        mat_size[_MV_MID_SIZE_IDX]  += B_nrow[i] * B_ncol[i];
+        mat_size[_MV_MID_SIZE_IDX]  += 2 * (B_nrow[i] + B_ncol[i]);
+        JIT_flops[_JIT_B_FLOPS_IDX] += (double)(krnl_bimv_flops) * (double)(node0_npt * node1_npt);
     }
     int BD_ntask_thread = (BD_JIT == 1) ? BD_NTASK_THREAD : 1;
     H2P_partition_workload(n_r_adm_pair, B_ptr + 1, B_total_size, n_thread * BD_ntask_thread, B_blk);
     for (int i = 1; i <= n_r_adm_pair; i++) B_ptr[i] += B_ptr[i - 1];
-    mat_size[1] = B_total_size;
+    mat_size[_B_SIZE_IDX] = B_total_size;
 
     h2pack->B_p2i_rowptr = (int*) malloc(sizeof(int) * (n_node + 1));
     h2pack->B_p2i_colidx = (int*) malloc(sizeof(int) * n_r_adm_pair * 2);
@@ -1265,9 +1272,9 @@ void H2P_build_D(H2Pack_t h2pack)
         D_pair_v[D_pair_cnt] = i + 1;
         D_pair_cnt++;
         // Add statistic info
-        mat_size[6] += D_nrow[i] * D_ncol[i];
-        mat_size[6] += D_nrow[i] + D_ncol[i];
-        JIT_flops[1] += (double)(krnl_bimv_flops) * (double)(node_npt * node_npt);
+        mat_size[_MV_DEN_SIZE_IDX]  += D_nrow[i] * D_ncol[i];
+        mat_size[_MV_DEN_SIZE_IDX]  += D_nrow[i] + D_ncol[i];
+        JIT_flops[_JIT_D_FLOPS_IDX] += (double)(krnl_bimv_flops) * (double)(node_npt * node_npt);
     }
     int BD_ntask_thread = (BD_JIT == 1) ? BD_NTASK_THREAD : 1;
     H2P_partition_workload(n_leaf_node, D_ptr + 1, D0_total_size, n_thread * BD_ntask_thread, D_blk0);
@@ -1298,13 +1305,13 @@ void H2P_build_D(H2Pack_t h2pack)
         D_pair_v[D_pair_cnt] = -(ii + 1);
         D_pair_cnt++;
         // Add statistic info
-        mat_size[6] += D_nrow[ii] * D_ncol[ii];
-        mat_size[6] += 2 * (D_nrow[ii] + D_ncol[ii]);
-        JIT_flops[1] += (double)(krnl_bimv_flops) * (double)(node0_npt * node1_npt);
+        mat_size[_MV_DEN_SIZE_IDX]  += D_nrow[ii] * D_ncol[ii];
+        mat_size[_MV_DEN_SIZE_IDX]  += 2 * (D_nrow[ii] + D_ncol[ii]);
+        JIT_flops[_JIT_D_FLOPS_IDX] += (double)(krnl_bimv_flops) * (double)(node0_npt * node1_npt);
     }
     H2P_partition_workload(n_r_inadm_pair, D_ptr + n_leaf_node + 1, D1_total_size, n_thread * BD_ntask_thread, D_blk1);
     for (int i = 1; i <= n_leaf_node + n_r_inadm_pair; i++) D_ptr[i] += D_ptr[i - 1];
-    mat_size[2] = D0_total_size + D1_total_size;
+    mat_size[_D_SIZE_IDX] = D0_total_size + D1_total_size;
     
     h2pack->D_p2i_rowptr = (int*) malloc(sizeof(int) * (n_node + 1));
     h2pack->D_p2i_colidx = (int*) malloc(sizeof(int) * n_Dij_pair);
@@ -1448,18 +1455,18 @@ void H2P_build(
     if (h2pack->is_HSS) H2P_build_HSS_UJ_hybrid(h2pack);
     else H2P_build_H2_UJ_proxy(h2pack);
     et = get_wtime_sec();
-    h2pack->timers[1] = et - st;
+    h2pack->timers[_U_BUILD_TIMER_IDX] = et - st;
 
     // 2. Build generator matrices
     st = get_wtime_sec();
     H2P_build_B(h2pack);
     et = get_wtime_sec();
-    h2pack->timers[2] = et - st;
+    h2pack->timers[_B_BUILD_TIMER_IDX] = et - st;
     
     // 3. Build dense blocks
     st = get_wtime_sec();
     H2P_build_D(h2pack);
     et = get_wtime_sec();
-    h2pack->timers[3] = et - st;
+    h2pack->timers[_D_BUILD_TIMER_IDX] = et - st;
 }
 

@@ -82,10 +82,12 @@ extern "C" {
 #endif
 
 #ifdef USE_AVX
-#ifdef __AVX__
 
 #define SIMD_LEN_S  8
 #define SIMD_LEN_D  4
+
+#ifdef __AVX__
+
 #define vec_f       __m256
 #define vec_d       __m256d
 #define vec_cmp_f   __m256
@@ -365,10 +367,12 @@ static inline __m256d vec_cos_d(__m256d a, __m256d b)
 
 
 #ifdef USE_AVX512
-#ifdef __AVX512F__
 
 #define SIMD_LEN_S  16
 #define SIMD_LEN_D  8
+
+#ifdef __AVX512F__
+
 #define vec_f       __m512
 #define vec_d       __m512d
 #define vec_cmp_f   __mmask16

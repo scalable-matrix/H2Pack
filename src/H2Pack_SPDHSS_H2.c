@@ -1615,15 +1615,23 @@ void H2P_SPDHSS_H2_build(
 
     int n_level = max_level + 1;  // This is the total number of levels
 
+    double st, et, build_U_t = 0.0, build_B_t = 0.0, build_D_t = 0.0;
+
     // 1. Accumulate off-diagonal block row H2 matvec results
+    st = get_wtime_sec();
     int n_vec = max_rank + 10;
     H2P_dense_mat_t *Yk;
     H2P_SPDHSS_H2_acc_matvec(h2mat, n_vec, &Yk);
+    et = get_wtime_sec();
+    build_U_t += et - st;
 
     // 2. Get the new HSS Bij pairs on each level
+    st = get_wtime_sec();
     H2P_int_vec_t *level_HSS_Bij_pairs;
     int n_HSS_Bij_pair;
     H2P_SPDHSS_H2_get_level_HSS_Bij_pairs(h2mat, &level_HSS_Bij_pairs, &n_HSS_Bij_pair);
+    et = get_wtime_sec();
+    build_B_t += et - st;
 
     // 3. Prepare auxiliary matrices
     H2P_dense_mat_t *S     = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
@@ -1677,7 +1685,44 @@ void H2P_SPDHSS_H2_build(
         HSS_D_pair2idx[node] = i;
     }
 
-    // 5. Level by level hierarchical construction
+    // 5. Loop over all leaf nodes to construct new D matrices
+    st = get_wtime_sec();
+    H2P_int_vec_t D_blk0 = h2mat->D_blk0;
+    const int n_D0_blk = D_blk0->length - 1;
+    #pragma omp parallel num_threads(n_thread)
+    {
+        #pragma omp for schedule(dynamic)
+        for (int i_blk0 = 0; i_blk0 < n_D0_blk; i_blk0++)
+        {
+            int D_blk0_s = D_blk0->data[i_blk0];
+            int D_blk0_e = D_blk0->data[i_blk0 + 1];
+            if (i_blk0 >= n_D0_blk)
+            {
+                D_blk0_s = 0;
+                D_blk0_e = 0;
+            }
+            for (int i = D_blk0_s; i < D_blk0_e; i++)
+            {
+                // H2_D_idx  = H2_D_pair2idx(node, node);
+                // HSS_D_idx = HSS_D_pair2idx(node, node);
+                // HSS_D{HSS_D_idx} = H2_D{H2_D_idx} + shift * eye(size(H2_D{H2_D_idx}));
+                int node = leaf_nodes[i];
+                int HSS_D_idx = HSS_D_pair2idx[node];
+                H2P_dense_mat_init(&HSS_D[HSS_D_idx], 8, 8);
+                H2P_dense_mat_t HSS_Dij = HSS_D[HSS_D_idx];
+                H2P_get_Dij_block(h2mat, node, node, HSS_Dij);
+                for (int k = 0; k < HSS_Dij->nrow; k++)
+                {
+                    int idx_kk = k * (HSS_Dij->nrow + 1);
+                    HSS_Dij->data[idx_kk] += shift;
+                }
+            }  // End of i loop
+        }  // End of i_blk0 loop
+    }  // End of pragma omp parallel 
+    et = get_wtime_sec();
+    build_D_t += et - st;
+
+    // 6. Level by level hierarchical construction for U and B matrices
     int is_SPD = 1;
     for (int i = max_level; i >= 1; i--)
     {
@@ -1690,6 +1735,8 @@ void H2P_SPDHSS_H2_build(
         int level_i_HSS_Bij_n_pair = level_HSS_Bij_pairs[i]->length / 2;
         int *level_i_HSS_Bij_pairs = level_HSS_Bij_pairs[i]->data;
         
+        st = get_wtime_sec();
+        // Build new U matrices
         #pragma omp parallel num_threads(n_thread_i)
         {
             int tid = omp_get_thread_num();
@@ -1710,18 +1757,9 @@ void H2P_SPDHSS_H2_build(
                 int info;
                 if (n_child_node == 0)
                 {
-                    // H2_D_idx  = H2_D_pair2idx(node, node);
                     // HSS_D_idx = HSS_D_pair2idx(node, node);
-                    // HSS_D{HSS_D_idx} = H2_D{H2_D_idx} + shift * eye(size(H2_D{H2_D_idx}));
                     int HSS_D_idx = HSS_D_pair2idx[node];
-                    H2P_dense_mat_init(&HSS_D[HSS_D_idx], 8, 8);
                     H2P_dense_mat_t HSS_Dij = HSS_D[HSS_D_idx];
-                    H2P_get_Dij_block(h2mat, node, node, HSS_Dij);
-                    for (int k = 0; k < HSS_Dij->nrow; k++)
-                    {
-                        int idx_kk = k * (HSS_Dij->nrow + 1);
-                        HSS_Dij->data[idx_kk] += shift;
-                    }
                     // [S{node}, chol_flag] = chol(HSS_D{HSS_D_idx}, 'lower');
                     H2P_dense_mat_init(&S[node], HSS_Dij->nrow, HSS_Dij->ncol);
                     H2P_copy_matrix_block(HSS_Dij->nrow, HSS_Dij->ncol, HSS_Dij->data, HSS_Dij->ld, S[node]->data, S[node]->ld);
@@ -2060,7 +2098,14 @@ void H2P_SPDHSS_H2_build(
                     }  // End of "if (H2_U_node->ld > 0)"
                 }  // End of "if (n_child_node == 0)"
             }  // End of j loop
+        }  // End of "#pragma omp parallel"
+        et = get_wtime_sec();
+        build_U_t += et - st;
 
+        st = get_wtime_sec();
+        // Build new B matrices
+        #pragma omp parallel num_threads(n_thread_i)
+        {
             #pragma omp for schedule(dynamic)
             for (int j = 0; j < level_i_HSS_Bij_n_pair; j++)
             {
@@ -2072,10 +2117,15 @@ void H2P_SPDHSS_H2_build(
                 );
             }  // End of j loop
         }  // End of "#pragma omp parallel"
+        et = get_wtime_sec();
+        build_B_t += et - st;
     }  // End of i loop
 
     // 6. Wrap the new SPD HSS matrix
     H2P_SPDHSS_H2_wrap_new_HSS(h2mat, HSS_U, HSS_B, HSS_D, HSS_B_pair2idx, HSS_D_pair2idx, hssmat_);
+    (*hssmat_)->timers[_U_BUILD_TIMER_IDX] = build_U_t;
+    (*hssmat_)->timers[_B_BUILD_TIMER_IDX] = build_B_t;
+    (*hssmat_)->timers[_D_BUILD_TIMER_IDX] = build_D_t;
 
     // 7. Delete intermediate arrays and matrices
     for (int i = 0; i < n_level; i++)

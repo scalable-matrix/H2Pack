@@ -96,13 +96,16 @@ int main(int argc, char **argv)
     // Warm up, reset timers, and test the matvec performance
     H2P_matvec(h2pack, x0, y1);
     h2pack->n_matvec = 0;
-    memset(h2pack->timers + 4, 0, sizeof(double) * 5);
+    h2pack->timers[_MV_FW_TIMER_IDX]  = 0.0;
+    h2pack->timers[_MV_MID_TIMER_IDX] = 0.0;
+    h2pack->timers[_MV_BW_TIMER_IDX]  = 0.0;
+    h2pack->timers[_MV_DEN_TIMER_IDX] = 0.0;
+    h2pack->timers[_MV_RDC_TIMER_IDX] = 0.0;
     //__itt_resume();
     for (int i = 0; i < 10; i++) 
         H2P_matvec(h2pack, x0, y1);
     //__itt_pause();
     
-    H2P_print_statistic(h2pack);
     
     // Verify HSS matvec results
     DTYPE ref_norm = 0.0, err_norm = 0.0;
@@ -118,15 +121,15 @@ int main(int argc, char **argv)
     
     // Test ULV Cholesky factorization
     const DTYPE shift = 0;
-    st = get_wtime_sec();
     H2P_HSS_ULV_Cholesky_factorize(h2pack, shift);
-    et = get_wtime_sec();
-    printf("H2P_HSS_ULV_Cholesky_factorize used %.3lf sec\n", et - st);
 
     for (int i = 0; i < test_params.krnl_mat_size; i++) y1[i] += shift * x0[i];
-    st = get_wtime_sec();
+    // Warm up, reset timers, and test the ULV solve performance
     H2P_HSS_ULV_Cholesky_solve(h2pack, 3, y1, x1);
-    et = get_wtime_sec();
+    h2pack->n_ULV_solve = 0;
+    h2pack->timers[_ULV_SLV_TIMER_IDX] = 0.0;
+    for (int i = 0; i < 10; i++) 
+         H2P_HSS_ULV_Cholesky_solve(h2pack, 3, y1, x1);
     ref_norm = 0.0; 
     err_norm = 0.0;
     for (int i = 0; i < test_params.krnl_mat_size; i++)
@@ -137,7 +140,9 @@ int main(int argc, char **argv)
     }
     ref_norm = DSQRT(ref_norm);
     err_norm = DSQRT(err_norm);
-    printf("H2P_HSS_ULV_Cholesky_solve     used %.3lf sec, relerr = %e\n", et - st, err_norm / ref_norm);
+    printf("H2P_HSS_ULV_Cholesky_solve relerr = %e\n",  err_norm / ref_norm);
+
+    H2P_print_statistic(h2pack);
 
     free(x0);
     free(x1);

@@ -24,7 +24,7 @@ void H2P_generate_proxy_point_ID(
 {   
     // 1. Initialize proxy point arrays
     H2P_dense_mat_t *pp = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * (max_level + 1));
-    assert(pp != NULL);
+    ASSERT_PRINTF(pp != NULL, "Failed to allocate %d H2P_dense_mat structues for storing proxy points", max_level + 1);
     for (int i = 0; i <= max_level; i++) pp[i] = NULL;
     
     // 2. Initialize temporary arrays. The numbers of Nx and Ny points are empirical values
@@ -286,7 +286,7 @@ void H2P_generate_proxy_point_surface(
     }
     
     H2P_dense_mat_t *pp = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * (max_level + 1));
-    assert(pp != NULL);
+    ASSERT_PRINTF(pp != NULL, "Failed to allocate %d H2P_dense_mat structues for storing proxy points", max_level + 1);
     for (int i = 0; i <= max_level; i++) pp[i] = NULL;
     
     int npts_axis, npts;
@@ -295,11 +295,11 @@ void H2P_generate_proxy_point_surface(
         npts_axis = (min_npts + 3) / 4;
         npts = npts_axis * 4;
     } else {
-        double n_point_face = (double) min_npts / 6.0;
+        DTYPE n_point_face = (DTYPE) min_npts / 6.0;
         npts_axis = (int) ceil(sqrt(n_point_face));
         npts = npts_axis * npts_axis * 6;
     }
-    double h = 2.0 / (double) (npts_axis + 1);
+    DTYPE h = 2.0 / (DTYPE) npts_axis;
     
     // Generate proxy points on the surface of [-1,1]^pt_dim box
     H2P_dense_mat_t unit_pp;
@@ -312,10 +312,10 @@ void H2P_generate_proxy_point_surface(
         DTYPE *z = unit_pp->data + npts * 2;
         for (int i = 0; i < npts_axis; i++)
         {
-            double h_i = h * (i + 1) - 1.0;
+            DTYPE h_i = h * ((DTYPE) i + 0.5) - 1.0;
             for (int j = 0; j < npts_axis; j++)
             {
-                double h_j = h * (j + 1) - 1.0;
+                DTYPE h_j = h * ((DTYPE) j + 0.5) - 1.0;
                 
                 x[index + 0] = h_i;
                 y[index + 0] = h_j;
@@ -351,7 +351,7 @@ void H2P_generate_proxy_point_surface(
         DTYPE *y = unit_pp->data + npts;
         for (int i = 0; i < npts_axis; i++)
         {
-            double h_i = h * (i + 1) - 1.0;
+            DTYPE h_i = h * ((DTYPE) i + 0.5) - 1.0;
             
             x[index + 0] = h_i;
             y[index + 0] = -1.0;
@@ -364,6 +364,8 @@ void H2P_generate_proxy_point_surface(
             
             x[index + 3] = 1.0;
             y[index + 3] = h_i;
+
+            index += 4;
         }
     }  // End of "if (pt_dim == 2)"
     
@@ -386,6 +388,12 @@ void H2P_generate_proxy_point_surface(
     H2P_dense_mat_destroy(unit_pp);
     *pp_ = pp;
 }
+
+#define _U_BUILD_KRNL_T_IDX     0
+#define _U_BUILD_QR_T_IDX       1
+#define _U_BUILD_OTHER_T_IDX    2
+#define _U_BUILD_RANDN_T_IDX    3
+#define _U_BUILD_GEMM_T_IDX     4
 
 // Build H2 projection matrices using proxy points
 // Input parameter:
@@ -425,7 +433,9 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
     h2pack->U       = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
     h2pack->J       = (H2P_int_vec_t*)   malloc(sizeof(H2P_int_vec_t)   * n_node);
     h2pack->J_coord = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
-    assert(h2pack->U != NULL && h2pack->J != NULL && h2pack->J_coord != NULL);
+    ASSERT_PRINTF(h2pack->U       != NULL, "Failed to allocate %d U matrices\n", n_node);
+    ASSERT_PRINTF(h2pack->J       != NULL, "Failed to allocate %d J matrices\n", n_node);
+    ASSERT_PRINTF(h2pack->J_coord != NULL, "Failed to allocate %d J_coord auxiliary matrices\n", n_node);
     for (int i = 0; i < h2pack->n_UJ; i++)
     {
         h2pack->U[i]       = NULL;
@@ -580,11 +590,11 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
             U[i]->ncol = 0;
             U[i]->ld   = 0;
         } else {
-            mat_size[0] += U[i]->nrow * U[i]->ncol;
-            mat_size[3] += U[i]->nrow * U[i]->ncol;
-            mat_size[3] += U[i]->nrow + U[i]->ncol;
-            mat_size[5] += U[i]->nrow * U[i]->ncol;
-            mat_size[5] += U[i]->nrow + U[i]->ncol;
+            mat_size[_U_SIZE_IDX]     += U[i]->nrow * U[i]->ncol;
+            mat_size[_MV_FW_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
+            mat_size[_MV_FW_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
+            mat_size[_MV_BW_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
+            mat_size[_MV_BW_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
         }
         if (J[i] == NULL) H2P_int_vec_init(&J[i], 1);
         if (J_coord[i] == NULL)
@@ -647,7 +657,9 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
     h2pack->U       = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
     h2pack->J       = (H2P_int_vec_t*)   malloc(sizeof(H2P_int_vec_t)   * n_node);
     h2pack->J_coord = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
-    assert(h2pack->U != NULL && h2pack->J != NULL && h2pack->J_coord != NULL);
+    ASSERT_PRINTF(h2pack->U       != NULL, "Failed to allocate %d U matrices\n", n_node);
+    ASSERT_PRINTF(h2pack->J       != NULL, "Failed to allocate %d J matrices\n", n_node);
+    ASSERT_PRINTF(h2pack->J_coord != NULL, "Failed to allocate %d J_coord auxiliary matrices\n", n_node);
     for (int i = 0; i < h2pack->n_UJ; i++)
     {
         h2pack->U[i]       = NULL;
@@ -745,16 +757,11 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                     for (int k = 0; k < n_r_inadm; k++)
                     {
                         int inadm_node_k = inadm_list[k];
-                        if (J[inadm_node_k] == NULL)
-                        {
-                            int k_level = node_level[k];
-                            printf(
-                                "[FATAL] Node %3d (lvl %2d): near field node %3d (lvl %2d) skeleton point not ready!\n",
-                                node, level, inadm_node_k, k_level
-                            );
-                            fflush(stdout);
-                        }
-                        assert(J[inadm_node_k] != NULL);
+                        ASSERT_PRINTF(
+                            J[inadm_node_k] != NULL,
+                            "Node %3d (level %2d): inadmissible node %3d (level %2d) skeleton point not ready!\n",
+                            node, level, inadm_node_k, node_level[k]
+                        );
                         H2P_int_vec_concatenate(inadm_skel_idx, J[inadm_node_k]);
                     }
                     inadm_skel_npt = inadm_skel_idx->length;
@@ -897,11 +904,11 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
             }  // End of j loop
             thread_buf[tid]->timer += get_wtime_sec();
             double *timers = U_timers + tid * 8;
-            timers[0] = krnl_t;
-            timers[1] = randn_t;
-            timers[2] = gemm_t;
-            timers[3] = QR_t;
-            timers[4] = other_t;
+            timers[_U_BUILD_KRNL_T_IDX]  = krnl_t;
+            timers[_U_BUILD_RANDN_T_IDX] = randn_t;
+            timers[_U_BUILD_GEMM_T_IDX]  = gemm_t;
+            timers[_U_BUILD_QR_T_IDX]    = QR_t;
+            timers[_U_BUILD_OTHER_T_IDX] = other_t;
         }  // End of "pragma omp parallel"
         
         #ifdef PROFILING_OUTPUT
@@ -923,7 +930,8 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
             double *timers = U_timers + 8 * tid;
             printf(
                 "%3d, %6.3lf, %6.3lf, %6.3lf, %6.3lf, %6.3lf, %6.3lf\n",
-                tid, timers[0], timers[1], timers[2], timers[3], timers[4], thread_buf[tid]->timer
+                tid, timers[_U_BUILD_KRNL_T_IDX], timers[_U_BUILD_RANDN_T_IDX], timers[_U_BUILD_GEMM_T_IDX], 
+                timers[_U_BUILD_QR_T_IDX], timers[_U_BUILD_OTHER_T_IDX], thread_buf[tid]->timer
             );
         }
         #endif
@@ -939,11 +947,11 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
             U[i]->ncol = 0;
             U[i]->ld   = 0;
         } else {
-            mat_size[0] += U[i]->nrow * U[i]->ncol;
-            mat_size[3] += U[i]->nrow * U[i]->ncol;
-            mat_size[3] += U[i]->nrow + U[i]->ncol;
-            mat_size[5] += U[i]->nrow * U[i]->ncol;
-            mat_size[5] += U[i]->nrow + U[i]->ncol;
+            mat_size[_U_SIZE_IDX]     += U[i]->nrow * U[i]->ncol;
+            mat_size[_MV_FW_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
+            mat_size[_MV_FW_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
+            mat_size[_MV_BW_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
+            mat_size[_MV_BW_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
         }
         if (J[i] == NULL) H2P_int_vec_init(&J[i], 1);
         if (J_coord[i] == NULL)
@@ -1005,13 +1013,19 @@ void H2P_build_B(H2Pack_t h2pack)
     int    *B_nrow = h2pack->B_nrow;
     int    *B_ncol = h2pack->B_ncol;
     size_t *B_ptr  = h2pack->B_ptr;
-    assert(h2pack->B_nrow != NULL && h2pack->B_ncol != NULL && h2pack->B_ptr != NULL);
+    ASSERT_PRINTF(
+        h2pack->B_nrow != NULL && h2pack->B_ncol != NULL && h2pack->B_ptr != NULL,
+        "Failed to allocate %d B matrices infomation array\n", n_r_adm_pair
+    );
 
     int B_pair_cnt = 0;
-    int *B_pair_i = (int*) malloc(sizeof(int) * h2pack->n_B * 2);
-    int *B_pair_j = (int*) malloc(sizeof(int) * h2pack->n_B * 2);
-    int *B_pair_v = (int*) malloc(sizeof(int) * h2pack->n_B * 2);
-    assert(B_pair_i != NULL && B_pair_j != NULL && B_pair_v != NULL);
+    int *B_pair_i = (int*) malloc(sizeof(int) * n_r_adm_pair * 2);
+    int *B_pair_j = (int*) malloc(sizeof(int) * n_r_adm_pair * 2);
+    int *B_pair_v = (int*) malloc(sizeof(int) * n_r_adm_pair * 2);
+    ASSERT_PRINTF(
+        B_pair_i != NULL && B_pair_j != NULL && B_pair_v != NULL,
+        "Failed to allocate working buffer for B matrices indexing\n"
+    );
     
     // 2. Partition B matrices into multiple blocks s.t. each block has approximately
     //    the same workload (total size of B matrices in a block)
@@ -1019,7 +1033,10 @@ void H2P_build_B(H2Pack_t h2pack)
     size_t B_total_size = 0;
     H2P_int_vec_t *J = h2pack->J;
     h2pack->node_n_r_adm = (int*) malloc(sizeof(int) * n_node);
-    assert(h2pack->node_n_r_adm != NULL);
+    ASSERT_PRINTF(
+        h2pack->node_n_r_adm != NULL, 
+        "Failed to allocate array of size %d for counting node admissible pairs\n", n_node
+    );
     int *node_n_r_adm = h2pack->node_n_r_adm;
     memset(node_n_r_adm, 0, sizeof(int) * n_node);
     for (int i = 0; i < n_r_adm_pair; i++)
@@ -1060,32 +1077,40 @@ void H2P_build_B(H2Pack_t h2pack)
         B_pair_j[B_pair_cnt] = node1;
         B_pair_v[B_pair_cnt] = i + 1;
         B_pair_cnt++;
+        B_pair_i[B_pair_cnt] = node1;
+        B_pair_j[B_pair_cnt] = node0;
+        B_pair_v[B_pair_cnt] = -(i + 1);
+        B_pair_cnt++;
         // Add Statistic info
-        mat_size[4]  += B_nrow[i] * B_ncol[i];
-        mat_size[4]  += 2 * (B_nrow[i] + B_ncol[i]);
-        JIT_flops[0] += (double)(krnl_bimv_flops) * (double)(node0_npt * node1_npt);
+        mat_size[_MV_MID_SIZE_IDX]  += B_nrow[i] * B_ncol[i];
+        mat_size[_MV_MID_SIZE_IDX]  += 2 * (B_nrow[i] + B_ncol[i]);
+        JIT_flops[_JIT_B_FLOPS_IDX] += (double)(krnl_bimv_flops) * (double)(node0_npt * node1_npt);
     }
     int BD_ntask_thread = (BD_JIT == 1) ? BD_NTASK_THREAD : 1;
     H2P_partition_workload(n_r_adm_pair, B_ptr + 1, B_total_size, n_thread * BD_ntask_thread, B_blk);
     for (int i = 1; i <= n_r_adm_pair; i++) B_ptr[i] += B_ptr[i - 1];
-    mat_size[1] = B_total_size;
+    mat_size[_B_SIZE_IDX] = B_total_size;
 
     h2pack->B_p2i_rowptr = (int*) malloc(sizeof(int) * (n_node + 1));
-    h2pack->B_p2i_colidx = (int*) malloc(sizeof(int) * h2pack->n_B * 2);
-    h2pack->B_p2i_val    = (int*) malloc(sizeof(int) * h2pack->n_B * 2);
-    assert(h2pack->B_p2i_rowptr != NULL);
-    assert(h2pack->B_p2i_colidx != NULL);
-    assert(h2pack->B_p2i_val    != NULL);
+    h2pack->B_p2i_colidx = (int*) malloc(sizeof(int) * n_r_adm_pair * 2);
+    h2pack->B_p2i_val    = (int*) malloc(sizeof(int) * n_r_adm_pair * 2);
+    ASSERT_PRINTF(h2pack->B_p2i_rowptr != NULL, "Failed to allocate arrays for B matrices indexing\n");
+    ASSERT_PRINTF(h2pack->B_p2i_colidx != NULL, "Failed to allocate arrays for B matrices indexing\n");
+    ASSERT_PRINTF(h2pack->B_p2i_val    != NULL, "Failed to allocate arrays for B matrices indexing\n");
     H2P_int_COO_to_CSR(
         n_node, B_pair_cnt, B_pair_i, B_pair_j, B_pair_v, 
         h2pack->B_p2i_rowptr, h2pack->B_p2i_colidx, h2pack->B_p2i_val
     );
 
+    free(B_pair_i);
+    free(B_pair_j);
+    free(B_pair_v);
+
     if (BD_JIT == 1) return;
 
     // 3. Generate B matrices
     h2pack->B_data = (DTYPE*) malloc_aligned(sizeof(DTYPE) * B_total_size, 64);
-    assert(h2pack->B_data != NULL);
+    ASSERT_PRINTF(h2pack->B_data != NULL, "Failed to allocate space for storing all %zu B matrices elements\n", B_total_size);
     DTYPE *B_data = h2pack->B_data;
     const int n_B_blk = B_blk->length - 1;
     #pragma omp parallel num_threads(n_thread)
@@ -1211,13 +1236,20 @@ void H2P_build_D(H2Pack_t h2pack)
     int    *D_nrow = h2pack->D_nrow;
     int    *D_ncol = h2pack->D_ncol;
     size_t *D_ptr  = h2pack->D_ptr;
-    assert(h2pack->D_nrow != NULL && h2pack->D_ncol != NULL && h2pack->D_ptr != NULL);
+    ASSERT_PRINTF(
+        h2pack->D_nrow != NULL && h2pack->D_ncol != NULL && h2pack->D_ptr != NULL,
+        "Failed to allocate %d D matrices infomation array\n", h2pack->n_D
+    );
 
     int D_pair_cnt = 0;
-    int *D_pair_i = (int*) malloc(sizeof(int) * h2pack->n_D * 2);
-    int *D_pair_j = (int*) malloc(sizeof(int) * h2pack->n_D * 2);
-    int *D_pair_v = (int*) malloc(sizeof(int) * h2pack->n_D * 2);
-    assert(D_pair_i != NULL && D_pair_j != NULL && D_pair_v != NULL);
+    int n_Dij_pair = n_leaf_node + 2 * n_r_inadm_pair;
+    int *D_pair_i = (int*) malloc(sizeof(int) * n_Dij_pair);
+    int *D_pair_j = (int*) malloc(sizeof(int) * n_Dij_pair);
+    int *D_pair_v = (int*) malloc(sizeof(int) * n_Dij_pair);
+    ASSERT_PRINTF(
+        D_pair_i != NULL && D_pair_j != NULL && D_pair_v != NULL,
+        "Failed to allocate working buffer for D matrices indexing\n"
+    );
     
     // 2. Partition D matrices into multiple blocks s.t. each block has approximately
     //    the same workload (total size of D matrices in a block)
@@ -1240,9 +1272,9 @@ void H2P_build_D(H2Pack_t h2pack)
         D_pair_v[D_pair_cnt] = i + 1;
         D_pair_cnt++;
         // Add statistic info
-        mat_size[6] += D_nrow[i] * D_ncol[i];
-        mat_size[6] += D_nrow[i] + D_ncol[i];
-        JIT_flops[1] += (double)(krnl_bimv_flops) * (double)(node_npt * node_npt);
+        mat_size[_MV_DEN_SIZE_IDX]  += D_nrow[i] * D_ncol[i];
+        mat_size[_MV_DEN_SIZE_IDX]  += D_nrow[i] + D_ncol[i];
+        JIT_flops[_JIT_D_FLOPS_IDX] += (double)(krnl_bimv_flops) * (double)(node_npt * node_npt);
     }
     int BD_ntask_thread = (BD_JIT == 1) ? BD_NTASK_THREAD : 1;
     H2P_partition_workload(n_leaf_node, D_ptr + 1, D0_total_size, n_thread * BD_ntask_thread, D_blk0);
@@ -1268,30 +1300,41 @@ void H2P_build_D(H2Pack_t h2pack)
         D_pair_j[D_pair_cnt] = node1;
         D_pair_v[D_pair_cnt] = ii + 1;
         D_pair_cnt++;
+        D_pair_i[D_pair_cnt] = node1;
+        D_pair_j[D_pair_cnt] = node0;
+        D_pair_v[D_pair_cnt] = -(ii + 1);
+        D_pair_cnt++;
         // Add statistic info
-        mat_size[6] += D_nrow[ii] * D_ncol[ii];
-        mat_size[6] += 2 * (D_nrow[ii] + D_ncol[ii]);
-        JIT_flops[1] += (double)(krnl_bimv_flops) * (double)(node0_npt * node1_npt);
+        mat_size[_MV_DEN_SIZE_IDX]  += D_nrow[ii] * D_ncol[ii];
+        mat_size[_MV_DEN_SIZE_IDX]  += 2 * (D_nrow[ii] + D_ncol[ii]);
+        JIT_flops[_JIT_D_FLOPS_IDX] += (double)(krnl_bimv_flops) * (double)(node0_npt * node1_npt);
     }
     H2P_partition_workload(n_r_inadm_pair, D_ptr + n_leaf_node + 1, D1_total_size, n_thread * BD_ntask_thread, D_blk1);
     for (int i = 1; i <= n_leaf_node + n_r_inadm_pair; i++) D_ptr[i] += D_ptr[i - 1];
-    mat_size[2] = D0_total_size + D1_total_size;
+    mat_size[_D_SIZE_IDX] = D0_total_size + D1_total_size;
     
     h2pack->D_p2i_rowptr = (int*) malloc(sizeof(int) * (n_node + 1));
-    h2pack->D_p2i_colidx = (int*) malloc(sizeof(int) * h2pack->n_D * 2);
-    h2pack->D_p2i_val    = (int*) malloc(sizeof(int) * h2pack->n_D * 2);
-    assert(h2pack->D_p2i_rowptr != NULL);
-    assert(h2pack->D_p2i_colidx != NULL);
-    assert(h2pack->D_p2i_val    != NULL);
+    h2pack->D_p2i_colidx = (int*) malloc(sizeof(int) * n_Dij_pair);
+    h2pack->D_p2i_val    = (int*) malloc(sizeof(int) * n_Dij_pair);
+    ASSERT_PRINTF(h2pack->D_p2i_rowptr != NULL, "Failed to allocate arrays for D matrices indexing\n");
+    ASSERT_PRINTF(h2pack->D_p2i_colidx != NULL, "Failed to allocate arrays for D matrices indexing\n");
+    ASSERT_PRINTF(h2pack->D_p2i_val    != NULL, "Failed to allocate arrays for D matrices indexing\n");
     H2P_int_COO_to_CSR(
         n_node, D_pair_cnt, D_pair_i, D_pair_j, D_pair_v, 
         h2pack->D_p2i_rowptr, h2pack->D_p2i_colidx, h2pack->D_p2i_val
     );
 
+    free(D_pair_i);
+    free(D_pair_j);
+    free(D_pair_v);
+
     if (BD_JIT == 1) return;
     
     h2pack->D_data = (DTYPE*) malloc_aligned(sizeof(DTYPE) * (D0_total_size + D1_total_size), 64);
-    assert(h2pack->D_data != NULL);
+    ASSERT_PRINTF(
+        h2pack->D_data != NULL, 
+        "Failed to allocate space for storing all %zu D matrices elements\n", D0_total_size + D1_total_size
+    );
     DTYPE *D_data = h2pack->D_data;
     const int n_D0_blk = D_blk0->length - 1;
     const int n_D1_blk = D_blk1->length - 1;
@@ -1412,18 +1455,18 @@ void H2P_build(
     if (h2pack->is_HSS) H2P_build_HSS_UJ_hybrid(h2pack);
     else H2P_build_H2_UJ_proxy(h2pack);
     et = get_wtime_sec();
-    h2pack->timers[1] = et - st;
+    h2pack->timers[_U_BUILD_TIMER_IDX] = et - st;
 
     // 2. Build generator matrices
     st = get_wtime_sec();
     H2P_build_B(h2pack);
     et = get_wtime_sec();
-    h2pack->timers[2] = et - st;
+    h2pack->timers[_B_BUILD_TIMER_IDX] = et - st;
     
     // 3. Build dense blocks
     st = get_wtime_sec();
     H2P_build_D(h2pack);
     et = get_wtime_sec();
-    h2pack->timers[3] = et - st;
+    h2pack->timers[_D_BUILD_TIMER_IDX] = et - st;
 }
 

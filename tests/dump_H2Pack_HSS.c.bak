@@ -1,0 +1,54 @@
+void dump_H2Pack_HSS(H2Pack_t h2pack)
+{
+    FILE *ouf;
+
+    int n_node = h2pack->n_node;
+    int HSS_n_r_adm_pair = h2pack->HSS_n_r_adm_pair;
+    int n_leaf_node = h2pack->n_leaf_node;
+    H2P_dense_mat_t *U = h2pack->U;
+    DTYPE *B_data = h2pack->B_data;
+    DTYPE *D_data = h2pack->D_data;
+    int *B_nrow = h2pack->B_nrow;
+    int *B_ncol = h2pack->B_ncol;
+    int *D_nrow = h2pack->D_nrow;
+    int *D_ncol = h2pack->D_ncol;
+    size_t *mat_size = h2pack->mat_size;
+
+    ouf = fopen("add_U_sizes.m", "w");
+    fprintf(ouf, "U_sizes = [\n");
+    for (int i = 0; i < n_node; i++)
+        fprintf(ouf, "%d %d\n", U[i]->nrow, U[i]->ncol);
+    fprintf(ouf, "];\n");
+    fclose(ouf);
+
+    ouf = fopen("add_B_sizes.m", "w");
+    fprintf(ouf, "B_sizes = [\n");
+    for (int i = 0; i < HSS_n_r_adm_pair; i++)
+        fprintf(ouf, "%d %d\n", B_nrow[i], B_ncol[i]);
+    fprintf(ouf, "];\n");
+    fclose(ouf);
+
+    ouf = fopen("add_D_sizes.m", "w");
+    fprintf(ouf, "D_sizes = [\n");
+    for (int i = 0; i < n_leaf_node; i++)
+        fprintf(ouf, "%d %d\n", D_nrow[i], D_ncol[i]);
+    fprintf(ouf, "];\n");
+    fclose(ouf);
+
+    ouf = fopen("coord.dat", "wb");
+    fwrite(h2pack->coord, sizeof(DTYPE), h2pack->n_point * h2pack->pt_dim, ouf);
+    fclose(ouf);
+
+    ouf = fopen("U_mats.bin", "wb");
+    for (int i = 0; i < n_node; i++)
+        fwrite(U[i]->data, sizeof(DTYPE), U[i]->nrow * U[i]->ncol, ouf);
+    fclose(ouf);
+
+    ouf = fopen("B_mats.bin", "wb");
+    fwrite(B_data, sizeof(DTYPE), mat_size[1], ouf);
+    fclose(ouf);
+
+    ouf = fopen("D_mats.bin", "wb");
+    fwrite(D_data, sizeof(DTYPE), mat_size[2], ouf);
+    fclose(ouf);
+}

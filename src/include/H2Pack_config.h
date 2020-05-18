@@ -24,9 +24,11 @@
 #define CBLAS_GER        cblas_dger     // CBLAS matrix rank-1 update
 #define CBLAS_TRSM       cblas_dtrsm    // CBLAS triangle solve
 #define LAPACK_GEQRF     LAPACKE_dgeqrf // LAPACK QR factorization
+#define LAPACK_ORGQR     LAPACKE_dorgqr // LAPACK QR Q matrix explicitly construction
 #define LAPACK_ORMQR     LAPACKE_dormqr // LAPACK QR Q matrix multiples another matrix
 #define LAPACK_POTRF     LAPACKE_dpotrf // LAPACK Cholesky factorization
 #define LAPACK_POTRS     LAPACKE_dpotrs // LAPACK linear system solve using Cholesky factorization
+#define LAPACK_SYEVD     LAPACKE_dsyevd // LAPACK eigenvalue decomposition
 #define N_DTYPE_64B      8              // 8 double == 64 bytes, for alignment
 #define SIMD_LEN         SIMD_LEN_D     // SIMD vector length
 
@@ -48,9 +50,11 @@
 #define CBLAS_GER        cblas_sger
 #define CBLAS_TRSM       cblas_strsm
 #define LAPACK_GEQRF     LAPACKE_sgeqrf
+#define LAPACK_ORGQR     LAPACKE_sorgqr
 #define LAPACK_ORMQR     LAPACKE_sormqr
 #define LAPACK_POTRF     LAPACKE_spotrf
 #define LAPACK_POTRS     LAPACKE_spotrs
+#define LAPACK_SYEVD     LAPACKE_ssyevd
 #define N_DTYPE_64B      16
 #define SIMD_LEN         SIMD_LEN_S
 

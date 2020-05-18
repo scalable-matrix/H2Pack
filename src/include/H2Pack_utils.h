@@ -141,15 +141,26 @@ void H2P_int_COO_to_CSR(
     const int *val, int *row_ptr, int *col_idx, int *val_
 );
 
-// Get element A(row, col) from CSR matrix A
+// Get the value of integer CSR matrix element A(row, col)
 // Input parameters:
-//   row_ptr, col_idx, val : CSR matrix arrays
-//   row, col : Target position
+//   row_ptr, col_idx, val : CSR matrix array triple
+//   row, col              : Target position
 // Output parameter:
 //   <return> : A(row, col) if exists, 0 if not
 int H2P_get_int_CSR_elem(
     const int *row_ptr, const int *col_idx, const int *val,
     const int row, const int col
+);
+
+// Set the value of integer CSR matrix element A(row, col) to new_val
+// Input parameters:
+//   row_ptr, col_idx, val : CSR matrix array triple
+//   row, col, new_val     : Target position and new value
+// Output parameter:
+//   val : Updated CSR matrix element value array
+void H2P_set_int_CSR_elem(
+    const int *row_ptr, const int *col_idx, int *val,
+    const int row, const int col, const int new_val
 );
 
 // Get B{node0, node1} from a H2Pack structure

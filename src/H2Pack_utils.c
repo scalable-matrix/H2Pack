@@ -256,7 +256,7 @@ void H2P_int_COO_to_CSR(
         qsort_int_key_val(col_idx, val_, row_ptr[i], row_ptr[i + 1] - 1);
 }
 
-// Get element A(row, col) from integer CSR matrix A
+// Get the value of integer CSR matrix element A(row, col)
 int H2P_get_int_CSR_elem(
     const int *row_ptr, const int *col_idx, const int *val,
     const int row, const int col
@@ -272,6 +272,25 @@ int H2P_get_int_CSR_elem(
         }
     }
     return res;
+}
+
+// Set the value of integer CSR matrix element A(row, col) to new_val
+void H2P_set_int_CSR_elem(
+    const int *row_ptr, const int *col_idx, int *val,
+    const int row, const int col, const int new_val
+)
+{
+    int has_element = 0;
+    for (int i = row_ptr[row]; i < row_ptr[row + 1]; i++)
+    {
+        if (col_idx[i] == col) 
+        {
+            val[i] = new_val;
+            has_element = 1;
+            break;
+        }
+    }
+    if (has_element == 0) ERROR_PRINTF("CSR matrix element (%d, %d) not found, cannot be updated\n", row, col);
 }
 
 // Get B{node0, node1} from a H2Pack structure

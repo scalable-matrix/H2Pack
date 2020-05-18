@@ -97,7 +97,7 @@ void H2P_build_explicit_U(H2Pack_t h2pack, H2P_dense_mat_t **exU_)
 // Input parameters:
 //   parent     : Size n_node, parent of each node
 //   node_level : Size n_node, level of each node
-//   n_level    : Total number of levels (max_level + 1 if root is level 0)
+//   n_level    : Total number of levels (max_level+1 since root is level 0)
 //   node{0, 1} : Target node pair
 //   work       : Work buffer, size >= 2 * n_level
 int H2P_tree_common_ancestor_level(
@@ -248,7 +248,6 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_t h2mat, const int n_vec, H2P_dense_mat_t *
     //    Yk{i} += Aij  * vec_j
     //    Yk{j} += Aij' * vec_i
     // Yk{i/j} are stored in the corresponding columns of the actual Yk
-    // TODO: use B_blk / D_blk for task partition
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
@@ -479,43 +478,35 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_t h2mat, const int n_vec, H2P_dense_mat_t *
     *Yk_ = Yk;
 }
 
-// TODO: HSS_B_pair2idx should be replaced by a CSR matrix
-
 // Gather matrices in HSS_B into a large matrix tmpB s.t. the i-th row j-th column 
 // block of tmpB is HSS_B[HSS_B_pair2idx(blk0[i], blk1[j])]
 // Input parameters:
 //   n_blk{0, 1}    : Number of row & column blocks
 //   blk{0, 1}      : Node indices of row & column blocks
-//   HSS_B          : Source HSS_B matrices
 //   n_node         : Number of nodes
-//   HSS_B_pair2idx : Size n_node * n_node, convert (blk0[i], blk1[j]) to an index
+//   HSS_B_p2i_{*}  : CSR matrix array triple, convert (i, j) pair to an index for HSS_B
+//   HSS_B          : Source HSS_B matrices
 // Output parameter:
 //   tmpB : Result matrix
 void H2P_SPDHSS_H2_gather_HSS_B(
-    const int n_blk0, const int n_blk1, const int *blk0, const int *blk1, 
-    H2P_dense_mat_t *HSS_B, const int n_node, const int *HSS_B_pair2idx, 
-    H2P_dense_mat_t tmpB
+    const int n_blk0, const int n_blk1, const int *blk0, const int *blk1, const int n_node, 
+    const int *HSS_B_p2i_rowptr, const int *HSS_B_p2i_colidx, const int *HSS_B_p2i_val,
+    H2P_dense_mat_t *HSS_B, H2P_dense_mat_t tmpB
 )
 {
     int nrow = 0, ncol = 0;
-    int B_idx_00 = HSS_B_pair2idx[blk0[0] * n_node + blk1[0]];
-    if (B_idx_00 == -1)
-    {
-        ERROR_PRINTF("SPDHSS_B{%d, %d} does not exist!\n", blk0[0], blk1[0]);
-        return;
-    }
+    int B_idx_00 = H2P_get_int_CSR_elem(HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, blk0[0], blk1[0]);
+    ASSERT_PRINTF(B_idx_00 > 0, "SPDHSS_B{%d, %d} does not exist!\n", blk0[0], blk1[0]);
+    B_idx_00--;
     int nrow0 = HSS_B[B_idx_00]->nrow;
     int ncol0 = HSS_B[B_idx_00]->ncol;
     
     // Count the total number of rows
     for (int i = 0; i < n_blk0; i++)
     {
-        int B_idx_i0 = HSS_B_pair2idx[blk0[i] * n_node + blk1[0]];
-        if (B_idx_i0 == -1)
-        {
-            ERROR_PRINTF("SPDHSS_B{%d, %d} does not exist!\n", blk0[i], blk1[0]);
-            return;
-        }
+        int B_idx_i0 = H2P_get_int_CSR_elem(HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, blk0[i], blk1[0]);
+        ASSERT_PRINTF(B_idx_i0 > 0, "SPDHSS_B{%d, %d} does not exist!\n", blk0[i], blk1[0]);
+        B_idx_i0--;
         if (HSS_B[B_idx_i0]->ncol != ncol0)
         {
             ERROR_PRINTF(
@@ -530,12 +521,9 @@ void H2P_SPDHSS_H2_gather_HSS_B(
     // Count the total number of columns
     for (int j = 0; j < n_blk1; j++)
     {
-        int B_idx_0j = HSS_B_pair2idx[blk0[0] * n_node + blk1[j]];
-        if (B_idx_0j == -1)
-        {
-            ERROR_PRINTF("SPDHSS_B{%d, %d} does not exist!\n", blk0[0], blk1[j]);
-            return;
-        }
+        int B_idx_0j = H2P_get_int_CSR_elem(HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, blk0[0], blk1[j]);
+        ASSERT_PRINTF(B_idx_0j > 0, "SPDHSS_B{%d, %d} does not exist!\n", blk0[0], blk1[j]);
+        B_idx_0j--;
         if (HSS_B[B_idx_0j]->nrow != nrow0)
         {
             ERROR_PRINTF(
@@ -552,26 +540,20 @@ void H2P_SPDHSS_H2_gather_HSS_B(
     int s_row = 0;
     for (int i = 0; i < n_blk0; i++)
     {
-        int B_idx_i0 = HSS_B_pair2idx[blk0[i] * n_node + blk1[0]];
-        int nrow_i = HSS_B[B_idx_i0]->nrow;
-        
-        int s_col = 0;
+        int s_col = 0, nrow_i, ncol_j;
         for (int j = 0; j < n_blk1; j++)
         {
-            int B_idx_ij = HSS_B_pair2idx[blk0[i] * n_node + blk1[j]];
-            if (B_idx_ij == -1)
-            {
-                ERROR_PRINTF("SPDHSS_B{%d, %d} does not exist!\n", blk0[i], blk1[j]);
-                return;
-            }
+            int B_idx_ij = H2P_get_int_CSR_elem(HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, blk0[i], blk1[j]);
+            ASSERT_PRINTF(B_idx_ij > 0, "SPDHSS_B{%d, %d} does not exist!\n", blk0[i], blk1[j]);
+            B_idx_ij--;
             DTYPE *tmpB_ij = tmpB->data + s_row * tmpB->ld + s_col;
             H2P_dense_mat_t HSS_Bij = HSS_B[B_idx_ij];
-            int ncol_j = HSS_Bij->ncol;
+            nrow_i = HSS_Bij->nrow;
+            ncol_j = HSS_Bij->ncol;
             H2P_copy_matrix_block(nrow_i, ncol_j, HSS_Bij->data, HSS_Bij->ld, tmpB_ij, tmpB->ld);
             s_col += ncol_j;
         }  // End of j loop
-
-        s_row += HSS_B[B_idx_i0]->nrow;
+        s_row += nrow_i;
     }  // End of i loop
 }
 
@@ -579,25 +561,26 @@ void H2P_SPDHSS_H2_gather_HSS_B(
 // Input parameters:
 //   n_blk{0, 1}    : Number of row & column blocks
 //   blk{0, 1}      : Node indices of row & column blocks
-//   HSS_B          : Source HSS_B matrices
 //   n_node         : Number of nodes
-//   HSS_B_pair2idx : Size n_node * n_node, convert (i, j) pair to an index for HSS_B
+//   HSS_B_p2i_{*}  : CSR matrix array triple, convert (i, j) pair to an index for HSS_B
+//   HSS_B          : Source HSS_B matrices
 // Output parameter:
-//   HSS_B          : Updated HSS_B matrices
-//   HSS_B_pair2idx : Updated HSS_B_pair2idx
+//   HSS_B_p2i_{*} : Updated CSR matrix array triple
+//   HSS_B         : Updated HSS_B matrices (some unused Bij matrices will be deleted)
 void H2P_SPDHSS_H2_clean_HSS_B(
-    const int n_blk0, const int n_blk1, const int *blk0, const int *blk1, 
-    H2P_dense_mat_t *HSS_B, const int n_node, int *HSS_B_pair2idx
+    const int n_blk0, const int n_blk1, const int *blk0, const int *blk1, const int n_node, 
+    const int *HSS_B_p2i_rowptr, const int *HSS_B_p2i_colidx, int *HSS_B_p2i_val, H2P_dense_mat_t *HSS_B
 )
 {
     for (int i = 0; i < n_blk0; i++)
     {
         for (int j = 0; j < n_blk1; j++)
         {
-            int pair_ij = blk0[i] * n_node + blk1[j];
-            int B_idx_ij = HSS_B_pair2idx[pair_ij];
-            HSS_B_pair2idx[pair_ij] = -1;
+            int B_idx_ij = H2P_get_int_CSR_elem(HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, blk0[i], blk1[j]);
+            ASSERT_PRINTF(B_idx_ij > 0, "SPDHSS_B{%d, %d} does not exist!\n", blk0[i], blk1[j]);
+            B_idx_ij--;
             H2P_dense_mat_destroy(HSS_B[B_idx_ij]);
+            H2P_set_int_CSR_elem(HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, blk0[i], blk1[j], 0);
         }
     }
 }
@@ -607,15 +590,15 @@ void H2P_SPDHSS_H2_clean_HSS_B(
 //   h2mat          : Source H2 matrix structure
 //   node{0, 1}     : Node pair
 //   S, V, W, Minv  : Arrays, size h2mat->n_node, intermediate matrices used in H2P_SPDHSS_H2_build()
+//   HSS_B_p2i_{*}  : CSR matrix array triple, convert (i, j) pair to an index for HSS_B
 //   HSS_B          : New HSS Bij matrices
-//   HSS_B_pair2idx : Size h2mat->n_node * h2mat->n_node, convert (i, j) pair to an index for HSS_B
 // Output parameters:
-//   HSS_B          : Updated HSS_B matrices (some unused Bij matrices will be deleted)
-//   HSS_B_pair2idx : Updated HSS_B_pair2idx
+//   HSS_B_p2i_{*} : Updated CSR matrix array triple
+//   HSS_B         : Updated HSS_B matrices (some unused Bij matrices will be deleted)
 void H2P_SPDHSS_H2_calc_HSS_Bij(
-    H2Pack_t h2mat, const int node0, const int node1,
-    H2P_dense_mat_t *S, H2P_dense_mat_t *V, H2P_dense_mat_t *W, 
-    H2P_dense_mat_t *Minv, H2P_dense_mat_t *HSS_B, int *HSS_B_pair2idx
+    H2Pack_t h2mat, const int node0, const int node1, const int tid, 
+    H2P_dense_mat_t *S, H2P_dense_mat_t *V, H2P_dense_mat_t *W, H2P_dense_mat_t *Minv, 
+    const int *HSS_B_p2i_rowptr, const int *HSS_B_p2i_colidx, int *HSS_B_p2i_val, H2P_dense_mat_t *HSS_B
 )
 {
     int   pt_dim      = h2mat->pt_dim;
@@ -635,19 +618,21 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
     DTYPE *enbox0  = enbox + node0 * 2 * pt_dim;
     DTYPE *enbox1  = enbox + node1 * 2 * pt_dim;
     int   is_adm   = H2P_check_box_admissible(enbox0, enbox1, pt_dim, ALPHA_H2);
+    H2P_thread_buf_t thread_buf = h2mat->tb[tid];
 
-    int B_idx = HSS_B_pair2idx[node0 * n_node + node1];
-    H2P_dense_mat_init(&HSS_B[B_idx], 0, 0);
-    H2P_dense_mat_t HSS_Bij = HSS_B[B_idx];
+    int HSS_B_idx = H2P_get_int_CSR_elem(HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, node0, node1);
+    ASSERT_PRINTF(HSS_B_idx > 0, "SPDHSS_B{%d, %d} does not exist!\n", node0, node1);
+    HSS_B_idx--;
+    H2P_dense_mat_init(&HSS_B[HSS_B_idx], 0, 0);
+    H2P_dense_mat_t HSS_Bij = HSS_B[HSS_B_idx];
 
     if (level0 == level1)
     {
         // 1.1: node0 and node1 are admissible
         if (is_adm)
         {
-            H2P_dense_mat_t H2_Bij, tmpM;
-            H2P_dense_mat_init(&H2_Bij, 128, 128);
-            H2P_dense_mat_init(&tmpM,   128, 128);
+            H2P_dense_mat_t H2_Bij = thread_buf->mat0;
+            H2P_dense_mat_t tmpM   = thread_buf->mat1;
             H2_Bij->nrow = 0;
             H2P_get_Bij_block(h2mat, node0, node1, H2_Bij);
             if (H2_Bij->nrow == 0)
@@ -670,8 +655,6 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
                 CblasRowMajor, CblasNoTrans, CblasNoTrans, W0->nrow, tmpM->ncol, W0->ncol,
                 1.0, W0->data, W0->ld, tmpM->data, tmpM->ld, 0.0, HSS_Bij->data, HSS_Bij->ld
             );
-            H2P_dense_mat_destroy(H2_Bij);
-            H2P_dense_mat_destroy(tmpM);
             return;
         }  // End of "if (is_adm)"
 
@@ -680,9 +663,8 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
         // 1.2: Both nodes are leaf nodes
         if (n_child0 == 0 && n_child1 == 0)
         {
-            H2P_dense_mat_t H2_Dij, tmpM;
-            H2P_dense_mat_init(&H2_Dij, 128, 128);
-            H2P_dense_mat_init(&tmpM,   128, 128);
+            H2P_dense_mat_t H2_Dij = thread_buf->mat0;
+            H2P_dense_mat_t tmpM   = thread_buf->mat1;
             H2_Dij->nrow = 0;
             H2P_get_Dij_block(h2mat, node0, node1, H2_Dij);
             if (H2_Dij->nrow == 0)
@@ -718,22 +700,19 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
                 CblasRowMajor, CblasNoTrans, CblasNoTrans, tmpM->nrow, V1->ncol, tmpM->ncol,
                 1.0, tmpM->data, tmpM->ld, V1->data, V1->ld, 0.0, HSS_Bij->data, HSS_Bij->ld
             );
-            H2P_dense_mat_destroy(H2_Dij);
-            H2P_dense_mat_destroy(tmpM);
             return;
         }  // End of "if (n_child0 == 0 && n_child1 == 0)"
 
         // 1.3: Both nodes are non-leaf nodes
         if (n_child0 > 0 && n_child1 > 0)
         {
-            H2P_dense_mat_t tmpB, tmpM0, tmpM1;
-            H2P_dense_mat_init(&tmpB,  128, 128);
-            H2P_dense_mat_init(&tmpM0, 128, 128);
-            H2P_dense_mat_init(&tmpM1, 128, 128);
+            H2P_dense_mat_t tmpB  = thread_buf->mat0;
+            H2P_dense_mat_t tmpM0 = thread_buf->mat1;
+            H2P_dense_mat_t tmpM1 = thread_buf->mat2;
             tmpB->nrow = 0;
             H2P_SPDHSS_H2_gather_HSS_B(
-                n_child0, n_child1, child0, child1, 
-                HSS_B, n_node, HSS_B_pair2idx, tmpB
+                n_child0, n_child1, child0, child1, n_node, 
+                HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, HSS_B, tmpB
             );
             if (tmpB->nrow == 0)
             {
@@ -768,24 +747,23 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
                 CblasRowMajor, CblasTrans, CblasNoTrans, V0->ncol, tmpM0->ncol, V0->nrow, 
                 1.0, V0->data, V0->ld, tmpM0->data, tmpM0->ld, 0.0, HSS_Bij->data, HSS_Bij->ld
             );
-            H2P_SPDHSS_H2_clean_HSS_B(n_child0, n_child1, child0, child1, HSS_B, n_node, HSS_B_pair2idx);
-            H2P_dense_mat_destroy(tmpB);
-            H2P_dense_mat_destroy(tmpM0);
-            H2P_dense_mat_destroy(tmpM1);
+            H2P_SPDHSS_H2_clean_HSS_B(
+                n_child0, n_child1, child0, child1, n_node, 
+                HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, HSS_B
+            );
             return;
         }  // End of "if (n_child0 > 0 && n_child1 > 0)"
 
         // 1.4: node0 is non-leaf, node1 is leaf
         if (n_child0 > 0 && n_child1 == 0)
         {
-            H2P_dense_mat_t tmpB, tmpM0, tmpM1;
-            H2P_dense_mat_init(&tmpB,  128, 128);
-            H2P_dense_mat_init(&tmpM0, 128, 128);
-            H2P_dense_mat_init(&tmpM1, 128, 128);
+            H2P_dense_mat_t tmpB  = thread_buf->mat0;
+            H2P_dense_mat_t tmpM0 = thread_buf->mat1;
+            H2P_dense_mat_t tmpM1 = thread_buf->mat2;
             tmpB->nrow = 0;
             H2P_SPDHSS_H2_gather_HSS_B(
-                n_child0, 1, child0, &node1, 
-                HSS_B, n_node, HSS_B_pair2idx, tmpB
+                n_child0, 1, child0, &node1, n_node, 
+                HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, HSS_B, tmpB
             );
             if (tmpB->nrow == 0)
             {
@@ -822,24 +800,23 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
                 CblasRowMajor, CblasNoTrans, CblasNoTrans, tmpM1->nrow, V1->ncol, tmpM1->ncol,
                 1.0, tmpM1->data, tmpM1->ld, V1->data, V1->ld, 0.0, HSS_Bij->data, HSS_Bij->ld
             );
-            H2P_SPDHSS_H2_clean_HSS_B(n_child0, 1, child0, &node1, HSS_B, n_node, HSS_B_pair2idx);
-            H2P_dense_mat_destroy(tmpB);
-            H2P_dense_mat_destroy(tmpM0);
-            H2P_dense_mat_destroy(tmpM1);
+            H2P_SPDHSS_H2_clean_HSS_B(
+                n_child0, 1, child0, &node1, n_node, 
+                HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, HSS_B
+            );
             return;
         }  // End of "if (n_child0 > 0 && n_child1 == 0)"
 
         // 1.5: node0 is leaf, node1 is non-leaf
         if (n_child0 == 0 && n_child1 > 0)
         {
-            H2P_dense_mat_t tmpB, tmpM0, tmpM1;
-            H2P_dense_mat_init(&tmpB,  128, 128);
-            H2P_dense_mat_init(&tmpM0, 128, 128);
-            H2P_dense_mat_init(&tmpM1, 128, 128);
+            H2P_dense_mat_t tmpB  = thread_buf->mat0;
+            H2P_dense_mat_t tmpM0 = thread_buf->mat1;
+            H2P_dense_mat_t tmpM1 = thread_buf->mat2;
             tmpB->nrow = 0;
             H2P_SPDHSS_H2_gather_HSS_B(
-                1, n_child1, &node0, child1, 
-                HSS_B, n_node, HSS_B_pair2idx, tmpB
+                1, n_child1, &node0, child1, n_node, 
+                HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, HSS_B, tmpB
             );
             if (tmpB->nrow == 0)
             {
@@ -874,10 +851,10 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
                 CblasRowMajor, CblasTrans, CblasNoTrans, V0->ncol, tmpM1->ncol, V0->nrow, 
                 1.0, V0->data, V0->ld, tmpM1->data, tmpM1->ld, 0.0, HSS_Bij->data, HSS_Bij->ld
             );
-            H2P_SPDHSS_H2_clean_HSS_B(1, n_child1, &node0, child1, HSS_B, n_node, HSS_B_pair2idx);
-            H2P_dense_mat_destroy(tmpB);
-            H2P_dense_mat_destroy(tmpM0);
-            H2P_dense_mat_destroy(tmpM1);
+            H2P_SPDHSS_H2_clean_HSS_B(
+                1, n_child1, &node0, child1, n_node, 
+                HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, HSS_B
+            );
             return;
         }  // End of "if (n_child0 == 0 && n_child1 > 0)"
     }  // End of "if (level0 == level1)"
@@ -894,8 +871,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
         // 2.1: node0 and node1 are admissible
         if (is_adm)
         {
-            H2P_dense_mat_t H2_Bij;
-            H2P_dense_mat_init(&H2_Bij, 128, 128);
+            H2P_dense_mat_t H2_Bij = thread_buf->mat0;
             H2_Bij->nrow = 0;
             H2P_get_Bij_block(h2mat, node0, node1, H2_Bij);
             if (H2_Bij->nrow == 0)
@@ -911,7 +887,6 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
                 CblasRowMajor, CblasNoTrans, CblasNoTrans, W0->nrow, H2_Bij->ncol, W0->ncol,
                 1.0, W0->data, W0->ld, H2_Bij->data, H2_Bij->ld, 0.0, HSS_Bij->data, HSS_Bij->ld
             );
-            H2P_dense_mat_destroy(H2_Bij);
             return;
         }  // End of "if (is_adm)"
 
@@ -920,8 +895,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
         // 2.2: node0 is a leaf node
         if (n_child0 == 0)
         {
-            H2P_dense_mat_t H2_Dij;
-            H2P_dense_mat_init(&H2_Dij, 128, 128);
+            H2P_dense_mat_t H2_Dij = thread_buf->mat0;
             H2_Dij->nrow = 0;
             H2P_get_Dij_block(h2mat, node0, node1, H2_Dij);
             if (H2_Dij->nrow == 0)
@@ -942,20 +916,18 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
                 CblasRowMajor, CblasTrans, CblasNoTrans, V0->ncol, H2_Dij->ncol, V0->nrow,
                 1.0, V0->data, V0->ld, H2_Dij->data, H2_Dij->ld, 0.0, HSS_Bij->data, HSS_Bij->ld
             );
-            H2P_dense_mat_destroy(H2_Dij);
             return;
         }  // End of "if (n_child0 == 0)"
 
         // 2.3: node0 is a non-leaf node
         if (n_child0 > 0)
         {
-            H2P_dense_mat_t tmpB, tmpM;
-            H2P_dense_mat_init(&tmpB, 128, 128);
-            H2P_dense_mat_init(&tmpM, 128, 128);
+            H2P_dense_mat_t tmpB = thread_buf->mat0;
+            H2P_dense_mat_t tmpM = thread_buf->mat1;
             tmpB->nrow = 0;
             H2P_SPDHSS_H2_gather_HSS_B(
-                n_child0, 1, child0, &node1, 
-                HSS_B, n_node, HSS_B_pair2idx, tmpB
+                n_child0, 1, child0, &node1, n_node, 
+                HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, HSS_B, tmpB
             );
             if (tmpB->nrow == 0)
             {
@@ -977,9 +949,10 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
                 CblasRowMajor, CblasTrans, CblasNoTrans, V0->ncol, tmpM->ncol, V0->nrow,
                 1.0, V0->data, V0->ld, tmpM->data, tmpM->ld, 0.0, HSS_Bij->data, HSS_Bij->ld
             );
-            H2P_SPDHSS_H2_clean_HSS_B(n_child0, 1, child0, &node1, HSS_B, n_node, HSS_B_pair2idx);
-            H2P_dense_mat_destroy(tmpB);
-            H2P_dense_mat_destroy(tmpM);
+            H2P_SPDHSS_H2_clean_HSS_B(
+                n_child0, 1, child0, &node1, n_node, 
+                HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, HSS_B
+            );
             return;
         }  // End of "if (n_child0 > 0)"
     }  // End of "if (level0 > level1)"
@@ -996,7 +969,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
         // 3.1: node0 and node1 are admissable
         if (is_adm)
         {
-            H2P_dense_mat_t H2_Bij;
+            H2P_dense_mat_t H2_Bij = thread_buf->mat0;
             H2P_dense_mat_init(&H2_Bij, 128, 128);
             H2_Bij->nrow = 0;
             H2P_get_Bij_block(h2mat, node0, node1, H2_Bij);
@@ -1013,7 +986,6 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
                 CblasRowMajor, CblasNoTrans, CblasTrans, H2_Bij->nrow, W1->nrow, H2_Bij->ncol,
                 1.0, H2_Bij->data, H2_Bij->ld, W1->data, W1->ld, 0.0, HSS_Bij->data, HSS_Bij->ld
             );
-            H2P_dense_mat_destroy(H2_Bij);
             return;
         }  // End of "if (is_adm)"
 
@@ -1022,8 +994,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
         // 3.2: node1 is a leaf node
         if (n_child1 == 0)
         {
-            H2P_dense_mat_t H2_Dij;
-            H2P_dense_mat_init(&H2_Dij, 128, 128);
+            H2P_dense_mat_t H2_Dij = thread_buf->mat0;
             H2_Dij->nrow = 0;
             H2P_get_Dij_block(h2mat, node0, node1, H2_Dij);
             if (H2_Dij->nrow == 0)
@@ -1046,20 +1017,18 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
                 CblasRowMajor, CblasNoTrans, CblasNoTrans, H2_Dij->nrow, V1->ncol, H2_Dij->ncol,
                 1.0, H2_Dij->data, H2_Dij->ld, V1->data, V1->ld, 0.0, HSS_Bij->data, HSS_Bij->ld
             );
-            H2P_dense_mat_destroy(H2_Dij);
             return;
         }  // End of "if (n_child1 == 0)"
 
         // 3.3: node1 is a non-leaf node
         if (n_child1 > 0)
         {
-            H2P_dense_mat_t tmpB, tmpM;
-            H2P_dense_mat_init(&tmpB, 128, 128);
-            H2P_dense_mat_init(&tmpM, 128, 128);
+            H2P_dense_mat_t tmpB = thread_buf->mat0;
+            H2P_dense_mat_t tmpM = thread_buf->mat1;
             tmpB->nrow = 0;
             H2P_SPDHSS_H2_gather_HSS_B(
-                1, n_child1, &node0, child1, 
-                HSS_B, n_node, HSS_B_pair2idx, tmpB
+                1, n_child1, &node0, child1, n_node, 
+                HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, HSS_B, tmpB
             );
             if (tmpB->nrow == 0)
             {
@@ -1081,9 +1050,10 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
                 CblasRowMajor, CblasNoTrans, CblasNoTrans, tmpB->nrow, tmpM->ncol, tmpB->ncol,
                 1.0, tmpB->data, tmpB->ld, tmpM->data, tmpM->ld, 0.0, HSS_Bij->data, HSS_Bij->ld
             );
-            H2P_SPDHSS_H2_clean_HSS_B(1, n_child1, &node0, child1, HSS_B, n_node, HSS_B_pair2idx);
-            H2P_dense_mat_destroy(tmpB);
-            H2P_dense_mat_destroy(tmpM);
+            H2P_SPDHSS_H2_clean_HSS_B(
+                1, n_child1, &node0, child1, n_node, 
+                HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, HSS_B
+            );
             return;
         }  // End of "if (n_child1 > 0)"
     }  // End of "if (level0 < level1)"
@@ -1241,13 +1211,14 @@ void H2P_SPDHSS_H2_get_level_HSS_Bij_pairs(H2Pack_t h2mat, H2P_int_vec_t **level
 // Input parameters:
 //   h2mat          : Source H2 matrix
 //   HSS_{U, B, D}  : New U/B/D matrices calculated in H2P_SPDHSS_H2_build()
-//   HSS_B_pair2idx : Size h2mat->n_node * h2mat->n_node, convert (i, j) pair to an index for HSS_B
+//   HSS_B_p2i_{*}  : CSR matrix array triple, convert (i, j) pair to an index for HSS_B
 //   HSS_D_pair2idx : Size h2mat->n_node, convert (i, i) pair to an index for HSS_D
 // Output parameter:
 //   *hssmat_ : New HSS matrix
 void H2P_SPDHSS_H2_wrap_new_HSS(
     H2Pack_t h2mat, H2P_dense_mat_t *HSS_U, H2P_dense_mat_t *HSS_B, H2P_dense_mat_t *HSS_D, 
-    const int *HSS_B_pair2idx, const int *HSS_D_pair2idx, H2Pack_t *hssmat_
+    const int *HSS_B_p2i_rowptr, const int *HSS_B_p2i_colidx, const int *HSS_B_p2i_val, 
+    const int *HSS_D_pair2idx, H2Pack_t *hssmat_
 )
 {
     H2Pack_t hssmat;
@@ -1416,8 +1387,9 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
     {
         int node0  = HSS_r_adm_pairs[2 * i];
         int node1  = HSS_r_adm_pairs[2 * i + 1];
-        int HSS_B_idx = HSS_B_pair2idx[node0 * n_node + node1];
-        ASSERT_PRINTF(HSS_B_idx >= 0, "SPDHSS_B{%d, %d} does not exist!\n", node0, node1);
+        int HSS_B_idx = H2P_get_int_CSR_elem(HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, node0, node1);
+        ASSERT_PRINTF(HSS_B_idx > 0, "SPDHSS_B{%d, %d} does not exist!\n", node0, node1);
+        HSS_B_idx--;
         H2P_dense_mat_t HSS_Bi = HSS_B[HSS_B_idx];
         B_nrow[i] = HSS_Bi->nrow;
         B_ncol[i] = HSS_Bi->ncol;
@@ -1470,7 +1442,9 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
             {
                 int node0 = HSS_r_adm_pairs[2 * i];
                 int node1 = HSS_r_adm_pairs[2 * i + 1];
-                int HSS_B_idx = HSS_B_pair2idx[node0 * n_node + node1];
+                int HSS_B_idx = H2P_get_int_CSR_elem(HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, node0, node1);
+                ASSERT_PRINTF(HSS_B_idx != 0, "SPDHSS_B{%d, %d} does not exist!\n", node0, node1);
+                HSS_B_idx--;
                 H2P_dense_mat_t HSS_Bi = HSS_B[HSS_B_idx];
                 int Bi_nrow = HSS_Bi->nrow;
                 int Bi_ncol = HSS_Bi->ncol;
@@ -1508,7 +1482,7 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
     {
         int node = leaf_nodes[i];
         int HSS_D_idx = HSS_D_pair2idx[node];
-        ASSERT_PRINTF(HSS_D_idx >= 0, "SPDHSS_B{%d, %d} does not exist!\n", node, node);
+        ASSERT_PRINTF(HSS_D_idx >= 0, "SPDHSS_D{%d, %d} does not exist!\n", node, node);
         H2P_dense_mat_t HSS_Di = HSS_D[HSS_D_idx];
         D_nrow[i] = HSS_Di->nrow;
         D_ncol[i] = HSS_Di->ncol;
@@ -1661,11 +1635,34 @@ void H2P_SPDHSS_H2_build(
 
     // 4. Construct all HSS_{B,D}_pair2idx in advance. Some HSS_B_pair2idx(i, j) 
     //    will be set as 0 but no new (i, j) pair will be added later
-    int *HSS_B_pair2idx = (int*) malloc(sizeof(int) * n_node * n_node);
     int *HSS_D_pair2idx = (int*) malloc(sizeof(int) * n_node);
-    #pragma omp parallel for num_threads(n_thread) schedule(static)
-    for (int i = 0; i < n_node * n_node; i++) HSS_B_pair2idx[i] = -1;
     memset(HSS_D_pair2idx, 0, sizeof(int) * n_node);
+    for (int i = 0; i < n_leaf_node; i++)
+    {
+        int node = leaf_nodes[i];
+        HSS_D_pair2idx[node] = i;
+    }
+    st = get_wtime_sec();
+    int HSS_B_n_pair = 0;
+    for (int i = max_level; i >= 1; i--)
+    {
+        H2P_int_vec_t level_i_HSS_Bij_pairs = level_HSS_Bij_pairs[i];
+        HSS_B_n_pair += level_i_HSS_Bij_pairs->length / 2;
+    }
+    int *HSS_B_pair_i = (int*) malloc(sizeof(int) * HSS_B_n_pair);
+    int *HSS_B_pair_j = (int*) malloc(sizeof(int) * HSS_B_n_pair);
+    int *HSS_B_pair_v = (int*) malloc(sizeof(int) * HSS_B_n_pair);
+    int *HSS_B_p2i_rowptr = (int*) malloc(sizeof(int) * (n_node + 1));
+    int *HSS_B_p2i_colidx = (int*) malloc(sizeof(int) * HSS_B_n_pair);
+    int *HSS_B_p2i_val    = (int*) malloc(sizeof(int) * HSS_B_n_pair);
+    ASSERT_PRINTF(
+        HSS_B_pair_i != NULL && HSS_B_pair_j != NULL && HSS_B_pair_v,
+        "Failed to allocate work arrays for indexing SPDHSS Bij pairs\n"
+    );
+    ASSERT_PRINTF(
+        HSS_B_p2i_rowptr != NULL && HSS_B_p2i_colidx != NULL && HSS_B_p2i_val,
+        "Failed to allocate arrays for indexing SPDHSS Bij pairs\n"
+    );
     int HSS_B_idx = 0;
     for (int i = max_level; i >= 1; i--)
     {
@@ -1674,16 +1671,21 @@ void H2P_SPDHSS_H2_build(
         {
             int node0 = level_i_HSS_Bij_pairs->data[2 * j];
             int node1 = level_i_HSS_Bij_pairs->data[2 * j + 1];
-            int pair_idx = node0 * n_node + node1;
-            HSS_B_pair2idx[pair_idx] = HSS_B_idx;
+            HSS_B_pair_i[HSS_B_idx] = node0;
+            HSS_B_pair_j[HSS_B_idx] = node1;
+            HSS_B_pair_v[HSS_B_idx] = HSS_B_idx + 1;
             HSS_B_idx++;
         }
     }
-    for (int i = 0; i < n_leaf_node; i++)
-    {
-        int node = leaf_nodes[i];
-        HSS_D_pair2idx[node] = i;
-    }
+    H2P_int_COO_to_CSR(
+        n_node, HSS_B_idx, HSS_B_pair_i, HSS_B_pair_j, HSS_B_pair_v,
+        HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val
+    );
+    free(HSS_B_pair_i);
+    free(HSS_B_pair_j);
+    free(HSS_B_pair_v);
+    et = get_wtime_sec();
+    build_B_t += et - st;
 
     // 5. Loop over all leaf nodes to construct new D matrices
     st = get_wtime_sec();
@@ -1703,8 +1705,6 @@ void H2P_SPDHSS_H2_build(
             }
             for (int i = D_blk0_s; i < D_blk0_e; i++)
             {
-                // H2_D_idx  = H2_D_pair2idx(node, node);
-                // HSS_D_idx = HSS_D_pair2idx(node, node);
                 // HSS_D{HSS_D_idx} = H2_D{H2_D_idx} + shift * eye(size(H2_D{H2_D_idx}));
                 int node = leaf_nodes[i];
                 int HSS_D_idx = HSS_D_pair2idx[node];
@@ -1741,7 +1741,6 @@ void H2P_SPDHSS_H2_build(
         {
             int tid = omp_get_thread_num();
             H2P_int_vec_t   idx0 = thread_buf[tid]->idx0;
-            H2P_int_vec_t   idx1 = thread_buf[tid]->idx1;
             H2P_dense_mat_t mat0 = thread_buf[tid]->mat0;
             H2P_dense_mat_t mat1 = thread_buf[tid]->mat1;
             H2P_dense_mat_t mat2 = thread_buf[tid]->mat2;
@@ -1869,7 +1868,6 @@ void H2P_SPDHSS_H2_build(
                     H2P_dense_mat_t tmpB = mat0;
                     H2P_dense_mat_resize(tmpB, tmpB_nrow + 1, tmpB_nrow);
                     tmpB->nrow--;
-                    // TODO: LAPACK_SYEVD only need uppertriangle, remove the H2P_transpose_dmat()
                     for (int k = 0; k < n_child_node; k++)
                     {
                         int child_k = node_children[k];
@@ -1883,14 +1881,17 @@ void H2P_SPDHSS_H2_build(
                             int idx_l_s = offset[l];
                             int idx_l_len = offset[l + 1] - idx_l_s;
                             // B_idx = B_pair2idx(child_k, child_l);
-                            int HSS_B_idx = HSS_B_pair2idx[child_k * n_node + child_l];
+                            int HSS_B_idx = H2P_get_int_CSR_elem(HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, child_k, child_l);
+                            ASSERT_PRINTF(HSS_B_idx != 0, "SPDHSS_B{%d, %d} does not exist!\n", child_k, child_l);
+                            HSS_B_idx--;
                             H2P_dense_mat_t HSS_B_kl = HSS_B[HSS_B_idx];
                             // tmpB(idx_k, idx_l) = HSS_B{B_idx};
                             DTYPE *tmpB_kl = tmpB->data + idx_k_s * tmpB->ld + idx_l_s;
                             H2P_copy_matrix_block(HSS_B_kl->nrow, HSS_B_kl->ncol, HSS_B_kl->data, HSS_B_kl->ld, tmpB_kl, tmpB->ld);
                             // tmpB(idx_l, idx_k) = HSS_B{B_idx}';
-                            DTYPE *tmpB_lk = tmpB->data + idx_l_s * tmpB->ld + idx_k_s;
-                            H2P_transpose_dmat(1, HSS_B_kl->nrow, HSS_B_kl->ncol, HSS_B_kl->data, HSS_B_kl->ld, tmpB_lk, tmpB->ld);
+                            // LAPACK_SYEVD only need uppertriangle, no need to fill the lower triangle part
+                            //DTYPE *tmpB_lk = tmpB->data + idx_l_s * tmpB->ld + idx_k_s;
+                            //H2P_transpose_dmat(1, HSS_B_kl->nrow, HSS_B_kl->ncol, HSS_B_kl->data, HSS_B_kl->ld, tmpB_lk, tmpB->ld);
                         }
                         // Set the diagonal block to zero
                         for (int l = idx_k_s; l < idx_k_s + idx_k_len; l++)
@@ -2106,14 +2107,15 @@ void H2P_SPDHSS_H2_build(
         // Build new B matrices
         #pragma omp parallel num_threads(n_thread_i)
         {
+            int tid = omp_get_thread_num();
             #pragma omp for schedule(dynamic)
             for (int j = 0; j < level_i_HSS_Bij_n_pair; j++)
             {
                 int node0 = level_i_HSS_Bij_pairs[2 * j];
                 int node1 = level_i_HSS_Bij_pairs[2 * j + 1];
                 H2P_SPDHSS_H2_calc_HSS_Bij(
-                    h2mat, node0, node1, S, V, W, 
-                    Minv, HSS_B, HSS_B_pair2idx
+                    h2mat, node0, node1, tid, S, V, W, Minv, 
+                    HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, HSS_B
                 );
             }  // End of j loop
         }  // End of "#pragma omp parallel"
@@ -2122,7 +2124,10 @@ void H2P_SPDHSS_H2_build(
     }  // End of i loop
 
     // 6. Wrap the new SPD HSS matrix
-    H2P_SPDHSS_H2_wrap_new_HSS(h2mat, HSS_U, HSS_B, HSS_D, HSS_B_pair2idx, HSS_D_pair2idx, hssmat_);
+    H2P_SPDHSS_H2_wrap_new_HSS(
+        h2mat, HSS_U, HSS_B, HSS_D, HSS_B_p2i_rowptr, HSS_B_p2i_colidx,
+        HSS_B_p2i_val, HSS_D_pair2idx, hssmat_
+    );
     (*hssmat_)->timers[_U_BUILD_TIMER_IDX] = build_U_t;
     (*hssmat_)->timers[_B_BUILD_TIMER_IDX] = build_B_t;
     (*hssmat_)->timers[_D_BUILD_TIMER_IDX] = build_D_t;
@@ -2148,6 +2153,8 @@ void H2P_SPDHSS_H2_build(
     free(Minv);
     free(HSS_B);
     free(HSS_D);
-    free(HSS_B_pair2idx);
     free(HSS_D_pair2idx);
+    free(HSS_B_p2i_rowptr);
+    free(HSS_B_p2i_colidx);
+    free(HSS_B_p2i_val);
 }

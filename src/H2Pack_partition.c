@@ -639,7 +639,7 @@ void H2P_partition_points(
     int estimated_n_pair = h2pack->n_node * h2pack->max_child;
     H2P_int_vec_init(&partition_vars.r_inadm_pairs, estimated_n_pair);
     H2P_int_vec_init(&partition_vars.r_adm_pairs,   estimated_n_pair);
-    // TODO: Change min_adm_level according to the tree structure
+    // h2pack->min_adm_level can be set manually to restrict the minimal admissible level
     // If h2pack->min_adm_level != 0, partition_vars.min_adm_level is useless
     h2pack->min_adm_level = 0;
     partition_vars.min_adm_level  = h2pack->max_level;

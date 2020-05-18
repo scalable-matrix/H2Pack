@@ -6,28 +6,23 @@
 #include <time.h>
 #include <omp.h>
 
-//#include <ittnotify.h>
-
 #include "H2Pack.h"
 
-#include "parse_scalar_params.h"
+#include "parse_tensor_params.h"
 
 #include "direct_nbody.h"
 
 int main(int argc, char **argv)
 {
-    //__itt_pause();
     srand48(time(NULL));
     
-    parse_scalar_params(argc, argv);
+    parse_tensor_params(argc, argv);
     
-    double st, et;
-
     H2Pack_t h2pack;
     
     H2P_init(&h2pack, test_params.pt_dim, test_params.krnl_dim, QR_REL_NRM, &test_params.rel_tol);
     
-    H2P_partition_points(h2pack, test_params.n_point, test_params.coord, 0, 0);
+    H2P_partition_points(h2pack, test_params.n_point, test_params.coord, 300, 0);
     
     // Check if point index permutation is correct in H2Pack
     DTYPE coord_diff_sum = 0.0;
@@ -45,24 +40,34 @@ int main(int argc, char **argv)
 
     H2P_dense_mat_t *pp;
     DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * test_params.pt_dim + test_params.pt_dim];
-    DTYPE Quadratic_krnl_param[2] = {1.0, -0.5};
-    void *krnl_param = NULL;
-    if (test_params.kernel_id == 3) krnl_param = (void*) &Quadratic_krnl_param[0];
-    
-    st = get_wtime_sec();
-    H2P_generate_proxy_point_ID(
-        test_params.pt_dim, test_params.krnl_dim, test_params.rel_tol, h2pack->max_level, 
-        h2pack->min_adm_level, max_L, krnl_param, test_params.krnl_eval, &pp
+    int start_level = 2;
+    int num_pp = ceil(-log10(test_params.rel_tol)) - 1;
+    if (num_pp < 4 ) num_pp = 4;
+    if (num_pp > 10) num_pp = 10;
+    num_pp = 6 * num_pp * num_pp;
+    H2P_generate_proxy_point_surface(
+        test_params.pt_dim, num_pp, h2pack->max_level, 
+        start_level, max_L, &pp
     );
-    et = get_wtime_sec();
-    printf("H2Pack generate proxy points used %.3lf (s)\n", et - st);
     
+    double krnl_param[2];  // {eta, a}
+    if (test_params.kernel_id == 0)  // Stokes kernel
+    {
+        krnl_param[0] = 0.5;
+        krnl_param[1] = 0.8;
+    }
+    if (test_params.kernel_id == 1)  // RPY kernel
+    {
+        krnl_param[0] = 1.0;
+        krnl_param[1] = 1.0;
+    }
+
     H2P_build(
         h2pack, pp, test_params.BD_JIT, krnl_param, 
         test_params.krnl_eval, test_params.krnl_bimv, test_params.krnl_bimv_flops
     );
     
-    int n_check_pt = 50000, check_pt_s;
+    int n_check_pt = 10000, check_pt_s;
     if (n_check_pt > test_params.n_point)
     {
         n_check_pt = test_params.n_point;
@@ -80,10 +85,10 @@ int main(int argc, char **argv)
     assert(x != NULL && y0 != NULL && y1 != NULL);
     for (int i = 0; i < test_params.krnl_mat_size; i++) 
     {
-        x[i] = (DTYPE) pseudo_randn();
-        // x[i] = (DTYPE) drand48();
+        //x[i] = (DTYPE) pseudo_randn();
+        x[i] = (DTYPE) drand48();
     }
-
+    
     // Get reference results
     direct_nbody(
         krnl_param, test_params.krnl_eval, test_params.pt_dim, test_params.krnl_dim, 
@@ -92,31 +97,29 @@ int main(int argc, char **argv)
     );
     
     // Warm up, reset timers, and test the matvec performance
-    H2P_matvec(h2pack, x, y1);
+    H2P_matvec(h2pack, x, y1); 
     h2pack->n_matvec = 0;
     h2pack->timers[_MV_FW_TIMER_IDX]  = 0.0;
     h2pack->timers[_MV_MID_TIMER_IDX] = 0.0;
     h2pack->timers[_MV_BW_TIMER_IDX]  = 0.0;
     h2pack->timers[_MV_DEN_TIMER_IDX] = 0.0;
     h2pack->timers[_MV_RDC_TIMER_IDX] = 0.0;
-    //__itt_resume();
     for (int i = 0; i < 10; i++) 
         H2P_matvec(h2pack, x, y1);
-    //__itt_pause();
-    
+
     H2P_print_statistic(h2pack);
     
     // Verify H2 matvec results
-    DTYPE y0_norm = 0.0, err_norm = 0.0;
+    DTYPE ref_norm = 0.0, err_norm = 0.0;
     for (int i = 0; i < test_params.krnl_dim * n_check_pt; i++)
     {
         DTYPE diff = y1[test_params.krnl_dim * check_pt_s + i] - y0[i];
-        y0_norm  += y0[i] * y0[i];
+        ref_norm += y0[i] * y0[i];
         err_norm += diff * diff;
     }
-    y0_norm  = DSQRT(y0_norm);
+    ref_norm = DSQRT(ref_norm);
     err_norm = DSQRT(err_norm);
-    printf("For %d validation points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / y0_norm);
+    printf("For %d validation points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / ref_norm);
     
     free(x);
     free(y0);

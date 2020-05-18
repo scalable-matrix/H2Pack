@@ -15,7 +15,7 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
 {
     if (!h2pack->is_HSS)
     {
-        printf("[FATAL] %s failed: H2Pack is not running in HSS mode!\n", __FUNCTION__);
+        ERROR_PRINTF("H2Pack is not running in HSS mode!\n");
         return;
     }
 
@@ -32,6 +32,8 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
     H2P_dense_mat_t *U  = h2pack->U;
     H2P_thread_buf_t *thread_buf = h2pack->tb;
 
+    double st = get_wtime_sec();
+
     int *ULV_Ls;
     H2P_int_vec_t   *ULV_idx;
     H2P_dense_mat_t *ULV_Q, *ULV_L, *U_mid, *D_mid;
@@ -41,8 +43,15 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
     ULV_L   = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
     U_mid   = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
     D_mid   = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
-    assert(ULV_Ls != NULL && ULV_idx != NULL && ULV_Q != NULL && ULV_L != NULL);
-    assert(U_mid != NULL && D_mid != NULL);
+    ASSERT_PRINTF(
+        ULV_Ls != NULL && ULV_idx != NULL && ULV_Q != NULL && ULV_L != NULL,
+        "Failed to allocate matrices for HSS ULV Cholesky factorization\n"
+    );
+    ASSERT_PRINTF(
+        U_mid != NULL && D_mid != NULL,
+        "Failed to allocate work matrices for HSS ULV Cholesky factorization\n"
+    );
+    
     for (int i = 0; i < n_node; i++)
     {
         ULV_idx[i] = NULL;
@@ -52,7 +61,7 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
         D_mid[i]   = NULL;
     }
 
-    // Non-root node construction
+    // Level by level factorization
     int is_SPD = 1;
     for (int i = max_level; i >= 0; i--)
     {
@@ -67,9 +76,9 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
             H2P_dense_mat_t tmpU   = thread_buf[tid]->mat0;
             H2P_dense_mat_t tmpD   = thread_buf[tid]->mat1;
             H2P_dense_mat_t tmpB   = thread_buf[tid]->mat2;
-            H2P_dense_mat_t tmpM   = thread_buf[tid]->mat2;
+            H2P_dense_mat_t tmpM   = thread_buf[tid]->mat0;
 
-            #pragma omp for
+            #pragma omp for schedule(dynamic)
             for (int j = 0; j < level_i_n_node; j++)
             {
                 if (!is_SPD) continue;
@@ -100,9 +109,8 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                         U_nrow += D_mid[child_k]->nrow;
                     }
                     // (2) Build the compressed diagonal block
-                    H2P_dense_mat_resize(tmpU, U_nrow, U_nrow);
+                    // Build tmpD, we need tmpB and tmpM (same buffer as tmpU, so we build tmpU later)
                     H2P_dense_mat_resize(tmpD, U_nrow, U_nrow);
-                    memset(tmpU->data, 0, sizeof(DTYPE) * U_nrow * U_nrow);
                     memset(tmpD->data, 0, sizeof(DTYPE) * U_nrow * U_nrow);
                     for (int k = 0; k < node_n_child; k++)
                     {
@@ -115,11 +123,6 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                         H2P_copy_matrix_block(
                             D_mid[child_k]->nrow, D_mid[child_k]->ncol, D_mid[child_k]->data, 
                             D_mid[child_k]->ld, tmpD->data + idx_k_s * (tmpD->ld + 1), tmpD->ld
-                        );
-                        // tmpU(idx_k, idx_k) = U_mid{child_k};
-                        H2P_copy_matrix_block(
-                            U_mid[child_k]->nrow, U_mid[child_k]->ncol, U_mid[child_k]->data, 
-                            U_mid[child_k]->ld, tmpU->data + idx_k_s * (tmpU->ld + 1), tmpU->ld
                         );
                         // Off-diagonal blocks
                         for (int l = k + 1; l < node_n_child; l++)
@@ -148,21 +151,39 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                             H2P_transpose_dmat(1, idx_k_len, idx_l_len, tmpD_kl, tmpD->ld, tmpD_lk, tmpD->ld);
                         }
                     }  // End of k loop
+                    // Build tmpU, now tmpM is no long used
+                    H2P_dense_mat_resize(tmpU, U_nrow, U_nrow);
+                    memset(tmpU->data, 0, sizeof(DTYPE) * U_nrow * U_nrow);
+                    for (int k = 0; k < node_n_child; k++)
+                    {
+                        int child_k = node_children[k];
+                        // idx_k = offset(k) : offset(k+1)-1;
+                        int idx_k_s = offset[k];
+                        int idx_k_len = offset[k + 1] - idx_k_s;
+                        // Diagonal blocks
+                        // tmpU(idx_k, idx_k) = U_mid{child_k};
+                        H2P_copy_matrix_block(
+                            U_mid[child_k]->nrow, U_mid[child_k]->ncol, U_mid[child_k]->data, 
+                            U_mid[child_k]->ld, tmpU->data + idx_k_s * (tmpU->ld + 1), tmpU->ld
+                        );
+                    }  // End of k loop
                     // if (level > 1), tmpU = tmpU * U{node}; end
+                    // tmpU (tmpM, mat0) and tmpD (mat1) are used, use tmpB (mat2) as buffer
                     if (i > 0)
                     {
-                        H2P_dense_mat_resize(tmpM, tmpU->nrow, U[node]->ncol);
+                        H2P_dense_mat_resize(tmpB, tmpU->nrow, U[node]->ncol);
                         CBLAS_GEMM(
-                            CblasRowMajor, CblasNoTrans, CblasNoTrans, tmpM->nrow, tmpM->ncol, tmpU->ncol,
-                            1.0, tmpU->data, tmpU->ld, U[node]->data, U[node]->ld, 0.0, tmpM->data, tmpM->ld
+                            CblasRowMajor, CblasNoTrans, CblasNoTrans, tmpB->nrow, tmpB->ncol, tmpU->ncol,
+                            1.0, tmpU->data, tmpU->ld, U[node]->data, U[node]->ld, 0.0, tmpB->data, tmpB->ld
                         );
-                        H2P_dense_mat_resize(tmpU, tmpM->nrow, tmpM->ncol);
-                        H2P_copy_matrix_block(tmpM->nrow, tmpM->ncol, tmpM->data, tmpM->ld, tmpU->data, tmpU->ld);
+                        H2P_dense_mat_resize(tmpU, tmpB->nrow, tmpB->ncol);
+                        H2P_copy_matrix_block(tmpB->nrow, tmpB->ncol, tmpB->data, tmpB->ld, tmpU->data, tmpU->ld);
                     }
                 }  // End of "if (node_n_child == 0)"
                 U_nrow = tmpU->nrow;
                 U_ncol = tmpU->ncol;
                 U_diff = U_nrow - U_ncol;
+                ASSERT_PRINTF(U_nrow >= U_ncol, "tmpU has more columns (%d) than rows (%d)!\n", U_ncol, U_nrow);
 
                 // 2. Cholesky factorization
                 // size(tmpU) = [U_nrow, U_ncol]
@@ -209,8 +230,8 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                         }
                         if (info != 0)
                         {
-                            printf("[FATAL] Node %d potrf() returned %d, target matrix is not SPD, current diagonal shift %.2lf is not enough\n", node, info, shift);
                             is_SPD = 0;
+                            ERROR_PRINTF("Node %d potrf() returned %d, target matrix with shifting %.2lf is not SPD\n", node, info, shift);
                         }
                         // LD21 = tmpL \ tmpD21;
                         // Here LD21 is stored in tmpD21
@@ -264,8 +285,8 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                     }
                     if (info != 0)
                     {
-                        printf("[FATAL] Node %d potrf() returned %d, target matrix is not SPD, current diagonal shift %.2lf is not enough\n", node, info, shift);
                         is_SPD = 0;
+                        ERROR_PRINTF("Node %d potrf() returned %d, target matrix with shifting %.2lf is not SPD\n", node, info, shift);
                     }
                 }  // End of "if (i > 0)"
 
@@ -280,7 +301,11 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                     for (int k = 0; k < cluster_len; k++)
                         ULV_idx[node]->data[k] = cluster_s + k;
                     ULV_idx[node]->length = cluster_len;
-                    assert(ULV_idx[node]->length == ULV_L[node]->nrow);
+                    ASSERT_PRINTF(
+                        ULV_idx[node]->length == ULV_L[node]->nrow, 
+                        "Node %d ULV_idx length %d mismatch ULV_L size %d", 
+                        node, ULV_idx[node]->length, ULV_L[node]->nrow
+                    );
                 } else {
                     int idx_size = 0;
                     for (int k = 0; k < node_n_child; k++)
@@ -298,7 +323,11 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                         idx_size += D_mid[child_k]->nrow;
                     }
                     ULV_idx[node]->length = idx_size;
-                    assert(ULV_idx[node]->length == ULV_L[node]->nrow);
+                    ASSERT_PRINTF(
+                        ULV_idx[node]->length == ULV_L[node]->nrow, 
+                        "Node %d ULV_idx length %d mismatch ULV_L size %d", 
+                        node, ULV_idx[node]->length, ULV_L[node]->nrow
+                    );
                 }  // End of "if (node_n_child == 0)"
 
                 // 4. Free U_mid{child_k} and D_mid{child_k} since we no longer need them
@@ -329,6 +358,22 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
     h2pack->ULV_idx = ULV_idx;
     h2pack->ULV_Q   = ULV_Q;
     h2pack->ULV_L   = ULV_L;
+
+    // Count the total sizes of Q, L, idx matrices
+    size_t ULV_Q_size = 0, ULV_L_size = 0, ULV_I_size = 0;
+    for (int i = 0; i < n_node; i++)
+    {
+        ULV_Q_size += ULV_Q[i]->nrow * ULV_Q[i]->ncol;
+        ULV_L_size += ULV_L[i]->nrow * ULV_L[i]->ncol;
+        ULV_I_size += ULV_idx[i]->length;
+    }
+    ULV_I_size += n_node;
+    h2pack->mat_size[_ULV_Q_SIZE_IDX] = ULV_Q_size;
+    h2pack->mat_size[_ULV_L_SIZE_IDX] = ULV_L_size;
+    h2pack->mat_size[_ULV_I_SIZE_IDX] = ULV_I_size;
+
+    double et = get_wtime_sec();  
+    h2pack->timers[_ULV_FCT_TIMER_IDX] = et - st;
 }
 
 // Solve the linear system A_{HSS} * x = b using the HSS ULV Cholesky factorization
@@ -336,17 +381,17 @@ void H2P_HSS_ULV_Cholesky_solve(H2Pack_t h2pack, const int op, const DTYPE *b, D
 {
     if (!h2pack->is_HSS)
     {
-        printf("[FATAL] %s failed: H2Pack is not running in HSS mode!\n", __FUNCTION__);
+        ERROR_PRINTF("H2Pack is not running in HSS mode!\n");
         return;
     }
     if (h2pack->ULV_idx == NULL)
     {
-        printf("[FATAL] %s failed: need to call H2P_HSS_ULV_Cholesky_factorize() first!\n", __FUNCTION__);
+        ERROR_PRINTF("Need to call H2P_HSS_ULV_Cholesky_factorize() first!\n");
         return;
     }
     if (op < 1 || op > 3) 
     {
-        printf("[FATAL] %s failed: invalid <op> value\n", __FUNCTION__);
+        ERROR_PRINTF("Invalid operation type %d, should be 1, 2, or 3\n", op);
         return;
     }
 
@@ -361,8 +406,9 @@ void H2P_HSS_ULV_Cholesky_solve(H2Pack_t h2pack, const int op, const DTYPE *b, D
     H2P_dense_mat_t  *ULV_L   = h2pack->ULV_L;
     H2P_thread_buf_t *thread_buf = h2pack->tb;
 
+    double st = get_wtime_sec();
+
     memcpy(x, b, sizeof(DTYPE) * h2pack->krnl_mat_size);
-    
     int solve_LT = op & 1;
     if (solve_LT)
     {
@@ -384,7 +430,6 @@ void H2P_HSS_ULV_Cholesky_solve(H2Pack_t h2pack, const int op, const DTYPE *b, D
                     H2P_int_vec_t   idx = ULV_idx[node];
                     H2P_dense_mat_t Q   = ULV_Q[node];
                     H2P_dense_mat_t L   = ULV_L[node];
-                    assert(idx->length == L->nrow);
                     int I_size = ULV_Ls[node];
                     int L_size = L->nrow - I_size;
                     // b0 = Q{node}' * x(idx);
@@ -414,7 +459,7 @@ void H2P_HSS_ULV_Cholesky_solve(H2Pack_t h2pack, const int op, const DTYPE *b, D
                         CblasRowMajor, CblasNoTrans, I_size, L_size, 
                         -1.0, L12, L->ld, x2, 1, 1.0, x1, 1
                     );
-                    // x(idx) = L{node} \ x(idx);
+                    // x(idx) = [x1; x2];
                     for (int k = 0; k < idx->length; k++) x[idx->data[k]] = x0->data[k];
                 }  // End of j loop
             }  // End of "#pragma omp parallel"
@@ -468,7 +513,6 @@ void H2P_HSS_ULV_Cholesky_solve(H2Pack_t h2pack, const int op, const DTYPE *b, D
                     H2P_int_vec_t   idx = ULV_idx[node];
                     H2P_dense_mat_t Q   = ULV_Q[node];
                     H2P_dense_mat_t L   = ULV_L[node];
-                    assert(idx->length == L->nrow);
                     int I_size = ULV_Ls[node];
                     int L_size = L->nrow - I_size;
                     // b0 = x(idx);
@@ -503,4 +547,8 @@ void H2P_HSS_ULV_Cholesky_solve(H2Pack_t h2pack, const int op, const DTYPE *b, D
             }  // End of "#pragma omp parallel"
         }  // End of i loop 
     }  // End of "if (solve_L)"
+
+    double et = get_wtime_sec();
+    h2pack->n_ULV_solve++;
+    h2pack->timers[_ULV_SLV_TIMER_IDX] += et - st;
 }

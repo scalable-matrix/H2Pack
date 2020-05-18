@@ -141,15 +141,26 @@ void H2P_int_COO_to_CSR(
     const int *val, int *row_ptr, int *col_idx, int *val_
 );
 
-// Get element A(row, col) from CSR matrix A
+// Get the value of integer CSR matrix element A(row, col)
 // Input parameters:
-//   row_ptr, col_idx, val : CSR matrix arrays
-//   row, col : Target position
+//   row_ptr, col_idx, val : CSR matrix array triple
+//   row, col              : Target position
 // Output parameter:
 //   <return> : A(row, col) if exists, 0 if not
 int H2P_get_int_CSR_elem(
     const int *row_ptr, const int *col_idx, const int *val,
     const int row, const int col
+);
+
+// Set the value of integer CSR matrix element A(row, col) to new_val
+// Input parameters:
+//   row_ptr, col_idx, val : CSR matrix array triple
+//   row, col, new_val     : Target position and new value
+// Output parameter:
+//   val : Updated CSR matrix element value array
+void H2P_set_int_CSR_elem(
+    const int *row_ptr, const int *col_idx, int *val,
+    const int row, const int col, const int new_val
 );
 
 // Get B{node0, node1} from a H2Pack structure
@@ -175,10 +186,13 @@ void H2P_get_Dij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_de
 //   n_work     : Number of work units
 //   work_sizes : Size n_work, sizes of work units
 //   total_size : Sum of work_sizes
-//   n_block    : Maximum number of blocks to partition the work units into
+//   n_block    : Number of blocks to be partitioned, the final result
+//                may have fewer blocks
 // Output parameter:
-//   blk_displs : H2P_int_vec structure, size <= n_block+1, indices of the 
-//                first work unit in each block
+//   blk_displs : Indices of each block's first work unit. The actual 
+//                number of work units == blk_displs->length-1 because 
+//                blk_displs->data[0] == 0 and 
+//                blk_displs->data[blk_displs->length-1] == total_size. 
 void H2P_partition_workload(
     const int n_work,  const size_t *work_sizes, const size_t total_size, 
     const int n_block, H2P_int_vec_t blk_displs

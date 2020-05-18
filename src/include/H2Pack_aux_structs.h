@@ -75,9 +75,9 @@ static inline void H2P_int_vec_set_capacity(H2P_int_vec_t int_vec, const int cap
 {
     if (capacity > int_vec->capacity)
     {
+        int *new_data = (int*) malloc(sizeof(int) * capacity);
+        ASSERT_PRINTF(new_data != NULL, "Failed to reallocate integer vector of size %d", capacity);
         int_vec->capacity = capacity;
-        int *new_data = (int*) malloc(sizeof(int) * int_vec->capacity);
-        assert(new_data != NULL);
         memcpy(new_data, int_vec->data, sizeof(int) * int_vec->length);
         free(int_vec->data);
         int_vec->data = new_data;
@@ -159,10 +159,10 @@ static inline void H2P_dense_mat_resize(H2P_dense_mat_t mat, const int nrow, con
     mat->ld   = ncol;
     if (new_size > mat->size)
     {
-        mat->size = new_size;
         free_aligned(mat->data);
-        mat->data = malloc_aligned(sizeof(DTYPE) * mat->size, 64);
-        assert(mat->data != NULL);
+        mat->data = malloc_aligned(sizeof(DTYPE) * new_size, 64);
+        ASSERT_PRINTF(mat->data != NULL, "Failed to reallocate %d * %d dense matrix\n", nrow, ncol);
+        mat->size = new_size;
     }
 }
 
@@ -203,6 +203,34 @@ void H2P_dense_mat_select_columns(H2P_dense_mat_t mat, H2P_int_vec_t col_idx);
 // Output parameter:
 //   mat     : H2P_dense_mat structure with normalized columns
 void H2P_dense_mat_normalize_columns(H2P_dense_mat_t mat, H2P_dense_mat_t workbuf);
+
+// Perform GEMM C := alpha * op(A) * op(B) + beta * C
+// Input parameters:
+//   alpha, beta    : Scaling factors
+//   transA, transB : If A / B need to be transposed
+//   A, B           : Source matrices
+// Output parameter:
+//   C : Result matrix, need to be properly resized before entering if beta != 0
+void H2P_dense_mat_gemm(
+    const DTYPE alpha, const DTYPE beta, const int transA, const int transB, 
+    H2P_dense_mat_t A, H2P_dense_mat_t B, H2P_dense_mat_t C
+);
+
+// Create a block diagonal matrix created by aligning the input matrices along the diagonal
+// Input parameters:
+//   mats : Size unknown, candidate H2P_dense_mat_t matrices
+//   idx  : Size unknown, indices of the input matrices in the candidate set
+// Output parameter:
+//   new_mat : The result matrix
+void H2P_dense_mat_blkdiag(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_mat_t new_mat);
+
+// Vertically concatenates the input matrices
+// Input / output parameters are the same as H2P_dense_mat_blkdiag()
+void H2P_dense_mat_vertcat(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_mat_t new_mat);
+
+// Horizontally concatenates the input matrices
+// Input / output parameters are the same as H2P_dense_mat_blkdiag()
+void H2P_dense_mat_horzcat(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_mat_t new_mat);
 
 // Print a H2P_dense_mat structure, for debugging
 // Input parameter:

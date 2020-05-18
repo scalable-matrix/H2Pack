@@ -152,11 +152,42 @@ struct H2Pack
 
     // Statistic data
     int    n_matvec;                // Number of performed matvec
-    size_t mat_size[8];             // Total size of U, B, D; matvec memory footprint
-    double timers[9];               // Partition; construct U, B, D; matvec up, down, B, D, reduce
-    double JIT_flops[2];            // JIT B & D flops
+    int    n_ULV_solve;             // Number of performed ULV solve
+    size_t mat_size[11];            // See below macros
+    double timers[11];              // See below macros
+    double JIT_flops[2];            // See below macros
 };
 typedef struct H2Pack* H2Pack_t;
+
+// For H2Pack_t->mat_size
+#define _U_SIZE_IDX         0   // Total size of U matrices
+#define _B_SIZE_IDX         1   // Total size of B matrices
+#define _D_SIZE_IDX         2   // Total size of D matrices
+#define _MV_FW_SIZE_IDX     3   // Total memory footprint of H2 matvec forward transformation
+#define _MV_MID_SIZE_IDX    4   // Total memory footprint of H2 matvec intermediate multiplication
+#define _MV_BW_SIZE_IDX     5   // Total memory footprint of H2 matvec backward transformation
+#define _MV_DEN_SIZE_IDX    6   // Total memory footprint of H2 matvec dense multiplication
+#define _MV_RDC_SIZE_IDX    7   // Total memory footprint of H2 matvec OpenMP reduction
+#define _ULV_Q_SIZE_IDX     8   // Total size of ULV Q matrices
+#define _ULV_L_SIZE_IDX     9   // Total size of ULV L matrices
+#define _ULV_I_SIZE_IDX     10  // Total size of ULV integer arrays
+
+// For H2Pack_t->timers
+#define _PT_TIMER_IDX       0   // Hierarchical partitioning
+#define _U_BUILD_TIMER_IDX  1   // U matrices construction
+#define _B_BUILD_TIMER_IDX  2   // B matrices construction
+#define _D_BUILD_TIMER_IDX  3   // D matrices construction
+#define _MV_FW_TIMER_IDX    4   // H2 matvec forward transformation
+#define _MV_MID_TIMER_IDX   5   // H2 matvec intermediate multiplication
+#define _MV_BW_TIMER_IDX    6   // H2 matvec backward transformation
+#define _MV_DEN_TIMER_IDX   7   // H2 matvec dense multiplication
+#define _MV_RDC_TIMER_IDX   8   // H2 matvec OpenMP reduction
+#define _ULV_FCT_TIMER_IDX  9   // ULV factorization
+#define _ULV_SLV_TIMER_IDX  10  // ULV solve
+
+// For H2Pack_t->JIT_flops
+#define _JIT_B_FLOPS_IDX    0   // JIT H2 matvec intermediate multiplication FLOPS
+#define _JIT_D_FLOPS_IDX    1   // JIT H2 matvec dense multiplication FLOPS
 
 // Initialize a H2Pack structure
 // Input parameters:

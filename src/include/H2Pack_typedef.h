@@ -65,6 +65,7 @@ struct H2Pack
     // H2 matrix tree flatten representation
     int    n_thread;                // Number of threads
     int    pt_dim;                  // Dimension of point coordinate
+    int    xpt_dim;                 // Dimension of extended point coordinate (for RPY)
     int    krnl_dim;                // Dimension of tensor kernel's return
     int    QR_stop_type;            // Partial QR stop criteria
     int    QR_stop_rank;            // Partial QR maximum rank
@@ -92,6 +93,7 @@ struct H2Pack
     int    BD_JIT;                  // If B and D matrices are computed just-in-time in matvec
     int    is_H2ERI;                // If H2Pack is called from H2ERI
     int    is_HSS;                  // If H2Pack is running in HSS mode
+    int    is_RPY;                  // If H2Pack is running RPY kernel
     int    *parent;                 // Size n_node, parent index of each node
     int    *children;               // Size n_node * max_child, indices of a node's children nodes
     int    *pt_cluster;             // Size n_node * 2, start and end (included) indices of points belong to each node
@@ -207,6 +209,12 @@ void H2P_init(
 // Input & output parameter:
 //   h2pack  : H2Pack structure to be configured (h2pack->is_HSS = 1)
 void H2P_run_HSS(H2Pack_t h2pack);
+
+// Run the RPY kernel in H2Pack, conflict with H2P_run_HSS(). This function 
+// should be called after H2P_init() and before H2P_partition_points().
+// Input & output parameter:
+//   h2pack  : H2Pack structure to be configured (h2pack->is_RPY = 1)
+void H2P_run_RPY(H2Pack_t h2pack);
 
 // Destroy a H2Pack structure
 // Input parameter:

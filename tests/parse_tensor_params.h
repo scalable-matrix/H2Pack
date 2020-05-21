@@ -2,6 +2,7 @@
 struct H2P_test_params
 {
     int   pt_dim;
+    int   xpt_dim;
     int   krnl_dim;
     int   n_point;
     int   krnl_mat_size;
@@ -24,7 +25,8 @@ static double pseudo_randn()
 
 void parse_tensor_params(int argc, char **argv)
 {
-    test_params.pt_dim = 3;
+    test_params.pt_dim   = 3;
+    test_params.xpt_dim  = 3;
     test_params.krnl_dim = 3;
     
     if (argc < 2)
@@ -66,56 +68,73 @@ void parse_tensor_params(int argc, char **argv)
     switch (test_params.kernel_id)
     {
         case 0: printf("Using 3D Stokes kernel \n"); break;
-        case 1: printf("Using 3D RPY kernel \n"); break;
+        case 1: printf("Using 3D RPY kernel \n");    break;
     }
     
-    test_params.coord = (DTYPE*) malloc_aligned(sizeof(DTYPE) * test_params.n_point * test_params.pt_dim, 64);
+    if (test_params.kernel_id == 1) test_params.xpt_dim = 4;
+    test_params.coord = (DTYPE*) malloc_aligned(sizeof(DTYPE) * test_params.n_point * test_params.xpt_dim, 64);
     assert(test_params.coord != NULL);
     
     // Note: coordinates need to be stored in column-major style, i.e. test_params.coord 
     // is row-major and each column stores the coordinate of a point. 
     int need_gen = 1;
-    if (argc >= 5)
+    if (argc >= 6)
     {
-        DTYPE *tmp = (DTYPE*) malloc(sizeof(DTYPE) * test_params.n_point * test_params.pt_dim);
-        if (strstr(argv[4], ".csv") != NULL)
+        DTYPE *tmp = (DTYPE*) malloc(sizeof(DTYPE) * test_params.n_point * test_params.xpt_dim);
+        if (strstr(argv[5], ".csv") != NULL)
         {
             printf("Reading coordinates from CSV file...");
-            FILE *inf = fopen(argv[4], "r");
+            FILE *inf = fopen(argv[5], "r");
             for (int i = 0; i < test_params.n_point; i++)
             {
-                for (int j = 0; j < test_params.pt_dim-1; j++) 
-                    fscanf(inf, "%lf,", &tmp[i * test_params.pt_dim + j]);
-                fscanf(inf, "%lf\n", &tmp[i * test_params.pt_dim + test_params.pt_dim-1]);
+                for (int j = 0; j < test_params.xpt_dim-1; j++) 
+                    fscanf(inf, "%lf,", &tmp[i * test_params.xpt_dim + j]);
+                fscanf(inf, "%lf\n", &tmp[i * test_params.xpt_dim + test_params.xpt_dim-1]);
             }
             fclose(inf);
             printf(" done.\n");
             need_gen = 0;
         }
-        if (strstr(argv[4], ".bin") != NULL)
+        if (strstr(argv[5], ".bin") != NULL)
         {
             printf("Reading coordinates from binary file...");
-            FILE *inf = fopen(argv[4], "rb");
-            fread(tmp, sizeof(DTYPE), test_params.n_point * test_params.pt_dim, inf);
+            FILE *inf = fopen(argv[5], "rb");
+            fread(tmp, sizeof(DTYPE), test_params.n_point * test_params.xpt_dim, inf);
             fclose(inf);
             printf(" done.\n");
             need_gen = 0;
         }
         if (need_gen == 0)
         {
-            for (int i = 0; i < test_params.pt_dim; i++)
+            for (int i = 0; i < test_params.xpt_dim; i++)
                 for (int j = 0; j < test_params.n_point; j++)
-                    test_params.coord[i * test_params.n_point + j] = tmp[j * test_params.pt_dim + i];
+                    test_params.coord[i * test_params.n_point + j] = tmp[j * test_params.xpt_dim + i];
         }
         free(tmp);
     }
     if (need_gen == 1)
     {
+        DTYPE base = 4.0 / 3.0 * M_PI / 0.4 * (DTYPE) test_params.n_point;
+        DTYPE expn = 1.0 / (DTYPE) test_params.pt_dim;
+        DTYPE prefac = DPOW(base, expn);
         printf("Binary/CSV coordinate file not provided. Generating random coordinates in unit box...");
-        for (int i = 0; i < test_params.n_point * test_params.pt_dim; i++)
+        if (test_params.kernel_id == 0)
         {
-            //test_params.coord[i] = (DTYPE) pseudo_randn();
-            test_params.coord[i] = (DTYPE) drand48();
+            for (int i = 0; i < test_params.n_point; i++)
+            {
+                DTYPE *point_i = test_params.coord + i * test_params.xpt_dim;
+                point_i[0] = (DTYPE) drand48() * prefac;
+                point_i[1] = (DTYPE) drand48() * prefac;
+                point_i[2] = (DTYPE) drand48() * prefac;
+                point_i[3] = 0.5 + 5.0 * (DTYPE) drand48();
+            }
+        } else {
+            for (int i = 0; i < test_params.n_point * test_params.pt_dim; i++)
+            {
+                //test_params.coord[i] = (DTYPE) pseudo_randn();
+                test_params.coord[i] = (DTYPE) drand48();
+                test_params.coord[i] *= prefac;
+            }
         }
         printf(" done.\n");
     }
@@ -131,8 +150,8 @@ void parse_tensor_params(int argc, char **argv)
         }
         case 1: 
         {
-            test_params.krnl_eval       = RPY_eval_std; 
-            test_params.krnl_bimv       = RPY_krnl_bimv_intrin_d; 
+            test_params.krnl_eval       = RPY_eval_radii; 
+            test_params.krnl_bimv       = NULL; 
             test_params.krnl_bimv_flops = RPY_krnl_bimv_flop;
             break;
         }

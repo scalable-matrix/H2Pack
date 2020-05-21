@@ -22,6 +22,8 @@ int main(int argc, char **argv)
     
     H2P_init(&h2pack, test_params.pt_dim, test_params.krnl_dim, QR_REL_NRM, &test_params.rel_tol);
     
+    if (test_params.kernel_id == 1) H2P_run_RPY(h2pack);
+
     H2P_partition_points(h2pack, test_params.n_point, test_params.coord, 300, 0);
     
     // Check if point index permutation is correct in H2Pack
@@ -46,21 +48,11 @@ int main(int argc, char **argv)
     if (num_pp > 10) num_pp = 10;
     num_pp = 6 * num_pp * num_pp;
     H2P_generate_proxy_point_surface(
-        test_params.pt_dim, num_pp, h2pack->max_level, 
-        start_level, max_L, &pp
+        test_params.pt_dim, test_params.xpt_dim, num_pp, 
+        h2pack->max_level, start_level, max_L, &pp
     );
     
-    double krnl_param[2];  // {eta, a}
-    if (test_params.kernel_id == 0)  // Stokes kernel
-    {
-        krnl_param[0] = 0.5;
-        krnl_param[1] = 0.8;
-    }
-    if (test_params.kernel_id == 1)  // RPY kernel
-    {
-        krnl_param[0] = 1.0;
-        krnl_param[1] = 1.0;
-    }
+    double krnl_param[2] = {1.0, 1.0};  // {eta, a}
 
     H2P_build(
         h2pack, pp, test_params.BD_JIT, krnl_param, 
@@ -68,7 +60,7 @@ int main(int argc, char **argv)
     );
     
     int n_check_pt = 10000, check_pt_s;
-    if (n_check_pt > test_params.n_point)
+    if (n_check_pt >= test_params.n_point)
     {
         n_check_pt = test_params.n_point;
         check_pt_s = 0;

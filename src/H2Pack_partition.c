@@ -32,6 +32,7 @@ struct H2P_partition_vars partition_vars;
 //   coord_s         : Index of the first point in this box
 //   coord_e         : Index of the last point in this box
 //   pt_dim          : Dimension of point coordinate
+//   xpt_dim         : Dimension of extended point coordinate (for RPY)
 //   n_point         : Total number of points
 //   max_leaf_size   : Maximum box size for leaf nodes
 //   max_leaf_points : Maximum number of points for leaf nodes
@@ -47,7 +48,7 @@ struct H2P_partition_vars partition_vars;
 //   coord           : Sorted coordinates
 //   <return>        : Information of current node
 H2P_tree_node_t H2P_bisection_partition_points(
-    int level, int coord_s, int coord_e, const int pt_dim, const int n_point, 
+    int level, int coord_s, int coord_e, const int pt_dim, const int xpt_dim, const int n_point, 
     const DTYPE max_leaf_size, const int max_leaf_points, DTYPE *enbox, 
     DTYPE *coord, DTYPE *coord_tmp, int *coord_idx, int *coord_idx_tmp
 )
@@ -161,7 +162,8 @@ H2P_tree_node_t H2P_bisection_partition_points(
     sub_displs[0] = 0;
     for (int i = 1; i <= max_child; i++)
         sub_displs[i] = sub_displs[i - 1] + sub_node_npts[i - 1];
-    for (int j = 0; j < pt_dim; j++)
+    // Notice: we need to copy both coordinates and extended information
+    for (int j = 0; j < xpt_dim; j++)
     {
         int dim_j_offset = j * n_point + coord_s;
         DTYPE *src = coord     + dim_j_offset;
@@ -176,7 +178,8 @@ H2P_tree_node_t H2P_bisection_partition_points(
         int dst_idx = coord_s + sub_displs[child_idx_i];
         DTYPE *coord_src = coord_tmp + src_idx;
         DTYPE *coord_dst = coord     + dst_idx;
-        for (int j = 0; j < pt_dim; j++)
+        // Notice: we need to copy both coordinates and extended information
+        for (int j = 0; j < xpt_dim; j++)
             coord_dst[j * n_point] = coord_src[j * n_point];
         coord_idx[dst_idx] = coord_idx_tmp[src_idx];
         sub_displs[child_idx_i]++;
@@ -219,7 +222,7 @@ H2P_tree_node_t H2P_bisection_partition_points(
         int coord_e_i = sub_coord_se[2 * i + 1];
         DTYPE *sub_box_i = sub_box + i * pt_dim * 2;
         node->children[i] = H2P_bisection_partition_points(
-            level + 1, coord_s_i, coord_e_i, pt_dim, n_point, 
+            level + 1, coord_s_i, coord_e_i, pt_dim, xpt_dim, n_point, 
             max_leaf_size, max_leaf_points, sub_box_i, 
             coord, coord_tmp, coord_idx, coord_idx_tmp
         );
@@ -260,7 +263,7 @@ H2P_tree_node_t H2P_bisection_partition_points(
 void H2P_tree_to_array(H2P_tree_node_t node, H2Pack_t h2pack)
 {
     int pt_dim    = h2pack->pt_dim;
-    int pt_dimx2  = pt_dim * 2;
+    int pt_dim2   = pt_dim * 2;
     int max_child = 1 << pt_dim;
     int node_idx  = node->po_idx;
     int n_child   = node->n_child;
@@ -286,7 +289,7 @@ void H2P_tree_to_array(H2P_tree_node_t node, H2Pack_t h2pack)
     for (int i = n_child; i < max_child; i++) node_children[i] = -1;
     h2pack->pt_cluster[node_idx * 2 + 0] = node->pt_cluster[0];
     h2pack->pt_cluster[node_idx * 2 + 1] = node->pt_cluster[1];
-    memcpy(h2pack->enbox + node_idx * pt_dimx2, node->enbox, sizeof(DTYPE) * pt_dimx2);
+    memcpy(h2pack->enbox + node_idx * pt_dim2, node->enbox, sizeof(DTYPE) * pt_dim2);
     h2pack->node_level[node_idx]  = level;
     h2pack->node_height[node_idx] = height;
     h2pack->n_child[node_idx] = node->n_child;
@@ -534,7 +537,8 @@ void H2P_partition_points(
     int max_leaf_points, DTYPE max_leaf_size
 )
 {
-    const int pt_dim = h2pack->pt_dim;
+    const int pt_dim  = h2pack->pt_dim;
+    const int xpt_dim = h2pack->xpt_dim;
     double st, et;
     
     st = get_wtime_sec();
@@ -549,18 +553,18 @@ void H2P_partition_points(
     h2pack->max_leaf_points = max_leaf_points;
     h2pack->max_leaf_size   = max_leaf_size;
     h2pack->coord_idx = (int*)   malloc(sizeof(int)   * n_point);
-    h2pack->coord     = (DTYPE*) malloc(sizeof(DTYPE) * n_point * pt_dim);
+    h2pack->coord     = (DTYPE*) malloc(sizeof(DTYPE) * n_point * xpt_dim);
     ASSERT_PRINTF(
         h2pack->coord != NULL && h2pack->coord_idx != NULL,
         "Failed to allocate matrix of size %d * %d for storing point coordinates\n", 
         pt_dim, n_point
     );
-    memcpy(h2pack->coord, coord, sizeof(DTYPE) * n_point * pt_dim);
+    memcpy(h2pack->coord, coord, sizeof(DTYPE) * n_point * xpt_dim);
     for (int i = 0; i < n_point; i++) h2pack->coord_idx[i] = i;
     
     // 2. Partition points for H2 tree using linked list 
     int   *coord_idx_tmp = (int*)   malloc(sizeof(int)   * n_point);
-    DTYPE *coord_tmp     = (DTYPE*) malloc(sizeof(DTYPE) * n_point * pt_dim);
+    DTYPE *coord_tmp     = (DTYPE*) malloc(sizeof(DTYPE) * n_point * xpt_dim);
     ASSERT_PRINTF(
         coord_tmp != NULL && coord_idx_tmp != NULL,
         "Failed to allocate matrix of size %d * %d for temporarily storing point coordinates\n", 
@@ -570,7 +574,7 @@ void H2P_partition_points(
     partition_vars.max_level   = 0;
     partition_vars.n_leaf_node = 0;
     H2P_tree_node_t root = H2P_bisection_partition_points(
-        0, 0, n_point-1, pt_dim, n_point, 
+        0, 0, n_point-1, pt_dim, xpt_dim, n_point, 
         max_leaf_size, max_leaf_points, NULL, 
         h2pack->coord, coord_tmp, h2pack->coord_idx, coord_idx_tmp
     );

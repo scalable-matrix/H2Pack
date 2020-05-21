@@ -32,6 +32,7 @@ void H2P_generate_proxy_point_ID(
 // we only need to generate proxy points once and use them repeatedly.
 // Input parameters:
 //   pt_dim      : Dimension of point coordinate
+//   xpt_dim     : Dimension of extended point coordinate (for RPY xpt_dim == pt_dim+1, otherwise set xpt_dim == pt_dim)
 //   min_npts    : Minimum number of proxy points on the box surface
 //   max_level   : Maximum level (included) of a H2 tree, (root level == 0)
 //   start_level : Minimum level that needs proxy points
@@ -39,7 +40,7 @@ void H2P_generate_proxy_point_ID(
 // Output parameter:
 //   pp_  : Array of proxy points for each level
 void H2P_generate_proxy_point_surface(
-    const int pt_dim, const int min_npts, const int max_level, 
+    const int pt_dim, const int xpt_dim, const int min_npts, const int max_level, 
     const int start_level, DTYPE max_L, H2P_dense_mat_t **pp_
 );
 

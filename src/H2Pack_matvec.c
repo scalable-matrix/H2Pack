@@ -480,7 +480,7 @@ void H2P_matvec_intmd_mult_AOT(H2Pack_t h2pack, const DTYPE *x)
 //   x_in_1     : Matrix, size >= krnl_dim * n0, will be left multiplied by kernel_matrix(coord1, coord0)
 //   ldi0, ldi1 : Leading dimensions of x_in_0 and x_in_1
 //   ldo0, ldo1 : Leading dimensions of x_out_0 and x_out_1
-//   pt_dim     : Dimension of point coordinate
+//   xpt_dim    : Dimension of extended point coordinate
 //   krnl_dim   : Dimension of tensor kernel's return
 //   workbuf    : H2P_dense_mat data structure for allocating working buffer
 //   krnl_param : Pointer to kernel function parameter array
@@ -496,25 +496,25 @@ void H2P_ext_krnl_bimv(
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
     const DTYPE *x_in_0, const DTYPE *x_in_1, DTYPE *x_out_0, DTYPE *x_out_1,
-    const int   ldi0, const int ldi1, const int ldo0, const int ldo1, 
-    const int pt_dim, const int krnl_dim, H2P_dense_mat_t workbuf, 
+    const int ldi0, const int ldi1, const int ldo0, const int ldo1, 
+    const int xpt_dim, const int krnl_dim, H2P_dense_mat_t workbuf, 
     const void *krnl_param, kernel_bimv_fptr krnl_bimv
 )
 {
     int n0_ext   = (n0 + SIMD_LEN - 1) / SIMD_LEN * SIMD_LEN;
     int n1_ext   = (n1 + SIMD_LEN - 1) / SIMD_LEN * SIMD_LEN;
     int n01_ext  = n0_ext + n1_ext;
-    int buf_size = (pt_dim + krnl_dim) * n01_ext * 2;
+    int buf_size = (xpt_dim + krnl_dim) * n01_ext * 2;
     H2P_dense_mat_resize(workbuf, 1, buf_size);
     DTYPE *trg_coord = workbuf->data;
-    DTYPE *src_coord = trg_coord + pt_dim * n0_ext;
-    DTYPE *x_in_0_   = src_coord + pt_dim * n1_ext;
+    DTYPE *src_coord = trg_coord + xpt_dim * n0_ext;
+    DTYPE *x_in_0_   = src_coord + xpt_dim * n1_ext;
     DTYPE *x_in_1_   = x_in_0_   + n1_ext * krnl_dim;
     DTYPE *x_out_0_  = x_in_1_   + n0_ext * krnl_dim;
     DTYPE *x_out_1_  = x_out_0_  + n0_ext * krnl_dim;
     
     // Copy coordinates and pad the extend part
-    for (int i = 0; i < pt_dim; i++)
+    for (int i = 0; i < xpt_dim; i++)
     {
         const DTYPE *c0_src = coord0 + i * ld0;
         const DTYPE *c1_src = coord1 + i * ld1;
@@ -619,7 +619,7 @@ void H2P_krnl_eval_bimv(
 // Need to calculate all B_{ij} matrices before using it
 void H2P_matvec_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x)
 {
-    int    pt_dim        = h2pack->pt_dim;
+    int    xpt_dim       = h2pack->xpt_dim;
     int    krnl_dim      = h2pack->krnl_dim;
     int    n_node        = h2pack->n_node;
     int    n_point       = h2pack->n_point;
@@ -711,7 +711,7 @@ void H2P_matvec_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x)
                             J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
                             y0[node1]->data, y0[node0]->data, y1_dst_0, y1_dst_1,
                             node1_npt, node0_npt, node0_npt, node1_npt, 
-                            pt_dim, krnl_dim, workbuf, krnl_param, krnl_bimv
+                            xpt_dim, krnl_dim, workbuf, krnl_param, krnl_bimv
                         );
                     } else {
                         H2P_krnl_eval_bimv(
@@ -748,7 +748,7 @@ void H2P_matvec_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x)
                             coord + pt_s1, n_point, node1_npt,
                             x_spos, y0[node0]->data, y1_dst_0, y_spos, 
                             n_point, node0_npt, node0_npt, n_point, 
-                            pt_dim, krnl_dim, workbuf, krnl_param, krnl_bimv
+                            xpt_dim, krnl_dim, workbuf, krnl_param, krnl_bimv
                         );
                     } else {
                         const DTYPE *x_spos = x + vec_s1;
@@ -787,7 +787,7 @@ void H2P_matvec_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x)
                             J_coord[node1]->data, J_coord[node1]->ncol, J_coord[node1]->ncol,
                             y0[node1]->data, x_spos, y_spos, y1_dst_1,
                             node1_npt, n_point, n_point, node1_npt, 
-                            pt_dim, krnl_dim, workbuf, krnl_param, krnl_bimv
+                            xpt_dim, krnl_dim, workbuf, krnl_param, krnl_bimv
                         );
                     } else {
                         const DTYPE *x_spos = x + vec_s0;
@@ -1058,7 +1058,7 @@ void H2P_matvec_dense_mult_AOT(H2Pack_t h2pack, const DTYPE *x)
 void H2P_matvec_dense_mult_JIT(H2Pack_t h2pack, const DTYPE *x)
 {
     int    n_thread        = h2pack->n_thread;
-    int    pt_dim          = h2pack->pt_dim;
+    int    xpt_dim         = h2pack->xpt_dim;
     int    krnl_dim        = h2pack->krnl_dim;
     int    n_point         = h2pack->n_point;
     int    n_leaf_node     = h2pack->n_leaf_node;
@@ -1111,7 +1111,7 @@ void H2P_matvec_dense_mult_JIT(H2Pack_t h2pack, const DTYPE *x)
                         coord + pt_s, n_point, node_npt,
                         x_spos, x_spos, y_spos, tmp->data, 
                         n_point, 0, n_point, 0,   // ldi1 and ldo1 need to be 0 here!
-                        pt_dim, krnl_dim, workbuf, krnl_param, krnl_bimv
+                        xpt_dim, krnl_dim, workbuf, krnl_param, krnl_bimv
                     );
                 } else {
                     DTYPE       *y_spos = y + vec_s;
@@ -1160,7 +1160,7 @@ void H2P_matvec_dense_mult_JIT(H2Pack_t h2pack, const DTYPE *x)
                         coord + pt_s1, n_point, node1_npt,
                         x_spos1, x_spos0, y_spos0, y_spos1,
                         n_point, n_point, n_point, n_point, 
-                        pt_dim, krnl_dim, workbuf, krnl_param, krnl_bimv
+                        xpt_dim, krnl_dim, workbuf, krnl_param, krnl_bimv
                     );
                 } else {
                     DTYPE       *y_spos0 = y + vec_s0;

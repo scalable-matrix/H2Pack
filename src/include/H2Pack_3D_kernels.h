@@ -611,6 +611,79 @@ static void Stokes_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
 // ======================   RPY Kernel   ====================== //
 // ============================================================ //
 
+const  int  RPY_krnl_bimv_flop = 87;
+
+static void RPY_eval_radii(KRNL_EVAL_PARAM)
+{
+    EXTRACT_3D_COORD();
+    // Radii
+    const DTYPE *a0 = coord0 + ld0 * 3; 
+    const DTYPE *a1 = coord1 + ld1 * 3; 
+    const DTYPE *param_ = (DTYPE*) param;
+    const DTYPE eta = param_[0];
+    const DTYPE C   = 1.0 / (6.0 * M_PI * eta);
+    for (int i = 0; i < n0; i++)
+    {
+        DTYPE tx = x0[i];
+        DTYPE ty = y0[i];
+        DTYPE tz = z0[i];
+        DTYPE ta = a0[i];
+        for (int j = 0; j < n1; j++)
+        {
+            DTYPE dx = tx - x1[j];
+            DTYPE dy = ty - y1[j];
+            DTYPE dz = tz - z1[j];
+            DTYPE da = a1[j];
+            DTYPE r2 = dx * dx + dy * dy + dz * dz;
+            DTYPE r  = DSQRT(r2);
+            DTYPE inv_r  = (r == 0.0) ? 0.0 : 1.0 / r;
+
+            dx *= inv_r;
+            dy *= inv_r;
+            dz *= inv_r;
+            
+            DTYPE t1, t2;
+            if (r > ta + da)
+            {
+                DTYPE tmp1 = C * 0.75 * inv_r;
+                DTYPE tmp2 = (ta * ta + da * da) * inv_r * inv_r;
+                t1 = tmp1 * (1.0 + tmp2 / 3.0);
+                t2 = tmp1 * (1.0 - tmp2);
+            } else if (r > ta - da && r > da - ta) {
+                DTYPE inv_r2 = inv_r * inv_r;
+                DTYPE tmp1 = (ta - da) * (ta - da);
+                DTYPE tmp2 = C / (ta * da);
+                DTYPE tmp3 = inv_r2 * inv_r / 32.0;
+                t1 = tmp1 + 3 * r2;
+                t1 = tmp2 * (16.0 * r2 * r * (ta + da) - t1 * t1) * tmp3;
+                t2 = tmp1 - r2;
+                t2 = tmp2 * 3.0 * t2 * t2 * tmp3;
+            } else {
+                t1 = C / (ta > da ? ta : da);
+                t2 = 0.0;
+            }
+            
+            int base = 3 * i * ldm + 3 * j;
+            DTYPE tmp;
+            #define krnl(k, l) mat[base + k * ldm + l]
+            tmp = t2 * dx;
+            krnl(0, 0) = tmp * dx + t1;
+            krnl(0, 1) = tmp * dy;
+            krnl(0, 2) = tmp * dz;
+            tmp = t2 * dy;
+            krnl(1, 0) = tmp * dx;
+            krnl(1, 1) = tmp * dy + t1;
+            krnl(1, 2) = tmp * dz;
+            tmp = t2 * dz;
+            krnl(2, 0) = tmp * dx;
+            krnl(2, 1) = tmp * dy;
+            krnl(2, 2) = tmp * dz + t1;
+            #undef krnl
+        }
+    }
+}
+
+/*
 #define CALC_RPY_CONST() \
     const DTYPE *param_ = (DTYPE*) param;           \
     const DTYPE eta = param_[0];                    \
@@ -779,6 +852,7 @@ static void RPY_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
         x_out_0[i + 2 * ld0] += vec_reduce_add_d(xo0_2);
     }
 }
+*/
 
 #ifdef __cplusplus
 }

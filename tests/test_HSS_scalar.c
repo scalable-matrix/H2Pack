@@ -64,7 +64,7 @@ int main(int argc, char **argv)
     );
     
     int n_check_pt = 50000, check_pt_s;
-    if (n_check_pt > test_params.n_point)
+    if (n_check_pt >= test_params.n_point)
     {
         n_check_pt = test_params.n_point;
         check_pt_s = 0;

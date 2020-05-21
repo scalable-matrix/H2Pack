@@ -21,6 +21,7 @@ void H2P_init(
     
     h2pack->n_thread    = omp_get_max_threads();
     h2pack->pt_dim      = pt_dim;
+    h2pack->xpt_dim     = pt_dim;  // By default, we don't have any extended information
     h2pack->krnl_dim    = krnl_dim;
     h2pack->max_child   = 1 << pt_dim;
     h2pack->n_matvec    = 0;
@@ -103,6 +104,19 @@ void H2P_run_HSS(H2Pack_t h2pack)
 {
     if (h2pack == NULL) return;
     h2pack->is_HSS = 1;
+}
+
+// Run the RPY kernel in H2Pack
+void H2P_run_RPY(H2Pack_t h2pack) 
+{
+    if (h2pack == NULL) return;
+    if (h2pack->is_HSS == 1)
+    {
+        ERROR_PRINTF("Cannot run RPY kernel in HSS mode, it is too slow!\n");
+        return;
+    }
+    h2pack->is_RPY  = 1;
+    h2pack->xpt_dim = 4;
 }
 
 // Destroy a H2Pack structure

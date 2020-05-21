@@ -274,7 +274,7 @@ void H2P_generate_proxy_point_ID(
 // Generate uniformly distributed proxy points on a box surface for constructing
 // H2 projection and skeleton matrices for SOME kernel function
 void H2P_generate_proxy_point_surface(
-    const int pt_dim, const int min_npts, const int max_level, 
+    const int pt_dim, const int xpt_dim, const int min_npts, const int max_level, 
     const int start_level, DTYPE max_L, H2P_dense_mat_t **pp_
 )
 {
@@ -303,7 +303,7 @@ void H2P_generate_proxy_point_surface(
     
     // Generate proxy points on the surface of [-1,1]^pt_dim box
     H2P_dense_mat_t unit_pp;
-    H2P_dense_mat_init(&unit_pp, pt_dim, npts);
+    H2P_dense_mat_init(&unit_pp, xpt_dim, npts);
     int index = 0;
     if (pt_dim == 3)
     {
@@ -369,6 +369,12 @@ void H2P_generate_proxy_point_surface(
         }
     }  // End of "if (pt_dim == 2)"
     
+    if (xpt_dim > pt_dim)
+    {
+        DTYPE *ext = unit_pp->data + npts * pt_dim;
+        memset(ext, 0, sizeof(DTYPE) * npts);
+    }
+
     // Scale proxy points on unit box surface to different size as
     // proxy points on different levels
     DTYPE pow_2_level = 0.5;
@@ -376,12 +382,12 @@ void H2P_generate_proxy_point_surface(
     for (int level = start_level; level <= max_level; level++)
     {
         pow_2_level *= 2.0;
-        H2P_dense_mat_init(&pp[level], pt_dim, npts);
+        H2P_dense_mat_init(&pp[level], xpt_dim, npts);
         DTYPE box_width = max_L / pow_2_level * 0.5;
         DTYPE adm_width = (1.0 + 2.0 * ALPHA_H2) * box_width;
         DTYPE *pp_level = pp[level]->data;
         #pragma omp simd
-        for (int i = 0; i < pt_dim * npts; i++)
+        for (int i = 0; i < xpt_dim * npts; i++)
             pp_level[i] = adm_width * unit_pp->data[i];
     }
     
@@ -403,6 +409,7 @@ void H2P_generate_proxy_point_surface(
 void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
 {
     int    pt_dim         = h2pack->pt_dim;
+    int    xpt_dim        = h2pack->xpt_dim;
     int    krnl_dim       = h2pack->krnl_dim;
     int    n_node         = h2pack->n_node;
     int    n_point        = h2pack->n_point;
@@ -452,7 +459,7 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
         int tid = omp_get_thread_num();
         H2P_dense_mat_t A_block         = thread_buf[tid]->mat0;
         H2P_dense_mat_t node_skel_coord = thread_buf[tid]->mat1;
-        H2P_dense_mat_t QR_buff         = thread_buf[tid]->mat1;
+        H2P_dense_mat_t QR_buff         = thread_buf[tid]->mat2;
         H2P_int_vec_t   sub_idx         = thread_buf[tid]->idx0;
         H2P_int_vec_t   ID_buff         = thread_buf[tid]->idx1;
 
@@ -474,8 +481,8 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
                 for (int k = 0; k < node_npt; k++)
                     J[node]->data[k] = pt_s + k;
                 J[node]->length = node_npt;
-                H2P_dense_mat_init(&J_coord[node], pt_dim, node_npt);
-                H2P_copy_matrix_block(pt_dim, node_npt, coord + pt_s, n_point, J_coord[node]->data, node_npt);
+                H2P_dense_mat_init(&J_coord[node], xpt_dim, node_npt);
+                H2P_copy_matrix_block(xpt_dim, node_npt, coord + pt_s, n_point, J_coord[node]->data, node_npt);
             } else {
                 // Non-leaf nodes, gather row indices from children nodes
                 int n_child_node = n_child[node];
@@ -495,7 +502,7 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
             }  // End of "if (height == 0)"
 
             // (2) Gather current node's skeleton points (== all children nodes' skeleton points)
-            H2P_dense_mat_resize(node_skel_coord, pt_dim, J[node]->length);
+            H2P_dense_mat_resize(node_skel_coord, xpt_dim, J[node]->length);
             if (height == 0)
             {
                 node_skel_coord = J_coord[node];
@@ -510,7 +517,7 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
                     int dst_ld = node_skel_coord->ncol;
                     DTYPE *src_mat = J_coord[i_child_node]->data;
                     DTYPE *dst_mat = node_skel_coord->data + J_child_size; 
-                    H2P_copy_matrix_block(pt_dim, src_ld, src_mat, src_ld, dst_mat, dst_ld);
+                    H2P_copy_matrix_block(xpt_dim, src_ld, src_mat, src_ld, dst_mat, dst_ld);
                     J_child_size += J[i_child_node]->length;
                 }
             }  // End of "if (level == 0)"
@@ -535,6 +542,22 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
                 pp[level]->data,       node_pp_npt,   node_pp_npt, 
                 krnl_param, A_block->data, A_block->ld
             );
+            if (A_blk_ncol > 2 * A_blk_nrow)
+            {
+                H2P_dense_mat_t A_block1 = node_skel_coord;
+                H2P_dense_mat_t rand_mat = QR_buff;
+                H2P_dense_mat_resize(A_block1, A_blk_nrow, A_blk_nrow);
+                H2P_dense_mat_resize(rand_mat, A_blk_ncol, A_blk_nrow);
+                H2P_gen_normal_distribution(0.0, 1.0, A_blk_ncol * A_blk_nrow, rand_mat->data);
+                CBLAS_GEMM(
+                    CblasRowMajor, CblasNoTrans, CblasNoTrans, A_blk_nrow, A_blk_nrow, A_blk_ncol, 
+                    1.0, A_block->data, A_block->ld, rand_mat->data, rand_mat->ld, 
+                    0.0, A_block1->data,  A_block1->ld
+                );
+                H2P_dense_mat_resize(A_block, A_blk_nrow, A_blk_nrow);
+                H2P_copy_matrix_block(A_blk_nrow, A_blk_nrow, A_block1->data, A_block1->ld, A_block->data, A_block->ld);
+                H2P_dense_mat_normalize_columns(A_block, A_block1);
+            }
 
             // (4) ID compress 
             // Note: A is transposed in ID compress, be careful when calculating the buffer size
@@ -555,10 +578,10 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
             for (int k = 0; k < sub_idx->length; k++)
                 J[node]->data[k] = J[node]->data[sub_idx->data[k]];
             J[node]->length = sub_idx->length;
-            H2P_dense_mat_init(&J_coord[node], pt_dim, sub_idx->length);
+            H2P_dense_mat_init(&J_coord[node], xpt_dim, sub_idx->length);
             H2P_gather_matrix_columns(
                 coord, n_point, J_coord[node]->data, J[node]->length, 
-                pt_dim, J[node]->data, J[node]->length
+                xpt_dim, J[node]->data, J[node]->length
             );
 
             // (6) Tell DAG_task_queue that this node is finished, and get next available node

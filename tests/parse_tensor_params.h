@@ -114,19 +114,30 @@ void parse_tensor_params(int argc, char **argv)
     }
     if (need_gen == 1)
     {
-        DTYPE base = 4.0 / 3.0 * M_PI / 0.4 * (DTYPE) test_params.n_point;
+        DTYPE vol_frac = 0.1;
+        DTYPE base = 4.0 / 3.0 * M_PI / vol_frac * (DTYPE) test_params.n_point;
         DTYPE expn = 1.0 / (DTYPE) test_params.pt_dim;
         DTYPE prefac = DPOW(base, expn);
         printf("Binary/CSV coordinate file not provided. Generating random coordinates in unit box...");
-        if (test_params.kernel_id == 0)
+        if (test_params.kernel_id == 1)
         {
+            DTYPE *x = test_params.coord;
+            DTYPE *y = test_params.coord + test_params.n_point;
+            DTYPE *z = test_params.coord + test_params.n_point * 2;
+            DTYPE *a = test_params.coord + test_params.n_point * 3;
+            DTYPE sum_a3 = 0.0;
             for (int i = 0; i < test_params.n_point; i++)
             {
-                DTYPE *point_i = test_params.coord + i * test_params.xpt_dim;
-                point_i[0] = (DTYPE) drand48() * prefac;
-                point_i[1] = (DTYPE) drand48() * prefac;
-                point_i[2] = (DTYPE) drand48() * prefac;
-                point_i[3] = 0.5 + 5.0 * (DTYPE) drand48();
+                a[i] = 0.5 + 5.0 * (DTYPE) drand48();
+                sum_a3 += a[i] * a[i] * a[i];
+            }
+            base = 4.0 / 3.0 * M_PI * sum_a3 / vol_frac;
+            prefac = DPOW(base, expn);
+            for (int i = 0; i < test_params.n_point; i++)
+            {
+                x[i] = (DTYPE) drand48() * prefac;
+                y[i] = (DTYPE) drand48() * prefac;
+                z[i] = (DTYPE) drand48() * prefac;
             }
         } else {
             for (int i = 0; i < test_params.n_point * test_params.pt_dim; i++)

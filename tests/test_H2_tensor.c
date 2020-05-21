@@ -22,9 +22,22 @@ int main(int argc, char **argv)
     
     H2P_init(&h2pack, test_params.pt_dim, test_params.krnl_dim, QR_REL_NRM, &test_params.rel_tol);
     
-    if (test_params.kernel_id == 1) H2P_run_RPY(h2pack);
+    int max_leaf_points = 300;
+    DTYPE max_leaf_size = 0.0;
+    // Some special settings for RPY
+    if (test_params.kernel_id == 1) 
+    {
+        H2P_run_RPY(h2pack);
+        // We need to ensure the size of each leaf box >= 2 * max(radii), but the 
+        // stopping criteria is "if (box_size <= max_leaf_size)", so max_leaf_size
+        // should be set as 4 * max(radii).
+        DTYPE *radii = test_params.coord + 3 * test_params.n_point; 
+        for (int i = 0; i < test_params.n_point; i++)
+            max_leaf_size = (max_leaf_size < radii[i]) ? radii[i] : max_leaf_size;
+        max_leaf_size *= 4.0;
+    }
 
-    H2P_partition_points(h2pack, test_params.n_point, test_params.coord, 300, 0);
+    H2P_partition_points(h2pack, test_params.n_point, test_params.coord, max_leaf_points, max_leaf_size);
     
     // Check if point index permutation is correct in H2Pack
     DTYPE coord_diff_sum = 0.0;

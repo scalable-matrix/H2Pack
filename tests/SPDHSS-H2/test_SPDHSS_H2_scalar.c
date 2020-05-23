@@ -16,17 +16,29 @@
 
 #include "pcg.h"
 #include "block_jacobi_precond.h"
+#include "LRD_precond.h"
+
+const int   max_rank = 100;
+const DTYPE shift    = 1e-1;
 
 void H2Pack_matvec(const void *h2pack_, const DTYPE *b, DTYPE *x)
 {
     H2Pack_t h2pack = (H2Pack_t) h2pack_;
     H2P_matvec(h2pack, b, x);
+    #pragma omp simd
+    for (int i = 0; i < h2pack->krnl_mat_size; i++) x[i] += shift * b[i];
 }
 
 void block_jacobi_precond(const void *precond_, const DTYPE *b, DTYPE *x)
 {
     block_jacobi_precond_t precond = (block_jacobi_precond_t) precond_;
     apply_block_jacobi_precond(precond, b, x);
+}
+
+void LRD_precond(const void *precond_, const DTYPE *b, DTYPE *x)
+{
+    LRD_precond_t precond = (LRD_precond_t) precond_;
+    apply_LRD_precond(precond, b, x);
 }
 
 void HSS_ULV_Chol_precond(const void *hssmat_, const DTYPE *b, DTYPE *x)
@@ -95,10 +107,11 @@ int main(int argc, char **argv)
     }
     printf("Calculating direct n-body reference result for points %d -> %d\n", check_pt_s, check_pt_s + n_check_pt - 1);
     
-    DTYPE *x0, *x1, *x2, *y0, *y1;
+    DTYPE *x0, *x1, *x2, *x3, *y0, *y1;
     x0 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
     x1 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
     x2 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
+    x3 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
     y0 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
     y1 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
     assert(x0 != NULL && x1 != NULL && x2 != NULL);
@@ -134,8 +147,6 @@ int main(int argc, char **argv)
     printf("For %d validation points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / ref_norm);
 
     printf("\nConstructing SPDHSS from H2\n");
-    const int max_rank = 100;
-    const DTYPE shift = 0.0;
     H2P_SPDHSS_H2_build(max_rank, shift, h2mat, &hssmat);
  
     // Check HSS matvec accuracy
@@ -178,12 +189,13 @@ int main(int argc, char **argv)
         x0[i] = 0.0;
         x1[i] = 0.0;
         x2[i] = 0.0;
+        x3[i] = 0.0;
     }
 
     printf("\nStarting PCG solve without preconditioner...\n");
-    int   flag0,   flag1,   flag2;
-    int   iter0,   iter1,   iter2;
-    DTYPE relres0, relres1, relres2;
+    int   flag0,   flag1,   flag2,   flag3;
+    int   iter0,   iter1,   iter2,   iter3;
+    DTYPE relres0, relres1, relres2, relres3;
     pcg(
         test_params.krnl_mat_size, 1e-6, 50, 
         H2Pack_matvec, h2mat, y0, NULL, NULL, x0,
@@ -210,6 +222,20 @@ int main(int argc, char **argv)
         &flag2, &relres2, &iter2, NULL
     );
     printf("PCG stopped after %d iterations, relres = %e\n", iter2, relres2);
+    free_block_jacobi_precond(bj_precond);
+
+    printf("\nConstructing LRD preconditioner...");
+    LRD_precond_t lrd_precond;
+    H2P_build_LRD_precond(h2mat, max_rank, shift, &lrd_precond);
+    printf("done.\n");
+    printf("Starting PCG solve with LRD preconditioner...\n");
+    pcg(
+        test_params.krnl_mat_size, 1e-6, 50, 
+        H2Pack_matvec, h2mat, y0, LRD_precond, lrd_precond, x3,
+        &flag3, &relres3, &iter3, NULL
+    );
+    printf("PCG stopped after %d iterations, relres = %e\n", iter3, relres3);
+    free_LRD_precond(lrd_precond);
 
     printf("\nSPDHSS matrix:\n");
     H2P_print_statistic(hssmat);
@@ -217,8 +243,10 @@ int main(int argc, char **argv)
     free(x0);
     free(x1);
     free(x2);
+    free(x3);
     free(y0);
     free(y1);
     free_aligned(test_params.coord);
     H2P_destroy(h2mat);
+    H2P_destroy(hssmat);
 }

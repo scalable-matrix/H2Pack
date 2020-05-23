@@ -7,9 +7,9 @@
 #include <omp.h>
 
 #include "H2Pack.h"
+#include "H2Pack_kernels.h"
 
 #include "parse_tensor_params.h"
-
 #include "direct_nbody.h"
 
 int main(int argc, char **argv)

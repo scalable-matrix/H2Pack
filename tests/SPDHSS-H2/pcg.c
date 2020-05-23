@@ -1,27 +1,12 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+#include <math.h>
 
-// b := A * x
-typedef void (*matvec_fptr) (const void *param, const DTYPE *x, DTYPE *b);
+#include "pcg.h"
 
 // Left preconditioned Conjugate Gradient for solving A * x = b
-// Reference: Iterative Methods for Sparse Linear System (2nd Edition), algorithm 9.1
-// Input parameters:
-//   n           : Size of the matrix
-//   tol         : Residual vector norm tolerance
-//   max_iter    : Maximum number of iterations
-//   Ax          : Function pointer for calculating A * x
-//   Ax_param    : Pointer to Ax function parameters
-//   b           : Size n, right-hand size vector
-//   invMx       : Function pointer for applying preconditioner M^{-1} * r, 
-//                 NULL pointer means no preconditioning
-//   invMx_param : Pointer to invMx function parameters
-//   x           : Size n, initial guess vector
-// Output parameters:
-//   x        : Size n, solution vector
-//   *flag_   : 0 == converged, 1 == not converged
-//   *relres_ : Residual vector relative 2-norm at last step
-//   *iter_   : Number of iterations performed
-//   res_vec  : Size >= max_iter, Residual vector relative 2-norms at each iteration, 
-//              NULL pointer means these values will not be recorded
 void pcg(
     const int n, const DTYPE tol, const int max_iter, 
     const matvec_fptr Ax,    const void *Ax_param,    const DTYPE *b, 
@@ -121,4 +106,3 @@ void pcg(
     free(p);
     free(s);
 }
-

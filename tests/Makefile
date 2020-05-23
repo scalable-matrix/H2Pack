@@ -6,7 +6,7 @@ USE_OPENBLAS = 0
 OPENBLAS_INSTALL_DIR = /home/mkurisu/Workspace/OpenBLAS-0.3.8/install
 
 CC      = icc
-DEF     = -DUSE_AVX
+DEF     = 
 CFLAGS  = $(INC) -Wall -g -std=gnu99 -O3 $(DEF)
 LDFLAGS = -g -O3
 

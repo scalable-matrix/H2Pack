@@ -74,10 +74,15 @@ extern "C" {
 #define NEWTON_ITER 2   // Two Newton iterations is usually sufficient for rsqrt using double type
 #endif
 
-#ifndef USE_AVX512
-#ifndef USE_AVX
+#if !defined(USE_AVX) && !defined(USE_AVX512)
+#ifdef __AVX512F__
+#define USE_AVX512
+#warning x86_intrin_wrapper.h detected AVX-512 and will use it. 
+#warning Add -DUSE_AVX to your CFLAGS to force use AVX & AVX2 in x86_intrin_wrapper.h.
+#else
 #define USE_AVX
-#warning x86_intrin_wrapper.h is using AVX & AVX2 by default. Add -DUSE_AVX512 to your CFLAGS to use AVX-512 in x86_intrin_wrapper.h.
+#warning x86_intrin_wrapper.h did not detect AVX-512 and will use AVX & AVX2. 
+#warning Add -DUSE_AVX512 to your CFLAGS to force use AVX-512 in x86_intrin_wrapper.h.
 #endif
 #endif
 

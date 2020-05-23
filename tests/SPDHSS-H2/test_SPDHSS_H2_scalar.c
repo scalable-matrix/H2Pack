@@ -9,15 +9,29 @@
 //#include <ittnotify.h>
 
 #include "H2Pack.h"
+#include "H2Pack_kernels.h"
 
-#include "parse_scalar_params.h"
-
-#include "direct_nbody.h"
+#include "../parse_scalar_params.h"
+#include "../direct_nbody.h"
 
 #include "pcg.h"
+#include "block_jacobi_precond.h"
 
-void HSS_ULV_Chol_precond(H2Pack_t hssmat, const DTYPE *b, DTYPE *x)
+void H2Pack_matvec(const void *h2pack_, const DTYPE *b, DTYPE *x)
 {
+    H2Pack_t h2pack = (H2Pack_t) h2pack_;
+    H2P_matvec(h2pack, b, x);
+}
+
+void block_jacobi_precond(const void *precond_, const DTYPE *b, DTYPE *x)
+{
+    block_jacobi_precond_t precond = (block_jacobi_precond_t) precond_;
+    apply_block_jacobi_precond(precond, b, x);
+}
+
+void HSS_ULV_Chol_precond(const void *hssmat_, const DTYPE *b, DTYPE *x)
+{
+    H2Pack_t hssmat = (H2Pack_t) hssmat_;
     H2P_HSS_ULV_Cholesky_solve(hssmat, 3, b, x);
 }
 
@@ -81,12 +95,14 @@ int main(int argc, char **argv)
     }
     printf("Calculating direct n-body reference result for points %d -> %d\n", check_pt_s, check_pt_s + n_check_pt - 1);
     
-    DTYPE *x0, *x1, *y0, *y1;
+    DTYPE *x0, *x1, *x2, *y0, *y1;
     x0 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
     x1 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
+    x2 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
     y0 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
     y1 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
-    assert(x0 != NULL && x1 != NULL && y0 != NULL && y1 != NULL);
+    assert(x0 != NULL && x1 != NULL && x2 != NULL);
+    assert(y0 != NULL && y1 != NULL);
     for (int i = 0; i < test_params.krnl_mat_size; i++) 
     {
         x0[i] = (DTYPE) pseudo_randn();
@@ -161,29 +177,46 @@ int main(int argc, char **argv)
         y0[i] = drand48();
         x0[i] = 0.0;
         x1[i] = 0.0;
+        x2[i] = 0.0;
     }
-    printf("Starting PCG solve without preconditioner...\n");
-    int flag0, flag1, iter0, iter1;
-    DTYPE relres0, relres1;
+
+    printf("\nStarting PCG solve without preconditioner...\n");
+    int   flag0,   flag1,   flag2;
+    int   iter0,   iter1,   iter2;
+    DTYPE relres0, relres1, relres2;
     pcg(
         test_params.krnl_mat_size, 1e-6, 50, 
-        H2P_matvec, h2mat, y0, NULL, NULL, x0,
+        H2Pack_matvec, h2mat, y0, NULL, NULL, x0,
         &flag0, &relres0, &iter0, NULL
     );
     printf("PCG stopped after %d iterations, relres = %e\n", iter0, relres0);
-    printf("Starting PCG solve with SPDHSS preconditioner...\n");
+
+    printf("\nStarting PCG solve with SPDHSS preconditioner...\n");
     pcg(
         test_params.krnl_mat_size, 1e-6, 50, 
-        H2P_matvec, h2mat, y0, HSS_ULV_Chol_precond, hssmat, x1,
+        H2Pack_matvec, h2mat, y0, HSS_ULV_Chol_precond, hssmat, x1,
         &flag1, &relres1, &iter1, NULL
     );
     printf("PCG stopped after %d iterations, relres = %e\n", iter1, relres1);
+
+    printf("\nConstructing block Jacobi preconditioner...");
+    block_jacobi_precond_t bj_precond;
+    H2P_build_block_jacobi_precond(h2mat, shift, &bj_precond);
+    printf("done.\n");
+    printf("Starting PCG solve with block Jacobi preconditioner...\n");
+    pcg(
+        test_params.krnl_mat_size, 1e-6, 50, 
+        H2Pack_matvec, h2mat, y0, block_jacobi_precond, bj_precond, x2,
+        &flag2, &relres2, &iter2, NULL
+    );
+    printf("PCG stopped after %d iterations, relres = %e\n", iter2, relres2);
 
     printf("\nSPDHSS matrix:\n");
     H2P_print_statistic(hssmat);
 
     free(x0);
     free(x1);
+    free(x2);
     free(y0);
     free(y1);
     free_aligned(test_params.coord);

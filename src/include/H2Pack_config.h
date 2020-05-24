@@ -16,6 +16,7 @@
 #define DEXP             exp            // Exponential function
 #define DPOW             pow            // Power function
 #define DSQRT            sqrt           // Sqrt function
+#define DERF             erf            // Erf function
 #define DFLOOR           floor          // Floor function
 #define CBLAS_NRM2       cblas_dnrm2    // CBLAS vector 2-norm 
 #define CBLAS_DOT        cblas_ddot     // CBLAS vector dot product
@@ -44,7 +45,8 @@
 #define DLOG             logf
 #define DEXP             expf
 #define DPOW             powf
-#define DSQRT            sqrtf    
+#define DSQRT            sqrtf
+#define DERF             erff
 #define DFLOOR           floorf
 #define CBLAS_NRM2       cblas_snrm2
 #define CBLAS_DOT        cblas_sdot

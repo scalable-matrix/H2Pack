@@ -50,6 +50,7 @@ vec_exp10_*(a)          : Return lane-wise 10^(<a[i]>)
 vec_pow_*(a, b)         : Return lane-wise (<a[i]>)^(<b[i]>)
 vec_sin_*(a)            : Return lane-wise sin(<a[i]>)
 vec_cos_*(a)            : Return lane-wise cos(<a[i]>)
+vec_erf_*(a)            : Return lane-wise erf(<a[i]>)
 
 Reference:
 1. Intel Intrinsic Guide    : https://software.intel.com/sites/landingpage/IntrinsicsGuide/
@@ -258,6 +259,9 @@ static inline __m256d vec_sin_d  (const __m256d a) { return _mm256_sin_pd(a);   
 static inline __m256  vec_cos_s  (const __m256  a) { return _mm256_cos_ps(a);   }
 static inline __m256d vec_cos_d  (const __m256d a) { return _mm256_cos_pd(a);   }
 
+static inline __m256  vec_erf_s  (const __m256  a) { return _mm256_erf_ps(a);   }
+static inline __m256d vec_erf_d  (const __m256d a) { return _mm256_erf_pd(a);   }
+
 #else  // Else of "#ifdef __INTEL_COMPILER"
 
 #if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 22
@@ -334,37 +338,53 @@ static inline __m256d vec_pow_d(__m256d a, __m256d b)
     return res.v;
 }
 
-static inline __m256  vec_sin_s(__m256  a, __m256  b)
+static inline __m256  vec_sin_s(__m256  a)
 {
     int i;
-    union vec8f ua = {a}, ub = {b}, res;
-    for (i = 0; i < SIMD_LEN_S; i++) res.f[i] = sinf(ua.f[i], ub.f[i]);
+    union vec8f ua = {a}, res;
+    for (i = 0; i < SIMD_LEN_S; i++) res.f[i] = sinf(ua.f[i]);
     return res.v;
 }
-static inline __m256d vec_sin_d(__m256d a, __m256d b)
+static inline __m256d vec_sin_d(__m256d a)
 {
     int i;
-    union vec4d ua = {a}, ub = {b}, res;
-    for (i = 0; i < SIMD_LEN_D; i++) res.d[i] = sin(ua.d[i], ub.d[i]);
+    union vec4d ua = {a}, res;
+    for (i = 0; i < SIMD_LEN_D; i++) res.d[i] = sin(ua.d[i]);
     return res.v;
 }
 
-static inline __m256  vec_cos_s(__m256  a, __m256  b)
+static inline __m256  vec_cos_s(__m256  a)
 {
     int i;
-    union vec8f ua = {a}, ub = {b}, res;
-    for (i = 0; i < SIMD_LEN_S; i++) res.f[i] = cosf(ua.f[i], ub.f[i]);
+    union vec8f ua = {a}, res;
+    for (i = 0; i < SIMD_LEN_S; i++) res.f[i] = cosf(ua.f[i]);
     return res.v;
 }
-static inline __m256d vec_cos_d(__m256d a, __m256d b)
+static inline __m256d vec_cos_d(__m256d a)
 {
     int i;
-    union vec4d ua = {a}, ub = {b}, res;
-    for (i = 0; i < SIMD_LEN_D; i++) res.d[i] = cos(ua.d[i], ub.d[i]);
+    union vec4d ua = {a}, res;
+    for (i = 0; i < SIMD_LEN_D; i++) res.d[i] = cos(ua.d[i]);
     return res.v;
 }
 
 #endif  // End of "#if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 22"
+
+static inline __m256  vec_erf_s(__m256  a)
+{
+    int i;
+    union vec8f ua = {a}, res;
+    for (i = 0; i < SIMD_LEN_S; i++) res.f[i] = erff(ua.f[i]);
+    return res.v;
+}
+static inline __m256d vec_erf_d(__m256d a)
+{
+    int i;
+    union vec4d ua = {a}, res;
+    for (i = 0; i < SIMD_LEN_D; i++) res.d[i] = erf(ua.d[i]);
+    return res.v;
+}
+
 #endif  // End of "#ifdef __INTEL_COMPILER"
 
 #endif  // End of "#ifdef __AVX__"
@@ -530,6 +550,9 @@ static inline __m512d vec_sin_d  (const __m512d a) { return _mm512_sin_pd(a);   
 static inline __m512  vec_cos_s  (const __m512  a) { return _mm512_cos_ps(a);   }
 static inline __m512d vec_cos_d  (const __m512d a) { return _mm512_cos_pd(a);   }
 
+static inline __m512  vec_erf_s  (const __m512  a) { return _mm512_erf_ps(a);   }
+static inline __m512d vec_erf_d  (const __m512d a) { return _mm512_erf_pd(a);   }
+
 #else   // Else of "#ifdef __INTEL_COMPILER"
 
 #if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 22
@@ -606,36 +629,52 @@ static inline __m512d vec_pow_d(__m512d a, __m512d b)
     return res.v;
 }
 
-static inline __m512  vec_sin_s(__m512  a, __m512  b)
+static inline __m512  vec_sin_s(__m512  a)
 {
     int i;
-    union vec16f ua = {a}, ub = {b}, res;
-    for (i = 0; i < SIMD_LEN_S; i++) res.f[i] = sinf(ua.f[i], ub.f[i]);
+    union vec16f ua = {a}, res;
+    for (i = 0; i < SIMD_LEN_S; i++) res.f[i] = sinf(ua.f[i]);
     return res.v;
 }
-static inline __m512d vec_sin_d(__m512d a, __m512d b)
+static inline __m512d vec_sin_d(__m512d a)
 {
     int i;
-    union vec8d ua = {a}, ub = {b}, res;
-    for (i = 0; i < SIMD_LEN_D; i++) res.d[i] = sin(ua.d[i], ub.d[i]);
+    union vec8d ua = {a}, res;
+    for (i = 0; i < SIMD_LEN_D; i++) res.d[i] = sin(ua.d[i]);
     return res.v;
 }
 
-static inline __m512  vec_cos_s(__m512  a, __m512  b)
+static inline __m512  vec_cos_s(__m512  a)
 {
     int i;
     union vec16f ua = {a}, ub = {b}, res;
-    for (i = 0; i < SIMD_LEN_S; i++) res.f[i] = cosf(ua.f[i], ub.f[i]);
+    for (i = 0; i < SIMD_LEN_S; i++) res.f[i] = cosf(ua.f[i]);
     return res.v;
 }
-static inline __m512d vec_cos_d(__m512d a, __m512d b)
+static inline __m512d vec_cos_d(__m512d a)
 {
     int i;
-    union vec8d ua = {a}, ub = {b}, res;
-    for (i = 0; i < SIMD_LEN_D; i++) res.d[i] = cos(ua.d[i], ub.d[i]);
+    union vec8d ua = {a}, res;
+    for (i = 0; i < SIMD_LEN_D; i++) res.d[i] = cos(ua.d[i]);
     return res.v;
 }
 #endif  // End of "#if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 22"
+
+static inline __m512  vec_erf_s(__m512  a)
+{
+    int i;
+    union vec16f ua = {a}, ub = {b}, res;
+    for (i = 0; i < SIMD_LEN_S; i++) res.f[i] = erff(ua.f[i]);
+    return res.v;
+}
+static inline __m512d vec_erf_d(__m512d a)
+{
+    int i;
+    union vec8d ua = {a}, res;
+    for (i = 0; i < SIMD_LEN_D; i++) res.d[i] = erf(ua.d[i]);
+    return res.v;
+}
+
 #endif  // End of "#ifdef __INTEL_COMPILER"
 
 #endif  // End of "#ifdef __AVX512F__"

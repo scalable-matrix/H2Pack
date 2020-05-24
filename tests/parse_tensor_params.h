@@ -9,12 +9,16 @@ struct H2P_test_params
     int   BD_JIT;
     int   kernel_id;
     int   krnl_bimv_flops;
+    void  *krnl_param;
     DTYPE rel_tol;
     DTYPE *coord;
     kernel_eval_fptr krnl_eval;
     kernel_bimv_fptr krnl_bimv;
 };
 struct H2P_test_params test_params;
+
+const DTYPE Stokes_krnl_param[2] = {1.0, 0.1};
+const DTYPE RPY_krnl_param[1]    = {1.0};
 
 static double pseudo_randn()
 {
@@ -67,8 +71,16 @@ void parse_tensor_params(int argc, char **argv)
     }
     switch (test_params.kernel_id)
     {
-        case 0: printf("Using 3D Stokes kernel \n"); break;
-        case 1: printf("Using 3D RPY kernel \n");    break;
+        case 0: 
+        {
+            printf("Using 3D Stokes kernel, eta = %.2lf, a = %.2lf\n", Stokes_krnl_param[0], Stokes_krnl_param[1]); 
+            break;
+        }
+        case 1: 
+        {
+            printf("Using 3D RPY kernel, eta = %.2lf\n", RPY_krnl_param[0]);
+            break;
+        }
     }
     
     if (test_params.kernel_id == 1) test_params.xpt_dim = 4;
@@ -157,6 +169,7 @@ void parse_tensor_params(int argc, char **argv)
             test_params.krnl_eval       = Stokes_eval_std; 
             test_params.krnl_bimv       = Stokes_krnl_bimv_intrin_d; 
             test_params.krnl_bimv_flops = Stokes_krnl_bimv_flop;
+            test_params.krnl_param      = (void*) &Stokes_krnl_param[0];
             break;
         }
         case 1: 
@@ -164,6 +177,7 @@ void parse_tensor_params(int argc, char **argv)
             test_params.krnl_eval       = RPY_eval_radii; 
             test_params.krnl_bimv       = NULL; 
             test_params.krnl_bimv_flops = RPY_krnl_bimv_flop;
+            test_params.krnl_param      = (void*) &RPY_krnl_param[0];
             break;
         }
     }

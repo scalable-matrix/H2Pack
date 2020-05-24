@@ -79,20 +79,16 @@ int main(int argc, char **argv)
 
     H2P_dense_mat_t *pp;
     DTYPE max_L = h2mat->enbox[h2mat->root_idx * 2 * test_params.pt_dim + test_params.pt_dim];
-    DTYPE Quadratic_krnl_param[2] = {1.0, -0.5};
-    void *krnl_param = NULL;
-    if (test_params.kernel_id == 3) krnl_param = (void*) &Quadratic_krnl_param[0];
-    
     st = get_wtime_sec();
     H2P_generate_proxy_point_ID(
         test_params.pt_dim, test_params.krnl_dim, test_params.rel_tol, h2mat->max_level, 
-        h2mat->min_adm_level, max_L, krnl_param, test_params.krnl_eval, &pp
+        h2mat->min_adm_level, max_L, test_params.krnl_param, test_params.krnl_eval, &pp
     );
     et = get_wtime_sec();
     printf("H2Pack generate proxy points used %.3lf (s)\n", et - st);
     
     H2P_build(
-        h2mat, pp, test_params.BD_JIT, krnl_param, 
+        h2mat, pp, test_params.BD_JIT, test_params.krnl_param, 
         test_params.krnl_eval, test_params.krnl_bimv, test_params.krnl_bimv_flops
     );
 
@@ -124,7 +120,7 @@ int main(int argc, char **argv)
 
     // Get reference results
     direct_nbody(
-        krnl_param, test_params.krnl_eval, test_params.pt_dim, test_params.krnl_dim, 
+        test_params.krnl_param, test_params.krnl_eval, test_params.pt_dim, test_params.krnl_dim, 
         h2mat->coord,              test_params.n_point, test_params.n_point, x0, 
         h2mat->coord + check_pt_s, test_params.n_point, n_check_pt,          y0
     );

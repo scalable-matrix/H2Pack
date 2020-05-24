@@ -65,10 +65,8 @@ int main(int argc, char **argv)
         h2pack->max_level, start_level, max_L, &pp
     );
     
-    double krnl_param[2] = {1.0, 1.0};  // {eta, a}
-
     H2P_build(
-        h2pack, pp, test_params.BD_JIT, krnl_param, 
+        h2pack, pp, test_params.BD_JIT, test_params.krnl_param, 
         test_params.krnl_eval, test_params.krnl_bimv, test_params.krnl_bimv_flops
     );
     
@@ -96,7 +94,7 @@ int main(int argc, char **argv)
     
     // Get reference results
     direct_nbody(
-        krnl_param, test_params.krnl_eval, test_params.pt_dim, test_params.krnl_dim, 
+        test_params.krnl_param, test_params.krnl_eval, test_params.pt_dim, test_params.krnl_dim, 
         h2pack->coord,              test_params.n_point, test_params.n_point, x, 
         h2pack->coord + check_pt_s, test_params.n_point, n_check_pt,          y0
     );

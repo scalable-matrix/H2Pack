@@ -59,20 +59,39 @@ void H2P_build_LRD_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, L
     H2P_dense_mat_t L, Ut, tmp;
     H2P_dense_mat_init(&L,   nrow, nrow);
     H2P_dense_mat_init(&Ut,  nrow, mat_size);
-    H2P_dense_mat_init(&tmp, nrow, nrow);
+    H2P_dense_mat_init(&tmp, nrow, mat_size);
     // L   = kernel({coord(idx, :), coord(idx, :)});
     // Ut  = kernel({coord(idx, :), coord});
     H2P_eval_kernel_matrix_OMP(h2pack->krnl_param, h2pack->krnl_eval, krnl_dim, coord_skel, coord_skel, L);
     H2P_eval_kernel_matrix_OMP(h2pack->krnl_param, h2pack->krnl_eval, krnl_dim, coord_skel, coord_all,  Ut);
-    // L   = chol(L, 'lower');
-    // Ut  = linsolve(L, Ut, struct('LT', true));
-    info = LAPACK_POTRF(LAPACK_ROW_MAJOR, 'L', nrow, L->data, L->ld);
-    ASSERT_PRINTF(info == 0, "Cholesky decomposition failed and return %d, matrix size = %d\n", info, nrow);
-    CBLAS_TRSM(
-        CblasRowMajor, CblasLeft, CblasLower, CblasNoTrans, CblasNonUnit,
-        nrow, mat_size, 1.0, L->data, L->ld, Ut->data, Ut->ld
+    // [V, D] = eig(S);
+    // Ut  = inv(D) * V' * Ut;
+    info = LAPACK_SYEVD(LAPACK_ROW_MAJOR, 'V', 'L', nrow, L->data, L->ld, tmp->data);
+    ASSERT_PRINTF(info == 0, "Eigen decomposition for S matrix failed and returned %d, matrix size = %d\n", info, nrow);
+    DTYPE *V = L->data, *D = tmp->data;
+    DTYPE max_diag = 0.0;
+    for (int i = 0; i < nrow; i++) 
+    {
+        if (D[i] < 0.0) WARNING_PRINTF("S matrix %d-th eigenvalue = %e < 0!\n", i+1, D[i]);
+        if (D[i] > max_diag) max_diag = D[i];
+    }
+    for (int i = 0; i < nrow; i++)
+        D[i] = (D[i] >= 1e-10 * max_diag) ? D[i] = 1.0 / sqrt(D[i]) : 0.0;
+    #pragma omp parallel for
+    for (int i = 0; i < nrow; i++)
+    {
+        DTYPE *V_i = V + i * nrow;
+        #pragma omp simd
+        for (int j = 0; j < nrow; j++) V_i[j] *= D[j];
+    }
+    CBLAS_GEMM(
+        CblasRowMajor, CblasTrans, CblasNoTrans, nrow, mat_size, nrow,
+        1.0, V, nrow, Ut->data, mat_size, 0.0, tmp->data, mat_size
     );
+    #pragma omp parallel for
+    for (int i = 0; i < nrow * mat_size; i++) Ut->data[i] = tmp->data[i];
     // tmp = Ut * Ut' + shift * eye(lr_rank);
+    H2P_dense_mat_resize(tmp, nrow, nrow);
     CBLAS_GEMM(
         CblasRowMajor, CblasNoTrans, CblasTrans, nrow, nrow, mat_size,
         1.0, Ut->data, Ut->ld, Ut->data, Ut->ld, 0.0, tmp->data, tmp->ld

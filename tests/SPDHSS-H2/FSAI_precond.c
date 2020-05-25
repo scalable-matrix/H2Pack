@@ -252,10 +252,12 @@ void H2P_build_FSAI_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, 
             int *nn_i = knn + i * n_neighbor;
             for (int j = 0; j < n_neighbor; j++)
             {
-                if (nn_i[j] > i) continue;
+                if (nn_i[j] >= i) continue;
                 nn_idx->data[num_i] = nn_i[j];
                 num_i++;
             }
+            nn_idx->data[num_i] = i;
+            num_i++;
             nn_idx->length = num_i;
             // tmpA = kernel({coord(nn_i, :), coord(nn_i, :)}) + shift * eye(krnl_dim * num_i);
             H2P_dense_mat_resize(nn_coord, pt_dim, num_i);
@@ -283,17 +285,23 @@ void H2P_build_FSAI_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, 
             for (int j = 0; j < krnl_dim; j++)
                 tmpU[(offset + j) * krnl_dim + j] = 1.0;
             // tmpY = (tmpA \ tmpU)';
-            CBLAS_TRSM(
-                CblasRowMajor, CblasLeft, CblasLower, CblasNoTrans, CblasNonUnit,
-                A_size, krnl_dim, 1.0, tmpA, A_size, tmpU, krnl_dim
-            );
+            if (A_size == 1)
+            {
+                tmpU[0] /= tmpA[0];
+            } else {
+                H2P_int_vec_set_capacity(col_idx, A_size);
+                int *ipiv = col_idx->data;
+                LAPACK_GETRF(LAPACK_ROW_MAJOR, A_size, A_size, tmpA, A_size, ipiv);
+                LAPACK_GETRS(LAPACK_ROW_MAJOR, 'N', A_size, krnl_dim, tmpA, A_size, ipiv, tmpU, krnl_dim);
+            }
             H2P_dense_mat_resize(tmpYDL, krnl_dim, A_size + 2 * krnl_dim);
             DTYPE *tmpY = tmpYDL->data;
             DTYPE *tmpD = tmpY + krnl_dim * A_size;
             DTYPE *tmpL = tmpD + krnl_dim * krnl_dim;
             if (krnl_dim == 1)
             {
-                memcpy(tmpY, tmpU, sizeof(DTYPE) * A_size);
+                DTYPE coef = 1.0 / sqrt(tmpU[A_size - 1]);
+                for (int j = 0; j < A_size; j++) tmpY[j] = tmpU[j] * coef;
             } else {
                 DTYPE *tmpY_src = tmpY + (A_size - krnl_dim);
                 H2P_transpose_dmat(1, A_size, krnl_dim, tmpU, krnl_dim, tmpY, A_size);

@@ -35,11 +35,26 @@ endif
 
 all: $(EXES)
 
-%.exe: %.o $(OBJS) $(LIB)
+test_SPDHSS_H2_scalar.exe: test_SPDHSS_H2_scalar.o $(OBJS) $(LIB)
 	$(CC) -o $@ $^ $(LDFLAGS) 
 
-%.o: %.c
-	$(CC) $(CFLAGS) -I../ -c $^ 
+pcg.o: pcg.c pcg.h
+	$(CC) $(CFLAGS) -I../ -c pcg.c
+
+block_jacobi_precond.o: block_jacobi_precond.c block_jacobi_precond.h
+	$(CC) $(CFLAGS) -I../ -c block_jacobi_precond.c
+
+LRD_precond.o: LRD_precond.c LRD_precond.h
+	$(CC) $(CFLAGS) -I../ -c LRD_precond.c
+
+FSAI_precond.o: FSAI_precond.c FSAI_precond.h CSRPlus.h
+	$(CC) $(CFLAGS) -I../ -c FSAI_precond.c
+
+CSRPlus.o: CSRPlus.c CSRPlus.h
+	$(CC) $(CFLAGS) -I../ -c CSRPlus.c
+
+test_SPDHSS_H2_scalar.o: test_SPDHSS_H2_scalar.c
+	$(CC) $(CFLAGS) -I../ -c test_SPDHSS_H2_scalar.c
 
 clean:
 	rm -f $(EXES) $(OBJS)

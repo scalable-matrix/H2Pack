@@ -17,9 +17,10 @@
 #include "pcg.h"
 #include "block_jacobi_precond.h"
 #include "LRD_precond.h"
+#include "FSAI_precond.h"
 
 const int   max_rank = 100;
-const DTYPE shift    = 1e-1;
+const DTYPE shift    = 1e-2;
 
 void H2Pack_matvec(const void *h2pack_, const DTYPE *b, DTYPE *x)
 {
@@ -39,6 +40,12 @@ void LRD_precond(const void *precond_, const DTYPE *b, DTYPE *x)
 {
     LRD_precond_t precond = (LRD_precond_t) precond_;
     apply_LRD_precond(precond, b, x);
+}
+
+void FSAI_precond(const void *precond_, const DTYPE *b, DTYPE *x)
+{
+    FSAI_precond_t precond = (FSAI_precond_t) precond_;
+    apply_FSAI_precond(precond, b, x);
 }
 
 void HSS_ULV_Chol_precond(const void *hssmat_, const DTYPE *b, DTYPE *x)
@@ -103,14 +110,15 @@ int main(int argc, char **argv)
     }
     printf("Calculating direct n-body reference result for points %d -> %d\n", check_pt_s, check_pt_s + n_check_pt - 1);
     
-    DTYPE *x0, *x1, *x2, *x3, *y0, *y1;
+    DTYPE *x0, *x1, *x2, *x3, *x4, *y0, *y1;
     x0 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
     x1 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
     x2 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
     x3 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
+    x4 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
     y0 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
     y1 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
-    assert(x0 != NULL && x1 != NULL && x2 != NULL);
+    assert(x0 != NULL && x1 != NULL && x2 != NULL && x3 != NULL && x4 != NULL);
     assert(y0 != NULL && y1 != NULL);
     for (int i = 0; i < test_params.krnl_mat_size; i++) 
     {
@@ -181,57 +189,90 @@ int main(int argc, char **argv)
     printf("\n");
     for (int i = 0; i < test_params.krnl_mat_size; i++)
     {
-        y0[i] = drand48();
+        y0[i] = 1.0;
         x0[i] = 0.0;
         x1[i] = 0.0;
         x2[i] = 0.0;
         x3[i] = 0.0;
+        x4[i] = 0.0;
     }
 
+    int   flag0,   flag1,   flag2,   flag3,   flag4;
+    int   iter0,   iter1,   iter2,   iter3,   iter4;
+    DTYPE relres0, relres1, relres2, relres3, relres4;
+    const int max_iter = 50;
+    const DTYPE CG_tol = 1e-6;
+
     printf("\nStarting PCG solve without preconditioner...\n");
-    int   flag0,   flag1,   flag2,   flag3;
-    int   iter0,   iter1,   iter2,   iter3;
-    DTYPE relres0, relres1, relres2, relres3;
+    st = get_wtime_sec();
     pcg(
-        test_params.krnl_mat_size, 1e-6, 50, 
+        test_params.krnl_mat_size, CG_tol, max_iter, 
         H2Pack_matvec, h2mat, y0, NULL, NULL, x0,
         &flag0, &relres0, &iter0, NULL
     );
-    printf("PCG stopped after %d iterations, relres = %e\n", iter0, relres0);
+    et = get_wtime_sec();
+    printf("PCG stopped after %d iterations, relres = %e, used time = %.2lf sec\n", iter0, relres0, et - st);
 
     printf("\nStarting PCG solve with SPDHSS preconditioner...\n");
+    st = get_wtime_sec();
     pcg(
-        test_params.krnl_mat_size, 1e-6, 50, 
+        test_params.krnl_mat_size, CG_tol, max_iter, 
         H2Pack_matvec, h2mat, y0, HSS_ULV_Chol_precond, hssmat, x1,
         &flag1, &relres1, &iter1, NULL
     );
-    printf("PCG stopped after %d iterations, relres = %e\n", iter1, relres1);
+    et = get_wtime_sec();
+    printf("PCG stopped after %d iterations, relres = %e, used time = %.2lf sec\n", iter1, relres1, et - st);
 
     printf("\nConstructing block Jacobi preconditioner...");
+    st = get_wtime_sec();
     block_jacobi_precond_t bj_precond;
     H2P_build_block_jacobi_precond(h2mat, shift, &bj_precond);
-    printf("done.\n");
+    et = get_wtime_sec();
+    printf("done, used time = %.2lf sec\n", et - st);
     printf("Starting PCG solve with block Jacobi preconditioner...\n");
+    st = get_wtime_sec();
     pcg(
-        test_params.krnl_mat_size, 1e-6, 50, 
+        test_params.krnl_mat_size, CG_tol, max_iter, 
         H2Pack_matvec, h2mat, y0, block_jacobi_precond, bj_precond, x2,
         &flag2, &relres2, &iter2, NULL
     );
-    printf("PCG stopped after %d iterations, relres = %e\n", iter2, relres2);
+    et = get_wtime_sec();
+    printf("PCG stopped after %d iterations, relres = %e, used time = %.2lf sec\n", iter2, relres2, et - st);
     free_block_jacobi_precond(bj_precond);
 
     printf("\nConstructing LRD preconditioner...");
     LRD_precond_t lrd_precond;
+    st = get_wtime_sec();
     H2P_build_LRD_precond(h2mat, max_rank, shift, &lrd_precond);
-    printf("done.\n");
+    et = get_wtime_sec();
+    printf("done, used time = %.2lf sec\n", et - st);
     printf("Starting PCG solve with LRD preconditioner...\n");
+    st = get_wtime_sec();
     pcg(
-        test_params.krnl_mat_size, 1e-6, 50, 
+        test_params.krnl_mat_size, CG_tol, max_iter, 
         H2Pack_matvec, h2mat, y0, LRD_precond, lrd_precond, x3,
         &flag3, &relres3, &iter3, NULL
     );
-    printf("PCG stopped after %d iterations, relres = %e\n", iter3, relres3);
+    et = get_wtime_sec();
+    printf("PCG stopped after %d iterations, relres = %e, used time = %.2lf sec\n", iter3, relres3, et - st);
     free_LRD_precond(lrd_precond);
+
+    printf("\nConstructing FSAI preconditioner...");
+    st = get_wtime_sec();
+    FSAI_precond_t fsai_precond;
+    H2P_build_FSAI_precond(h2mat, max_rank, shift, &fsai_precond);
+    et = get_wtime_sec();
+    printf("done, used time = %.2lf sec\n", et - st);
+    printf("Starting PCG solve with FSAI preconditioner...\n");
+    st = get_wtime_sec();
+    pcg(
+        test_params.krnl_mat_size, CG_tol, max_iter, 
+        H2Pack_matvec, h2mat, y0, FSAI_precond, fsai_precond, x4,
+        &flag4, &relres4, &iter4, NULL
+    );
+    et = get_wtime_sec();
+    printf("PCG stopped after %d iterations, relres = %e, used time = %.2lf sec\n", iter4, relres4, et - st);
+    free_FSAI_precond(fsai_precond);
 
     printf("\nSPDHSS matrix:\n");
     H2P_print_statistic(hssmat);
@@ -240,6 +281,7 @@ int main(int argc, char **argv)
     free(x1);
     free(x2);
     free(x3);
+    free(x4);
     free(y0);
     free(y1);
     free_aligned(test_params.coord);

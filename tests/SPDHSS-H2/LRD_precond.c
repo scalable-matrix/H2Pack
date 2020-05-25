@@ -37,6 +37,8 @@ void H2P_build_LRD_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, L
     H2P_dense_mat_init(&coord_skel, pt_dim, n_point);
     memcpy(coord_all->data,  h2pack->coord, sizeof(DTYPE) * pt_dim * n_point);
     memcpy(coord_skel->data, h2pack->coord, sizeof(DTYPE) * pt_dim * n_point);
+    /*
+    // Not working?
     int cnt = 0;
     while (cnt < rank)
     {
@@ -48,9 +50,12 @@ void H2P_build_LRD_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, L
             cnt++;
         }
     }
+    */
     skel_idx->length = rank;
+    for (int i = 0; i < rank; i++) skel_idx->data[i] = i * n_point / rank;
     H2P_dense_mat_select_columns(coord_skel, skel_idx);
     
+    int info;
     H2P_dense_mat_t L, Ut, tmp;
     H2P_dense_mat_init(&L,   nrow, nrow);
     H2P_dense_mat_init(&Ut,  nrow, mat_size);
@@ -61,7 +66,8 @@ void H2P_build_LRD_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, L
     H2P_eval_kernel_matrix_OMP(h2pack->krnl_param, h2pack->krnl_eval, krnl_dim, coord_skel, coord_all,  Ut);
     // L   = chol(L, 'lower');
     // Ut  = linsolve(L, Ut, struct('LT', true));
-    LAPACK_POTRF(LAPACK_ROW_MAJOR, 'L', nrow, L->data, L->ld);
+    info = LAPACK_POTRF(LAPACK_ROW_MAJOR, 'L', nrow, L->data, L->ld);
+    ASSERT_PRINTF(info == 0, "Cholesky decomposition failed and return %d, matrix size = %d\n", info, nrow);
     CBLAS_TRSM(
         CblasRowMajor, CblasLeft, CblasLower, CblasNoTrans, CblasNonUnit,
         nrow, mat_size, 1.0, L->data, L->ld, Ut->data, Ut->ld
@@ -75,7 +81,8 @@ void H2P_build_LRD_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, L
         tmp->data[i * tmp->ld + i] += shift;
     // tmp = chol(tmp, 'lower');
     // Ut  = linsolve(tmp, Ut, struct('LT', true));
-    LAPACK_POTRF(LAPACK_ROW_MAJOR, 'L', nrow, tmp->data, tmp->ld);
+    info = LAPACK_POTRF(LAPACK_ROW_MAJOR, 'L', nrow, tmp->data, tmp->ld);
+    ASSERT_PRINTF(info == 0, "Cholesky decomposition failed and return %d, matrix size = %d\n", info, nrow);
     CBLAS_TRSM(
         CblasRowMajor, CblasLeft, CblasLower, CblasNoTrans, CblasNonUnit,
         nrow, mat_size, 1.0, tmp->data, tmp->ld, Ut->data, Ut->ld
@@ -106,9 +113,10 @@ void H2P_build_LRD_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, L
     *precond_ = precond;
 }
 
-// Apply LRD preconditioner, x := M_{BJP}^{-1} * b
+// Apply LRD preconditioner, x := M_{LRD}^{-1} * b
 void apply_LRD_precond(LRD_precond_t precond, const DTYPE *b, DTYPE *x)
 {
+    if (precond == NULL) return;
     int   mat_size  = precond->mat_size;
     int   rank      = precond->rank;
     DTYPE shift     = precond->shift;
@@ -126,6 +134,7 @@ void apply_LRD_precond(LRD_precond_t precond, const DTYPE *b, DTYPE *x)
 // Destroy a LRD_precond structure
 void free_LRD_precond(LRD_precond_t precond)
 {
+    if (precond == NULL) return;
     free(precond->Ut);
     free(precond->workbuf);
     free(precond);

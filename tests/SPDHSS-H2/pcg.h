@@ -6,6 +6,10 @@
 #define DSQRT sqrt
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // b := A * x
 typedef void (*matvec_fptr) (const void *param, const DTYPE *x, DTYPE *b);
 
@@ -35,5 +39,9 @@ void pcg(
     const matvec_fptr invMx, const void *invMx_param, DTYPE *x, 
     int *flag_, DTYPE *relres_, int *iter_, DTYPE *res_vec
 );
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

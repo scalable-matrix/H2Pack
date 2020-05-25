@@ -83,6 +83,8 @@ void H2P_build_block_jacobi_precond(H2Pack_t h2pack, const DTYPE shift, block_ja
 // Apply block Jacobi preconditioner, x := M_{BJP}^{-1} * b
 void apply_block_jacobi_precond(block_jacobi_precond_t precond, const DTYPE *b, DTYPE *x)
 {
+    if (precond == NULL) return;
+    
     int    n_block      = precond->n_block;
     int    *blk_sizes   = precond->blk_sizes;
     int    *blk_displs  = precond->blk_displs;

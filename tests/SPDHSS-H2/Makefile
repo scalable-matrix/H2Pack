@@ -1,9 +1,9 @@
 EXES  = test_SPDHSS_H2_scalar.exe
-OBJS  = pcg.o block_jacobi_precond.o LRD_precond.o
+OBJS  = pcg.o block_jacobi_precond.o LRD_precond.o FSAI_precond.o CSRPlus.o
 
 USE_MKL      = 1
 USE_OPENBLAS = 0
-OPENBLAS_INSTALL_DIR = ../../OpenBLAS-0.3.8/install
+OPENBLAS_INSTALL_DIR = ../../../OpenBLAS-0.3.8/install
 
 CC      = icc
 DEF     = 

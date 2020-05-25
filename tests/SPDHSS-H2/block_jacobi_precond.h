@@ -15,6 +15,10 @@ struct block_jacobi_precond
 typedef struct block_jacobi_precond  block_jacobi_precond_s;
 typedef struct block_jacobi_precond* block_jacobi_precond_t;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Construct a block_jacobi_precond from a H2Pack structure
 // Input parameters:
 //   h2pack : Constructed H2Pack structure
@@ -35,6 +39,10 @@ void apply_block_jacobi_precond(block_jacobi_precond_t precond, const DTYPE *b, 
 // Input parameter:
 //   precond : A block_jacobi_precond structure to be destroyed
 void free_block_jacobi_precond(block_jacobi_precond_t precond);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

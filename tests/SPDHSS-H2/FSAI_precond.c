@@ -201,6 +201,7 @@ void H2P_build_FSAI_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, 
     int n_point     = h2pack->n_point;
     int n_thread    = h2pack->n_thread;
     int pt_dim      = h2pack->pt_dim;
+    int xpt_dim     = h2pack->xpt_dim;
     int krnl_dim    = h2pack->krnl_dim;
     int n_neighbor  = rank / krnl_dim;
     int max_nnz     = krnl_dim * krnl_dim * n_neighbor * n_point;
@@ -217,6 +218,10 @@ void H2P_build_FSAI_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, 
 
     H2P_search_knn(h2pack, n_neighbor, knn);
 
+    //FILE *ouf = fopen("C_knn.bin", "wb");
+    //fwrite(knn, sizeof(int), n_neighbor * n_point, ouf);
+    //fclose(ouf);
+
     int nnz = 0;
     int *row_ptr = (int*) malloc(sizeof(int) * (n_point + 1));
     row_ptr[0] = 0;
@@ -226,6 +231,7 @@ void H2P_build_FSAI_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, 
         int *nn_i = knn + i * n_neighbor;
         for (int j = 0; j < n_neighbor; j++)
             if (nn_i[j] <= i) num_i++;
+        num_i *= krnl_dim * krnl_dim;
         row_ptr[i + 1] = num_i + row_ptr[i]; 
     }
     nnz = row_ptr[n_point];
@@ -260,8 +266,8 @@ void H2P_build_FSAI_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, 
             num_i++;
             nn_idx->length = num_i;
             // tmpA = kernel({coord(nn_i, :), coord(nn_i, :)}) + shift * eye(krnl_dim * num_i);
-            H2P_dense_mat_resize(nn_coord, pt_dim, num_i);
-            for (int k = 0; k < pt_dim; k++)
+            H2P_dense_mat_resize(nn_coord, xpt_dim, num_i);
+            for (int k = 0; k < xpt_dim; k++)
             {
                 DTYPE *nn_coord_k = nn_coord->data + k * num_i;
                 DTYPE *coord_k = coord + k * n_point;
@@ -303,9 +309,9 @@ void H2P_build_FSAI_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, 
                 DTYPE coef = 1.0 / sqrt(tmpU[A_size - 1]);
                 for (int j = 0; j < A_size; j++) tmpY[j] = tmpU[j] * coef;
             } else {
-                DTYPE *tmpY_src = tmpY + (A_size - krnl_dim);
                 H2P_transpose_dmat(1, A_size, krnl_dim, tmpU, krnl_dim, tmpY, A_size);
                 // tmpD = tmpY(:, end-krnl_dim+1:end); 
+                DTYPE *tmpY_src = tmpY + (A_size - krnl_dim);
                 H2P_copy_matrix_block(krnl_dim, krnl_dim, tmpY_src, A_size, tmpD, krnl_dim);
                 // tmpL = 0.5 * (tmpL + tmpL');
                 for (int j = 0; j < krnl_dim; j++)

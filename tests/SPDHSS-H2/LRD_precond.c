@@ -37,7 +37,6 @@ void H2P_build_LRD_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, L
     H2P_dense_mat_init(&coord_skel, pt_dim, n_point);
     memcpy(coord_all->data,  h2pack->coord, sizeof(DTYPE) * pt_dim * n_point);
     memcpy(coord_skel->data, h2pack->coord, sizeof(DTYPE) * pt_dim * n_point);
-    /*
     // Not working?
     int cnt = 0;
     while (cnt < rank)
@@ -50,9 +49,8 @@ void H2P_build_LRD_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, L
             cnt++;
         }
     }
-    */
+    //for (int i = 0; i < rank; i++) skel_idx->data[i] = i * n_point / rank;
     skel_idx->length = rank;
-    for (int i = 0; i < rank; i++) skel_idx->data[i] = i * n_point / rank;
     H2P_dense_mat_select_columns(coord_skel, skel_idx);
     
     int info;

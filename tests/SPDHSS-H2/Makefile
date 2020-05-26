@@ -1,5 +1,5 @@
-EXES  = test_SPDHSS_H2_scalar.exe
-OBJS  = pcg.o block_jacobi_precond.o LRD_precond.o FSAI_precond.o CSRPlus.o
+EXES  = test_SPDHSS_H2_scalar.exe test_SPDHSS_H2_tensor.exe
+OBJS  = pcg.o block_jacobi_precond.o LRD_precond.o FSAI_precond.o CSRPlus.o pcg_tests.o
 
 USE_MKL      = 1
 USE_OPENBLAS = 0
@@ -38,6 +38,9 @@ all: $(EXES)
 test_SPDHSS_H2_scalar.exe: test_SPDHSS_H2_scalar.o $(OBJS) $(LIB)
 	$(CC) -o $@ $^ $(LDFLAGS) 
 
+test_SPDHSS_H2_tensor.exe: test_SPDHSS_H2_tensor.o $(OBJS) $(LIB)
+	$(CC) -o $@ $^ $(LDFLAGS) 
+
 pcg.o: pcg.c pcg.h
 	$(CC) $(CFLAGS) -I../ -c pcg.c
 
@@ -53,8 +56,14 @@ FSAI_precond.o: FSAI_precond.c FSAI_precond.h CSRPlus.h
 CSRPlus.o: CSRPlus.c CSRPlus.h
 	$(CC) $(CFLAGS) -I../ -c CSRPlus.c
 
+pcg_tests.o: pcg_tests.c pcg_tests.h
+	$(CC) $(CFLAGS) -I../ -c pcg_tests.c
+
 test_SPDHSS_H2_scalar.o: test_SPDHSS_H2_scalar.c
 	$(CC) $(CFLAGS) -I../ -c test_SPDHSS_H2_scalar.c
+
+test_SPDHSS_H2_tensor.o: test_SPDHSS_H2_tensor.c
+	$(CC) $(CFLAGS) -I../ -c test_SPDHSS_H2_tensor.c
 
 clean:
 	rm -f $(EXES) $(OBJS)

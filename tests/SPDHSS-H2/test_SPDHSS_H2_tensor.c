@@ -11,7 +11,7 @@
 #include "H2Pack.h"
 #include "H2Pack_kernels.h"
 
-#include "../parse_scalar_params.h"
+#include "../parse_tensor_params.h"
 #include "../direct_nbody.h"
 
 #include "pcg_tests.h"
@@ -21,15 +21,30 @@ int main(int argc, char **argv)
     //__itt_pause();
     srand48(time(NULL));
     
-    parse_scalar_params(argc, argv);
+    parse_tensor_params(argc, argv);
     
     double st, et;
 
     H2Pack_t h2mat, hssmat;
     
     H2P_init(&h2mat, test_params.pt_dim, test_params.krnl_dim, QR_REL_NRM, &test_params.rel_tol);
+
+    int max_leaf_points = 300;
+    DTYPE max_leaf_size = 0.0;
+    // Some special settings for RPY
+    if (test_params.kernel_id == 1) 
+    {
+        H2P_run_RPY(h2mat);
+        // We need to ensure the size of each leaf box >= 2 * max(radii), but the 
+        // stopping criteria is "if (box_size <= max_leaf_size)", so max_leaf_size
+        // should be set as 4 * max(radii).
+        DTYPE *radii = test_params.coord + 3 * test_params.n_point; 
+        for (int i = 0; i < test_params.n_point; i++)
+            max_leaf_size = (max_leaf_size < radii[i]) ? radii[i] : max_leaf_size;
+        max_leaf_size *= 4.0;
+    }
     
-    H2P_partition_points(h2mat, test_params.n_point, test_params.coord, 0, 0);
+    H2P_partition_points(h2mat, test_params.n_point, test_params.coord, max_leaf_points, max_leaf_size);
     H2P_HSS_calc_adm_inadm_pairs(h2mat);
     
     // Check if point index permutation is correct in H2Pack
@@ -48,20 +63,22 @@ int main(int argc, char **argv)
 
     H2P_dense_mat_t *pp;
     DTYPE max_L = h2mat->enbox[h2mat->root_idx * 2 * test_params.pt_dim + test_params.pt_dim];
-    st = get_wtime_sec();
-    H2P_generate_proxy_point_ID(
-        test_params.pt_dim, test_params.krnl_dim, test_params.rel_tol, h2mat->max_level, 
-        h2mat->min_adm_level, max_L, test_params.krnl_param, test_params.krnl_eval, &pp
+    int start_level = 2;
+    int num_pp = ceil(-log10(test_params.rel_tol)) - 1;
+    if (num_pp < 4 ) num_pp = 4;
+    if (num_pp > 10) num_pp = 10;
+    num_pp = 6 * num_pp * num_pp;
+    H2P_generate_proxy_point_surface(
+        test_params.pt_dim, test_params.xpt_dim, num_pp, 
+        h2mat->max_level, start_level, max_L, &pp
     );
-    et = get_wtime_sec();
-    printf("H2Pack generate proxy points used %.3lf (s)\n", et - st);
     
     H2P_build(
         h2mat, pp, test_params.BD_JIT, test_params.krnl_param, 
         test_params.krnl_eval, test_params.krnl_bimv, test_params.krnl_bimv_flops
     );
 
-    int n_check_pt = 50000, check_pt_s;
+    int n_check_pt = 10000, check_pt_s;
     if (n_check_pt >= test_params.n_point)
     {
         n_check_pt = test_params.n_point;
@@ -110,7 +127,7 @@ int main(int argc, char **argv)
     printf("For %d validation points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / ref_norm);
 
     printf("\nConstructing SPDHSS from H2\n");
-    const int max_rank = 100;
+    const int max_rank = 100 * 3;
     const DTYPE shift = 1e-2;
     H2P_SPDHSS_H2_build(max_rank, shift, h2mat, &hssmat);
  

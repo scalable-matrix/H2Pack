@@ -1,7 +1,7 @@
 LIB   = libH2Pack.a
 OBJS  = H2Pack_typedef.o utils.o H2Pack_aux_structs.o H2Pack_ID_compress.o \
         H2Pack_partition.o H2Pack_build.o H2Pack_matvec.o DAG_task_queue.o \
-        H2Pack_HSS_ULV.o
+        H2Pack_HSS_ULV.o H2Pack_utils.o H2Pack_SPDHSS_H2.o
 
 USE_MKL      = 0
 USE_OPENBLAS = 1
@@ -10,7 +10,7 @@ OPENBLAS_INSTALL_DIR = /opt/OpenBLAS
 CC      = gcc
 DEF     = -DUSE_AVX
 INC     = ./include
-CFLAGS  = -I$(INC) -Wall -g -std=gnu99 -O1 -lm $(DEF)
+CFLAGS  = -I$(INC) -Wall -g -std=gnu99 -O3 -lm $(DEF)
 
 ifeq ($(CC), icc)
 AR      = xiar rcs
@@ -60,6 +60,12 @@ H2Pack_matvec.o: ./include/*.h H2Pack_matvec.c
 
 H2Pack_HSS_ULV.o: ./include/*.h H2Pack_HSS_ULV.c
 	$(CC) $(CFLAGS) H2Pack_HSS_ULV.c -c 
+
+H2Pack_utils.o: ./include/*.h H2Pack_utils.c
+	$(CC) $(CFLAGS) H2Pack_utils.c -c 
+
+H2Pack_SPDHSS_H2.o: ./include/*.h H2Pack_SPDHSS_H2.c
+	$(CC) $(CFLAGS) H2Pack_SPDHSS_H2.c -c 
 
 DAG_task_queue.o: ./include/*.h DAG_task_queue.c
 	$(CC) $(CFLAGS) DAG_task_queue.c -c 

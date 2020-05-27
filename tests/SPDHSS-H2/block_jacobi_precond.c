@@ -60,7 +60,7 @@ void H2P_build_block_jacobi_precond(H2Pack_t h2pack, const DTYPE shift, block_ja
                 coord + pt_s, n_point, npt,
                 h2pack->krnl_param, blk_node, npt * krnl_dim
             );
-            for (int j = 0; j < n_block; j++)
+            for (int j = 0; j < blk_size; j++)
                 blk_node[j * blk_size + j] += shift;
             int info;
             info = LAPACK_GETRF(LAPACK_ROW_MAJOR, blk_size, blk_size, blk_node, blk_size, ipiv);

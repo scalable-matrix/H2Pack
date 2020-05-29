@@ -140,11 +140,13 @@ static void H2P_search_knn(H2Pack_t h2pack, const int k, int *knn)
             "Node %d: inadm nodes + self only has %d points, > %d estimated maximum\n",
             node, neighbor_pt_cnt, max_candidate
         );
-        ASSERT_PRINTF(
-            neighbor_pt_cnt >= k, 
-            "Node %d: inadm nodes + self only has %d points, required %d nearest neighbors\n",
-            node, neighbor_pt_cnt, k
-        );
+        if (neighbor_pt_cnt < k)
+        {
+            WARNING_PRINTF(
+                "Node %d has only %d (< %d) nearest neighbors from inadmissible nodes\n",
+                node, neighbor_pt_cnt, k
+            );
+        }
         for (int j = 1; j < node_npt; j++)
             memcpy(pt_idx->data + j * neighbor_pt_cnt, pt_idx->data, sizeof(int) * neighbor_pt_cnt);
 
@@ -168,14 +170,26 @@ static void H2P_search_knn(H2Pack_t h2pack, const int k, int *knn)
         }
 
         // Sort pairwise distance and get the nearest neighbors
-        #pragma omp parallel for
-        for (int j = 0; j < node_npt; j++)
+        if (neighbor_pt_cnt > k)
         {
-            DTYPE *dist_j   =   dist->data + j * neighbor_pt_cnt;
-            int   *pt_idx_j = pt_idx->data + j * neighbor_pt_cnt;
-            qsort_DTYPE_int_pair(dist_j, pt_idx_j, 0, neighbor_pt_cnt - 1);
-        }  // End of j loop
-        copy_int_mat_blk(pt_idx->data, neighbor_pt_cnt, node_npt, k, knn + node_pt_s * k, k);
+            #pragma omp parallel for
+            for (int j = 0; j < node_npt; j++)
+            {
+                DTYPE *dist_j   =   dist->data + j * neighbor_pt_cnt;
+                int   *pt_idx_j = pt_idx->data + j * neighbor_pt_cnt;
+                qsort_DTYPE_int_pair(dist_j, pt_idx_j, 0, neighbor_pt_cnt - 1);
+            }  // End of j loop
+            copy_int_mat_blk(pt_idx->data, neighbor_pt_cnt, node_npt, k, knn + node_pt_s * k, k);
+        } else {
+            copy_int_mat_blk(pt_idx->data, neighbor_pt_cnt, node_npt, neighbor_pt_cnt, knn + node_pt_s * k, k);
+            // Not enough neighbor points, set the rest as self
+            #pragma omp parallel for
+            for (int j = node_pt_s; j <= node_pt_e; j++)
+            {
+                int *knn_j = knn + j * k;
+                for (int l = neighbor_pt_cnt; l < k; l++) knn_j[l] = j;
+            }
+        }
     }  // End of i loop
 
     H2P_dense_mat_destroy(dist);
@@ -230,7 +244,8 @@ void H2P_build_FSAI_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, 
         int num_i = 0;
         int *nn_i = knn + i * n_neighbor;
         for (int j = 0; j < n_neighbor; j++)
-            if (nn_i[j] <= i) num_i++;
+            if (nn_i[j] < i) num_i++;
+        num_i++;  // For self
         num_i *= krnl_dim * krnl_dim;
         row_ptr[i + 1] = num_i + row_ptr[i]; 
     }

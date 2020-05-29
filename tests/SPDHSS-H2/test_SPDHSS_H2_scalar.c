@@ -149,7 +149,7 @@ int main(int argc, char **argv)
     // Preconditioned CG test
     const int max_iter = 50;
     const DTYPE CG_tol = 1e-6;
-    pcg_tests(test_params.krnl_mat_size, h2mat, hssmat, shift, max_rank, max_iter, CG_tol);
+    pcg_tests(test_params.krnl_mat_size, h2mat, hssmat, shift, max_rank, max_iter, CG_tol, 0);
 
     printf("\nSPDHSS matrix:\n");
     H2P_print_statistic(hssmat);

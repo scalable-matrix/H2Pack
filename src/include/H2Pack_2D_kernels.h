@@ -10,7 +10,7 @@
 #define KRNL_EVAL_PARAM \
     const DTYPE *coord0, const int ld0, const int n0, \
     const DTYPE *coord1, const int ld1, const int n1, \
-    const void *param, DTYPE *mat, const int ldm 
+    const void *param, DTYPE *restrict mat, const int ldm 
 #endif
 
 #ifndef KRNL_BIMV_PARAM
@@ -18,7 +18,7 @@
     const DTYPE *coord0, const int ld0, const int n0,            \
     const DTYPE *coord1, const int ld1, const int n1,            \
     const void *param, const DTYPE *x_in_0, const DTYPE *x_in_1, \
-    DTYPE *x_out_0, DTYPE *x_out_1
+    DTYPE *restrict x_out_0, DTYPE *restrict x_out_1
 #endif
 
 #define EXTRACT_2D_COORD() \

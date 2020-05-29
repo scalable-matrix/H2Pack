@@ -542,7 +542,9 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
                 pp[level]->data,       node_pp_npt,   node_pp_npt, 
                 krnl_param, A_block->data, A_block->ld
             );
-            if (A_blk_ncol > 2 * A_blk_nrow)
+            #ifdef H2_UJ_BUILD_RANDOMIZE
+            // It seems that this part makes the calculation slower instead of faster
+            if (A_blk_ncol > 2 * A_blk_nrow && krnl_dim >= 3)
             {
                 H2P_dense_mat_t A_block1 = node_skel_coord;
                 H2P_dense_mat_t rand_mat = QR_buff;
@@ -558,6 +560,7 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
                 H2P_copy_matrix_block(A_blk_nrow, A_blk_nrow, A_block1->data, A_block1->ld, A_block->data, A_block->ld);
                 H2P_dense_mat_normalize_columns(A_block, A_block1);
             }
+            #endif
 
             // (4) ID compress 
             // Note: A is transposed in ID compress, be careful when calculating the buffer size

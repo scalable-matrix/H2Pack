@@ -189,7 +189,7 @@ void H2P_matmul_intmd_mult(
             for (int i = B_p2i_rowptr[node0]; i < B_p2i_rowptr[node0 + 1]; i++)
             {
                 int node1  = B_p2i_colidx[i];
-                int level1 = node_level[node0];
+                int level1 = node_level[node1];
 
                 H2P_dense_mat_t y0_1 = y0[node1];
                 H2P_get_Bij_block(h2pack, node0, node1, Bij0);
@@ -232,7 +232,7 @@ void H2P_matmul_intmd_mult(
                 if (level0 < level1)
                 {
                     int mat_y_srow = mat_cluster[node0 * 2];
-                    DTYPE *mat_y_spos = mat_y + mat_y_srow + ldy;
+                    DTYPE *mat_y_spos = mat_y + mat_y_srow * ldy;
                     CBLAS_GEMM(
                         CblasRowMajor, CblasNoTrans, CblasNoTrans, Bij->nrow, n_vec, Bij->ncol,
                         1.0, Bij->data, Bij->ld, y0_1->data, y0_1->ld, 1.0, mat_y_spos, ldy
@@ -436,7 +436,7 @@ void H2P_matmul(
     H2P_matmul_bwd_transform(h2pack, layout, n_vec, mat_y, ldy);
     et = get_wtime_sec();
     h2pack->timers[_MV_BW_TIMER_IDX] += et - st;
-    
+
     // 5. Dense multiplication, calculate D_{ij} * x_j
     st = get_wtime_sec();
     H2P_matmul_dense_mult(h2pack, layout, n_vec, mat_x, ldx, mat_y, ldy);

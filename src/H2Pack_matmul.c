@@ -42,7 +42,7 @@ void H2P_matmul_init_y0(H2Pack_t h2pack, const int n_vec)
 // H2 matmul forward transformation, calculate U_j^T * x_j
 void H2P_matmul_fwd_transform(
     H2Pack_t h2pack, const int n_vec, 
-    const DTYPE *mat_x, const int ldx, const int x_stride, const CBLAS_TRANSPOSE x_trans
+    const DTYPE *mat_x, const int ldx, const int x_row_stride, const CBLAS_TRANSPOSE x_trans
 )
 {
     int n_thread       = h2pack->n_thread;
@@ -98,7 +98,7 @@ void H2P_matmul_fwd_transform(
                     int s_row = mat_cluster[2 * node];
                     int e_row = mat_cluster[2 * node + 1];
                     int nrow = e_row - s_row + 1;
-                    const DTYPE *mat_x_blk = mat_x + s_row * x_stride;
+                    const DTYPE *mat_x_blk = mat_x + s_row * x_row_stride;
                     CBLAS_GEMM(
                         CblasRowMajor, CblasTrans, x_trans, U_node->ncol, n_vec, nrow,
                         1.0, U_node->data, U_node->ld, mat_x_blk, ldx, 0.0, y0[node]->data, y0[node]->ld
@@ -154,8 +154,8 @@ void H2P_matmul_init_y1(H2Pack_t h2pack, const int n_vec)
 // H2 matmul intermediate multiplication, calculate B_{ij} * (U_j^T * x_j)
 void H2P_matmul_intmd_mult(
     H2Pack_t h2pack, const int n_vec, 
-    const DTYPE *mat_x, const int ldx, const int x_stride, const CBLAS_TRANSPOSE x_trans,
-          DTYPE *mat_y, const int ldy, const int y_stride, const CBLAS_TRANSPOSE y_trans
+    const DTYPE *mat_x, const int ldx, const int x_row_stride, const CBLAS_TRANSPOSE x_trans,
+          DTYPE *mat_y, const int ldy, const int y_row_stride, const CBLAS_TRANSPOSE y_trans
 )
 {
     int n_node        = h2pack->n_node;
@@ -221,7 +221,7 @@ void H2P_matmul_intmd_mult(
                 if (level0 > level1)
                 {
                     int mat_x_srow = mat_cluster[node1 * 2];
-                    const DTYPE *mat_x_spos = mat_x + mat_x_srow * x_stride;
+                    const DTYPE *mat_x_spos = mat_x + mat_x_srow * x_row_stride;
                     CBLAS_GEMM(
                         CblasRowMajor, CblasNoTrans, x_trans, Bij->nrow, n_vec, Bij->ncol,
                         1.0, Bij->data, Bij->ld, mat_x_spos, ldx, 1.0, y1_0->data, y1_0->ld
@@ -233,7 +233,7 @@ void H2P_matmul_intmd_mult(
                 if (level0 < level1)
                 {
                     int mat_y_srow = mat_cluster[node0 * 2];
-                    DTYPE *mat_y_spos = mat_y + mat_y_srow * y_stride;
+                    DTYPE *mat_y_spos = mat_y + mat_y_srow * y_row_stride;
                     if (y_trans == CblasNoTrans)
                     {    
                         CBLAS_GEMM(
@@ -255,7 +255,7 @@ void H2P_matmul_intmd_mult(
 // H2 matmul backward transformation, calculate U_i * (B_{ij} * (U_j^T * x_j))
 void H2P_matmul_bwd_transform(
     H2Pack_t h2pack, const int n_vec, 
-    DTYPE *mat_y, const int ldy, const int y_stride, const CBLAS_TRANSPOSE y_trans
+    DTYPE *mat_y, const int ldy, const int y_row_stride, const CBLAS_TRANSPOSE y_trans
 )
 {
     int n_thread        = h2pack->n_thread;
@@ -360,8 +360,8 @@ void H2P_matmul_bwd_transform(
 // H2 matmul dense multiplication, calculate D_{ij} * x_j
 void H2P_matmul_dense_mult(
     H2Pack_t h2pack, const int n_vec, 
-    const DTYPE *mat_x, const int ldx, const int x_stride, const CBLAS_TRANSPOSE x_trans,
-          DTYPE *mat_y, const int ldy, const int y_stride, const CBLAS_TRANSPOSE y_trans
+    const DTYPE *mat_x, const int ldx, const int x_row_stride, const CBLAS_TRANSPOSE x_trans,
+          DTYPE *mat_y, const int ldy, const int y_row_stride, const CBLAS_TRANSPOSE y_trans
 )
 {
     int n_node        = h2pack->n_node;
@@ -382,13 +382,13 @@ void H2P_matmul_dense_mult(
         for (int node0 = 0; node0 < n_node; node0++)
         {
             int mat_y_srow = mat_cluster[2 * node0];
-            DTYPE *mat_y_spos = mat_y + mat_y_srow * y_stride;
+            DTYPE *mat_y_spos = mat_y + mat_y_srow * y_row_stride;
 
             for (int i = D_p2i_rowptr[node0]; i < D_p2i_rowptr[node0 + 1]; i++)
             {
                 int node1 = D_p2i_colidx[i];
                 int mat_x_srow = mat_cluster[2 * node1];
-                const DTYPE *mat_x_spos = mat_x + mat_x_srow * x_stride;
+                const DTYPE *mat_x_spos = mat_x + mat_x_srow * x_row_stride;
                 
                 H2P_get_Dij_block(h2pack, node0, node1, Dij0);
                 if (Dij0->ld > 0)
@@ -428,72 +428,106 @@ void H2P_matmul(
 {
     double st, et;
     int krnl_mat_size = h2pack->krnl_mat_size;
-    int krnl_dim      = h2pack->krnl_dim;
-    int n_point       = h2pack->n_point;
+    int max_n_vec = 64;
+    char *max_n_vec_p = getenv("H2P_MATMUL_MAX_N_VEC");
+    if (max_n_vec_p != NULL)
+    {
+        max_n_vec = atoi(max_n_vec_p);
+        if (max_n_vec < 4 || max_n_vec > 128)
+        {
+            WARNING_PRINTF("H2P_MATMUL_MAX_N_VEC = %d is either too small or too large, reset to default value 64\n", max_n_vec);
+            max_n_vec = 64;
+        }
+    }
 
-    int x_stride, y_stride;
+    int x_row_stride, x_col_stride, y_row_stride, y_col_stride;
     CBLAS_TRANSPOSE x_trans, y_trans;
     if (layout == CblasRowMajor)
     {
-        x_stride = ldx;
-        y_stride = ldy;
+        x_row_stride = ldx;
+        x_col_stride = 1;
+        y_row_stride = ldy;
+        y_col_stride = 1;
         x_trans  = CblasNoTrans;
         y_trans  = CblasNoTrans;
     } else {
-        x_stride = 1;
-        y_stride = 1;
+        x_row_stride = 1;
+        x_col_stride = ldx;
+        y_row_stride = 1;
+        y_col_stride = ldy;
         x_trans  = CblasTrans;
         y_trans  = CblasTrans;
     }
-    
-    // 1. Reset output matrix
-    st = get_wtime_sec();
-    if (layout == CblasRowMajor)
+
+    for (int i_vec = 0; i_vec < n_vec; i_vec += max_n_vec)
     {
-        size_t row_msize = sizeof(DTYPE) * n_vec;
-        #pragma omp parallel for schedule(static)
-        for (int i = 0; i < krnl_mat_size; i++)
-        {
-            DTYPE *mat_y_i = mat_y + i * ldy;
-            memset(mat_y_i, 0, row_msize);
-        }
-    } else {
-        #pragma omp parallel
-        {
-            for (int i = 0; i < n_vec; i++)
-            {
-                DTYPE *mat_y_i = mat_y + i * ldy;
-                #pragma omp for schedule(static)
-                for (int j = 0; j < krnl_mat_size; j++) mat_y_i[j] = 0.0;
-            }
-        }
-    }
-    et = get_wtime_sec();
-    h2pack->timers[_MV_RDC_TIMER_IDX] += et - st;
+        int curr_n_vec = (i_vec + max_n_vec <= n_vec) ? max_n_vec : (n_vec - i_vec);
+        const DTYPE *curr_mat_x = mat_x + i_vec * x_col_stride;
+        DTYPE *curr_mat_y = mat_y + i_vec * y_col_stride;
     
-    // 2. Forward transformation, calculate U_j^T * x_j
-    st = get_wtime_sec();
-    H2P_matmul_fwd_transform(h2pack, n_vec, mat_x, ldx, x_stride, x_trans);
-    et = get_wtime_sec();
-    h2pack->timers[_MV_FW_TIMER_IDX] += et - st;
+        // 1. Reset output matrix
+        st = get_wtime_sec();
+        if (layout == CblasRowMajor)
+        {
+            size_t row_msize = sizeof(DTYPE) * curr_n_vec;
+            #pragma omp parallel for schedule(static)
+            for (int i = 0; i < krnl_mat_size; i++)
+            {
+                DTYPE *mat_y_i = curr_mat_y + i * ldy;
+                memset(mat_y_i, 0, row_msize);
+            }
+        } else {
+            #pragma omp parallel
+            {
+                for (int i = 0; i < curr_n_vec; i++)
+                {
+                    DTYPE *mat_y_i = curr_mat_y + i * ldy;
+                    #pragma omp for schedule(static)
+                    for (int j = 0; j < krnl_mat_size; j++) mat_y_i[j] = 0.0;
+                }
+            }
+        }  // End of "if (layout == CblasRowMajor)"
+        et = get_wtime_sec();
+        h2pack->timers[_MV_RDC_TIMER_IDX] += et - st;
+        
+        // 2. Forward transformation, calculate U_j^T * x_j
+        st = get_wtime_sec();
+        H2P_matmul_fwd_transform(
+            h2pack, curr_n_vec, 
+            curr_mat_x, ldx, x_row_stride, x_trans
+        );
+        et = get_wtime_sec();
+        h2pack->timers[_MV_FW_TIMER_IDX] += et - st;
 
-    // 3. Intermediate multiplication, calculate B_{ij} * (U_j^T * x_j)
-    st = get_wtime_sec();
-    H2P_matmul_intmd_mult(h2pack, n_vec, mat_x, ldx, x_stride, x_trans, mat_y, ldy, y_stride, y_trans);
-    et = get_wtime_sec();
-    h2pack->timers[_MV_MID_TIMER_IDX] += et - st;
+        // 3. Intermediate multiplication, calculate B_{ij} * (U_j^T * x_j)
+        st = get_wtime_sec();
+        H2P_matmul_intmd_mult(
+            h2pack, curr_n_vec, 
+            curr_mat_x, ldx, x_row_stride, x_trans, 
+            curr_mat_y, ldy, y_row_stride, y_trans
+        );
+        et = get_wtime_sec();
+        h2pack->timers[_MV_MID_TIMER_IDX] += et - st;
 
-    // 4. Backward transformation, calculate U_i * (B_{ij} * (U_j^T * x_j))
-    st = get_wtime_sec();
-    H2P_matmul_bwd_transform(h2pack, n_vec, mat_y, ldy, y_stride, y_trans);
-    et = get_wtime_sec();
-    h2pack->timers[_MV_BW_TIMER_IDX] += et - st;
+        // 4. Backward transformation, calculate U_i * (B_{ij} * (U_j^T * x_j))
+        st = get_wtime_sec();
+        H2P_matmul_bwd_transform(
+            h2pack, curr_n_vec, 
+            curr_mat_y, ldy, y_row_stride, y_trans
+        );
+        et = get_wtime_sec();
+        h2pack->timers[_MV_BW_TIMER_IDX] += et - st;
 
-    // 5. Dense multiplication, calculate D_{ij} * x_j
-    st = get_wtime_sec();
-    H2P_matmul_dense_mult(h2pack, n_vec, mat_x, ldx, x_stride, x_trans, mat_y, ldy, y_stride, y_trans);
-    et = get_wtime_sec();
-    h2pack->timers[_MV_DEN_TIMER_IDX] += et - st;
+        // 5. Dense multiplication, calculate D_{ij} * x_j
+        st = get_wtime_sec();
+        H2P_matmul_dense_mult(
+            h2pack, curr_n_vec, 
+            curr_mat_x, ldx, x_row_stride, x_trans, 
+            curr_mat_y, ldy, y_row_stride, y_trans
+        );
+        et = get_wtime_sec();
+        h2pack->timers[_MV_DEN_TIMER_IDX] += et - st;
+    }  // End of i_vec loop
 
     h2pack->n_matvec += n_vec;
 }

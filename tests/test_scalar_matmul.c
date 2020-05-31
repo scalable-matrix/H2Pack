@@ -42,8 +42,12 @@ int main(int argc, char **argv)
         test_params.krnl_eval, test_params.krnl_bimv, test_params.krnl_bimv_flops
     );
     
-    int n_vec = 16;
-    test_H2_matmul(h2pack, n_vec);
+    const int n_vecs[13] = {2, 4, 8, 12, 16, 20, 24, 28, 32, 40, 48, 56, 64};
+    for (int i = 0; i < 13; i++)
+        test_H2_matmul(h2pack, n_vecs[i]);
+
+    h2pack->n_matvec = 0;  // Skip printing matvec timings
+    H2P_print_statistic(h2pack);
 
     free_aligned(test_params.coord);
     H2P_destroy(h2pack);

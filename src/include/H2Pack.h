@@ -22,6 +22,9 @@
 // H2Pack H2/HSS fast matrix-vector multiplication
 #include "H2Pack_matvec.h"
 
+// H2Pack H2/HSS fast matrix-matrix multiplication
+#include "H2Pack_matmul.h"
+
 // H2Pack HSS ULV decomposition and solve
 #include "H2Pack_HSS_ULV.h"
 

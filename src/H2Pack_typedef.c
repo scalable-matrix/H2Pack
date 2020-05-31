@@ -288,14 +288,14 @@ void H2P_print_statistic(H2Pack_t h2pack)
     UBD_k += (double) mat_size[_B_SIZE_IDX];
     UBD_k += (double) mat_size[_D_SIZE_IDX];
     UBD_k /= (double) h2pack->krnl_mat_size;
-    double y0y1_MB = 0.0, tb_MB = 0.0;
+    double matvec_MB = 0.0;
     for (int i = 0; i < h2pack->n_thread; i++)
     {
         H2P_thread_buf_t tbi = h2pack->tb[i];
         double msize0 = (double) tbi->mat0->size     + (double) tbi->mat1->size;
         double msize1 = (double) tbi->idx0->capacity + (double) tbi->idx1->capacity;
-        tb_MB += DTYPE_MB * msize0 + int_MB * msize1;
-        tb_MB += DTYPE_MB * (double) h2pack->krnl_mat_size;
+        matvec_MB += DTYPE_MB * msize0 + int_MB * msize1;
+        matvec_MB += DTYPE_MB * (double) h2pack->krnl_mat_size;
     }
     if (h2pack->y0 != NULL && h2pack->y1 != NULL)
     {
@@ -303,14 +303,12 @@ void H2P_print_statistic(H2Pack_t h2pack)
         {
             H2P_dense_mat_t y0i = h2pack->y0[i];
             H2P_dense_mat_t y1i = h2pack->y1[i];
-            y0y1_MB += DTYPE_MB * (double) (y0i->size + y1i->ncol - 1);
-            tb_MB   += DTYPE_MB * (double) (y1i->size - y1i->ncol + 1);
+            matvec_MB += DTYPE_MB * (y0i->size + y1i->size);
         }
     }
     printf("  * Just-In-Time B & D build      : %s\n", h2pack->BD_JIT ? "Yes (B & D not allocated)" : "No");
     printf("  * H2 representation U, B, D     : %.2lf, %.2lf, %.2lf (MB) \n", U_MB, B_MB, D_MB);
-    printf("  * Matvec auxiliary arrays       : %.2lf (MB) \n", y0y1_MB);
-    printf("  * Thread-local buffers          : %.2lf (MB) \n", tb_MB);
+    printf("  * Matvec auxiliary arrays       : %.2lf (MB) \n", matvec_MB);
     int max_node_rank = 0;
     double sum_node_rank = 0.0, non_empty_node = 0.0;
     for (int i = 0; i < h2pack->n_UJ; i++)
@@ -350,57 +348,56 @@ void H2P_print_statistic(H2Pack_t h2pack)
     if (h2pack->n_matvec == 0)
     {
         printf("H2Pack does not has matvec timings results yet.\n");
-        return;
-    }
-    
-    double fw_t  = timers[_MV_FW_TIMER_IDX]  / d_n_matvec;
-    double mid_t = timers[_MV_MID_TIMER_IDX] / d_n_matvec;
-    double bw_t  = timers[_MV_BW_TIMER_IDX]  / d_n_matvec;
-    double den_t = timers[_MV_DEN_TIMER_IDX] / d_n_matvec;
-    double rdc_t = timers[_MV_RDC_TIMER_IDX] / d_n_matvec;
-    matvec_t = fw_t + mid_t + bw_t + den_t + rdc_t;
-    printf(
-        "  * H2 matvec average time (sec) = %.3lf, %.2lf GB/s\n", 
-        matvec_t, mv_MB / matvec_t / 1024.0
-    );
-    printf(
-        "      |----> Forward transformation      = %.3lf, %.2lf GB/s\n", 
-        fw_t, fw_MB / fw_t / 1024.0
-    );
-    if (h2pack->BD_JIT == 0)
-    {
-        printf(
-            "      |----> Intermediate multiplication = %.3lf, %.2lf GB/s\n", 
-            mid_t, mid_MB / mid_t / 1024.0
-        );
     } else {
-        double GFLOPS = h2pack->JIT_flops[0] / 1000000000.0;
+        double fw_t  = timers[_MV_FW_TIMER_IDX]  / d_n_matvec;
+        double mid_t = timers[_MV_MID_TIMER_IDX] / d_n_matvec;
+        double bw_t  = timers[_MV_BW_TIMER_IDX]  / d_n_matvec;
+        double den_t = timers[_MV_DEN_TIMER_IDX] / d_n_matvec;
+        double rdc_t = timers[_MV_RDC_TIMER_IDX] / d_n_matvec;
+        matvec_t = fw_t + mid_t + bw_t + den_t + rdc_t;
         printf(
-            "      |----> Intermediate multiplication = %.3lf, %.2lf GFLOPS\n", 
-            mid_t, GFLOPS / mid_t
+            "  * H2 matvec average time (sec) = %.3lf, %.2lf GB/s\n", 
+            matvec_t, mv_MB / matvec_t / 1024.0
+        );
+        printf(
+            "      |----> Forward transformation      = %.3lf, %.2lf GB/s\n", 
+            fw_t, fw_MB / fw_t / 1024.0
+        );
+        if (h2pack->BD_JIT == 0)
+        {
+            printf(
+                "      |----> Intermediate multiplication = %.3lf, %.2lf GB/s\n", 
+                mid_t, mid_MB / mid_t / 1024.0
+            );
+        } else {
+            double GFLOPS = h2pack->JIT_flops[0] / 1000000000.0;
+            printf(
+                "      |----> Intermediate multiplication = %.3lf, %.2lf GFLOPS\n", 
+                mid_t, GFLOPS / mid_t
+            );
+        }
+        printf(
+            "      |----> Backward transformation     = %.3lf, %.2lf GB/s\n", 
+            bw_t, bw_MB / bw_t / 1024.0
+        );
+        if (h2pack->BD_JIT == 0)
+        {
+            printf(
+                "      |----> Dense multiplication        = %.3lf, %.2lf GB/s\n", 
+                den_t, den_MB / den_t / 1024.0
+            );
+        } else {
+            double GFLOPS = h2pack->JIT_flops[1] / 1000000000.0;
+            printf(
+                "      |----> Dense multiplication        = %.3lf, %.2lf GFLOPS\n", 
+                den_t, GFLOPS / den_t
+            );
+        }
+        printf(
+            "      |----> OpenMP reduction            = %.3lf, %.2lf GB/s\n", 
+            rdc_t, rdc_MB / rdc_t / 1024.0
         );
     }
-    printf(
-        "      |----> Backward transformation     = %.3lf, %.2lf GB/s\n", 
-        bw_t, bw_MB / bw_t / 1024.0
-    );
-    if (h2pack->BD_JIT == 0)
-    {
-        printf(
-            "      |----> Dense multiplication        = %.3lf, %.2lf GB/s\n", 
-            den_t, den_MB / den_t / 1024.0
-        );
-    } else {
-        double GFLOPS = h2pack->JIT_flops[1] / 1000000000.0;
-        printf(
-            "      |----> Dense multiplication        = %.3lf, %.2lf GFLOPS\n", 
-            den_t, GFLOPS / den_t
-        );
-    }
-    printf(
-        "      |----> OpenMP reduction            = %.3lf, %.2lf GB/s\n", 
-        rdc_t, rdc_MB / rdc_t / 1024.0
-    );
 
     if (h2pack->is_HSS == 1)
     {

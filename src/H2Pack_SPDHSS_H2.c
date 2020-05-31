@@ -360,8 +360,8 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_t h2mat, const int n_vec, H2P_dense_mat_t *
                 DTYPE *Yk_mat_blk0 = Yk_mat + s_row0 * Yk_mat_ld + s_col;
                 DTYPE *vec_blk1    = vec + s_row1 * n_vec;
 
-                // We only handle the update on Yk_mat_blk0, the symmetric operations for 
-                // updateing Yk_mat_blk1 is handled by double counting the inadmissible pairs
+                // We only handle the update on Yk_mat_blk0, the symmetric operation for 
+                // updating Yk_mat_blk1 is handled by double counting the admissible pairs
 
                 // A. Two nodes are of the same level, compress on both side
                 if (level0 == level1)

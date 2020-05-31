@@ -176,8 +176,7 @@ void H2P_matmul_intmd_mult(
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
-        H2P_dense_mat_t Bij  = thread_buf[tid]->mat0;
-        H2P_dense_mat_t Bij0 = thread_buf[tid]->mat1;
+        H2P_dense_mat_t Bij = thread_buf[tid]->mat0;
 
         #pragma omp for schedule(dynamic)
         for (int node0 = 0; node0 < n_node; node0++)
@@ -192,16 +191,21 @@ void H2P_matmul_intmd_mult(
                 int node1  = B_p2i_colidx[i];
                 int level1 = node_level[node1];
 
+                int Bij_nrow, Bij_ncol, Bij_ld, Bij_trans;
                 H2P_dense_mat_t y0_1 = y0[node1];
-                H2P_get_Bij_block(h2pack, node0, node1, Bij0);
-                if (Bij0->ld > 0)
+                H2P_get_Bij_block(h2pack, node0, node1, Bij);
+                DTYPE *Bij_data = Bij->data;
+                if (Bij->ld > 0)
                 {
-                    H2P_dense_mat_resize(Bij, Bij0->nrow, Bij0->ncol);
-                    H2P_copy_matrix_block(Bij0->nrow, Bij0->ncol, Bij0->data, Bij0->ld, Bij->data, Bij->ld);
+                    Bij_nrow  = Bij->nrow;
+                    Bij_ncol  = Bij->ncol;
+                    Bij_ld    = Bij->ld;
+                    Bij_trans = 0;
                 } else {
-                    Bij0->ld = -Bij0->ld;
-                    H2P_dense_mat_resize(Bij, Bij0->ncol, Bij0->nrow);
-                    H2P_transpose_dmat(1, Bij0->nrow, Bij0->ncol, Bij0->data, Bij0->ld, Bij->data, Bij->ld);
+                    Bij_nrow  = Bij->ncol;
+                    Bij_ncol  = Bij->nrow;
+                    Bij_ld    = -Bij->ld;
+                    Bij_trans = 1;
                 }
 
                 // We only handle the update on node0's side, the symmetric operation for
@@ -210,9 +214,10 @@ void H2P_matmul_intmd_mult(
                 // (1) Two nodes are of the same level, compress on both sides
                 if (level0 == level1)
                 {
+                    CBLAS_TRANSPOSE Bij_trans_ = (Bij_trans == 0) ? CblasNoTrans : CblasTrans;
                     CBLAS_GEMM(
-                        CblasRowMajor, CblasNoTrans, CblasNoTrans, Bij->nrow, n_vec, Bij->ncol,
-                        1.0, Bij->data, Bij->ld, y0_1->data, y0_1->ld, 1.0, y1_0->data, y1_0->ld
+                        CblasRowMajor, Bij_trans_, CblasNoTrans, Bij_nrow, n_vec, Bij_ncol,
+                        1.0, Bij_data, Bij_ld, y0_1->data, y0_1->ld, 1.0, y1_0->data, y1_0->ld
                     );
                 }  // End of "if (level0 == level1)"
 
@@ -222,9 +227,10 @@ void H2P_matmul_intmd_mult(
                 {
                     int mat_x_srow = mat_cluster[node1 * 2];
                     const DTYPE *mat_x_spos = mat_x + mat_x_srow * x_row_stride;
+                    CBLAS_TRANSPOSE Bij_trans_ = (Bij_trans == 0) ? CblasNoTrans : CblasTrans;
                     CBLAS_GEMM(
-                        CblasRowMajor, CblasNoTrans, x_trans, Bij->nrow, n_vec, Bij->ncol,
-                        1.0, Bij->data, Bij->ld, mat_x_spos, ldx, 1.0, y1_0->data, y1_0->ld
+                        CblasRowMajor, Bij_trans_, x_trans, Bij_nrow, n_vec, Bij_ncol,
+                        1.0, Bij_data, Bij_ld, mat_x_spos, ldx, 1.0, y1_0->data, y1_0->ld
                     );
                 }  // End of "if (level0 > level1)"
 
@@ -235,15 +241,17 @@ void H2P_matmul_intmd_mult(
                     int mat_y_srow = mat_cluster[node0 * 2];
                     DTYPE *mat_y_spos = mat_y + mat_y_srow * y_row_stride;
                     if (y_trans == CblasNoTrans)
-                    {    
+                    {
+                        CBLAS_TRANSPOSE Bij_trans_ = (Bij_trans == 0) ? CblasNoTrans : CblasTrans;
                         CBLAS_GEMM(
-                            CblasRowMajor, CblasNoTrans, CblasNoTrans, Bij->nrow, n_vec, Bij->ncol,
-                            1.0, Bij->data, Bij->ld, y0_1->data, y0_1->ld, 1.0, mat_y_spos, ldy
+                            CblasRowMajor, Bij_trans_, CblasNoTrans, Bij_nrow, n_vec, Bij_ncol,
+                            1.0, Bij_data, Bij_ld, y0_1->data, y0_1->ld, 1.0, mat_y_spos, ldy
                         );
                     } else {
+                        CBLAS_TRANSPOSE Bij_trans_ = (Bij_trans == 0) ? CblasTrans : CblasNoTrans;
                         CBLAS_GEMM(
-                            CblasRowMajor, CblasTrans, CblasTrans, n_vec, Bij->nrow, Bij->ncol,
-                            1.0, y0_1->data, y0_1->ld, Bij->data, Bij->ld, 1.0, mat_y_spos, ldy
+                            CblasRowMajor, CblasTrans, Bij_trans_, n_vec, Bij_nrow, Bij_ncol,
+                            1.0, y0_1->data, y0_1->ld, Bij_data, Bij_ld, 1.0, mat_y_spos, ldy
                         );
                     }
                 }  // End of "if (level0 < level1)"
@@ -375,8 +383,7 @@ void H2P_matmul_dense_mult(
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
-        H2P_dense_mat_t Dij  = thread_buf[tid]->mat0;
-        H2P_dense_mat_t Dij0 = thread_buf[tid]->mat1;
+        H2P_dense_mat_t Dij = thread_buf[tid]->mat0;
 
         #pragma omp for schedule(dynamic)
         for (int node0 = 0; node0 < n_node; node0++)
@@ -390,31 +397,38 @@ void H2P_matmul_dense_mult(
                 int mat_x_srow = mat_cluster[2 * node1];
                 const DTYPE *mat_x_spos = mat_x + mat_x_srow * x_row_stride;
                 
-                H2P_get_Dij_block(h2pack, node0, node1, Dij0);
-                if (Dij0->ld > 0)
+                int Dij_nrow, Dij_ncol, Dij_ld, Dij_trans;
+                H2P_get_Dij_block(h2pack, node0, node1, Dij);
+                DTYPE *Dij_data = Dij->data;
+                if (Dij->ld > 0)
                 {
-                    H2P_dense_mat_resize(Dij, Dij0->nrow, Dij0->ncol);
-                    H2P_copy_matrix_block(Dij0->nrow, Dij0->ncol, Dij0->data, Dij0->ld, Dij->data, Dij->ld);
+                    Dij_nrow  = Dij->nrow;
+                    Dij_ncol  = Dij->ncol;
+                    Dij_ld    = Dij->ld;
+                    Dij_trans = 0;
                 } else {
-                    Dij0->ld = -Dij0->ld;
-                    H2P_dense_mat_resize(Dij, Dij0->ncol, Dij0->nrow);
-                    H2P_transpose_dmat(1, Dij0->nrow, Dij0->ncol, Dij0->data, Dij0->ld, Dij->data, Dij->ld);
-                }
+                    Dij_nrow  = Dij->ncol;
+                    Dij_ncol  = Dij->nrow;
+                    Dij_ld    = -Dij->ld;
+                    Dij_trans = 1;
+                }  // End of "if (Dij0->ld > 0)"
 
                 // We only handle y_i = D_{ij} * x_j, its symmetric operation
                 // y_j = D_{ij}' * x_i is handled by double counting inadmissible pairs
-                if (x_trans == CblasNoTrans && y_trans == CblasNoTrans)
+                if (x_trans == CblasNoTrans)
                 {
+                    CBLAS_TRANSPOSE Dij_trans_ = (Dij_trans == 0) ? CblasNoTrans : CblasTrans;
                     CBLAS_GEMM(
-                        CblasRowMajor, CblasNoTrans, CblasNoTrans, Dij->nrow, n_vec, Dij->ncol,
-                        1.0, Dij->data, Dij->ld, mat_x_spos, ldx, 1.0, mat_y_spos, ldy
+                        CblasRowMajor, Dij_trans_, CblasNoTrans, Dij_nrow, n_vec, Dij_ncol,
+                        1.0, Dij_data, Dij_ld, mat_x_spos, ldx, 1.0, mat_y_spos, ldy
                     );
                 } else {
+                    CBLAS_TRANSPOSE Dij_trans_ = (Dij_trans == 0) ? CblasTrans : CblasNoTrans;
                     CBLAS_GEMM(
-                        CblasRowMajor, CblasNoTrans, CblasTrans, n_vec, Dij->nrow, Dij->ncol,
-                        1.0, mat_x_spos, ldx, Dij->data, Dij->ld, 1.0, mat_y_spos, ldy
+                        CblasRowMajor, CblasNoTrans, Dij_trans_, n_vec, Dij_nrow, Dij_ncol,
+                        1.0, mat_x_spos, ldx, Dij_data, Dij_ld, 1.0, mat_y_spos, ldy
                     );
-                }
+                }  // End of "if (x_trans == CblasNoTrans)"
             }  // End of i loop
         }  // End of node0 loop
     }  // End of "#pragma omp parallel"

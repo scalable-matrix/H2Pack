@@ -23,19 +23,19 @@ void H2Pack_matvec(const void *h2pack_, const DTYPE *b, DTYPE *x)
 void block_jacobi_precond(const void *precond_, const DTYPE *b, DTYPE *x)
 {
     block_jacobi_precond_t precond = (block_jacobi_precond_t) precond_;
-    apply_block_jacobi_precond(precond, b, x);
+    block_jacobi_precond_apply(precond, b, x);
 }
 
 void LRD_precond(const void *precond_, const DTYPE *b, DTYPE *x)
 {
     LRD_precond_t precond = (LRD_precond_t) precond_;
-    apply_LRD_precond(precond, b, x);
+    LRD_precond_apply(precond, b, x);
 }
 
 void FSAI_precond(const void *precond_, const DTYPE *b, DTYPE *x)
 {
     FSAI_precond_t precond = (FSAI_precond_t) precond_;
-    apply_FSAI_precond(precond, b, x);
+    FSAI_precond_apply(precond, b, x);
 }
 
 void HSS_ULV_Chol_precond(const void *hssmat_, const DTYPE *b, DTYPE *x)
@@ -78,12 +78,9 @@ void pcg_tests(
 
     if (method == 0 || method == 2)
     {
-        printf("\nConstructing block Jacobi preconditioner...");
-        st = get_wtime_sec();
+        printf("\nConstructing block Jacobi preconditioner...\n");
         block_jacobi_precond_t bj_precond;
         H2P_build_block_jacobi_precond(h2mat, shift, &bj_precond);
-        et = get_wtime_sec();
-        printf("done, used time = %.2lf sec\n", et - st);
         printf("Starting PCG solve with block Jacobi preconditioner...\n");
         memset(x, 0, sizeof(DTYPE) * krnl_mat_size);
         st = get_wtime_sec();
@@ -94,17 +91,15 @@ void pcg_tests(
         );
         et = get_wtime_sec();
         printf("PCG stopped after %d iterations, relres = %e, used time = %.2lf sec\n", iter, relres, et - st);
-        free_block_jacobi_precond(bj_precond);
+        block_jacobi_precond_print_stat(bj_precond);
+        block_jacobi_precond_destroy(bj_precond);
     }
 
     if (method == 0 || method == 3)
     {
-        printf("\nConstructing LRD preconditioner...");
+        printf("\nConstructing LRD preconditioner...\n");
         LRD_precond_t lrd_precond;
-        st = get_wtime_sec();
         H2P_build_LRD_precond(h2mat, max_rank, shift, &lrd_precond);
-        et = get_wtime_sec();
-        printf("done, used time = %.2lf sec\n", et - st);
         printf("Starting PCG solve with LRD preconditioner...\n");
         memset(x, 0, sizeof(DTYPE) * krnl_mat_size);
         st = get_wtime_sec();
@@ -115,17 +110,15 @@ void pcg_tests(
         );
         et = get_wtime_sec();
         printf("PCG stopped after %d iterations, relres = %e, used time = %.2lf sec\n", iter, relres, et - st);
-        free_LRD_precond(lrd_precond);
+        LRD_precond_print_stat(lrd_precond);
+        LRD_precond_destroy(lrd_precond);
     }
 
     if (method == 0 || method == 4)
     {
-        printf("\nConstructing FSAI preconditioner...");
-        st = get_wtime_sec();
+        printf("\nConstructing FSAI preconditioner...\n");
         FSAI_precond_t fsai_precond;
         H2P_build_FSAI_precond(h2mat, max_rank, shift, &fsai_precond);
-        et = get_wtime_sec();
-        printf("done, used time = %.2lf sec\n", et - st);
         printf("Starting PCG solve with FSAI preconditioner...\n");
         memset(x, 0, sizeof(DTYPE) * krnl_mat_size);
         st = get_wtime_sec();
@@ -136,7 +129,8 @@ void pcg_tests(
         );
         et = get_wtime_sec();
         printf("PCG stopped after %d iterations, relres = %e, used time = %.2lf sec\n", iter, relres, et - st);
-        free_FSAI_precond(fsai_precond);
+        FSAI_precond_print_stat(fsai_precond);
+        FSAI_precond_destroy(fsai_precond);
     }
 
     if (method == 0 || method == 5)

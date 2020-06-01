@@ -223,7 +223,7 @@ void H2P_destroy(H2Pack_t h2pack);
 
 // Print statistic info of a H2Pack structure
 // Input parameter:
-//   h2pack : H2Pack structure to be destroyed
+//   h2pack : H2Pack structure whose statistic info to be printed
 void H2P_print_statistic(H2Pack_t h2pack);
 
 #ifdef __cplusplus

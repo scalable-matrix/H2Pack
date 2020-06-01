@@ -10,6 +10,11 @@ struct LRD_precond
     DTYPE shift;    // Diagonal shift
     DTYPE *Ut;      // Size rank * mat_size, LRD matrix
     DTYPE *workbuf; // Size rank, working buffer in apply_LRD_precond
+
+    // Statistic info
+    int    n_apply;
+    double t_apply, t_build;
+    double mem_MB;
 };
 typedef struct LRD_precond  LRD_precond_s;
 typedef struct LRD_precond* LRD_precond_t;
@@ -33,12 +38,17 @@ void H2P_build_LRD_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, L
 //   b       : Size precond->mat_size, input vector
 // Output parameter:
 //   x : Size precond->mat_size, output vector
-void apply_LRD_precond(LRD_precond_t precond, const DTYPE *b, DTYPE *x);
+void LRD_precond_apply(LRD_precond_t precond, const DTYPE *b, DTYPE *x);
 
 // Destroy a LRD_precond structure
 // Input parameter:
 //   precond : A LRD_precond structure to be destroyed
-void free_LRD_precond(LRD_precond_t precond);
+void LRD_precond_destroy(LRD_precond_t precond);
+
+// Print statistic info of a LRD_precond structure
+// Input parameter:
+//   precond : LRD_precond structure whose statistic info to be printed
+void LRD_precond_print_stat(LRD_precond_t precond);
 
 #ifdef __cplusplus
 }

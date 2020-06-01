@@ -275,9 +275,7 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_t h2mat, const int n_vec, H2P_dense_mat_t *
         int tid = omp_get_thread_num();
         H2P_int_vec_t   work = thread_buf[tid]->idx0;
         H2P_dense_mat_t Dij  = thread_buf[tid]->mat0;
-        H2P_dense_mat_t Dij0 = thread_buf[tid]->mat1;
         H2P_dense_mat_t Bij  = thread_buf[tid]->mat0;
-        H2P_dense_mat_t Bij0 = thread_buf[tid]->mat1;
         H2P_dense_mat_t tmpM = thread_buf[tid]->mat1;
         H2P_int_vec_set_capacity(work, 2 * max_level + 4);
 
@@ -299,15 +297,21 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_t h2mat, const int n_vec, H2P_dense_mat_t *
                 int n_row1 = e_row1 - s_row1 + 1;
                 DTYPE *Yk_mat_blk0 = Yk_mat + s_row0 * Yk_mat_ld + s_col;
                 DTYPE *vec_blk1    = vec + s_row1 * n_vec;
-                H2P_get_Dij_block(h2mat, node0, node1, Dij0);
-                if (Dij0->ld > 0)
+
+                int Dij_nrow, Dij_ncol, Dij_ld, Dij_trans;
+                H2P_get_Dij_block(h2mat, node0, node1, Dij);
+                DTYPE *Dij_data = Dij->data;
+                if (Dij->ld > 0)
                 {
-                    H2P_dense_mat_resize(Dij, Dij0->nrow, Dij0->ncol);
-                    H2P_copy_matrix_block(Dij0->nrow, Dij0->ncol, Dij0->data, Dij0->ld, Dij->data, Dij->ld);
+                    Dij_nrow  = Dij->nrow;
+                    Dij_ncol  = Dij->ncol;
+                    Dij_ld    = Dij->ld;
+                    Dij_trans = 0;
                 } else {
-                    Dij0->ld = -Dij0->ld;
-                    H2P_dense_mat_resize(Dij, Dij0->ncol, Dij0->nrow);
-                    H2P_transpose_dmat(1, Dij0->nrow, Dij0->ncol, Dij0->data, Dij0->ld, Dij->data, Dij->ld);
+                    Dij_nrow  = Dij->ncol;
+                    Dij_ncol  = Dij->nrow;
+                    Dij_ld    = -Dij->ld;
+                    Dij_trans = 1;
                 }
 
                 // We only handle: 
@@ -316,13 +320,14 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_t h2mat, const int n_vec, H2P_dense_mat_t *
                 //     Yk_mat(idx2, col_idx) = Yk_mat(idx2, col_idx) + D{D_idx}' * vec(idx1, :);
                 // is handled by double counting node inadmissible pairs
                 ASSERT_PRINTF(
-                    Dij->nrow == n_row0 && Dij->ncol == n_row1,
+                    Dij_nrow == n_row0 && Dij_ncol == n_row1,
                     "D{%d, %d} has size %d * %d, expected %d * %d\n", 
-                    node0, node1, Dij->nrow, Dij->ncol, n_row0, n_row1
+                    node0, node1, Dij_nrow, Dij_ncol, n_row0, n_row1
                 );
+                CBLAS_TRANSPOSE Dij_trans_ = (Dij_trans == 0) ? CblasNoTrans : CblasTrans;
                 CBLAS_GEMM(
-                    CblasRowMajor, CblasNoTrans, CblasNoTrans, n_row0, n_vec, n_row1,
-                    1.0, Dij->data, Dij->ld, vec_blk1, n_vec, 1.0, Yk_mat_blk0, Yk_mat_ld
+                    CblasRowMajor, Dij_trans_, CblasNoTrans, n_row0, n_vec, n_row1,
+                    1.0, Dij_data, Dij_ld, vec_blk1, n_vec, 1.0, Yk_mat_blk0, Yk_mat_ld
                 );
             }  // End of i loop
         }  // End of node0 loop
@@ -346,15 +351,21 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_t h2mat, const int n_vec, H2P_dense_mat_t *
                 int e_row1 = mat_cluster[2 * node1 + 1];
                 int n_row1 = e_row1 - s_row1 + 1;
                 int level1 = node_level[node1];
-                H2P_get_Bij_block(h2mat, node0, node1, Bij0);
-                if (Bij0->ld > 0)
+
+                int Bij_nrow, Bij_ncol, Bij_ld, Bij_trans;
+                H2P_get_Bij_block(h2mat, node0, node1, Bij);
+                DTYPE *Bij_data = Bij->data;
+                if (Bij->ld > 0)
                 {
-                    H2P_dense_mat_resize(Bij, Bij0->nrow, Bij0->ncol);
-                    H2P_copy_matrix_block(Bij0->nrow, Bij0->ncol, Bij0->data, Bij0->ld, Bij->data, Bij->ld);
+                    Bij_nrow  = Bij->nrow;
+                    Bij_ncol  = Bij->ncol;
+                    Bij_ld    = Bij->ld;
+                    Bij_trans = 0;
                 } else {
-                    Bij0->ld = -Bij0->ld;
-                    H2P_dense_mat_resize(Bij, Bij0->ncol, Bij0->nrow);
-                    H2P_transpose_dmat(1, Bij0->nrow, Bij0->ncol, Bij0->data, Bij0->ld, Bij->data, Bij->ld);
+                    Bij_nrow  = Bij->ncol;
+                    Bij_ncol  = Bij->nrow;
+                    Bij_ld    = -Bij->ld;
+                    Bij_trans = 1;
                 }
                 H2P_dense_mat_t y0_1 = y0[node1];
                 DTYPE *Yk_mat_blk0 = Yk_mat + s_row0 * Yk_mat_ld + s_col;
@@ -368,19 +379,20 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_t h2mat, const int n_vec, H2P_dense_mat_t *
                 {
                     // Yk_mat(idx1, col_idx) = Yk_mat(idx1, col_idx) + exU{c1} * (Bij  * y0{c2});
                     ASSERT_PRINTF(
-                        exU_0->ncol == Bij->nrow && Bij->ncol == y0_1->nrow,
+                        exU_0->ncol == Bij_nrow && Bij_ncol == y0_1->nrow,
                         "Pair (%d, %d) GEMM size mismatch: [%d, %d] * [%d, %d] * [%d, %d]\n",
-                        node0, node1, exU_0->nrow, exU_0->ncol, Bij->nrow, Bij->ncol, y0_1->nrow, y0_1->ncol
+                        node0, node1, exU_0->nrow, exU_0->ncol, Bij_nrow, Bij_ncol, y0_1->nrow, y0_1->ncol
                     );
                     ASSERT_PRINTF(
                         n_row0 == exU_0->nrow && n_vec == y0_1->ncol, 
                         "Pair (%d, %d) matrix addition size mismatch: expected [%d, %d], got [%d, %d]\n",
                         node0, node1, n_row0, n_vec, exU_0->nrow, y0_1->ncol
                     );
-                    H2P_dense_mat_resize(tmpM, Bij->nrow, y0_1->ncol);
+                    H2P_dense_mat_resize(tmpM, Bij_nrow, y0_1->ncol);
+                    CBLAS_TRANSPOSE Bij_trans_ = (Bij_trans == 0) ? CblasNoTrans : CblasTrans;
                     CBLAS_GEMM(
-                        CblasRowMajor, CblasNoTrans, CblasNoTrans, Bij->nrow, y0_1->ncol, Bij->ncol,
-                        1.0, Bij->data, Bij->ld, y0_1->data, y0_1->ld, 0.0, tmpM->data, tmpM->ld
+                        CblasRowMajor, Bij_trans_, CblasNoTrans, Bij_nrow, y0_1->ncol, Bij_ncol,
+                        1.0, Bij_data, Bij_ld, y0_1->data, y0_1->ld, 0.0, tmpM->data, tmpM->ld
                     );
                     CBLAS_GEMM(
                         CblasRowMajor, CblasNoTrans, CblasNoTrans, exU_0->nrow, tmpM->ncol, exU_0->ncol,
@@ -394,19 +406,20 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_t h2mat, const int n_vec, H2P_dense_mat_t *
                 {
                     // Yk_mat(idx1, col_idx) = Yk_mat(idx1, col_idx) + exU{c1} * (Bij * vec(idx2, :));
                     ASSERT_PRINTF(
-                        exU_0->ncol == Bij->nrow && Bij->ncol == n_row1,
+                        exU_0->ncol == Bij_nrow && Bij_ncol == n_row1,
                         "Pair (%d, %d) GEMM size mismatch: [%d, %d] * [%d, %d] * [%d, %d]\n",
-                        node0, node1, exU_0->nrow, exU_0->ncol, Bij->nrow, Bij->ncol, n_row1, n_vec
+                        node0, node1, exU_0->nrow, exU_0->ncol, Bij_nrow, Bij_ncol, n_row1, n_vec
                     );
                     ASSERT_PRINTF(
                         n_row0 == exU_0->nrow, 
                         "Pair (%d, %d) matrix addition size mismatch: expected [%d, %d], got [%d, %d]\n",
                         node0, node1, n_row0, n_vec, exU_0->nrow, n_vec
                     );
-                    H2P_dense_mat_resize(tmpM, Bij->nrow, n_vec);
+                    H2P_dense_mat_resize(tmpM, Bij_nrow, n_vec);
+                    CBLAS_TRANSPOSE Bij_trans_ = (Bij_trans == 0) ? CblasNoTrans : CblasTrans;
                     CBLAS_GEMM(
-                        CblasRowMajor, CblasNoTrans, CblasNoTrans, Bij->nrow, n_vec, Bij->ncol,
-                        1.0, Bij->data, Bij->ld, vec_blk1, n_vec, 0.0, tmpM->data, tmpM->ld
+                        CblasRowMajor, Bij_trans_, CblasNoTrans, Bij_nrow, n_vec, Bij_ncol,
+                        1.0, Bij_data, Bij_ld, vec_blk1, n_vec, 0.0, tmpM->data, tmpM->ld
                     );
                     CBLAS_GEMM(
                         CblasRowMajor, CblasNoTrans, CblasNoTrans, exU_0->nrow, tmpM->ncol, exU_0->ncol,
@@ -420,13 +433,14 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_t h2mat, const int n_vec, H2P_dense_mat_t *
                 {
                     // Yk_mat(idx1, col_idx) = Yk_mat(idx1, col_idx) + Bij * y0{c2};
                     ASSERT_PRINTF(
-                        n_row0 == Bij->nrow && Bij->ncol == y0_1->nrow && y0_1->ncol == n_vec,
+                        n_row0 == Bij_nrow && Bij_ncol == y0_1->nrow && y0_1->ncol == n_vec,
                         "Pair (%d, %d) GEMM & matrix addition size mismatch: [%d, %d] + [%d, %d] * [%d, %d]\n",
-                        node0, node1, n_row0, n_vec, Bij->nrow, Bij->ncol, y0_1->nrow, y0_1->ncol
+                        node0, node1, n_row0, n_vec, Bij_nrow, Bij_ncol, y0_1->nrow, y0_1->ncol
                     );
+                    CBLAS_TRANSPOSE Bij_trans_ = (Bij_trans == 0) ? CblasNoTrans : CblasTrans;
                     CBLAS_GEMM(
-                        CblasRowMajor, CblasNoTrans, CblasNoTrans, Bij->nrow, y0_1->ncol, Bij->ncol, 
-                        1.0, Bij->data, Bij->ld, y0_1->data, y0_1->ld, 1.0, Yk_mat_blk0, Yk_mat_ld
+                        CblasRowMajor, Bij_trans_, CblasNoTrans, Bij_nrow, y0_1->ncol, Bij_ncol, 
+                        1.0, Bij_data, Bij_ld, y0_1->data, y0_1->ld, 1.0, Yk_mat_blk0, Yk_mat_ld
                     );
                 }  // End of "if (level0 < level1)"
             }  // End of i loop

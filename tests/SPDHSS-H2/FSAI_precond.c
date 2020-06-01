@@ -211,6 +211,8 @@ void H2P_build_FSAI_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, 
         return;
     }
 
+    double st = get_wtime_sec();
+
     int mat_size    = h2pack->krnl_mat_size;
     int n_point     = h2pack->n_point;
     int n_thread    = h2pack->n_thread;
@@ -383,27 +385,37 @@ void H2P_build_FSAI_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, 
     free(val);
     free(row_ptr);
 
+    double et = get_wtime_sec();
+
     DTYPE *x0 = (DTYPE*) malloc(sizeof(DTYPE) * mat_size);
     ASSERT_PRINTF(x0 != NULL, "Failed to allocate working array of size %d for FSAI preconditioner\n", mat_size);
     precond->mat_size = mat_size;
     precond->x0       = x0;
     precond->G        = G;
     precond->Gt       = Gt;
+    precond->t_build  = et - st;
+    precond->t_apply  = 0.0;
+    precond->n_apply  = 0;
+    precond->mem_MB   = 2.0 * ((sizeof(DTYPE) + sizeof(int)) * (nnz + mat_size)) / 1048576.0;
     *precond_ = precond;
 }
 
 // Apply FSAI preconditioner, x := M_{FSAI}^{-1} * b
-void apply_FSAI_precond(FSAI_precond_t precond, const DTYPE *b, DTYPE *x)
+void FSAI_precond_apply(FSAI_precond_t precond, const DTYPE *b, DTYPE *x)
 {
     if (precond == NULL) return;
+    double st = get_wtime_sec();
     CSRP_SpMV(precond->G,  b, precond->x0);
     CSRP_SpMV(precond->Gt, precond->x0, x);
+    double et = get_wtime_sec();
+    precond->t_apply += et - st;
+    precond->n_apply++;
 }
 
 // Destroy a FSAI_precond structure
 // Input parameter:
 //   precond : A FSAI_precond structure to be destroyed
-void free_FSAI_precond(FSAI_precond_t precond)
+void FSAI_precond_destroy(FSAI_precond_t precond)
 {
     if (precond == NULL) return;
     CSRP_free(precond->G);
@@ -411,4 +423,14 @@ void free_FSAI_precond(FSAI_precond_t precond)
     free(precond->G);
     free(precond->Gt);
     free(precond);
+}
+
+// Print statistic info of a FSAI_precond structure
+void FSAI_precond_print_stat(FSAI_precond_t precond)
+{
+    if (precond == NULL) return;
+    printf(
+        "FSAI precond used memory = %.2lf MB, build time = %.3lf sec, apply avg time = %.3lf sec\n", 
+        precond->mem_MB, precond->t_build, precond->t_apply / (double) precond->n_apply
+    );
 }

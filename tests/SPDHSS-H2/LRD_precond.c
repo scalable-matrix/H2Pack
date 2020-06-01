@@ -27,6 +27,8 @@ void H2P_build_LRD_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, L
     int krnl_dim = h2pack->krnl_dim;
     int nrow     = rank * krnl_dim;
 
+    double st = get_wtime_sec();
+
     int *flag = (int*) malloc(sizeof(int) * n_point);
     ASSERT_PRINTF(flag != NULL, "Failed to allocate work array of size %d for LRD preconditioner\n", n_point);
     memset(flag, 0, sizeof(int) * n_point);
@@ -122,16 +124,23 @@ void H2P_build_LRD_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, L
     free(coord_all);
     free(coord_skel);
     free(skel_idx);
+
+    double et = get_wtime_sec();
+
     precond->mat_size = mat_size;
     precond->rank     = nrow;
     precond->shift    = shift;
     precond->Ut       = Ut_;
     precond->workbuf  = workbuf;
+    precond->t_build  = et - st;
+    precond->t_apply  = 0.0;
+    precond->n_apply  = 0;
+    precond->mem_MB   = (double) (sizeof(DTYPE) * nrow * (mat_size + 1)) / 1048576.0;
     *precond_ = precond;
 }
 
 // Apply LRD preconditioner, x := M_{LRD}^{-1} * b
-void apply_LRD_precond(LRD_precond_t precond, const DTYPE *b, DTYPE *x)
+void LRD_precond_apply(LRD_precond_t precond, const DTYPE *b, DTYPE *x)
 {
     if (precond == NULL) return;
     int   mat_size  = precond->mat_size;
@@ -139,6 +148,8 @@ void apply_LRD_precond(LRD_precond_t precond, const DTYPE *b, DTYPE *x)
     DTYPE shift     = precond->shift;
     DTYPE *Ut       = precond->Ut;
     DTYPE *workbuf  = precond->workbuf;
+
+    double st = get_wtime_sec();
     // x = 1 / shift * (b - Ut' * (Ut * b));
     memcpy(x, b, sizeof(DTYPE) * mat_size);
     CBLAS_GEMV(CblasRowMajor, CblasNoTrans, rank, mat_size,  1.0, Ut, mat_size,       b, 1, 0.0, workbuf, 1);
@@ -146,13 +157,26 @@ void apply_LRD_precond(LRD_precond_t precond, const DTYPE *b, DTYPE *x)
     DTYPE inv_shift = 1.0 / shift;
     #pragma omp simd
     for (int i = 0; i < mat_size; i++) x[i] *= inv_shift;
+    double et = get_wtime_sec();
+    precond->t_apply += et - st;
+    precond->n_apply++;
 }
 
 // Destroy a LRD_precond structure
-void free_LRD_precond(LRD_precond_t precond)
+void LRD_precond_destroy(LRD_precond_t precond)
 {
     if (precond == NULL) return;
     free(precond->Ut);
     free(precond->workbuf);
     free(precond);
+}
+
+// Print statistic info of a FSAI_precond structure
+void LRD_precond_print_stat(LRD_precond_t precond)
+{
+    if (precond == NULL) return;
+    printf(
+        "LRD precond used memory = %.2lf MB, build time = %.3lf sec, apply avg time = %.3lf sec\n", 
+        precond->mem_MB, precond->t_build, precond->t_apply / (double) precond->n_apply
+    );
 }

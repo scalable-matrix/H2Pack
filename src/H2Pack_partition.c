@@ -87,6 +87,26 @@ H2P_tree_node_t H2P_bisection_partition_points(
             }
         }
         semi_box_size = semi_box_size + 1e-8;
+        // Give the center a small random shift to prevent highly symmetric point distributions
+        DTYPE shift_scale = semi_box_size * 1e-3;
+        for (int j = 0; j < pt_dim; j++) 
+        {
+            DTYPE shift_j = (DTYPE) drand48() * 0.5 + 0.25;
+            center[j] += shift_j * shift_scale;
+        }
+        // Recalculate the box size
+        semi_box_size = 0.0;
+        for (int j = 0; j < pt_dim; j++)
+        {
+            DTYPE *coord_dim_j = coord + j * n_point;
+            DTYPE center_j = center[j];
+            for (int i = coord_s; i <= coord_e; i++)
+            {
+                DTYPE tmp = DABS(coord_dim_j[i] - center_j);
+                semi_box_size = MAX(semi_box_size, tmp);
+            }
+        }
+        semi_box_size = semi_box_size + 1e-8;
         for (int j = 0; j < pt_dim; j++)
         {
             enbox[j] = center[j] - semi_box_size - 2e-12;
@@ -121,7 +141,7 @@ H2P_tree_node_t H2P_bisection_partition_points(
     int *child_idx = (int*) malloc(sizeof(int) * node_npts);
     ASSERT_PRINTF(
         rel_idx != NULL && child_idx != NULL, 
-        "Failed to allocate index arrays of size %d for bisection partioning\n", node_npts * (pt_dim + 1)
+        "Failed to allocate index arrays of size %d for bisection partitioning\n", node_npts * (pt_dim + 1)
     );
     memset(child_idx, 0, sizeof(int) * node_npts);
     int pow2 = 1;
@@ -605,18 +625,18 @@ void H2P_partition_points(
     h2pack->height_n_node = malloc(int_max_level_msize);
     h2pack->height_nodes  = malloc(int_max_level_msize * h2pack->n_leaf_node);
     h2pack->enbox         = malloc(enbox_msize);
-    ASSERT_PRINTF(h2pack->parent        != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
-    ASSERT_PRINTF(h2pack->children      != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
-    ASSERT_PRINTF(h2pack->pt_cluster    != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
-    ASSERT_PRINTF(h2pack->mat_cluster   != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
-    ASSERT_PRINTF(h2pack->n_child       != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
-    ASSERT_PRINTF(h2pack->node_level    != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
-    ASSERT_PRINTF(h2pack->node_height   != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
-    ASSERT_PRINTF(h2pack->level_n_node  != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
-    ASSERT_PRINTF(h2pack->level_nodes   != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
-    ASSERT_PRINTF(h2pack->height_n_node != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
-    ASSERT_PRINTF(h2pack->height_nodes  != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
-    ASSERT_PRINTF(h2pack->enbox         != NULL, "Failed to allocate arrays for storing hierarchical partioning tree\n");
+    ASSERT_PRINTF(h2pack->parent        != NULL, "Failed to allocate hierarchical partitioning tree arrays\n");
+    ASSERT_PRINTF(h2pack->children      != NULL, "Failed to allocate hierarchical partitioning tree arrays\n");
+    ASSERT_PRINTF(h2pack->pt_cluster    != NULL, "Failed to allocate hierarchical partitioning tree arrays\n");
+    ASSERT_PRINTF(h2pack->mat_cluster   != NULL, "Failed to allocate hierarchical partitioning tree arrays\n");
+    ASSERT_PRINTF(h2pack->n_child       != NULL, "Failed to allocate hierarchical partitioning tree arrays\n");
+    ASSERT_PRINTF(h2pack->node_level    != NULL, "Failed to allocate hierarchical partitioning tree arrays\n");
+    ASSERT_PRINTF(h2pack->node_height   != NULL, "Failed to allocate hierarchical partitioning tree arrays\n");
+    ASSERT_PRINTF(h2pack->level_n_node  != NULL, "Failed to allocate hierarchical partitioning tree arrays\n");
+    ASSERT_PRINTF(h2pack->level_nodes   != NULL, "Failed to allocate hierarchical partitioning tree arrays\n");
+    ASSERT_PRINTF(h2pack->height_n_node != NULL, "Failed to allocate hierarchical partitioning tree arrays\n");
+    ASSERT_PRINTF(h2pack->height_nodes  != NULL, "Failed to allocate hierarchical partitioning tree arrays\n");
+    ASSERT_PRINTF(h2pack->enbox         != NULL, "Failed to allocate hierarchical partitioning tree arrays\n");
     partition_vars.curr_leaf_idx = 0;
     memset(h2pack->level_n_node,  0, int_max_level_msize);
     memset(h2pack->height_n_node, 0, int_max_level_msize);

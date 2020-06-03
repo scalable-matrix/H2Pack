@@ -77,8 +77,8 @@ int main(int argc, char **argv)
     assert(x != NULL && y0 != NULL && y1 != NULL);
     for (int i = 0; i < test_params.krnl_mat_size; i++) 
     {
-        x[i] = (DTYPE) pseudo_randn();
-        // x[i] = (DTYPE) drand48();
+        //x[i] = (DTYPE) pseudo_randn();
+        x[i] = (DTYPE) drand48();
     }
 
     // Get reference results

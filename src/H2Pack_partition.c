@@ -19,7 +19,6 @@ struct H2P_partition_vars
     int n_leaf_node;    // Number of leaf nodes
     int curr_leaf_idx;  // Index of this leaf node
     int min_adm_level;  // Minimum level of reduced admissible pair
-    int max_adm_height; // Maximum height of reduced admissible pair
     H2P_int_vec_t r_inadm_pairs;  // Reduced inadmissible pairs
     H2P_int_vec_t r_adm_pairs;    // Reduced admissible pairs
 };
@@ -383,10 +382,8 @@ void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0
         {
             H2P_int_vec_push_back(partition_vars.r_adm_pairs, n0);
             H2P_int_vec_push_back(partition_vars.r_adm_pairs, n1);
-            int max_level_n01  = MAX(level_n0,  level_n1);
-            int min_height_n01 = (max_level_n01 == level_n0) ? height_n0 : height_n1;
-            partition_vars.min_adm_level  = MIN(partition_vars.min_adm_level,  max_level_n01);
-            partition_vars.max_adm_height = MAX(partition_vars.max_adm_height, min_height_n01);
+            int max_level_n01 = MAX(level_n0, level_n1);
+            partition_vars.min_adm_level = MIN(partition_vars.min_adm_level, max_level_n01);
             return;
         }
         
@@ -522,12 +519,10 @@ void H2P_HSS_calc_adm_inadm_pairs(H2Pack_t h2pack)
     H2P_int_vec_init(&partition_vars.r_adm_pairs,   estimated_n_pair);
     int H2_min_adm_level = h2pack->min_adm_level;
     h2pack->min_adm_level = 0;
-    partition_vars.min_adm_level  = h2pack->max_level;
-    partition_vars.max_adm_height = 0;
+    partition_vars.min_adm_level = h2pack->max_level;
     H2P_calc_reduced_adm_pairs(h2pack, ALPHA_HSS, h2pack->root_idx, h2pack->root_idx);
-    h2pack->min_adm_level      = H2_min_adm_level;
-    h2pack->HSS_min_adm_level  = partition_vars.min_adm_level;
-    h2pack->HSS_max_adm_height = partition_vars.max_adm_height;
+    h2pack->min_adm_level     = H2_min_adm_level;
+    h2pack->HSS_min_adm_level = partition_vars.min_adm_level;
     ASSERT_PRINTF(h2pack->HSS_min_adm_level == 1, "HSS matrix minimal admissible level should be 1!\n");
 
     // Copy reduced HSS (in)admissible pairs from H2P_int_vec to h2pack arrays
@@ -666,11 +661,9 @@ void H2P_partition_points(
     // h2pack->min_adm_level can be set manually to restrict the minimal admissible level
     // If h2pack->min_adm_level != 0, partition_vars.min_adm_level is useless
     h2pack->min_adm_level = 0;
-    partition_vars.min_adm_level  = h2pack->max_level;
-    partition_vars.max_adm_height = 0;
+    partition_vars.min_adm_level = h2pack->max_level;
     H2P_calc_reduced_adm_pairs(h2pack, ALPHA_H2, h2pack->root_idx, h2pack->root_idx);
-    h2pack->min_adm_level  = partition_vars.min_adm_level;
-    h2pack->max_adm_height = partition_vars.max_adm_height;
+    h2pack->min_adm_level = partition_vars.min_adm_level;
     
     // 5. Copy reduced (in)admissible pairs from H2P_int_vec to h2pack arrays
     h2pack->n_r_inadm_pair = partition_vars.r_inadm_pairs->length / 2;
@@ -696,9 +689,7 @@ void H2P_partition_points(
         H2P_thread_buf_init(&h2pack->tb[i], h2pack->krnl_mat_size);
     
     // 7. Construct a DAG_task_queue for H2P_build_H2_UJ_proxy 
-    int max_adm_height = h2pack->max_adm_height;
     int min_adm_level  = h2pack->min_adm_level;
-    int *node_height   = h2pack->node_height;
     int *node_level    = h2pack->node_level;
     int *parent        = h2pack->parent;
     int *DAG_src_ptr   = (int*) malloc(sizeof(int) * (n_node + 1));
@@ -709,10 +700,8 @@ void H2P_partition_points(
     );
     for (int node = 0; node < n_node; node++)
     {
-        int height = node_height[node];
-        int level  = node_level[node];
         DAG_src_ptr[node] = node;
-        if (height > max_adm_height || level < min_adm_level) DAG_dst_idx[node] = node;
+        if (node_level[node] < min_adm_level) DAG_dst_idx[node] = node;
         else DAG_dst_idx[node] = parent[node];
     }
     DAG_src_ptr[n_node] = n_node;

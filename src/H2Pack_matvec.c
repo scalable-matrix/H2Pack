@@ -73,23 +73,14 @@ void H2P_matvec_fwd_transform(H2Pack_t h2pack, const DTYPE *x)
     int max_child      = h2pack->max_child;
     int n_node         = h2pack->n_node;
     int n_leaf_node    = h2pack->n_leaf_node;
+    int max_level      = h2pack->max_level;
+    int min_adm_level  = (h2pack->is_HSS) ? h2pack->HSS_min_adm_level : h2pack->min_adm_level;
     int *children      = h2pack->children;
     int *n_child       = h2pack->n_child;
-    int *height_n_node = h2pack->height_n_node;
-    int *node_level    = h2pack->node_level;
-    int *height_nodes  = h2pack->height_nodes;
+    int *level_n_node  = h2pack->level_n_node;
+    int *level_nodes   = h2pack->level_nodes;
     int *mat_cluster   = h2pack->mat_cluster;
     H2P_thread_buf_t *thread_buf = h2pack->tb;
-
-    int min_adm_level, max_adm_height;
-    if (h2pack->is_HSS == 0)
-    {
-        min_adm_level  = h2pack->min_adm_level;
-        max_adm_height = h2pack->max_adm_height;
-    } else {
-        min_adm_level  = h2pack->HSS_min_adm_level;
-        max_adm_height = h2pack->HSS_max_adm_height;
-    }
     
     // 1. Initialize y0 on the first run
     if (h2pack->y0 == NULL)
@@ -119,11 +110,11 @@ void H2P_matvec_fwd_transform(H2Pack_t h2pack, const DTYPE *x)
     // 2. Upward sweep
     H2P_dense_mat_t *y0 = h2pack->y0;
     H2P_dense_mat_t *U  = h2pack->U;
-    for (int i = 0; i <= max_adm_height; i++)
+    for (int i = max_level; i >= min_adm_level; i--)
     {
-        int *height_i_nodes = height_nodes + i * n_leaf_node;
-        int height_i_n_node = height_n_node[i];
-        int n_thread_i = MIN(height_i_n_node, n_thread);
+        int *level_i_nodes = level_nodes + i * n_leaf_node;
+        int level_i_n_node = level_n_node[i];
+        int n_thread_i = MIN(level_i_n_node, n_thread);
         
         #pragma omp parallel num_threads(n_thread_i)
         {
@@ -131,11 +122,9 @@ void H2P_matvec_fwd_transform(H2Pack_t h2pack, const DTYPE *x)
             
             thread_buf[tid]->timer = -get_wtime_sec();
             #pragma omp for schedule(dynamic) nowait
-            for (int j = 0; j < height_i_n_node; j++)
+            for (int j = 0; j < level_i_n_node; j++)
             {
-                int node  = height_i_nodes[j];
-                int level = node_level[node];
-                if (level < min_adm_level) continue;
+                int node = level_i_nodes[j];
                 int n_child_node = n_child[node];
                 int *child_nodes = children + node * max_child;
                 if (n_child_node == 0)

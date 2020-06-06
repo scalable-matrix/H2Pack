@@ -17,8 +17,8 @@ struct H2P_test_params
 };
 struct H2P_test_params test_params;
 
-const DTYPE Stokes_krnl_param[2] = {1.0, 0.1};
-const DTYPE RPY_krnl_param[1]    = {1.0};
+DTYPE Stokes_krnl_param[2] = {1.0, 0.1};
+DTYPE RPY_krnl_param[1]    = {1.0};
 
 static double pseudo_randn()
 {

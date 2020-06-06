@@ -1506,7 +1506,7 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
     size_t *D_ptr    = (size_t*) malloc(sizeof(size_t) * (n_leaf_node + 1));
     ASSERT_PRINTF(
         D_nrow   != NULL && D_ncol   != NULL && D_ptr    != NULL,
-        "Failed to allocate %d SPDHSS D matrices infomation array\n", n_leaf_node
+        "Failed to allocate %d SPDHSS D matrices information array\n", n_leaf_node
     );
     ASSERT_PRINTF(
         D_pair_i != NULL && D_pair_j != NULL && D_pair_v != NULL,

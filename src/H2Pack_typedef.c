@@ -249,9 +249,10 @@ void H2P_print_statistic(H2Pack_t h2pack)
     
     printf("==================== H2Pack H2 tree info ====================\n");
     printf("  * Number of points               : %d\n", h2pack->n_point);
-    printf("  * Kernel matrix size (kms)       : %d\n", h2pack->krnl_mat_size);
+    printf("  * Kernel matrix size             : %d\n", h2pack->krnl_mat_size);
     printf("  * Maximum points in a leaf node  : %d\n", h2pack->max_leaf_points);
-    printf("  * Height of H2 tree              : %d\n", h2pack->max_level+1);
+    printf("  * Maximum leaf node box size     : %e\n", h2pack->max_leaf_size);
+    printf("  * Number of levels (root at 0)   : %d\n", h2pack->max_level+1);
     printf("  * Number of nodes                : %d\n", h2pack->n_node);
     printf("  * Number of nodes on each level  : ");
     for (int i = 0; i < h2pack->max_level; i++) 
@@ -261,8 +262,15 @@ void H2P_print_statistic(H2Pack_t h2pack)
     for (int i = 0; i < h2pack->max_level; i++) 
         printf("%d, ", h2pack->height_n_node[i]);
     printf("%d\n", h2pack->height_n_node[h2pack->max_level]);
-    printf("  * Number of reduced far pairs    : %d\n", h2pack->n_r_adm_pair);
-    printf("  * Number of reduced near pairs   : %d\n", h2pack->n_r_inadm_pair);
+    printf("  * H2Pack running mode            : ");
+    int is_H2 = 1;
+    if (h2pack->is_HSS   == 1) { printf("HSS\n");               is_H2 = 0; }
+    if (h2pack->is_RPY   == 1) { printf("H2 for RPY kernel\n"); is_H2 = 0; }
+    if (h2pack->is_H2ERI == 1) { printf("H2-ERI\n");            is_H2 = 0; }
+    if (is_H2 == 1) printf("H2\n");
+    printf("  * Minimum admissible pair level  : %d\n", (h2pack->is_HSS == 0) ? h2pack->min_adm_level : h2pack->HSS_min_adm_level);
+    printf("  * Number of reduced adm. pairs   : %d\n", h2pack->n_r_adm_pair);
+    printf("  * Number of reduced inadm. pairs : %d\n", h2pack->n_r_inadm_pair);
     
     if (h2pack->U == NULL) 
     {

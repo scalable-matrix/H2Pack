@@ -16,9 +16,9 @@ struct H2P_test_params
 };
 struct H2P_test_params test_params;
 
-const DTYPE Gaussian_krnl_param[1]  = {1.0};
-const DTYPE Matern_krnl_param[1]    = {1.0};
-const DTYPE Quadratic_krnl_param[2] = {1.0, -0.5};
+DTYPE Gaussian_krnl_param[1]  = {1.0};
+DTYPE Matern_krnl_param[1]    = {1.0};
+DTYPE Quadratic_krnl_param[2] = {1.0, -0.5};
 
 static double pseudo_randn()
 {
@@ -91,7 +91,7 @@ void parse_scalar_params(int argc, char **argv)
         case 2: 
         {
             printf("Using 3/2 Matern kernel : k(x, y) = (1 + l * k) * exp(-l * k), ");
-            printf("k = l * sqrt(3) * |x-y|, l = %.2lf\n", Matern_krnl_param[0]); 
+            printf("k = sqrt(3) * |x-y|, l = %.2lf\n", Matern_krnl_param[0]); 
             break;
         }
         case 3: 

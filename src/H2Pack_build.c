@@ -453,7 +453,8 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
     H2P_int_vec_t   *J       = h2pack->J;
     H2P_dense_mat_t *J_coord = h2pack->J_coord;
     
-    // 2. Construct U for nodes whose height is not larger than max_adm_height
+    // 2. Construct U for nodes whose level is not smaller than min_adm_level.
+    //    min_adm_level is the highest level that still has admissible blocks.
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
@@ -714,9 +715,7 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
     }
 
     // 3. Hierarchical construction level by level. min_adm_level is the 
-    //    highest level that still has admissible blocks, so we only need 
-    //    to compress matrix blocks to that level since higher blocks 
-    //    are inadmissible and cannot be compressed.
+    //    highest level that still has admissible blocks.
     for (int i = max_level; i >= min_adm_level; i--)
     {
         int *level_i_nodes = level_nodes + i * n_leaf_node;

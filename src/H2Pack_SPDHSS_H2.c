@@ -1325,9 +1325,7 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
 
     // 3. Copy H2 & HSS reduced (in)admissible pairs
     hssmat->min_adm_level      = h2mat->min_adm_level;
-    hssmat->max_adm_height     = h2mat->max_adm_height;
     hssmat->HSS_min_adm_level  = h2mat->HSS_min_adm_level;
-    hssmat->HSS_max_adm_height = h2mat->HSS_max_adm_height;
     hssmat->n_r_inadm_pair     = h2mat->n_r_inadm_pair;
     hssmat->n_r_adm_pair       = h2mat->n_r_adm_pair;
     hssmat->HSS_n_r_inadm_pair = h2mat->HSS_n_r_inadm_pair;

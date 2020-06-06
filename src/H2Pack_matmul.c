@@ -13,6 +13,7 @@
 #include "x86_intrin_wrapper.h"
 #include "utils.h"
 
+// Initialize auxiliary array y0 used in H2 matmul forward transformation
 void H2P_matmul_init_y0(H2Pack_t h2pack, const int n_vec)
 {
     if (h2pack->y0 != NULL) return;
@@ -48,6 +49,7 @@ void H2P_matmul_fwd_transform(
     int n_thread       = h2pack->n_thread;
     int max_child      = h2pack->max_child;
     int max_level      = h2pack->max_level;
+    int min_adm_level  = (h2pack->is_HSS) ? h2pack->HSS_min_adm_level : h2pack->min_adm_level;
     int n_node         = h2pack->n_node;
     int n_leaf_node    = h2pack->n_leaf_node;
     int *children      = h2pack->children;
@@ -56,16 +58,6 @@ void H2P_matmul_fwd_transform(
     int *level_n_node  = h2pack->level_n_node;
     int *mat_cluster   = h2pack->mat_cluster;
     H2P_thread_buf_t *thread_buf = h2pack->tb;
-
-    int min_adm_level, max_adm_height;
-    if (h2pack->is_HSS == 0)
-    {
-        min_adm_level  = h2pack->min_adm_level;
-        max_adm_height = h2pack->max_adm_height;
-    } else {
-        min_adm_level  = h2pack->HSS_min_adm_level;
-        max_adm_height = h2pack->HSS_max_adm_height;
-    }
 
     // 1. Initialize y0 on the first run
     H2P_matmul_init_y0(h2pack, n_vec);
@@ -104,22 +96,20 @@ void H2P_matmul_fwd_transform(
                         1.0, U_node->data, U_node->ld, mat_x_blk, ldx, 0.0, y0[node]->data, y0[node]->ld
                     );
                 } else {
-                    // Non-leaf node, concatenate y0 in the children nodes and multiply it with U_j^T
-                    // Multiple U{node} with each child nodes' y0 directly
+                    // Non-leaf node, multiple U{node}^T with each child node y0 directly
                     int *node_children = children + node * max_child;
-                    int y0_tmp_nrow = 0;
-                    DTYPE beta = 0.0;
+                    int U_srow = 0;
                     for (int k = 0; k < n_child_node; k++)
                     {
                         int child_k = node_children[k];
                         H2P_dense_mat_t y0_k = y0[child_k];
-                        DTYPE *U_node_k_row = U_node->data + y0_tmp_nrow * U_node->ld;
+                        DTYPE *U_node_k = U_node->data + U_srow * U_node->ld;
+                        DTYPE beta = (k == 0) ? 0.0 : 1.0;
                         CBLAS_GEMM(
                             CblasRowMajor, CblasTrans, CblasNoTrans, U_node->ncol, n_vec, y0_k->nrow,
-                            1.0, U_node_k_row, U_node->ld, y0_k->data, y0_k->ld, beta, y0[node]->data, y0[node]->ld
+                            1.0, U_node_k, U_node->ld, y0_k->data, y0_k->ld, beta, y0[node]->data, y0[node]->ld
                         );
-                        beta = 1.0;
-                        y0_tmp_nrow += y0[child_k]->nrow;
+                        U_srow += y0_k->nrow;
                     }  // End of k loop
                 }  // End of "if (n_child_node == 0)"
             }  // End of j loop
@@ -127,6 +117,7 @@ void H2P_matmul_fwd_transform(
     }  // End of i loop
 }
 
+// Initialize auxiliary array y1 used in H2 matmul intermediate multiplication
 void H2P_matmul_init_y1(H2Pack_t h2pack, const int n_vec)
 {
     int n_node = h2pack->n_node;
@@ -442,15 +433,15 @@ void H2P_matmul(
 {
     double st, et;
     int krnl_mat_size = h2pack->krnl_mat_size;
-    int max_n_vec = 64;
+    int max_n_vec = 128;
     char *max_n_vec_p = getenv("H2P_MATMUL_MAX_N_VEC");
     if (max_n_vec_p != NULL)
     {
         max_n_vec = atoi(max_n_vec_p);
-        if (max_n_vec < 4 || max_n_vec > 128)
+        if (max_n_vec < 4 || max_n_vec > 512)
         {
-            WARNING_PRINTF("H2P_MATMUL_MAX_N_VEC = %d is either too small or too large, reset to default value 64\n", max_n_vec);
-            max_n_vec = 64;
+            WARNING_PRINTF("H2P_MATMUL_MAX_N_VEC = %d is either too small or too large, reset to default value 128\n", max_n_vec);
+            max_n_vec = 128;
         }
     }
 

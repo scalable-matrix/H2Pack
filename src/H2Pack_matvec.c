@@ -65,6 +65,32 @@ void CBLAS_BI_GEMV(
     }
 }
 
+// Initialize auxiliary array y0 used in H2 matvec forward transformation
+void H2P_matvec_init_y0(H2Pack_t h2pack)
+{
+    if (h2pack->y0 != NULL) return;
+    int n_node = h2pack->n_node;
+    h2pack->y0 = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
+    ASSERT_PRINTF(
+        h2pack->y0 != NULL, 
+        "Failed to allocate %d H2P_dense_mat_t for H2 matvec buffer\n", n_node
+    );
+    H2P_dense_mat_t *y0 = h2pack->y0;
+    H2P_dense_mat_t *U  = h2pack->U;
+    for (int node = 0; node < n_node; node++)
+    {
+        int ncol = U[node]->ncol;
+        if (ncol > 0) 
+        {
+            H2P_dense_mat_init(&y0[node], ncol, 1);
+        } else {
+            H2P_dense_mat_init(&y0[node], 0, 0);
+            y0[node]->nrow = 0;
+            y0[node]->ncol = 0;
+            y0[node]->ld   = 0;
+        }
+    }
+}
 
 // H2 matvec forward transformation, calculate U_j^T * x_j
 void H2P_matvec_fwd_transform(H2Pack_t h2pack, const DTYPE *x)
@@ -83,29 +109,7 @@ void H2P_matvec_fwd_transform(H2Pack_t h2pack, const DTYPE *x)
     H2P_thread_buf_t *thread_buf = h2pack->tb;
     
     // 1. Initialize y0 on the first run
-    if (h2pack->y0 == NULL)
-    {
-        h2pack->y0 = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
-        ASSERT_PRINTF(
-            h2pack->y0 != NULL, 
-            "Failed to allocate %d H2P_dense_mat_t for H2 matvec buffer\n", n_node
-        );
-        H2P_dense_mat_t *y0 = h2pack->y0;
-        H2P_dense_mat_t *U  = h2pack->U;
-        for (int node = 0; node < n_node; node++)
-        {
-            int ncol = U[node]->ncol;
-            if (ncol > 0) 
-            {
-                H2P_dense_mat_init(&y0[node], ncol, 1);
-            } else {
-                H2P_dense_mat_init(&y0[node], 0, 0);
-                y0[node]->nrow = 0;
-                y0[node]->ncol = 0;
-                y0[node]->ld   = 0;
-            }
-        }
-    }
+    H2P_matvec_init_y0(h2pack);
     
     // 2. Upward sweep
     H2P_dense_mat_t *y0 = h2pack->y0;
@@ -126,32 +130,33 @@ void H2P_matvec_fwd_transform(H2Pack_t h2pack, const DTYPE *x)
             {
                 int node = level_i_nodes[j];
                 int n_child_node = n_child[node];
-                int *child_nodes = children + node * max_child;
+                H2P_dense_mat_t U_node = U[node];
+
+                H2P_dense_mat_resize(y0[node], U_node->ncol, 1);
                 if (n_child_node == 0)
                 {
                     // Leaf node, directly calculate U_j^T * x_j
                     const DTYPE *x_spos = x + mat_cluster[node * 2];
                     CBLAS_GEMV(
-                        CblasRowMajor, CblasTrans, U[node]->nrow, U[node]->ncol, 
-                        1.0, U[node]->data, U[node]->ld, 
+                        CblasRowMajor, CblasTrans, U_node->nrow, U_node->ncol, 
+                        1.0, U_node->data, U_node->ld, 
                         x_spos, 1, 0.0, y0[node]->data, 1
                     );
                 } else {
-                    // Non-leaf node, concatenate children node's y0 and multiple
-                    // it with U_j^T
+                    // Non-leaf node, multiple U{node}^T with each child node y0 directly
+                    int *node_children = children + node * max_child;
                     int U_srow = 0;
                     for (int k = 0; k < n_child_node; k++)
                     {
-                        int child_k = child_nodes[k];
-                        int child_k_len = y0[child_k]->nrow; 
-                        DTYPE *U_node_k = U[node]->data + U_srow * U[node]->ld;
+                        int child_k = node_children[k];
+                        H2P_dense_mat_t y0_k = y0[child_k];
+                        DTYPE *U_node_k = U_node->data + U_srow * U_node->ld;
                         DTYPE beta = (k == 0) ? 0.0 : 1.0;
                         CBLAS_GEMV(
-                            CblasRowMajor, CblasTrans, child_k_len, U[node]->ncol, 
-                            1.0, U_node_k, U[node]->ld, 
-                            y0[child_k]->data, 1, beta, y0[node]->data, 1
+                            CblasRowMajor, CblasTrans, y0_k->nrow, U_node->ncol, 
+                            1.0, U_node_k, U_node->ld, y0_k->data, 1, beta, y0[node]->data, 1
                         );
-                        U_srow += child_k_len;
+                        U_srow += y0_k->nrow;
                     }
                 }  // End of "if (n_child_node == 0)"
             }  // End of j loop
@@ -228,7 +233,7 @@ void H2P_transpose_y1_to_krnldim(H2Pack_t h2pack)
     }
 }
 
-// Initialize auxiliary array y1 used in intermediate multiplication
+// Initialize auxiliary array y1 used in H2 matvec intermediate multiplication
 void H2P_matvec_init_y1(H2Pack_t h2pack)
 {
     int n_node = h2pack->n_node;

@@ -80,9 +80,7 @@ struct H2Pack
     int    max_neighbor;            // Maximum number of neighbor nodes per node, == 2^pt_dim
     int    max_level;               // Maximum level of this H2 tree, (root = 0, total max_level + 1 levels)
     int    min_adm_level;           // Minimum level of reduced admissible pair
-    int    max_adm_height;          // Maximum height of reduced admissible pair
     int    HSS_min_adm_level;       // Minimum level of reduced admissible pair in HSS mode
-    int    HSS_max_adm_height;      // Maximum height of reduced admissible pair in HSS mode
     int    n_r_inadm_pair;          // Number of reduced inadmissible pairs 
     int    n_r_adm_pair;            // Number of reduced admissible pairs 
     int    HSS_n_r_inadm_pair;      // Number of reduced inadmissible pairs in HSS mode

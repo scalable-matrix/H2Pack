@@ -333,118 +333,127 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_t h2mat, const int n_vec, H2P_dense_mat_t *
         }  // End of node0 loop
         
         // 4.2 Admissible pairs
-        #pragma omp for schedule(dynamic)
-        for (int node0 = 0; node0 < n_node; node0++)
+        #pragma omp barrier
+        for (int i = max_level; i >= min_adm_level; i--)
         {
-            int s_row0 = mat_cluster[2 * node0];
-            int e_row0 = mat_cluster[2 * node0 + 1];
-            int n_row0 = e_row0 - s_row0 + 1;
-            int level0 = node_level[node0];
-            H2P_dense_mat_t exU_0 = exU[node0];
-            for (int i = B_p2i_rowptr[node0]; i < B_p2i_rowptr[node0 + 1]; i++)
+            int *level_i_nodes = level_nodes + i * n_leaf_node;
+            int level_i_n_node = level_n_node[i];
+
+            #pragma omp barrier
+            #pragma omp for schedule(dynamic)
+            for (int j = 0; j < level_i_n_node; j++)
             {
-                int node1 = B_p2i_colidx[i];
-                if (node0 == node1) continue;
-                int ca_level = H2P_tree_common_ancestor_level(parent, node_level, max_level+1, node0, node1, work->data) + 1;
-                int s_col  = n_vec * (ca_level - 1);
-                int s_row1 = mat_cluster[2 * node1];
-                int e_row1 = mat_cluster[2 * node1 + 1];
-                int n_row1 = e_row1 - s_row1 + 1;
-                int level1 = node_level[node1];
-
-                int Bij_nrow, Bij_ncol, Bij_ld, Bij_trans;
-                H2P_get_Bij_block(h2mat, node0, node1, Bij);
-                DTYPE *Bij_data = Bij->data;
-                if (Bij->ld > 0)
+                int node0 = level_i_nodes[j];
+                int s_row0 = mat_cluster[2 * node0];
+                int e_row0 = mat_cluster[2 * node0 + 1];
+                int n_row0 = e_row0 - s_row0 + 1;
+                int level0 = node_level[node0];
+                H2P_dense_mat_t exU_0 = exU[node0];
+                for (int k = B_p2i_rowptr[node0]; k < B_p2i_rowptr[node0 + 1]; k++)
                 {
-                    Bij_nrow  = Bij->nrow;
-                    Bij_ncol  = Bij->ncol;
-                    Bij_ld    = Bij->ld;
-                    Bij_trans = 0;
-                } else {
-                    Bij_nrow  = Bij->ncol;
-                    Bij_ncol  = Bij->nrow;
-                    Bij_ld    = -Bij->ld;
-                    Bij_trans = 1;
-                }
-                H2P_dense_mat_t y0_1 = y0[node1];
-                DTYPE *Yk_mat_blk0 = Yk_mat + s_row0 * Yk_mat_ld + s_col;
-                DTYPE *vec_blk1    = vec + s_row1 * n_vec;
+                    int node1 = B_p2i_colidx[k];
+                    if (node0 == node1) continue;
+                    int ca_level = H2P_tree_common_ancestor_level(parent, node_level, max_level+1, node0, node1, work->data) + 1;
+                    int s_col  = n_vec * (ca_level - 1);
+                    int s_row1 = mat_cluster[2 * node1];
+                    int e_row1 = mat_cluster[2 * node1 + 1];
+                    int n_row1 = e_row1 - s_row1 + 1;
+                    int level1 = node_level[node1];
 
-                // We only handle the update on Yk_mat_blk0, the symmetric operation for 
-                // updating Yk_mat_blk1 is handled by double counting the admissible pairs
+                    int Bij_nrow, Bij_ncol, Bij_ld, Bij_trans;
+                    H2P_get_Bij_block(h2mat, node0, node1, Bij);
+                    DTYPE *Bij_data = Bij->data;
+                    if (Bij->ld > 0)
+                    {
+                        Bij_nrow  = Bij->nrow;
+                        Bij_ncol  = Bij->ncol;
+                        Bij_ld    = Bij->ld;
+                        Bij_trans = 0;
+                    } else {
+                        Bij_nrow  = Bij->ncol;
+                        Bij_ncol  = Bij->nrow;
+                        Bij_ld    = -Bij->ld;
+                        Bij_trans = 1;
+                    }
+                    H2P_dense_mat_t y0_1 = y0[node1];
+                    DTYPE *Yk_mat_blk0 = Yk_mat + s_row0 * Yk_mat_ld + s_col;
+                    DTYPE *vec_blk1    = vec + s_row1 * n_vec;
 
-                // A. Two nodes are of the same level, compress on both side
-                if (level0 == level1)
-                {
-                    // Yk_mat(idx1, col_idx) = Yk_mat(idx1, col_idx) + exU{c1} * (Bij  * y0{c2});
-                    ASSERT_PRINTF(
-                        exU_0->ncol == Bij_nrow && Bij_ncol == y0_1->nrow,
-                        "Pair (%d, %d) GEMM size mismatch: [%d, %d] * [%d, %d] * [%d, %d]\n",
-                        node0, node1, exU_0->nrow, exU_0->ncol, Bij_nrow, Bij_ncol, y0_1->nrow, y0_1->ncol
-                    );
-                    ASSERT_PRINTF(
-                        n_row0 == exU_0->nrow && n_vec == y0_1->ncol, 
-                        "Pair (%d, %d) matrix addition size mismatch: expected [%d, %d], got [%d, %d]\n",
-                        node0, node1, n_row0, n_vec, exU_0->nrow, y0_1->ncol
-                    );
-                    H2P_dense_mat_resize(tmpM, Bij_nrow, y0_1->ncol);
-                    CBLAS_TRANSPOSE Bij_trans_ = (Bij_trans == 0) ? CblasNoTrans : CblasTrans;
-                    CBLAS_GEMM(
-                        CblasRowMajor, Bij_trans_, CblasNoTrans, Bij_nrow, y0_1->ncol, Bij_ncol,
-                        1.0, Bij_data, Bij_ld, y0_1->data, y0_1->ld, 0.0, tmpM->data, tmpM->ld
-                    );
-                    CBLAS_GEMM(
-                        CblasRowMajor, CblasNoTrans, CblasNoTrans, exU_0->nrow, tmpM->ncol, exU_0->ncol,
-                        1.0, exU_0->data, exU_0->ld, tmpM->data, tmpM->ld, 1.0, Yk_mat_blk0, Yk_mat_ld
-                    );
-                }  // End of "if (level0 == level1)"
+                    // We only handle the update on Yk_mat_blk0, the symmetric operation for 
+                    // updating Yk_mat_blk1 is handled by double counting the admissible pairs
 
-                // B. node1 is a leaf node and its level is larger than node0,
-                //    only compress on node0's side
-                if (level0 > level1)
-                {
-                    // Yk_mat(idx1, col_idx) = Yk_mat(idx1, col_idx) + exU{c1} * (Bij * vec(idx2, :));
-                    ASSERT_PRINTF(
-                        exU_0->ncol == Bij_nrow && Bij_ncol == n_row1,
-                        "Pair (%d, %d) GEMM size mismatch: [%d, %d] * [%d, %d] * [%d, %d]\n",
-                        node0, node1, exU_0->nrow, exU_0->ncol, Bij_nrow, Bij_ncol, n_row1, n_vec
-                    );
-                    ASSERT_PRINTF(
-                        n_row0 == exU_0->nrow, 
-                        "Pair (%d, %d) matrix addition size mismatch: expected [%d, %d], got [%d, %d]\n",
-                        node0, node1, n_row0, n_vec, exU_0->nrow, n_vec
-                    );
-                    H2P_dense_mat_resize(tmpM, Bij_nrow, n_vec);
-                    CBLAS_TRANSPOSE Bij_trans_ = (Bij_trans == 0) ? CblasNoTrans : CblasTrans;
-                    CBLAS_GEMM(
-                        CblasRowMajor, Bij_trans_, CblasNoTrans, Bij_nrow, n_vec, Bij_ncol,
-                        1.0, Bij_data, Bij_ld, vec_blk1, n_vec, 0.0, tmpM->data, tmpM->ld
-                    );
-                    CBLAS_GEMM(
-                        CblasRowMajor, CblasNoTrans, CblasNoTrans, exU_0->nrow, tmpM->ncol, exU_0->ncol,
-                        1.0, exU_0->data, exU_0->ld, tmpM->data, tmpM->ld, 1.0, Yk_mat_blk0, Yk_mat_ld
-                    );
-                }  // End of "if (level0 > level1)"
+                    // A. Two nodes are of the same level, compress on both side
+                    if (level0 == level1)
+                    {
+                        // Yk_mat(idx1, col_idx) = Yk_mat(idx1, col_idx) + exU{c1} * (Bij  * y0{c2});
+                        ASSERT_PRINTF(
+                            exU_0->ncol == Bij_nrow && Bij_ncol == y0_1->nrow,
+                            "Pair (%d, %d) GEMM size mismatch: [%d, %d] * [%d, %d] * [%d, %d]\n",
+                            node0, node1, exU_0->nrow, exU_0->ncol, Bij_nrow, Bij_ncol, y0_1->nrow, y0_1->ncol
+                        );
+                        ASSERT_PRINTF(
+                            n_row0 == exU_0->nrow && n_vec == y0_1->ncol, 
+                            "Pair (%d, %d) matrix addition size mismatch: expected [%d, %d], got [%d, %d]\n",
+                            node0, node1, n_row0, n_vec, exU_0->nrow, y0_1->ncol
+                        );
+                        H2P_dense_mat_resize(tmpM, Bij_nrow, y0_1->ncol);
+                        CBLAS_TRANSPOSE Bij_trans_ = (Bij_trans == 0) ? CblasNoTrans : CblasTrans;
+                        CBLAS_GEMM(
+                            CblasRowMajor, Bij_trans_, CblasNoTrans, Bij_nrow, y0_1->ncol, Bij_ncol,
+                            1.0, Bij_data, Bij_ld, y0_1->data, y0_1->ld, 0.0, tmpM->data, tmpM->ld
+                        );
+                        CBLAS_GEMM(
+                            CblasRowMajor, CblasNoTrans, CblasNoTrans, exU_0->nrow, tmpM->ncol, exU_0->ncol,
+                            1.0, exU_0->data, exU_0->ld, tmpM->data, tmpM->ld, 1.0, Yk_mat_blk0, Yk_mat_ld
+                        );
+                    }  // End of "if (level0 == level1)"
 
-                // C. node0 is a leaf node and its level is larger than node1,
-                //    only compress on node1's side
-                if (level0 < level1)
-                {
-                    // Yk_mat(idx1, col_idx) = Yk_mat(idx1, col_idx) + Bij * y0{c2};
-                    ASSERT_PRINTF(
-                        n_row0 == Bij_nrow && Bij_ncol == y0_1->nrow && y0_1->ncol == n_vec,
-                        "Pair (%d, %d) GEMM & matrix addition size mismatch: [%d, %d] + [%d, %d] * [%d, %d]\n",
-                        node0, node1, n_row0, n_vec, Bij_nrow, Bij_ncol, y0_1->nrow, y0_1->ncol
-                    );
-                    CBLAS_TRANSPOSE Bij_trans_ = (Bij_trans == 0) ? CblasNoTrans : CblasTrans;
-                    CBLAS_GEMM(
-                        CblasRowMajor, Bij_trans_, CblasNoTrans, Bij_nrow, y0_1->ncol, Bij_ncol, 
-                        1.0, Bij_data, Bij_ld, y0_1->data, y0_1->ld, 1.0, Yk_mat_blk0, Yk_mat_ld
-                    );
-                }  // End of "if (level0 < level1)"
-            }  // End of i loop
-        }  // End of node 0 loop
+                    // B. node1 is a leaf node and its level is larger than node0,
+                    //    only compress on node0's side
+                    if (level0 > level1)
+                    {
+                        // Yk_mat(idx1, col_idx) = Yk_mat(idx1, col_idx) + exU{c1} * (Bij * vec(idx2, :));
+                        ASSERT_PRINTF(
+                            exU_0->ncol == Bij_nrow && Bij_ncol == n_row1,
+                            "Pair (%d, %d) GEMM size mismatch: [%d, %d] * [%d, %d] * [%d, %d]\n",
+                            node0, node1, exU_0->nrow, exU_0->ncol, Bij_nrow, Bij_ncol, n_row1, n_vec
+                        );
+                        ASSERT_PRINTF(
+                            n_row0 == exU_0->nrow, 
+                            "Pair (%d, %d) matrix addition size mismatch: expected [%d, %d], got [%d, %d]\n",
+                            node0, node1, n_row0, n_vec, exU_0->nrow, n_vec
+                        );
+                        H2P_dense_mat_resize(tmpM, Bij_nrow, n_vec);
+                        CBLAS_TRANSPOSE Bij_trans_ = (Bij_trans == 0) ? CblasNoTrans : CblasTrans;
+                        CBLAS_GEMM(
+                            CblasRowMajor, Bij_trans_, CblasNoTrans, Bij_nrow, n_vec, Bij_ncol,
+                            1.0, Bij_data, Bij_ld, vec_blk1, n_vec, 0.0, tmpM->data, tmpM->ld
+                        );
+                        CBLAS_GEMM(
+                            CblasRowMajor, CblasNoTrans, CblasNoTrans, exU_0->nrow, tmpM->ncol, exU_0->ncol,
+                            1.0, exU_0->data, exU_0->ld, tmpM->data, tmpM->ld, 1.0, Yk_mat_blk0, Yk_mat_ld
+                        );
+                    }  // End of "if (level0 > level1)"
+
+                    // C. node0 is a leaf node and its level is larger than node1,
+                    //    only compress on node1's side
+                    if (level0 < level1)
+                    {
+                        // Yk_mat(idx1, col_idx) = Yk_mat(idx1, col_idx) + Bij * y0{c2};
+                        ASSERT_PRINTF(
+                            n_row0 == Bij_nrow && Bij_ncol == y0_1->nrow && y0_1->ncol == n_vec,
+                            "Pair (%d, %d) GEMM & matrix addition size mismatch: [%d, %d] + [%d, %d] * [%d, %d]\n",
+                            node0, node1, n_row0, n_vec, Bij_nrow, Bij_ncol, y0_1->nrow, y0_1->ncol
+                        );
+                        CBLAS_TRANSPOSE Bij_trans_ = (Bij_trans == 0) ? CblasNoTrans : CblasTrans;
+                        CBLAS_GEMM(
+                            CblasRowMajor, Bij_trans_, CblasNoTrans, Bij_nrow, y0_1->ncol, Bij_ncol, 
+                            1.0, Bij_data, Bij_ld, y0_1->data, y0_1->ld, 1.0, Yk_mat_blk0, Yk_mat_ld
+                        );
+                    }  // End of "if (level0 < level1)"
+                }  // End of k loop (admissible pairs)
+            }  // End of j loop (nodes in this level)
+        }  // End of i loop (level)
     }  // End of "#pragma omp parallel"
 
     // 5. Accumulate the results in Yk_mat to lead nodes

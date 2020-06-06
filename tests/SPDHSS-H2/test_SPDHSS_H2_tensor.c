@@ -128,16 +128,17 @@ int main(int argc, char **argv)
 
     printf("\nConstructing SPDHSS from H2\n");
     const int max_rank = 100 * 3;
-    const DTYPE shift = 1e-2;
+    const DTYPE shift  = 1e-2;
     H2P_SPDHSS_H2_build(max_rank, shift, h2mat, &hssmat);
  
     // Check HSS matvec accuracy
-    memcpy(y0, y1, sizeof(DTYPE) * test_params.krnl_mat_size);
+    H2P_matvec(h2mat,  x0, y0);
     H2P_matvec(hssmat, x0, y1);
     ref_norm = 0.0; 
     err_norm = 0.0;
     for (int i = 0; i < test_params.krnl_mat_size; i++)
     {
+        y0[i] += shift * x0[i];
         DTYPE diff = y1[i] - y0[i];
         ref_norm += y0[i] * y0[i];
         err_norm += diff * diff;

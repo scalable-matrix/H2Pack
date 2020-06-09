@@ -175,7 +175,7 @@ void parse_tensor_params(int argc, char **argv)
         case 1: 
         {
             test_params.krnl_eval       = RPY_eval_radii; 
-            test_params.krnl_bimv       = NULL; 
+            test_params.krnl_bimv       = RPY_krnl_bimv_std; 
             test_params.krnl_bimv_flops = RPY_krnl_bimv_flop;
             test_params.krnl_param      = (void*) &RPY_krnl_param[0];
             break;

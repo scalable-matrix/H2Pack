@@ -25,6 +25,7 @@ vec_add_*(a, b)         : Return lane-wise <a[i]> + <b[i]>
 vec_sub_*(a, b)         : Return lane-wise <a[i]> - <b[i]>
 vec_mul_*(a, b)         : Return lane-wise <a[i]> * <b[i]>
 vec_div_*(a, b)         : Return lane-wise <a[i]> / <b[i]>
+vec_abs_*(a)            : Return lane-wise abs(<a[i]>)
 vec_sqrt_*(a)           : Return lane-wise sqrt(<a[i]>)
 vec_fmadd_* (a, b, c)   : Return lane-wise Fused Multiply-Add            <a[i]> * <b[i]> + <c[i]>
 vec_fnmadd_*(a, b, c)   : Return lane-wise Fused Negative Multiply-Add  -<a[i]> * <b[i]> + <c[i]>
@@ -141,6 +142,9 @@ static inline __m256d vec_mul_d(const __m256d a, const __m256d b) { return _mm25
 
 static inline __m256  vec_div_s(const __m256  a, const __m256  b) { return _mm256_div_ps(a, b); }
 static inline __m256d vec_div_d(const __m256d a, const __m256d b) { return _mm256_div_pd(a, b); }
+
+static inline __m256  vec_abs_s(const __m256  a) { return _mm256_max_ps(a, _mm256_sub_ps(_mm256_setzero_ps(), a)); }
+static inline __m256d vec_abs_d(const __m256d a) { return _mm256_max_pd(a, _mm256_sub_pd(_mm256_setzero_pd(), a)); }
 
 static inline __m256  vec_sqrt_s(const __m256  a) { return _mm256_sqrt_ps(a); }
 static inline __m256d vec_sqrt_d(const __m256d a) { return _mm256_sqrt_pd(a); }
@@ -445,6 +449,9 @@ static inline __m512d vec_mul_d(const __m512d a, const __m512d b) { return _mm51
 
 static inline __m512  vec_div_s(const __m512  a, const __m512  b) { return _mm512_div_ps(a, b); }
 static inline __m512d vec_div_d(const __m512d a, const __m512d b) { return _mm512_div_pd(a, b); }
+
+static inline __m512  vec_abs_s(const __m512  a) { return _mm512_abs_ps(a); }
+static inline __m512d vec_abs_d(const __m512d a) { return _mm512_abs_pd(a); }
 
 static inline __m512  vec_sqrt_s(const __m512  a) { return _mm512_sqrt_ps(a); }
 static inline __m512d vec_sqrt_d(const __m512d a) { return _mm512_sqrt_pd(a); }

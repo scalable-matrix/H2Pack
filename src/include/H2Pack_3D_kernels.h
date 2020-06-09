@@ -739,7 +739,7 @@ static void Stokes_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
 // ======================   RPY Kernel   ====================== //
 // ============================================================ //
 
-const  int  RPY_krnl_bimv_flop = 72;
+const  int  RPY_krnl_bimv_flop = 82;
 
 static void RPY_eval_radii(KRNL_EVAL_PARAM)
 {
@@ -761,52 +761,50 @@ static void RPY_eval_radii(KRNL_EVAL_PARAM)
             DTYPE dx = tx - x1[j];
             DTYPE dy = ty - y1[j];
             DTYPE dz = tz - z1[j];
-            DTYPE da = a1[j];
+            DTYPE sa = a1[j];
             DTYPE r2 = dx * dx + dy * dy + dz * dz;
             DTYPE r  = DSQRT(r2);
             DTYPE inv_r  = (r == 0.0) ? 0.0 : 1.0 / r;
+            DTYPE inv_r2 = inv_r * inv_r;
 
             dx *= inv_r;
             dy *= inv_r;
             dz *= inv_r;
             
-            DTYPE t1, t2;
-            if (r > ta + da)
+            DTYPE t1, t2, tmp0, tmp1, tmp2;
+            DTYPE ta_p_sa = ta + sa;
+            DTYPE ta_m_sa = ta - sa;
+            if (r > ta_p_sa)
             {
-                DTYPE tmp1 = C * 0.75 * inv_r;
-                DTYPE tmp2 = (ta * ta + da * da) * inv_r * inv_r;
-                t1 = tmp1 * (1.0 + tmp2 / 3.0);
-                t2 = tmp1 * (1.0 - tmp2);
-            } else if (r > ta - da && r > da - ta) {
-                DTYPE inv_r2 = inv_r * inv_r;
-                DTYPE tmp1 = (ta - da) * (ta - da);
-                DTYPE tmp2 = C / (ta * da);
-                DTYPE tmp3 = inv_r2 * inv_r / 32.0;
-                t1 = tmp1 + 3 * r2;
-                t1 = tmp2 * (16.0 * r2 * r * (ta + da) - t1 * t1) * tmp3;
-                t2 = tmp1 - r2;
-                t2 = tmp2 * 3.0 * t2 * t2 * tmp3;
+                tmp0 = C * 0.75 * inv_r;
+                tmp1 = (ta * ta + sa * sa) * inv_r2;
+                t1 = tmp0 * (1.0 + tmp1 / 3.0);
+                t2 = tmp0 * (1.0 - tmp1);
+            } else if (r > fabs(ta_m_sa)) {
+                tmp0 = ta_m_sa * ta_m_sa;
+                tmp1 = (inv_r2 * inv_r * C) / (ta * sa * 32.0);
+                t1 = tmp0 + 3.0 * r2;
+                t1 = tmp1 * (16.0 * r2 * r * ta_p_sa - t1 * t1);
+                t2 = tmp0 - r2;
+                t2 = tmp1 * 3.0 * t2 * t2;
             } else {
-                t1 = C / (ta > da ? ta : da);
+                t1 = C / (ta > sa ? ta : sa);
                 t2 = 0.0;
             }
             
-            int base = 3 * i * ldm + 3 * j;
-            DTYPE tmp;
-            #define krnl(k, l) mat[base + k * ldm + l]
-            tmp = t2 * dx;
-            krnl(0, 0) = tmp * dx + t1;
-            krnl(0, 1) = tmp * dy;
-            krnl(0, 2) = tmp * dz;
-            tmp = t2 * dy;
-            krnl(1, 0) = tmp * dx;
-            krnl(1, 1) = tmp * dy + t1;
-            krnl(1, 2) = tmp * dz;
-            tmp = t2 * dz;
-            krnl(2, 0) = tmp * dx;
-            krnl(2, 1) = tmp * dy;
-            krnl(2, 2) = tmp * dz + t1;
-            #undef krnl
+            DTYPE *krnl_ptr = mat + 3 * i * ldm + 3 * j;
+            tmp0 = t2 * dx;
+            tmp1 = t2 * dy;
+            tmp2 = t2 * dz;
+            krnl_ptr[0 * ldm + 0] = tmp0 * dx + t1;
+            krnl_ptr[0 * ldm + 1] = tmp0 * dy;
+            krnl_ptr[0 * ldm + 2] = tmp0 * dz;
+            krnl_ptr[1 * ldm + 0] = tmp1 * dx; 
+            krnl_ptr[1 * ldm + 1] = tmp1 * dy + t1;
+            krnl_ptr[1 * ldm + 2] = tmp1 * dz;
+            krnl_ptr[2 * ldm + 0] = tmp2 * dx;
+            krnl_ptr[2 * ldm + 1] = tmp2 * dy;
+            krnl_ptr[2 * ldm + 2] = tmp2 * dz + t1;
         }
     }
 }
@@ -819,7 +817,8 @@ static void RPY_krnl_bimv_std(KRNL_BIMV_PARAM)
     const DTYPE *a1 = coord1 + ld1 * 3; 
     const DTYPE *param_ = (DTYPE*) param;
     const DTYPE eta = param_[0];
-    const DTYPE C   = 1.0 / (6.0 * M_PI * eta);
+    const DTYPE C    = 1.0 / (6.0 * M_PI * eta);
+    const DTYPE C3o4 = C * 0.75;
     for (int i = 0; i < n0; i++)
     {
         DTYPE tx = x0[i];
@@ -838,33 +837,34 @@ static void RPY_krnl_bimv_std(KRNL_BIMV_PARAM)
             DTYPE dx = tx - x1[j];
             DTYPE dy = ty - y1[j];
             DTYPE dz = tz - z1[j];
-            DTYPE da = a1[j];
+            DTYPE sa = a1[j];
             DTYPE r2 = dx * dx + dy * dy + dz * dz;
             DTYPE r  = DSQRT(r2);
-            DTYPE inv_r = (r == 0.0) ? 0.0 : 1.0 / r;
+            DTYPE inv_r  = (r == 0.0) ? 0.0 : 1.0 / r;
+            DTYPE inv_r2 = inv_r * inv_r;
 
             dx *= inv_r;
             dy *= inv_r;
             dz *= inv_r;
             
-            DTYPE t1, t2;
-            if (r > ta + da)
+            DTYPE t1, t2, tmp0, tmp1;
+            DTYPE ta_p_sa = ta + sa;
+            DTYPE ta_m_sa = ta - sa;
+            if (r > ta_p_sa)
             {
-                DTYPE tmp1 = C * 0.75 * inv_r;
-                DTYPE tmp2 = (ta * ta + da * da) * inv_r * inv_r;
-                t1 = tmp1 * (1.0 + tmp2 / 3.0);
-                t2 = tmp1 * (1.0 - tmp2);
-            } else if (r > ta - da && r > da - ta) {
-                DTYPE inv_r2 = inv_r * inv_r;
-                DTYPE tmp1 = (ta - da) * (ta - da);
-                DTYPE tmp2 = C / (ta * da);
-                DTYPE tmp3 = inv_r2 * inv_r / 32.0;
-                t1 = tmp1 + 3 * r2;
-                t1 = tmp2 * (16.0 * r2 * r * (ta + da) - t1 * t1) * tmp3;
-                t2 = tmp1 - r2;
-                t2 = tmp2 * 3.0 * t2 * t2 * tmp3;
+                tmp0 = C3o4 * inv_r;
+                tmp1 = (ta * ta + sa * sa) * inv_r2;
+                t1 = tmp0 * (1.0 + tmp1 * 0.333333333333333);
+                t2 = tmp0 * (1.0 - tmp1);
+            } else if (r > fabs(ta_m_sa)) {
+                tmp0 = ta_m_sa * ta_m_sa;
+                tmp1 = C * inv_r2 * inv_r / (ta * sa * 32.0);
+                t1 = tmp0 + 3.0 * r2;
+                t1 = tmp1 * (16.0 * r2 * r * ta_p_sa - t1 * t1);
+                t2 = tmp0 - r2;
+                t2 = tmp1 * 3.0 * t2 * t2;
             } else {
-                t1 = C / (ta > da ? ta : da);
+                t1 = C / (ta > sa ? ta : sa);
                 t2 = 0.0;
             }
             
@@ -872,7 +872,6 @@ static void RPY_krnl_bimv_std(KRNL_BIMV_PARAM)
             DTYPE x_in_0_j1 = x_in_0[1 * ld1 + j];
             DTYPE x_in_0_j2 = x_in_0[2 * ld1 + j];
 
-            DTYPE tmp0, tmp1;
             tmp0 = t2 * (x_in_0_j0 * dx + x_in_0_j1 * dy + x_in_0_j2 * dz);
             tmp1 = t2 * (x_in_1_i0 * dx + x_in_1_i1 * dy + x_in_1_i2 * dz);
             x_out_1[0 * ld1 + j] += dx * tmp1 + t1 * x_in_1_i0;
@@ -885,6 +884,128 @@ static void RPY_krnl_bimv_std(KRNL_BIMV_PARAM)
         x_out_0[0 * ld0 + i] += x_out_0_i0;
         x_out_0[1 * ld0 + i] += x_out_0_i1;
         x_out_0[2 * ld0 + i] += x_out_0_i2;
+    }
+}
+
+static void RPY_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
+{
+    EXTRACT_3D_COORD();
+    // Radii
+    const DTYPE *a0 = coord0 + ld0 * 3; 
+    const DTYPE *a1 = coord1 + ld1 * 3; 
+    const DTYPE *param_ = (DTYPE*) param;
+    const DTYPE eta = param_[0];
+    const DTYPE C = 1.0 / (6.0 * M_PI * eta);
+    const vec_d vC    = vec_set1_d(C);
+    const vec_d vC3o4 = vec_set1_d(C * 0.75);
+    const vec_d v1    = vec_set1_d(1.0);
+    const vec_d v3    = vec_set1_d(3.0);
+    const vec_d v16   = vec_set1_d(16.0);
+    const vec_d v32   = vec_set1_d(32.0);
+    const vec_d v1o3  = vec_set1_d(1.0 / 3.0);
+    for (int i = 0; i < n0; i++)
+    {
+        vec_d txv = vec_bcast_d(x0 + i);
+        vec_d tyv = vec_bcast_d(y0 + i);
+        vec_d tzv = vec_bcast_d(z0 + i);
+        vec_d ta  = vec_bcast_d(a0 + i);
+        vec_d x_in_1_i0 = vec_bcast_d(x_in_1 + i + 0 * ld0);
+        vec_d x_in_1_i1 = vec_bcast_d(x_in_1 + i + 1 * ld0);
+        vec_d x_in_1_i2 = vec_bcast_d(x_in_1 + i + 2 * ld0);
+        vec_d xo0_0 = vec_zero_d();
+        vec_d xo0_1 = vec_zero_d();
+        vec_d xo0_2 = vec_zero_d();
+        vec_d frsqrt_pf = vec_frsqrt_pf_d();
+        for (int j = 0; j < n1; j += SIMD_LEN_D)
+        {
+            vec_d dx = vec_sub_d(txv, vec_load_d(x1 + j));
+            vec_d dy = vec_sub_d(tyv, vec_load_d(y1 + j));
+            vec_d dz = vec_sub_d(tzv, vec_load_d(z1 + j));
+            vec_d sa = vec_load_d(a1 + j);
+            vec_d r2 = vec_mul_d(dx, dx);
+            r2 = vec_fmadd_d(dy, dy, r2);
+            r2 = vec_fmadd_d(dz, dz, r2);
+            vec_d inv_r  = vec_mul_d(vec_frsqrt_d(r2), frsqrt_pf);
+            vec_d inv_r2 = vec_mul_d(inv_r, inv_r);
+            vec_d r      = vec_mul_d(inv_r, r2);
+            
+            dx = vec_mul_d(dx, inv_r);
+            dy = vec_mul_d(dy, inv_r);
+            dz = vec_mul_d(dz, inv_r);
+
+            vec_d tmp0, tmp1, t1, t2;
+            vec_d t1_0, t2_0, t1_1, t2_1, t1_2, t2_2;
+            vec_d ta_p_sa = vec_add_d(ta, sa);
+            vec_d ta_m_sa = vec_max_d(vec_sub_d(ta, sa), vec_sub_d(sa, ta));
+            // r > ta + sa
+            tmp0 = vec_mul_d(vC3o4, inv_r);
+            tmp1 = vec_mul_d(vec_fmadd_d(sa, sa, vec_mul_d(ta, ta)), inv_r2);
+            t1_0 = vec_mul_d(tmp0, vec_fmadd_d(v1o3, tmp1, v1));
+            t2_0 = vec_mul_d(tmp0, vec_sub_d(v1, tmp1));
+            // ta + sa >= r > abs(ta - sa)
+            tmp0 = vec_mul_d(ta_m_sa, ta_m_sa);
+            tmp1 = vec_div_d(vec_mul_d(vec_mul_d(vC, inv_r2), inv_r), vec_mul_d(vec_mul_d(ta, sa), v32));
+            t1_1 = vec_fmadd_d(v3, r2, tmp0);
+            t1_1 = vec_mul_d(t1_1, t1_1);
+            t1_1 = vec_fmsub_d(vec_mul_d(v16, r2), vec_mul_d(r, ta_p_sa), t1_1);
+            t1_1 = vec_mul_d(tmp1, t1_1);
+            t2_1 = vec_sub_d(tmp0, r2);
+            t2_1 = vec_mul_d(t2_1, t2_1);
+            t2_1 = vec_mul_d(vec_mul_d(tmp1, v3), t2_1);
+            // r <= abs(ta - sa)
+            t1_2 = vec_div_d(vC, vec_max_d(ta, sa));
+            t2_2 = vec_set1_d(0.0);
+
+            vec_cmp_d r_gt_ta_p_da = vec_cmp_gt_d(r, ta_p_sa);
+            vec_cmp_d r_le_ta_m_da = vec_cmp_le_d(r, ta_m_sa);
+            t1 = vec_blend_d(t1_1, t1_0, r_gt_ta_p_da);
+            t1 = vec_blend_d(t1,   t1_2, r_le_ta_m_da);
+            t2 = vec_blend_d(t2_1, t2_0, r_gt_ta_p_da);
+            t2 = vec_blend_d(t2,   t2_2, r_le_ta_m_da);
+            
+            vec_d x_in_0_j0 = vec_load_d(x_in_0 + j + ld1 * 0);
+            vec_d x_in_0_j1 = vec_load_d(x_in_0 + j + ld1 * 1);
+            vec_d x_in_0_j2 = vec_load_d(x_in_0 + j + ld1 * 2);
+            
+            tmp0 = vec_mul_d(x_in_0_j0, dx);
+            tmp0 = vec_fmadd_d(x_in_0_j1, dy, tmp0);
+            tmp0 = vec_fmadd_d(x_in_0_j2, dz, tmp0);
+            tmp0 = vec_mul_d(tmp0, t2);
+            
+            tmp1 = vec_mul_d(x_in_1_i0, dx);
+            tmp1 = vec_fmadd_d(x_in_1_i1, dy, tmp1);
+            tmp1 = vec_fmadd_d(x_in_1_i2, dz, tmp1);
+            tmp1 = vec_mul_d(tmp1, t2);
+            
+            DTYPE *x_out_1_0 = x_out_1 + j + 0 * ld1;
+            DTYPE *x_out_1_1 = x_out_1 + j + 1 * ld1;
+            DTYPE *x_out_1_2 = x_out_1 + j + 2 * ld1;
+            
+            vec_d xo1_0 = vec_load_d(x_out_1_0);
+            vec_d xo1_1 = vec_load_d(x_out_1_1);
+            vec_d xo1_2 = vec_load_d(x_out_1_2);
+
+            xo0_0 = vec_fmadd_d(dx, tmp0, xo0_0);
+            xo0_1 = vec_fmadd_d(dy, tmp0, xo0_1);
+            xo0_2 = vec_fmadd_d(dz, tmp0, xo0_2);
+            xo0_0 = vec_fmadd_d(t1, x_in_0_j0, xo0_0);
+            xo0_1 = vec_fmadd_d(t1, x_in_0_j1, xo0_1);
+            xo0_2 = vec_fmadd_d(t1, x_in_0_j2, xo0_2);
+            
+            xo1_0 = vec_fmadd_d(dx, tmp1, xo1_0);
+            xo1_1 = vec_fmadd_d(dy, tmp1, xo1_1);
+            xo1_2 = vec_fmadd_d(dz, tmp1, xo1_2);
+            xo1_0 = vec_fmadd_d(t1, x_in_1_i0, xo1_0);
+            xo1_1 = vec_fmadd_d(t1, x_in_1_i1, xo1_1);
+            xo1_2 = vec_fmadd_d(t1, x_in_1_i2, xo1_2);
+            
+            vec_store_d(x_out_1_0, xo1_0);
+            vec_store_d(x_out_1_1, xo1_1);
+            vec_store_d(x_out_1_2, xo1_2);
+        }
+        x_out_0[i + 0 * ld0] += vec_reduce_add_d(xo0_0);
+        x_out_0[i + 1 * ld0] += vec_reduce_add_d(xo0_1);
+        x_out_0[i + 2 * ld0] += vec_reduce_add_d(xo0_2);
     }
 }
 

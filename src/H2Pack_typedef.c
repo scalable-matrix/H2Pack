@@ -355,7 +355,7 @@ void H2P_print_statistic(H2Pack_t h2pack)
 
     if (h2pack->n_matvec == 0)
     {
-        printf("H2Pack does not has matvec timings results yet.\n");
+        printf("H2Pack does not have matvec timings results yet.\n");
     } else {
         double fw_t  = timers[_MV_FW_TIMER_IDX]  / d_n_matvec;
         double mid_t = timers[_MV_MID_TIMER_IDX] / d_n_matvec;

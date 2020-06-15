@@ -422,7 +422,7 @@ void H2P_ID_QR(
         int *param = (int*) stop_param;
         tol_rank = param[0];
         tol_norm = 1e-15;
-        rel_norm = 0;
+        rel_norm = 1;
     }
     if (stop_type == QR_REL_NRM)
     {
@@ -531,6 +531,7 @@ void H2P_ID_compress(
     if (r == 0)
     {
         // Special case: rank = 0, set U and J as empty
+        H2P_dense_mat_init(&U, 0, 0);
         U->nrow = nrow;
         U->ncol = 0;
         U->ld   = 0;

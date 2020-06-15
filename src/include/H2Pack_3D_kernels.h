@@ -741,7 +741,7 @@ static void Stokes_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
 
 const  int  RPY_krnl_bimv_flop = 82;
 
-static void RPY_eval_radii(KRNL_EVAL_PARAM)
+static void RPY_eval_std(KRNL_EVAL_PARAM)
 {
     EXTRACT_3D_COORD();
     // Radii
@@ -806,84 +806,6 @@ static void RPY_eval_radii(KRNL_EVAL_PARAM)
             krnl_ptr[2 * ldm + 1] = tmp2 * dy;
             krnl_ptr[2 * ldm + 2] = tmp2 * dz + t1;
         }
-    }
-}
-
-static void RPY_krnl_bimv_std(KRNL_BIMV_PARAM)
-{
-    EXTRACT_3D_COORD();
-    // Radii
-    const DTYPE *a0 = coord0 + ld0 * 3; 
-    const DTYPE *a1 = coord1 + ld1 * 3; 
-    const DTYPE *param_ = (DTYPE*) param;
-    const DTYPE eta = param_[0];
-    const DTYPE C    = 1.0 / (6.0 * M_PI * eta);
-    const DTYPE C3o4 = C * 0.75;
-    for (int i = 0; i < n0; i++)
-    {
-        DTYPE tx = x0[i];
-        DTYPE ty = y0[i];
-        DTYPE tz = z0[i];
-        DTYPE ta = a0[i];
-        DTYPE x_in_1_i0 = x_in_1[0 * ld0 + i];
-        DTYPE x_in_1_i1 = x_in_1[1 * ld0 + i];
-        DTYPE x_in_1_i2 = x_in_1[2 * ld0 + i];
-        DTYPE x_out_0_i0 = 0.0;
-        DTYPE x_out_0_i1 = 0.0;
-        DTYPE x_out_0_i2 = 0.0;
-        #pragma omp simd
-        for (int j = 0; j < n1; j++)
-        {
-            DTYPE dx = tx - x1[j];
-            DTYPE dy = ty - y1[j];
-            DTYPE dz = tz - z1[j];
-            DTYPE sa = a1[j];
-            DTYPE r2 = dx * dx + dy * dy + dz * dz;
-            DTYPE r  = DSQRT(r2);
-            DTYPE inv_r  = (r == 0.0) ? 0.0 : 1.0 / r;
-            DTYPE inv_r2 = inv_r * inv_r;
-
-            dx *= inv_r;
-            dy *= inv_r;
-            dz *= inv_r;
-            
-            DTYPE t1, t2, tmp0, tmp1;
-            DTYPE ta_p_sa = ta + sa;
-            DTYPE ta_m_sa = ta - sa;
-            if (r > ta_p_sa)
-            {
-                tmp0 = C3o4 * inv_r;
-                tmp1 = (ta * ta + sa * sa) * inv_r2;
-                t1 = tmp0 * (1.0 + tmp1 * 0.333333333333333);
-                t2 = tmp0 * (1.0 - tmp1);
-            } else if (r > fabs(ta_m_sa)) {
-                tmp0 = ta_m_sa * ta_m_sa;
-                tmp1 = C * inv_r2 * inv_r / (ta * sa * 32.0);
-                t1 = tmp0 + 3.0 * r2;
-                t1 = tmp1 * (16.0 * r2 * r * ta_p_sa - t1 * t1);
-                t2 = tmp0 - r2;
-                t2 = tmp1 * 3.0 * t2 * t2;
-            } else {
-                t1 = C / (ta > sa ? ta : sa);
-                t2 = 0.0;
-            }
-            
-            DTYPE x_in_0_j0 = x_in_0[0 * ld1 + j];
-            DTYPE x_in_0_j1 = x_in_0[1 * ld1 + j];
-            DTYPE x_in_0_j2 = x_in_0[2 * ld1 + j];
-
-            tmp0 = t2 * (x_in_0_j0 * dx + x_in_0_j1 * dy + x_in_0_j2 * dz);
-            tmp1 = t2 * (x_in_1_i0 * dx + x_in_1_i1 * dy + x_in_1_i2 * dz);
-            x_out_1[0 * ld1 + j] += dx * tmp1 + t1 * x_in_1_i0;
-            x_out_1[1 * ld1 + j] += dy * tmp1 + t1 * x_in_1_i1;
-            x_out_1[2 * ld1 + j] += dz * tmp1 + t1 * x_in_1_i2;
-            x_out_0_i0 += dx * tmp0 + t1 * x_in_0_j0;
-            x_out_0_i1 += dy * tmp0 + t1 * x_in_0_j1;
-            x_out_0_i2 += dz * tmp0 + t1 * x_in_0_j2;
-        }
-        x_out_0[0 * ld0 + i] += x_out_0_i0;
-        x_out_0[1 * ld0 + i] += x_out_0_i1;
-        x_out_0[2 * ld0 + i] += x_out_0_i2;
     }
 }
 

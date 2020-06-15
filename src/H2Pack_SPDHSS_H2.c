@@ -1457,13 +1457,13 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
         B_pair_j[B_pair_cnt] = node1;
         B_pair_v[B_pair_cnt] = i + 1;
         B_pair_cnt++;
-        mat_size[4] += B_nrow[i] * B_ncol[i];
-        mat_size[4] += 2 * (B_nrow[i] + B_ncol[i]);
+        mat_size[_MV_MID_SIZE_IDX] += B_nrow[i] * B_ncol[i];
+        mat_size[_MV_MID_SIZE_IDX] += 2 * (B_nrow[i] + B_ncol[i]);
     }
     H2P_int_vec_t B_blk = hssmat->B_blk;
     H2P_partition_workload(HSS_n_r_adm_pair, B_ptr + 1, B_total_size, n_thread * BD_ntask_thread, B_blk);
     for (int i = 1; i <= HSS_n_r_adm_pair; i++) B_ptr[i] += B_ptr[i - 1];
-    mat_size[1] = B_total_size;
+    mat_size[_B_SIZE_IDX] = B_total_size;
 
     hssmat->B_p2i_rowptr = (int*) malloc(sizeof(int) * (n_node + 1));
     hssmat->B_p2i_colidx = (int*) malloc(int_r_adm_pairs_msize * 2);
@@ -1550,8 +1550,8 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
         D_pair_j[D_pair_cnt] = node;
         D_pair_v[D_pair_cnt] = i + 1;
         D_pair_cnt++;
-        mat_size[6] += D_nrow[i] * D_ncol[i];
-        mat_size[6] += 2 * (D_nrow[i] + D_ncol[i]);
+        mat_size[_MV_DEN_SIZE_IDX] += D_nrow[i] * D_ncol[i];
+        mat_size[_MV_DEN_SIZE_IDX] += 2 * (D_nrow[i] + D_ncol[i]);
     }
     H2P_int_vec_t D_blk0 = hssmat->D_blk0;
     H2P_int_vec_t D_blk1 = hssmat->D_blk1;
@@ -1559,7 +1559,7 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
     for (int i = 1; i <= n_leaf_node; i++) D_ptr[i] += D_ptr[i - 1];
     D_blk1->length  = 1;
     D_blk1->data[0] = 0;
-    mat_size[2] = D_total_size;
+    mat_size[_D_SIZE_IDX] = D_total_size;
 
     hssmat->D_p2i_rowptr = (int*) malloc(sizeof(int) * (n_node + 1));
     hssmat->D_p2i_colidx = (int*) malloc(int_n_leaf_node_msize * 2);

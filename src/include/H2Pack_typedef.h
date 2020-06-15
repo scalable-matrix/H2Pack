@@ -12,10 +12,10 @@ extern "C" {
 // Pointer to function that evaluates a kernel matrix using given sets of points.
 // The kernel function must by symmetric.
 // Input parameters:
-//   coord0     : Matrix, size dim-by-ld0, coordinates of the 1st point set
+//   coord0     : Matrix, size pt_dim-by-ld0, coordinates of the 1st point set
 //   ld0        : Leading dimension of coord0, should be >= n0
 //   n0         : Number of points in coord0 (each column in coord0 is a coordinate)
-//   coord1     : Matrix, size dim-by-ld1, coordinates of the 2nd point set
+//   coord1     : Matrix, size pt_dim-by-ld1, coordinates of the 2nd point set
 //   ld1        : Leading dimension of coord1, should be >= n1
 //   n1         : Number of points in coord1 (each column in coord0 is a coordinate)
 //   ldm        : Leading dimension of the kernel matrix
@@ -25,7 +25,7 @@ extern "C" {
 typedef void (*kernel_eval_fptr) (
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
-    const void *krnl_param, DTYPE *mat, const int ldm
+    const void *krnl_param, DTYPE *restrict mat, const int ldm
 );
 
 // Pointer to function that performs kernel matrix bi-matvec using given sets
@@ -35,28 +35,28 @@ typedef void (*kernel_eval_fptr) (
 //   (2) x_out_1 = kernel_matrix(coord1, coord0) * x_in_1,
 //   where kernel_matrix(coord0, coord1)^T = kernel_matrix(coord1, coord0).
 // Input parameters:
-//   coord0     : Matrix, size dim-by-ld0, coordinates of the 1st point set
+//   coord0     : Matrix, size pt_dim-by-ld0, coordinates of the 1st point set
 //   ld0        : Leading dimension of coord0, should be >= n0
 //   n0         : Number of points in coord0 (each column in coord0 is a coordinate)
-//   coord1     : Matrix, size dim-by-ld1, coordinates of the 2nd point set
+//   coord1     : Matrix, size pt_dim-by-ld1, coordinates of the 2nd point set
 //   ld1        : Leading dimension of coord1, should be >= n1
 //   n1         : Number of points in coord1 (each column in coord0 is a coordinate)
 //   krnl_param : Pointer to kernel function parameter array
-//   x_in_0     : Vector, size >= n1, will be left multiplied by kernel_matrix(coord0, coord1)
-//   x_in_1     : Vector, size >= n0, will be left multiplied by kernel_matrix(coord1, coord0).
+//   x_in_0     : Vector, size >= krnl_dim * n1, will be left multiplied by kernel_matrix(coord0, coord1)
+//   x_in_1     : Vector, size >= krnl_dim * n0, will be left multiplied by kernel_matrix(coord1, coord0).
 // Output parameters:
-//   x_out_0 : Vector, size >= n0, x_out_0 += kernel_matrix(coord0, coord1) * x_in_0
-//   x_out_1 : Vector, size >= n1, x_out_1 += kernel_matrix(coord1, coord0) * x_in_1
+//   x_out_0 : Vector, size >= krnl_dim * n0, x_out_0 += kernel_matrix(coord0, coord1) * x_in_0
+//   x_out_1 : Vector, size >= krnl_dim * n1, x_out_1 += kernel_matrix(coord1, coord0) * x_in_1
 // Performance optimization notes:
 //   When calling a kernel_bimv_fptr, H2Pack guarantees that:
 //     (1) n{0,1} are multiples of SIMD_LEN;
-//     (2) The lengths of x_{in,out}_{0,1} are multiples of (SIMD_LEN * H2Pack->krnl_dim)
+//     (2) The lengths of x_{in,out}_{0,1} are multiples of (SIMD_LEN * krnl_dim)
 //     (3) The addresses of coord{0,1}, x_{in,out}_{0,1} are aligned to (SIMD_LEN * sizeof(DTYPE))
 typedef void (*kernel_bimv_fptr) (
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
     const void *krnl_param, const DTYPE *x_in_0, const DTYPE *x_in_1, 
-    DTYPE *x_out_0, DTYPE *x_out_1
+    DTYPE *restrict x_out_0, DTYPE *restrict x_out_1
 );
 
 // Structure of H2 matrix tree flatten representation

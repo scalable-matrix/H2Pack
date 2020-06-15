@@ -1,6 +1,7 @@
-LIB   = libH2Pack.a
-OBJS  = H2Pack_typedef.o utils.o H2Pack_aux_structs.o H2Pack_ID_compress.o \
-        H2Pack_partition.o H2Pack_build.o H2Pack_matvec.o H2Pack_matmul.o  \
+LIBA  = libH2Pack.a
+LIBSO = libH2Pack.so
+OBJS  = H2Pack_typedef.o utils.o H2Pack_aux_structs.o H2Pack_ID_compress.o     \
+        H2Pack_partition.o H2Pack_build.o H2Pack_matvec.o H2Pack_matmul.o      \
         DAG_task_queue.o H2Pack_HSS_ULV.o H2Pack_utils.o H2Pack_SPDHSS_H2.o
 
 USE_MKL      = 1
@@ -10,30 +11,35 @@ OPENBLAS_INSTALL_DIR = /home/mkurisu/Workspace/OpenBLAS-0.3.8/install
 CC      = icc
 DEF     = 
 INC     = ./include
-CFLAGS  = -I$(INC) -Wall -g -std=gnu99 -O3 $(DEF)
+CFLAGS  = -I$(INC) -Wall -g -std=gnu99 -O3 -fPIC $(DEF)
 
-ifeq ($(CC), icc)
+ifeq ($(strip $(CC)), icc)
 AR      = xiar rcs
 CFLAGS += -qopenmp -xHost
 endif
 
-ifeq ($(CC), gcc)
+ifeq ($(strip $(CC)), gcc)
 AR      = ar rcs
-CFLAGS += -fopenmp -march=native -Wno-unused-result -Wno-unused-function
+CFLAGS += -fopenmp -lm -march=native -Wno-unused-result -Wno-unused-function
 endif
 
-ifeq ($(USE_MKL), 1)
+ifeq ($(strip $(USE_MKL)), 1)
 DEF    += -DUSE_MKL
 CFLAGS += -mkl
 endif
 
-ifeq ($(USE_OPENBLAS), 1)
+ifeq ($(strip $(USE_OPENBLAS)), 1)
 DEF    += -DUSE_OPENBLAS
 INC    += -I$(OPENBLAS_INSTALL_DIR)/include
 endif
 
-$(LIB): $(OBJS) 
+all: $(LIBA) $(LIBSO)
+
+$(LIBA): $(OBJS) 
 	${AR} $@ $^
+
+$(LIBSO): $(OBJS) 
+	${CC} -shared -o $@ $^
 
 H2Pack_typedef.o: ./include/*.h H2Pack_typedef.c
 	$(CC) $(CFLAGS) H2Pack_typedef.c -c 

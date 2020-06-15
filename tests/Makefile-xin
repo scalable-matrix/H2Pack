@@ -3,33 +3,32 @@ INC     = -I../src/include   #-I$(VTUNE_AMPLIFIER_2018_DIR)/include
 
 USE_MKL      = 0
 USE_OPENBLAS = 1
-#OPENBLAS_INSTALL_DIR = /usr/local/opt/openblas
 OPENBLAS_INSTALL_DIR = /opt/OpenBLAS
 
 CC      = gcc
-DEF     = -DUSE_AVX
+DEF     = 
 CFLAGS  = $(INC) -Wall -g -std=gnu99 -O3 $(DEF)
 LDFLAGS = -g -O3
 
-ifeq ($(CC), icc)
+ifeq ($(strip $(CC)), icc)
 CFLAGS  += -qopenmp -xHost
 endif
 
-ifeq ($(CC), gcc)
-CFLAGS  += -fopenmp -march=native -Wno-unused-result -Wno-unused-function
+ifeq ($(strip $(CC)), gcc)
+CFLAGS  += -fopenmp -lm -march=native -Wno-unused-result -Wno-unused-function
 endif
 
-ifeq ($(USE_MKL), 1)
+ifeq ($(strip $(USE_MKL)), 1)
 DEF     += -DUSE_MKL
 CFLAGS  += -mkl
 LDFLAGS += -mkl -qopenmp
 endif
 
-ifeq ($(USE_OPENBLAS), 1)
+ifeq ($(strip $(USE_OPENBLAS)), 1)
 DEF     += -DUSE_OPENBLAS
 LIB     += $(OPENBLAS_INSTALL_DIR)/lib/libopenblas.a
 INC     += -I$(OPENBLAS_INSTALL_DIR)/include
-LDFLAGS += -fopenmp -lm -lgfortran -L/usr/lib/gcc/x86_64-linux-gnu/7/
+LDFLAGS += -fopenmp -lm
 endif
 
 SRCS = $(wildcard *.c)
@@ -40,9 +39,9 @@ all: $(EXES)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -I../ -c $^ 
-	
+
 %.exe: %.o $(LIB)
 	$(CC) -o $@ $^ $(LDFLAGS) 
-	
+
 clean:
 	rm -f $(EXES) $(OBJS)

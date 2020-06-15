@@ -10,21 +10,21 @@ DEF     =
 CFLAGS  = $(INC) -Wall -g -std=gnu99 -O3 $(DEF)
 LDFLAGS = -g -O3
 
-ifeq ($(CC), icc)
+ifeq ($(strip $(CC)), icc)
 CFLAGS  += -qopenmp -xHost
 endif
 
-ifeq ($(CC), gcc)
-CFLAGS  += -fopenmp -march=native -Wno-unused-result -Wno-unused-function
+ifeq ($(strip $(CC)), gcc)
+CFLAGS  += -fopenmp -lm -march=native -Wno-unused-result -Wno-unused-function
 endif
 
-ifeq ($(USE_MKL), 1)
+ifeq ($(strip $(USE_MKL)), 1)
 DEF     += -DUSE_MKL
 CFLAGS  += -mkl
 LDFLAGS += -mkl -qopenmp
 endif
 
-ifeq ($(USE_OPENBLAS), 1)
+ifeq ($(strip $(USE_OPENBLAS)), 1)
 DEF     += -DUSE_OPENBLAS
 LIB     += $(OPENBLAS_INSTALL_DIR)/lib/libopenblas.a
 INC     += -I$(OPENBLAS_INSTALL_DIR)/include
@@ -39,9 +39,9 @@ all: $(EXES)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -I../ -c $^ 
-	
+
 %.exe: %.o $(LIB)
 	$(CC) -o $@ $^ $(LDFLAGS) 
-	
+
 clean:
 	rm -f $(EXES) $(OBJS)

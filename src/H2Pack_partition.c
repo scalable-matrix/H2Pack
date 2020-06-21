@@ -87,7 +87,9 @@ H2P_tree_node_t H2P_bisection_partition_points(
         }
         semi_box_size = semi_box_size + 1e-8;
         // Give the center a small random shift to prevent highly symmetric point distributions
+        // Use a fixed random seed here to get the same partitioning for repeated tests
         DTYPE shift_scale = semi_box_size * 1e-3;
+        srand48(19241112);
         for (int j = 0; j < pt_dim; j++) 
         {
             DTYPE shift_j = (DTYPE) drand48() * 0.5 + 0.25;

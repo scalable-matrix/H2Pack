@@ -92,6 +92,7 @@ struct H2Pack
     int    is_H2ERI;                // If H2Pack is called from H2ERI
     int    is_HSS;                  // If H2Pack is running in HSS mode
     int    is_RPY;                  // If H2Pack is running RPY kernel
+    int    is_HSS_SPD;              // If H2Pack in HSS mode is SPD 
     int    *parent;                 // Size n_node, parent index of each node
     int    *children;               // Size n_node * max_child, indices of a node's children nodes
     int    *pt_cluster;             // Size n_node * 2, start and end (included) indices of points belong to each node

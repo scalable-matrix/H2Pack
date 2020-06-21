@@ -110,11 +110,7 @@ void H2P_run_HSS(H2Pack_t h2pack)
 void H2P_run_RPY(H2Pack_t h2pack) 
 {
     if (h2pack == NULL) return;
-    if (h2pack->is_HSS == 1)
-    {
-        ERROR_PRINTF("Cannot run RPY kernel in HSS mode, it is too slow!\n");
-        return;
-    }
+    //if (h2pack->is_HSS == 1) WARNING_PRINTF("Running RPY kernel in HSS mode will be very slow, please consider using H2 mode\n");
     h2pack->is_RPY  = 1;
     h2pack->xpt_dim = 4;
 }

@@ -227,7 +227,7 @@ void H2P_partial_pivot_QR_kdim(
     }
     
     // Scale the stopping norm
-    int stop_rank   = MIN(max_iter, tol_rank);
+    int stop_rank   = MIN(max_iter, tol_rank/kdim);
     DTYPE norm_eps  = DSQRT((DTYPE) nrow) * 1e-15;
     DTYPE stop_norm = MAX(norm_eps, tol_norm);
     if (rel_norm) stop_norm *= norm_p;

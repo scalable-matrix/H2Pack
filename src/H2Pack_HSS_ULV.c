@@ -68,7 +68,7 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
         int *level_i_nodes = level_nodes + i * n_leaf_node;
         int level_i_n_node = level_n_node[i];
         int n_thread_i = MIN(level_i_n_node, n_thread);
-        if (!is_SPD) continue;
+        if (!is_SPD) break;
         #pragma omp parallel num_threads(n_thread_i)
         {
             int tid = omp_get_thread_num();
@@ -358,22 +358,26 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
     h2pack->ULV_idx = ULV_idx;
     h2pack->ULV_Q   = ULV_Q;
     h2pack->ULV_L   = ULV_L;
+    h2pack->is_HSS_SPD = is_SPD;
 
     // Count the total sizes of Q, L, idx matrices
-    size_t ULV_Q_size = 0, ULV_L_size = 0, ULV_I_size = 0;
-    for (int i = 0; i < n_node; i++)
+    if (is_SPD)
     {
-        ULV_Q_size += ULV_Q[i]->nrow * ULV_Q[i]->ncol;
-        ULV_L_size += ULV_L[i]->nrow * ULV_L[i]->ncol;
-        ULV_I_size += ULV_idx[i]->length;
+        size_t ULV_Q_size = 0, ULV_L_size = 0, ULV_I_size = 0;
+        for (int i = 0; i < n_node; i++)
+        {
+            ULV_Q_size += ULV_Q[i]->nrow * ULV_Q[i]->ncol;
+            ULV_L_size += ULV_L[i]->nrow * ULV_L[i]->ncol;
+            ULV_I_size += ULV_idx[i]->length;
+        }
+        ULV_I_size += n_node;
+        h2pack->mat_size[_ULV_Q_SIZE_IDX] = ULV_Q_size;
+        h2pack->mat_size[_ULV_L_SIZE_IDX] = ULV_L_size;
+        h2pack->mat_size[_ULV_I_SIZE_IDX] = ULV_I_size;
+        
+        double et = get_wtime_sec();  
+        h2pack->timers[_ULV_FCT_TIMER_IDX] = et - st;
     }
-    ULV_I_size += n_node;
-    h2pack->mat_size[_ULV_Q_SIZE_IDX] = ULV_Q_size;
-    h2pack->mat_size[_ULV_L_SIZE_IDX] = ULV_L_size;
-    h2pack->mat_size[_ULV_I_SIZE_IDX] = ULV_I_size;
-
-    double et = get_wtime_sec();  
-    h2pack->timers[_ULV_FCT_TIMER_IDX] = et - st;
 }
 
 // Solve the linear system A_{HSS} * x = b using the HSS ULV Cholesky factorization

@@ -646,6 +646,7 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
 void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
 {
     int    pt_dim            = h2pack->pt_dim;
+    int    xpt_dim           = h2pack->xpt_dim;
     int    max_neighbor      = h2pack->max_neighbor;
     int    krnl_dim          = h2pack->krnl_dim;
     int    n_node            = h2pack->n_node;
@@ -710,8 +711,8 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
         for (int k = 0; k < node_npt; k++)
             J[node]->data[k] = pt_s + k;
         J[node]->length = node_npt;
-        H2P_dense_mat_init(&J_coord[node], pt_dim, node_npt);
-        H2P_copy_matrix_block(pt_dim, node_npt, coord + pt_s, n_point, J_coord[node]->data, node_npt);
+        H2P_dense_mat_init(&J_coord[node], xpt_dim, node_npt);
+        H2P_copy_matrix_block(xpt_dim, node_npt, coord + pt_s, n_point, J_coord[node]->data, node_npt);
     }
 
     // 3. Hierarchical construction level by level. min_adm_level is the 
@@ -796,7 +797,7 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                 
                 // (3) Gather current node's skeleton points (== all children nodes' skeleton points)
                 st = get_wtime_sec();
-                H2P_dense_mat_resize(node_skel_coord, pt_dim, J[node]->length);
+                H2P_dense_mat_resize(node_skel_coord, xpt_dim, J[node]->length);
                 if (height == 0)
                 {
                     node_skel_coord = J_coord[node];
@@ -811,7 +812,7 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                         int dst_ld = node_skel_coord->ncol;
                         DTYPE *src_mat = J_coord[i_child_node]->data;
                         DTYPE *dst_mat = node_skel_coord->data + J_child_size; 
-                        H2P_copy_matrix_block(pt_dim, src_ld, src_mat, src_ld, dst_mat, dst_ld);
+                        H2P_copy_matrix_block(xpt_dim, src_ld, src_mat, src_ld, dst_mat, dst_ld);
                         J_child_size += J[i_child_node]->length;
                     }
                 }
@@ -837,7 +838,7 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                 // (5) Gather skeleton points from all inadmissible nodes and shift their centers to 
                 //     the original point. We also put proxy points into inadm_skel_coord.
                 st = get_wtime_sec();
-                H2P_dense_mat_resize(inadm_skel_coord, pt_dim, inadm_skel_npt + node_pp_npt);
+                H2P_dense_mat_resize(inadm_skel_coord, xpt_dim, inadm_skel_npt + node_pp_npt);
                 if (inadm_skel_npt > 0)
                 {
                     for (int k = 0; k < pt_dim; k++)
@@ -849,11 +850,22 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                         for (int l = 0; l < inadm_skel_npt; l++)
                             inadm_skel_coord_k[l] = coord_k[inadm_skel_idx->data[l]] - box_center_k;
                     }
+                    if (xpt_dim > pt_dim)
+                    {
+                        for (int k = pt_dim; k < xpt_dim; k++)
+                        {
+                            DTYPE *coord_k = coord + k * n_point;
+                            DTYPE *inadm_skel_coord_k = inadm_skel_coord->data + k * inadm_skel_coord->ld;
+                            #pragma omp simd 
+                            for (int l = 0; l < inadm_skel_npt; l++)
+                                inadm_skel_coord_k[l] = coord_k[inadm_skel_idx->data[l]];
+                        }
+                    }
                 }
                 if (node_pp_npt > 0)
                 {
                     H2P_copy_matrix_block(
-                        pt_dim, node_pp_npt, pp[level]->data, pp[level]->ld, 
+                        xpt_dim, node_pp_npt, pp[level]->data, pp[level]->ld, 
                         inadm_skel_coord->data + inadm_skel_npt, inadm_skel_coord->ld
                     );
                 }
@@ -870,7 +882,7 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                     inadm_skel_coord->data, inadm_skel_coord->ncol, inadm_skel_coord->ld, 
                     krnl_param, A_block->data, A_block->ld
                 );
-                H2P_dense_mat_normalize_columns(A_block, inadm_skel_coord);
+                //H2P_dense_mat_normalize_columns(A_block, inadm_skel_coord);
                 et = get_wtime_sec();
                 krnl_t += et - st;
                 if (A_blk_ncol > 2 * A_blk_nrow)
@@ -919,10 +931,10 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                 for (int k = 0; k < sub_idx->length; k++)
                     J[node]->data[k] = J[node]->data[sub_idx->data[k]];
                 J[node]->length = sub_idx->length;
-                H2P_dense_mat_init(&J_coord[node], pt_dim, sub_idx->length);
+                H2P_dense_mat_init(&J_coord[node], xpt_dim, sub_idx->length);
                 H2P_gather_matrix_columns(
                     coord, n_point, J_coord[node]->data, J[node]->length, 
-                    pt_dim, J[node]->data, J[node]->length
+                    xpt_dim, J[node]->data, J[node]->length
                 );
                 et = get_wtime_sec();
                 other_t += et - st;

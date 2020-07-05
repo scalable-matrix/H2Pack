@@ -95,6 +95,33 @@ void H2P_int_vec_gather(H2P_int_vec_t src_vec, H2P_int_vec_t idx, H2P_int_vec_t 
 // ------------------------------------------------------------------- // 
 
 
+// ======================= H2P_partition_vars ======================== //
+
+// Initialize a H2P_partition_vars structure
+void H2P_partition_vars_init(H2P_partition_vars_t *part_vars_)
+{
+    H2P_partition_vars_t part_vars = (H2P_partition_vars_t) malloc(sizeof(struct H2P_partition_vars));
+    H2P_int_vec_init(&part_vars->r_adm_pairs,   10240);
+    H2P_int_vec_init(&part_vars->r_inadm_pairs, 10240);
+    part_vars->curr_po_idx = 0;
+    part_vars->max_level   = 0;
+    part_vars->n_leaf_node = 0;
+    *part_vars_ = part_vars;
+}
+
+// Destroy a H2P_partition_vars structure
+void H2P_partition_vars_destroy(H2P_partition_vars_t part_vars)
+{
+    H2P_int_vec_destroy(part_vars->r_adm_pairs);
+    H2P_int_vec_destroy(part_vars->r_inadm_pairs);
+    free(part_vars->r_adm_pairs);
+    free(part_vars->r_inadm_pairs);
+    free(part_vars);
+}
+
+// ------------------------------------------------------------------- // 
+
+
 // ========================== H2P_dense_mat ========================== //
 
 // Initialize a H2P_dense_mat structure

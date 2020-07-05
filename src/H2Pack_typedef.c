@@ -76,8 +76,12 @@ void H2P_init(
     h2pack->D_ptr               = NULL;
     h2pack->coord               = NULL;
     h2pack->enbox               = NULL;
+    h2pack->per_lattices        = NULL;
+    h2pack->per_adm_shifts      = NULL;
+    h2pack->per_inadm_shifts    = NULL;
     h2pack->B_data              = NULL;
     h2pack->D_data              = NULL;
+    h2pack->per_blk             = NULL;
     h2pack->xT                  = NULL;
     h2pack->yT                  = NULL;
     h2pack->J                   = NULL;
@@ -104,6 +108,7 @@ void H2P_run_HSS(H2Pack_t h2pack)
 {
     if (h2pack == NULL) return;
     h2pack->is_HSS = 1;
+    h2pack->is_RPY_Ewald = 0;
 }
 
 // Run the RPY kernel in H2Pack
@@ -112,7 +117,78 @@ void H2P_run_RPY(H2Pack_t h2pack)
     if (h2pack == NULL) return;
     //if (h2pack->is_HSS == 1) WARNING_PRINTF("Running RPY kernel in HSS mode will be very slow, please consider using H2 mode\n");
     h2pack->is_RPY  = 1;
-    h2pack->xpt_dim = 4;
+    h2pack->xpt_dim = h2pack->pt_dim + 1;
+    h2pack->is_RPY_Ewald = 0;
+}
+
+const DTYPE per_lattices_2d[9 * 2] = {
+    -1, -1,
+    -1,  0,
+    -1,  1,
+     0, -1,
+     0,  0, 
+     0,  1,
+     1, -1,
+     1,  0, 
+     1,  1
+};
+
+const DTYPE per_lattices_3d[27 * 3] = {
+    -1, -1, -1, 
+    -1, -1,  0, 
+    -1, -1,  1, 
+    -1,  0, -1,
+    -1,  0,  0, 
+    -1,  0,  1,
+    -1,  1, -1,
+    -1,  1,  0, 
+    -1,  1,  1,
+     0, -1, -1, 
+     0, -1,  0, 
+     0, -1,  1, 
+     0,  0, -1,
+     0,  0,  0, 
+     0,  0,  1,
+     0,  1, -1,
+     0,  1,  0, 
+     0,  1,  1,
+     1, -1, -1, 
+     1, -1,  0, 
+     1, -1,  1, 
+     1,  0, -1,
+     1,  0,  0, 
+     1,  0,  1,
+     1,  1, -1,
+     1,  1,  0, 
+     1,  1,  1
+};
+
+// Run the RPY Ewald summation kernel in H2Pack
+void H2P_run_RPY_Ewald(H2Pack_t h2pack)
+{
+    if (h2pack == NULL) return;
+    if (h2pack->is_HSS == 1 || h2pack->is_RPY == 1)
+    {
+        ERROR_PRINTF("RPY_Ewald kernel conflicts with HSS mode / RPY kernel\n");
+        return;
+    }
+    h2pack->is_RPY_Ewald = 1;
+    h2pack->is_HSS  = 0;
+    h2pack->is_RPY  = 0;
+    h2pack->xpt_dim = h2pack->pt_dim + 1;
+
+    if (h2pack->pt_dim == 2)
+    {
+        h2pack->n_lattice = 9;
+        h2pack->per_lattices = (DTYPE*) malloc(sizeof(DTYPE) * 9 * 2);
+        memcpy(h2pack->per_lattices, per_lattices_2d, sizeof(DTYPE) * 9 * 2);
+    }
+    if (h2pack->pt_dim == 3)
+    {
+        h2pack->n_lattice = 27;
+        h2pack->per_lattices = (DTYPE*) malloc(sizeof(DTYPE) * 27 * 3);
+        memcpy(h2pack->per_lattices, per_lattices_3d, sizeof(DTYPE) * 27 * 3);
+    }
 }
 
 // Destroy a H2Pack structure
@@ -154,8 +230,12 @@ void H2P_destroy(H2Pack_t h2pack)
     free(h2pack->D_ptr);
     free(h2pack->coord);
     free(h2pack->enbox);
+    free(h2pack->per_lattices);
+    free(h2pack->per_adm_shifts);
+    free(h2pack->per_inadm_shifts);
     free_aligned(h2pack->B_data);
     free_aligned(h2pack->D_data);
+    free_aligned(h2pack->per_blk);
     free(h2pack->xT);
     free(h2pack->yT);
     DAG_task_queue_free(h2pack->upward_tq);

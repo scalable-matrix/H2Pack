@@ -9,20 +9,8 @@
 #include "H2Pack_typedef.h"
 #include "H2Pack_aux_structs.h"
 #include "H2Pack_utils.h"
+#include "H2Pack_partition.h"
 #include "utils.h"
-
-// Use this structure as a name space for global variables in this file
-struct H2P_partition_vars
-{
-    int curr_po_idx;    // Post-order traversal index
-    int max_level;      // Maximum level of the H2 tree
-    int n_leaf_node;    // Number of leaf nodes
-    int curr_leaf_idx;  // Index of this leaf node
-    int min_adm_level;  // Minimum level of reduced admissible pair
-    H2P_int_vec_t r_inadm_pairs;  // Reduced inadmissible pairs
-    H2P_int_vec_t r_adm_pairs;    // Reduced admissible pairs
-};
-struct H2P_partition_vars partition_vars;
 
 // Hierarchical partitioning of the given points.
 // Tree nodes are indexed in post order.
@@ -43,18 +31,20 @@ struct H2P_partition_vars partition_vars;
 //   coord_tmp       : Temporary array for sorting coord
 //   coord_idx       : Array, size n_point, original index of each point
 //   coord_idx_tmp   : Temporary array for sorting coord_idx
+//   part_vars       : Structure for storing working variables and arrays in point partitioning
 // Output parameters:
 //   coord           : Sorted coordinates
 //   <return>        : Information of current node
 H2P_tree_node_t H2P_bisection_partition_points(
     int level, int coord_s, int coord_e, const int pt_dim, const int xpt_dim, const int n_point, 
     const DTYPE max_leaf_size, const int max_leaf_points, DTYPE *enbox, 
-    DTYPE *coord, DTYPE *coord_tmp, int *coord_idx, int *coord_idx_tmp
+    DTYPE *coord, DTYPE *coord_tmp, int *coord_idx, int *coord_idx_tmp, 
+    H2P_partition_vars_t part_vars
 )
 {
     int node_npts = coord_e - coord_s + 1;
     int max_child = 1 << pt_dim;
-    if (level > partition_vars.max_level) partition_vars.max_level = level;
+    if (level > part_vars->max_level) part_vars->max_level = level;
     
     // 1. Check the enclosing box
     int alloc_enbox = 0;
@@ -114,7 +104,7 @@ H2P_tree_node_t H2P_bisection_partition_points(
             enbox[pt_dim + j] = 2 * semi_box_size + 4e-12;
         }
         free(center);
-    }
+    }  // End of "if (enbox == NULL)"
     DTYPE box_size = enbox[pt_dim];
     
     // 2. If the size of current box or the number of points in current box
@@ -127,12 +117,12 @@ H2P_tree_node_t H2P_bisection_partition_points(
         node->pt_cluster[1] = coord_e;
         node->n_child = 0;
         node->n_node  = 1;
-        node->po_idx  = partition_vars.curr_po_idx;
+        node->po_idx  = part_vars->curr_po_idx;
         node->level   = level;
         node->height  = 0;
         memcpy(node->enbox, enbox, sizeof(DTYPE) * pt_dim * 2);
-        partition_vars.curr_po_idx++;
-        partition_vars.n_leaf_node++;
+        part_vars->curr_po_idx++;
+        part_vars->n_leaf_node++;
         if (alloc_enbox) free(enbox);
         return node;
     }
@@ -245,7 +235,7 @@ H2P_tree_node_t H2P_bisection_partition_points(
         node->children[i] = H2P_bisection_partition_points(
             level + 1, coord_s_i, coord_e_i, pt_dim, xpt_dim, n_point, 
             max_leaf_size, max_leaf_points, sub_box_i, 
-            coord, coord_tmp, coord_idx, coord_idx_tmp
+            coord, coord_tmp, coord_idx, coord_idx_tmp, part_vars
         );
         H2P_tree_node_t child_node_i = (H2P_tree_node_t) node->children[i];
         n_node += child_node_i->n_node;
@@ -257,11 +247,11 @@ H2P_tree_node_t H2P_bisection_partition_points(
     node->pt_cluster[1] = coord_e;
     node->n_child = n_child;
     node->n_node  = n_node;
-    node->po_idx  = partition_vars.curr_po_idx;
+    node->po_idx  = part_vars->curr_po_idx;
     node->level   = level;
     node->height  = max_child_height + 1;
     memcpy(node->enbox, enbox, sizeof(DTYPE) * pt_dim * 2);
-    partition_vars.curr_po_idx++;
+    part_vars->curr_po_idx++;
 
     // 8. Free temporary arrays
     free(sub_coord_se);
@@ -314,7 +304,7 @@ void H2P_tree_to_array(H2P_tree_node_t node, H2Pack_t h2pack)
     h2pack->node_level[node_idx]  = level;
     h2pack->node_height[node_idx] = height;
     h2pack->n_child[node_idx] = node->n_child;
-    int level_idx  = level * h2pack->n_leaf_node + h2pack->level_n_node[level];
+    int level_idx  = level  * h2pack->n_leaf_node + h2pack->level_n_node[level];
     int height_idx = height * h2pack->n_leaf_node + h2pack->height_n_node[height];
     h2pack->level_nodes[level_idx]   = node_idx;
     h2pack->height_nodes[height_idx] = node_idx;
@@ -324,12 +314,13 @@ void H2P_tree_to_array(H2P_tree_node_t node, H2Pack_t h2pack)
 
 // Calculate reduced (in)admissible pairs of a H2 tree
 // Input parameters:
-//   h2pack : H2Pack structure with H2 tree partitioning in arrays
-//   alpha  : Admissible pair coefficient
-//   n0, n1 : Node pair
+//   h2pack    : H2Pack structure with H2 tree partitioning in arrays
+//   alpha     : Admissible pair coefficient
+//   n0, n1    : Node pair
+//   part_vars : Structure for storing working variables and arrays in point partitioning
 // Output parameter:
 //   h2pack : H2Pack structure reduced (in)admissible pairs
-void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0, const int n1)
+void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0, const int n1, H2P_partition_vars_t part_vars)
 {
     int   pt_dim        = h2pack->pt_dim;
     int   max_child     = h2pack->max_child;
@@ -354,7 +345,7 @@ void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0
         for (int i = 0; i < n_child_n0; i++)
         {
             int child_idx = child_node[i];
-            H2P_calc_reduced_adm_pairs(h2pack, alpha, child_idx, child_idx);
+            H2P_calc_reduced_adm_pairs(h2pack, alpha, child_idx, child_idx, part_vars);
         }
         // (2) Interaction between different children nodes
         for (int i = 0; i < n_child_n0; i++)
@@ -363,7 +354,7 @@ void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0
             for (int j = i + 1; j < n_child_n0; j++)
             {
                 int child_idx_j = child_node[j];
-                H2P_calc_reduced_adm_pairs(h2pack, alpha, child_idx_i, child_idx_j);
+                H2P_calc_reduced_adm_pairs(h2pack, alpha, child_idx_i, child_idx_j, part_vars);
             }
         }
     } else {
@@ -382,18 +373,18 @@ void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0
         if (H2P_check_box_admissible(enbox_n0, enbox_n1, pt_dim, alpha) &&
             (level_n0 >= min_adm_level) && (level_n1 >= min_adm_level))
         {
-            H2P_int_vec_push_back(partition_vars.r_adm_pairs, n0);
-            H2P_int_vec_push_back(partition_vars.r_adm_pairs, n1);
+            H2P_int_vec_push_back(part_vars->r_adm_pairs, n0);
+            H2P_int_vec_push_back(part_vars->r_adm_pairs, n1);
             int max_level_n01 = MAX(level_n0, level_n1);
-            partition_vars.min_adm_level = MIN(partition_vars.min_adm_level, max_level_n01);
+            part_vars->min_adm_level = MIN(part_vars->min_adm_level, max_level_n01);
             return;
         }
         
         // 2. Two inadmissible leaf node
         if ((n_child_n0 == 0) && (n_child_n1 == 0))
         {
-            H2P_int_vec_push_back(partition_vars.r_inadm_pairs, n0);
-            H2P_int_vec_push_back(partition_vars.r_inadm_pairs, n1);
+            H2P_int_vec_push_back(part_vars->r_inadm_pairs, n0);
+            H2P_int_vec_push_back(part_vars->r_inadm_pairs, n1);
             return;
         }
         
@@ -404,7 +395,7 @@ void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0
             for (int j = 0; j < n_child_n1; j++)
             {
                 int n1_child_j = child_n1[j];
-                H2P_calc_reduced_adm_pairs(h2pack, alpha, n0, n1_child_j);
+                H2P_calc_reduced_adm_pairs(h2pack, alpha, n0, n1_child_j, part_vars);
             }
             return;
         }
@@ -416,7 +407,7 @@ void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0
             for (int i = 0; i < n_child_n0; i++)
             {
                 int n0_child_i = child_n0[i];
-                H2P_calc_reduced_adm_pairs(h2pack, alpha, n0_child_i, n1);
+                H2P_calc_reduced_adm_pairs(h2pack, alpha, n0_child_i, n1, part_vars);
             }
             return;
         }
@@ -432,11 +423,11 @@ void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0
                 for (int j = 0; j < n_child_n1; j++)
                 {
                     int n1_child_j = child_n1[j];
-                    H2P_calc_reduced_adm_pairs(h2pack, alpha, n0_child_i, n1_child_j);
+                    H2P_calc_reduced_adm_pairs(h2pack, alpha, n0_child_i, n1_child_j, part_vars);
                 }
             }
         }
-    }
+    }  // End of "if (n0 == n1)"
 }
 
 // Calculate the inadmissible node list for each node, required by HSS construction
@@ -504,8 +495,8 @@ void H2P_calc_node_inadm_lists(H2Pack_t h2pack)
                 }
                 node_n_r_inadm[node] = n_r_inadm;
             }
-        }
-    }
+        }  // End of j loop
+    }  // End of i loop
 
     h2pack->node_inadm_lists = node_inadm_lists;
     h2pack->node_n_r_inadm   = node_n_r_inadm;
@@ -515,21 +506,22 @@ void H2P_calc_node_inadm_lists(H2Pack_t h2pack)
 // Calculate reduced (in)admissible pairs for HSS
 void H2P_HSS_calc_adm_inadm_pairs(H2Pack_t h2pack)
 {
+    H2P_partition_vars_t part_vars;
+    H2P_partition_vars_init(&part_vars);
+
     // Calculate reduced HSS (in)admissible pairs
     int estimated_n_pair = h2pack->n_node * h2pack->max_child;
-    H2P_int_vec_init(&partition_vars.r_inadm_pairs, estimated_n_pair);
-    H2P_int_vec_init(&partition_vars.r_adm_pairs,   estimated_n_pair);
     int H2_min_adm_level = h2pack->min_adm_level;
     h2pack->min_adm_level = 0;
-    partition_vars.min_adm_level = h2pack->max_level;
-    H2P_calc_reduced_adm_pairs(h2pack, ALPHA_HSS, h2pack->root_idx, h2pack->root_idx);
+    part_vars->min_adm_level = h2pack->max_level;
+    H2P_calc_reduced_adm_pairs(h2pack, ALPHA_HSS, h2pack->root_idx, h2pack->root_idx, part_vars);
     h2pack->min_adm_level     = H2_min_adm_level;
-    h2pack->HSS_min_adm_level = partition_vars.min_adm_level;
+    h2pack->HSS_min_adm_level = part_vars->min_adm_level;
     ASSERT_PRINTF(h2pack->HSS_min_adm_level == 1, "HSS matrix minimal admissible level should be 1!\n");
 
     // Copy reduced HSS (in)admissible pairs from H2P_int_vec to h2pack arrays
-    h2pack->HSS_n_r_inadm_pair = partition_vars.r_inadm_pairs->length / 2;
-    h2pack->HSS_n_r_adm_pair   = partition_vars.r_adm_pairs->length   / 2;
+    h2pack->HSS_n_r_inadm_pair = part_vars->r_inadm_pairs->length / 2;
+    h2pack->HSS_n_r_adm_pair   = part_vars->r_adm_pairs->length   / 2;
     size_t HSS_r_inadm_pairs_msize = sizeof(int) * h2pack->HSS_n_r_inadm_pair * 2;
     size_t HSS_r_adm_pairs_msize   = sizeof(int) * h2pack->HSS_n_r_adm_pair   * 2;
     h2pack->HSS_r_inadm_pairs = (int*) malloc(HSS_r_inadm_pairs_msize);
@@ -539,13 +531,13 @@ void H2P_HSS_calc_adm_inadm_pairs(H2Pack_t h2pack)
         "Failed to allocate arrays of size %d and %d for HSS (in)admissible pairs\n",
         h2pack->HSS_n_r_inadm_pair * 2, h2pack->HSS_n_r_adm_pair   * 2
     );
-    memcpy(h2pack->HSS_r_inadm_pairs, partition_vars.r_inadm_pairs->data, HSS_r_inadm_pairs_msize);
-    memcpy(h2pack->HSS_r_adm_pairs,   partition_vars.r_adm_pairs->data,   HSS_r_adm_pairs_msize);
-    H2P_int_vec_destroy(partition_vars.r_inadm_pairs);
-    H2P_int_vec_destroy(partition_vars.r_adm_pairs);
+    memcpy(h2pack->HSS_r_inadm_pairs, part_vars->r_inadm_pairs->data, HSS_r_inadm_pairs_msize);
+    memcpy(h2pack->HSS_r_adm_pairs,   part_vars->r_adm_pairs->data,   HSS_r_adm_pairs_msize);
 
     // Calculate inadmissible node list for each node
     H2P_calc_node_inadm_lists(h2pack);
+
+    H2P_partition_vars_destroy(part_vars);
 }
 
 // Partition points for a H2 tree
@@ -559,6 +551,9 @@ void H2P_partition_points(
     double st, et;
     
     st = get_wtime_sec();
+
+    H2P_partition_vars_t part_vars;
+    H2P_partition_vars_init(&part_vars);
     
     // 1. Copy input point coordinates
     h2pack->n_point = n_point;
@@ -587,13 +582,10 @@ void H2P_partition_points(
         "Failed to allocate matrix of size %d * %d for temporarily storing point coordinates\n", 
         pt_dim, n_point
     );
-    partition_vars.curr_po_idx = 0;
-    partition_vars.max_level   = 0;
-    partition_vars.n_leaf_node = 0;
     H2P_tree_node_t root = H2P_bisection_partition_points(
         0, 0, n_point-1, pt_dim, xpt_dim, n_point, 
         max_leaf_size, max_leaf_points, NULL, 
-        h2pack->coord, coord_tmp, h2pack->coord_idx, coord_idx_tmp
+        h2pack->coord, coord_tmp, h2pack->coord_idx, coord_idx_tmp, part_vars
     );
     free(coord_tmp);
     free(coord_idx_tmp);
@@ -601,10 +593,10 @@ void H2P_partition_points(
     // 3. Convert linked list H2 tree partition to arrays
     int n_node    = root->n_node;
     int max_child = 1 << pt_dim;
-    int max_level = partition_vars.max_level;
+    int max_level = part_vars->max_level;
     h2pack->n_node        = n_node;
     h2pack->root_idx      = n_node - 1;
-    h2pack->n_leaf_node   = partition_vars.n_leaf_node;
+    h2pack->n_leaf_node   = part_vars->n_leaf_node;
     h2pack->max_child     = max_child;
     h2pack->max_level     = max_level++;
     size_t int_n_node_msize    = sizeof(int)   * n_node;
@@ -634,7 +626,6 @@ void H2P_partition_points(
     ASSERT_PRINTF(h2pack->height_n_node != NULL, "Failed to allocate hierarchical partitioning tree arrays\n");
     ASSERT_PRINTF(h2pack->height_nodes  != NULL, "Failed to allocate hierarchical partitioning tree arrays\n");
     ASSERT_PRINTF(h2pack->enbox         != NULL, "Failed to allocate hierarchical partitioning tree arrays\n");
-    partition_vars.curr_leaf_idx = 0;
     memset(h2pack->level_n_node,  0, int_max_level_msize);
     memset(h2pack->height_n_node, 0, int_max_level_msize);
     H2P_tree_to_array(root, h2pack);
@@ -658,18 +649,16 @@ void H2P_partition_points(
     
     // 4. Calculate reduced (in)admissible pairs
     int estimated_n_pair = h2pack->n_node * h2pack->max_child;
-    H2P_int_vec_init(&partition_vars.r_inadm_pairs, estimated_n_pair);
-    H2P_int_vec_init(&partition_vars.r_adm_pairs,   estimated_n_pair);
     // h2pack->min_adm_level can be set manually to restrict the minimal admissible level
-    // If h2pack->min_adm_level != 0, partition_vars.min_adm_level is useless
+    // If h2pack->min_adm_level != 0, part_vars->min_adm_level is useless
     h2pack->min_adm_level = 0;
-    partition_vars.min_adm_level = h2pack->max_level;
-    H2P_calc_reduced_adm_pairs(h2pack, ALPHA_H2, h2pack->root_idx, h2pack->root_idx);
-    h2pack->min_adm_level = partition_vars.min_adm_level;
+    part_vars->min_adm_level = h2pack->max_level;
+    H2P_calc_reduced_adm_pairs(h2pack, ALPHA_H2, h2pack->root_idx, h2pack->root_idx, part_vars);
+    h2pack->min_adm_level = part_vars->min_adm_level;
     
     // 5. Copy reduced (in)admissible pairs from H2P_int_vec to h2pack arrays
-    h2pack->n_r_inadm_pair = partition_vars.r_inadm_pairs->length / 2;
-    h2pack->n_r_adm_pair   = partition_vars.r_adm_pairs->length   / 2;
+    h2pack->n_r_inadm_pair = part_vars->r_inadm_pairs->length / 2;
+    h2pack->n_r_adm_pair   = part_vars->r_adm_pairs->length   / 2;
     size_t r_inadm_pairs_msize = sizeof(int) * h2pack->n_r_inadm_pair * 2;
     size_t r_adm_pairs_msize   = sizeof(int) * h2pack->n_r_adm_pair   * 2;
     h2pack->r_inadm_pairs = (int*) malloc(r_inadm_pairs_msize);
@@ -679,10 +668,8 @@ void H2P_partition_points(
         "Failed to allocate arrays of sizes %d and %d for storing (in)admissible pairs\n",
         h2pack->n_r_inadm_pair * 2, h2pack->n_r_adm_pair   * 2
     );
-    memcpy(h2pack->r_inadm_pairs, partition_vars.r_inadm_pairs->data, r_inadm_pairs_msize);
-    memcpy(h2pack->r_adm_pairs,   partition_vars.r_adm_pairs->data,   r_adm_pairs_msize);
-    H2P_int_vec_destroy(partition_vars.r_inadm_pairs);
-    H2P_int_vec_destroy(partition_vars.r_adm_pairs);
+    memcpy(h2pack->r_inadm_pairs, part_vars->r_inadm_pairs->data, r_inadm_pairs_msize);
+    memcpy(h2pack->r_adm_pairs,   part_vars->r_adm_pairs->data,   r_adm_pairs_msize);
 
     // 6. Initialize thread-local buffer
     h2pack->tb = (H2P_thread_buf_t*) malloc(sizeof(H2P_thread_buf_t) * h2pack->n_thread);
@@ -713,6 +700,8 @@ void H2P_partition_points(
 
     // 8: Optional: calculate reduced (in)admissible pairs for HSS
     if (h2pack->is_HSS == 1) H2P_HSS_calc_adm_inadm_pairs(h2pack);
+
+    H2P_partition_vars_destroy(part_vars);
 
     et = get_wtime_sec();
     h2pack->timers[_PT_TIMER_IDX] = et - st;

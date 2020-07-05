@@ -10,10 +10,13 @@
 // H2Pack auxiliary data structures
 #include "H2Pack_aux_structs.h"
 
-// H2Pack point partitioning
+// Hierarchical point partitioning
 #include "H2Pack_partition.h"
 
-// H2Pack ID compression
+// Hierarchical point partitioning for periodic system
+#include "H2Pack_partition_periodic.h"
+
+// Interpolative decomposition compression
 #include "H2Pack_ID_compress.h"
 
 // H2Pack build H2/HSS representation

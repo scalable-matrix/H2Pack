@@ -118,6 +118,29 @@ void H2P_int_vec_gather(H2P_int_vec_t src_vec, H2P_int_vec_t idx, H2P_int_vec_t 
 // ------------------------------------------------------------------------------ // 
 
 
+// ========== Working variables and arrays used in point partitioning =========== //
+
+struct H2P_partition_vars
+{
+    int curr_po_idx;                // Post-order traversal index
+    int max_level;                  // Maximum level of the H2 tree
+    int n_leaf_node;                // Number of leaf nodes
+    int curr_leaf_idx;              // Index of this leaf node
+    int min_adm_level;              // Minimum level of reduced admissible pair
+    H2P_int_vec_t r_inadm_pairs;    // Reduced inadmissible pairs
+    H2P_int_vec_t r_adm_pairs;      // Reduced admissible pairs
+};
+typedef struct H2P_partition_vars*  H2P_partition_vars_t;
+
+// Initialize a H2P_partition_vars structure
+void H2P_partition_vars_init(H2P_partition_vars_t *vars_);
+
+// Destroy a H2P_partition_vars structure
+void H2P_partition_vars_destroy(H2P_partition_vars_t vars);
+
+// ------------------------------------------------------------------------------ // 
+
+
 // ========== Simple dense matrix structure with some basic operations ========== //
 
 struct H2P_dense_mat

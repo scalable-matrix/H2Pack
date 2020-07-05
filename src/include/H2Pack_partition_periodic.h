@@ -1,5 +1,5 @@
-#ifndef __H2PACK_PARTITION_H__
-#define __H2PACK_PARTITION_H__
+#ifndef __H2PACK_PARTITION_PERIODIC_H__
+#define __H2PACK_PARTITION_PERIODIC_H__
 
 #include "H2Pack_config.h"
 #include "H2Pack_typedef.h"
@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-// Hierarchical point partitioning for H2 / HSS construction
+// Hierarchical point partitioning for periodic system H2 construction 
 // Input parameters:
 //   h2pack          : H2Pack structure initialized using H2P_init()
 //   n_point         : Number of points for the kernel matrix
@@ -17,19 +17,14 @@ extern "C" {
 //                     2D points and 400 for other dimensions
 //   max_leaf_size   : Maximum size of a leaf node's box. If == 0, max_leaf_points
 //                     will be the only restriction.
+//   unit_cell       : Array, size 2 * h2pack->pt_dim, unit cell of the periodic system, 
+//                     == the largest enclosing box for all points
 // Output parameter:
 //   h2pack : H2Pack structure with point partitioning info
-void H2P_partition_points(
-    H2Pack_t h2pack, const int n_point, const DTYPE *coord, 
-    int max_leaf_points, DTYPE max_leaf_size
+void H2P_partition_points_periodic(
+    H2Pack_t h2pack, const int n_point, const DTYPE *coord, int max_leaf_points, 
+    DTYPE max_leaf_size, DTYPE *unit_cell
 );
-
-// Calculate reduced (in)admissible pairs for HSS
-// Input parameter:
-//   h2pack : H2Pack structure after calling H2P_partition_points()
-// Output parameter:
-//   h2pack : H2Pack structure with reduced (in)admissible pairs for HSS
-void H2P_HSS_calc_adm_inadm_pairs(H2Pack_t h2pack);
 
 #ifdef __cplusplus
 }

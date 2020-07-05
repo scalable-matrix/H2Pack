@@ -299,7 +299,7 @@ void H2P_generate_proxy_point_surface(
         npts_axis = (int) ceil(sqrt(n_point_face));
         npts = npts_axis * npts_axis * 6;
     }
-    DTYPE h = 2.0 / (DTYPE) npts_axis;
+    DTYPE h = 2.0 / (DTYPE) (npts_axis + 1);
     
     // Generate proxy points on the surface of [-1,1]^pt_dim box
     H2P_dense_mat_t unit_pp;
@@ -312,10 +312,10 @@ void H2P_generate_proxy_point_surface(
         DTYPE *z = unit_pp->data + npts * 2;
         for (int i = 0; i < npts_axis; i++)
         {
-            DTYPE h_i = h * ((DTYPE) i + 0.5) - 1.0;
+            DTYPE h_i = h * ((DTYPE) i + 1.0) - 1.0;
             for (int j = 0; j < npts_axis; j++)
             {
-                DTYPE h_j = h * ((DTYPE) j + 0.5) - 1.0;
+                DTYPE h_j = h * ((DTYPE) j + 1.0) - 1.0;
                 
                 x[index + 0] = h_i;
                 y[index + 0] = h_j;
@@ -351,7 +351,7 @@ void H2P_generate_proxy_point_surface(
         DTYPE *y = unit_pp->data + npts;
         for (int i = 0; i < npts_axis; i++)
         {
-            DTYPE h_i = h * ((DTYPE) i + 0.5) - 1.0;
+            DTYPE h_i = h * ((DTYPE) i + 1.0) - 1.0;
             
             x[index + 0] = h_i;
             y[index + 0] = -1.0;

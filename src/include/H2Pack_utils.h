@@ -213,6 +213,41 @@ void H2P_transpose_dmat(
     const DTYPE *src, const int lds, DTYPE *dst, const int ldd
 );
 
+// Shift the coordinates
+// Input parameters:
+//   coord : Matrix, size unknown, each column is a coordinate
+//   shift : Array, size >= coord->nrow, coordinate shift
+//   scale : Scaling factor of shift
+// Output paramater:
+//   coord : Shifted coordinates
+void H2P_shift_coord(H2P_dense_mat_t coord, const DTYPE *shift, const DTYPE scale);
+
+// The following two functions are implemented in H2Pack_partition.c and used by 
+// both H2Pack_partition.c and H2Pack_partition_periodic.c
+
+// Hierarchical partitioning of the given points
+H2P_tree_node_t H2P_bisection_partition_points(
+    int level, int coord_s, int coord_e, const int pt_dim, const int xpt_dim, const int n_point, 
+    const DTYPE max_leaf_size, const int max_leaf_points, DTYPE *enbox, 
+    DTYPE *coord, DTYPE *coord_tmp, int *coord_idx, int *coord_idx_tmp, 
+    H2P_partition_vars_t part_vars
+);
+
+// Convert a linked list H2 tree to arrays
+void H2P_tree_to_array(H2P_tree_node_t node, H2Pack_t h2pack);
+
+// The following three functions are implemented in H2Pack_build.c and used by 
+// both H2Pack_build.c and H2Pack_build_periodic.c
+
+// Build H2 projection matrices using proxy points, in H2Pack_build.c
+void H2P_build_H2_UJ_proxy(H2Pack_t h2pack);
+
+// Generate H2 generator matrices metadata
+void H2P_generate_B_metadata(H2Pack_t h2pack);
+
+// Generate H2 dense blocks metadata
+void H2P_generate_D_metadata(H2Pack_t h2pack);
+
 #ifdef __cplusplus
 }
 #endif

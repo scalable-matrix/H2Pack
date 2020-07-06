@@ -153,6 +153,7 @@ struct H2Pack
     size_t *B_ptr;                  // Size n_B, offset of each generator matrix's data in B_data
     size_t *D_ptr;                  // Size n_D, offset of each dense block's data in D_data
     void   *krnl_param;             // Pointer to kernel function parameter array
+    void   *pkrnl_param;            // Pointer to periodic system kernel function parameter array
     DTYPE  max_leaf_size;           // Maximum size of a leaf node's box
     DTYPE  QR_stop_tol;             // Partial QR stop column norm tolerance
     DTYPE  *coord;                  // Size n_point * pt_dim, sorted point coordinates

@@ -3,7 +3,7 @@ LIBSO = libH2Pack.so
 OBJS  = H2Pack_typedef.o utils.o H2Pack_aux_structs.o H2Pack_ID_compress.o      \
         H2Pack_partition.o H2Pack_build.o H2Pack_matvec.o H2Pack_matmul.o       \
         DAG_task_queue.o H2Pack_HSS_ULV.o H2Pack_utils.o H2Pack_SPDHSS_H2.o		\
-		H2Pack_partition_periodic.o
+		H2Pack_partition_periodic.o H2Pack_build_periodic.o
 
 USE_MKL      = 1
 USE_OPENBLAS = 0
@@ -62,6 +62,9 @@ H2Pack_partition_periodic.o: ./include/*.h H2Pack_partition_periodic.c
 
 H2Pack_build.o: ./include/*.h H2Pack_build.c
 	$(CC) $(CFLAGS) H2Pack_build.c -c 
+
+H2Pack_build_periodic.o: ./include/*.h H2Pack_build_periodic.c
+	$(CC) $(CFLAGS) H2Pack_build_periodic.c -c 
 
 H2Pack_matvec.o: ./include/*.h H2Pack_matvec.c
 	$(CC) $(CFLAGS) H2Pack_matvec.c -c 

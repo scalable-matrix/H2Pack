@@ -19,8 +19,7 @@ struct H2P_test_params
     int   n_point;
     int   krnl_mat_size;
     int   BD_JIT;
-    int   krnl_bimv_flops;
-    void  *krnl_param;
+    int   krnl_mv_flops;
     DTYPE rel_tol;
     DTYPE *coord;
     DTYPE unit_cell[8];
@@ -30,19 +29,16 @@ struct H2P_test_params
 };
 struct H2P_test_params test_params;
 
-DTYPE RPY_krnl_param[1] = {1.0};
-
 void parse_RPY_Ewald_params(int argc, char **argv)
 {
-    test_params.pt_dim          = 3;
-    test_params.xpt_dim         = test_params.pt_dim + 1;
-    test_params.krnl_dim        = 3;
-    test_params.BD_JIT          = 1;
-    test_params.krnl_bimv_flops = RPY_krnl_bimv_flop;
-    test_params.krnl_param      = (void*) &RPY_krnl_param[0];
-    test_params.krnl_eval       = RPY_eval_std;
-    //test_params.pkrnl_eval      = RPY_Ewald_eval_std;
-    //test_params.krnl_mv         = RPY_krnl_mv_intrin_d;
+    test_params.pt_dim        = 3;
+    test_params.xpt_dim       = test_params.pt_dim + 1;
+    test_params.krnl_dim      = 3;
+    test_params.BD_JIT        = 1;
+    test_params.krnl_mv_flops = RPY_krnl_mv_flop;
+    test_params.krnl_eval     = RPY_eval_std;
+    test_params.pkrnl_eval    = RPY_Ewald_eval_std;
+    test_params.krnl_mv       = RPY_krnl_mv_intrin_d;
 
     if (argc < 2)
     {
@@ -158,18 +154,19 @@ int main(int argc, char **argv)
     srand48(time(NULL));
 
     parse_RPY_Ewald_params(argc, argv);
-    /*
+    #if 0
     printf(
         "n_point, left corner, L = %d, (%lf, %lf, %lf), %lf\n", 
         test_params.n_point, test_params.unit_cell[0], test_params.unit_cell[1], 
         test_params.unit_cell[2], test_params.unit_cell[3]
     );
-    */
+    #endif
 
     H2Pack_t ph2mat;
     
     H2P_init(&ph2mat, test_params.pt_dim, test_params.krnl_dim, QR_REL_NRM, &test_params.rel_tol);
 
+    // Partition points and generate (in)adm pairs
     int max_leaf_points = 200;
     DTYPE max_leaf_size = 0.0;
     H2P_run_RPY_Ewald(ph2mat);
@@ -180,36 +177,46 @@ int main(int argc, char **argv)
     for (int i = 0; i < test_params.n_point; i++)
         max_leaf_size = (max_leaf_size < radii[i]) ? radii[i] : max_leaf_size;
     max_leaf_size *= 4.0;
-
     H2P_partition_points_periodic(
         ph2mat, test_params.n_point, test_params.coord, max_leaf_points, 
         max_leaf_size, test_params.unit_cell
     );
 
-    printf("n_r_adm_pair, n_r_inadm_pair = %d, %d\n", ph2mat->n_r_adm_pair, ph2mat->n_r_inadm_pair);
-    FILE *ouf0 = fopen("add_r_adm_pairs.m", "w");
-    fprintf(ouf0, "C_r_adm_pairs = [\n");
-    for (int i = 0; i < ph2mat->n_r_adm_pair; i++)
-    {
-        fprintf(ouf0, "%d %d ", ph2mat->r_adm_pairs[2*i]+1, ph2mat->r_adm_pairs[2*i+1]+1);
-        for (int j = 0; j < test_params.pt_dim; j++)
-            fprintf(ouf0, "%.15lf ", ph2mat->per_adm_shifts[i * test_params.pt_dim + j]);
-        fprintf(ouf0, "\n");
-    }
-    fprintf(ouf0, "];\n");
-    fclose(ouf0);
+    // Generate surface proxy points
+    H2P_dense_mat_t *pp;
+    DTYPE max_L = ph2mat->enbox[ph2mat->root_idx * 2 * test_params.pt_dim + test_params.pt_dim];
+    int min_level = ph2mat->min_adm_level;
+    int max_level = ph2mat->max_level;
+    int num_pp    = 400;
+    H2P_generate_proxy_point_surface(
+        test_params.pt_dim, test_params.xpt_dim, num_pp, 
+        max_level, min_level, max_L, &pp
+    );
 
-    FILE *ouf1 = fopen("add_r_inadm_pairs.m", "w");
-    fprintf(ouf1, "C_r_inadm_pairs = [\n");
-    for (int i = 0; i < ph2mat->n_r_inadm_pair; i++)
-    {
-        fprintf(ouf1, "%d %d ", ph2mat->r_inadm_pairs[2*i]+1, ph2mat->r_inadm_pairs[2*i+1]+1);
-        for (int j = 0; j < test_params.pt_dim; j++)
-            fprintf(ouf1, "%.15lf ", ph2mat->per_inadm_shifts[i * test_params.pt_dim + j]);
-        fprintf(ouf1, "\n");
-    }
-    fprintf(ouf1, "];\n");
-    fclose(ouf1);
+    // Set up RPY Ewald parameters and work buffer
+    const int nr = 4, nk = 4;
+    const DTYPE eta = 1.0;
+    const DTYPE L   = test_params.unit_cell[3];
+    const DTYPE xi  = DSQRT(M_PI) / L;
+    DTYPE RPY_param[1] = {eta};
+    DTYPE RPY_Ewald_param[5], *ewald_workbuf;
+    RPY_Ewald_param[0] = L;
+    RPY_Ewald_param[1] = xi;
+    RPY_Ewald_param[2] = (DTYPE) nr;
+    RPY_Ewald_param[3] = (DTYPE) nk;
+    RPY_Ewald_init_workbuf(L, xi, nr, nk, &ewald_workbuf);
+    memcpy(RPY_Ewald_param + 4, &ewald_workbuf, sizeof(DTYPE*));
 
+    // Build H2 matrix for RPY Ewald
+    H2P_build_periodic(
+        ph2mat, pp, test_params.BD_JIT, RPY_param, test_params.krnl_eval,
+        RPY_Ewald_param, test_params.pkrnl_eval, test_params.krnl_mv, 
+        test_params.krnl_mv_flops
+    );
+    DEBUG_PRINTF("H2P_build_periodic done\n");
+    for (int i = 0; i < ph2mat->n_node; i++)
+        DEBUG_PRINTF("U[%d] size = %d * %d\n", i, ph2mat->U[i]->nrow, ph2mat->U[i]->ncol);
+
+    free(ewald_workbuf);
     H2P_destroy(ph2mat);
 }

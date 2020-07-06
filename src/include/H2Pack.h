@@ -22,6 +22,9 @@
 // H2Pack build H2/HSS representation
 #include "H2Pack_build.h"
 
+// H2Pack build H2 representation for periodic system
+#include "H2Pack_build_periodic.h"
+
 // H2Pack H2/HSS fast matrix-vector multiplication
 #include "H2Pack_matvec.h"
 

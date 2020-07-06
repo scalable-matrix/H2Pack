@@ -12,17 +12,6 @@
 #include "H2Pack_partition_periodic.h"
 #include "utils.h"
 
-// Hierarchical partitioning of the given points, in H2Pack_partition.c
-extern H2P_tree_node_t H2P_bisection_partition_points(
-    int level, int coord_s, int coord_e, const int pt_dim, const int xpt_dim, const int n_point, 
-    const DTYPE max_leaf_size, const int max_leaf_points, DTYPE *enbox, 
-    DTYPE *coord, DTYPE *coord_tmp, int *coord_idx, int *coord_idx_tmp, 
-    H2P_partition_vars_t part_vars
-);
-
-// Convert a linked list H2 tree to arrays, in H2Pack_partition.c
-extern void H2P_tree_to_array(H2P_tree_node_t node, H2Pack_t h2pack);
-
 // Calculate reduced (in)admissible pairs of a H2 tree for periodic system
 // Input parameters:
 //   h2pack     : H2Pack structure with H2 tree partitioning in arrays

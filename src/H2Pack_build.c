@@ -18,7 +18,7 @@
 // Generate proxy points for constructing H2 projection and skeleton matrices
 // using ID compress for any kernel function
 void H2P_generate_proxy_point_ID(
-    const int pt_dim, const int krnl_dim, const DTYPE tol_norm, const int max_level, const int start_level,
+    const int pt_dim, const int krnl_dim, const DTYPE tol_norm, const int max_level, const int min_level,
     DTYPE max_L, const void *krnl_param, kernel_eval_fptr krnl_eval, H2P_dense_mat_t **pp_
 )
 {   
@@ -48,14 +48,15 @@ void H2P_generate_proxy_point_ID(
     H2P_int_vec_t   ID_buff;
     H2P_dense_mat_init(&QR_buff, 2 * Ny_size, 1);
     H2P_int_vec_init(&ID_buff, 4 * Ny_size);
-    for (int level = 0; level < start_level; level++) pow_2_level *= 2.0;
-    for (int level = start_level; level <= max_level; level++)
+    for (int level = 0; level < min_level; level++) pow_2_level *= 2.0;
+    for (int level = min_level; level <= max_level; level++)
     {
         if (level < 2)
         {
             H2P_dense_mat_init(&pp[level], pt_dim, 1);
             pp[level]->ncol = 0;
             pow_2_level *= 2.0;
+            WARNING_PRINTF("Level %d: no proxy points are selected\n", level);
             continue;
         }
         other_t = 0.0;
@@ -274,14 +275,13 @@ void H2P_generate_proxy_point_ID(
 // Generate uniformly distributed proxy points on a box surface for constructing
 // H2 projection and skeleton matrices for SOME kernel function
 void H2P_generate_proxy_point_surface(
-    const int pt_dim, const int xpt_dim, const int min_npts, const int max_level, 
-    const int start_level, DTYPE max_L, H2P_dense_mat_t **pp_
+    const int pt_dim, const int xpt_dim, const int min_npt, const int max_level, 
+    const int min_level, DTYPE max_L, H2P_dense_mat_t **pp_
 )
 {
     if (pt_dim < 2 || pt_dim > 3)
     {
-        fprintf(stderr, "[ERROR] H2P_generate_proxy_point_surface() needs pt_dim = 2 or 3!\n");
-        fprintf(stderr, "[ERROR] H2P_generate_proxy_point_surface() exits without doing anything.\n");
+        ERROR_PRINTF("Only 2D and 3D systems are supported in this function.\n");
         return;
     }
     
@@ -289,33 +289,35 @@ void H2P_generate_proxy_point_surface(
     ASSERT_PRINTF(pp != NULL, "Failed to allocate %d H2P_dense_mat structues for storing proxy points", max_level + 1);
     for (int i = 0; i <= max_level; i++) pp[i] = NULL;
     
-    int npts_axis, npts;
+    int npt_axis, npt;
     if (pt_dim == 2)
     {
-        npts_axis = (min_npts + 3) / 4;
-        npts = npts_axis * 4;
+        npt_axis = (min_npt + 3) / 4;
+        npt = npt_axis * 4;
     } else {
-        DTYPE n_point_face = (DTYPE) min_npts / 6.0;
-        npts_axis = (int) ceil(sqrt(n_point_face));
-        npts = npts_axis * npts_axis * 6;
+        DTYPE n_point_face = (DTYPE) min_npt / 6.0;
+        npt_axis = (int) ceil(sqrt(n_point_face));
+        npt = npt_axis * npt_axis * 6;
     }
-    DTYPE h = 2.0 / (DTYPE) (npts_axis + 1);
+    DTYPE h = 2.0 / (DTYPE) (npt_axis + 1);
     
     // Generate proxy points on the surface of [-1,1]^pt_dim box
     H2P_dense_mat_t unit_pp;
-    H2P_dense_mat_init(&unit_pp, xpt_dim, npts);
+    H2P_dense_mat_init(&unit_pp, xpt_dim, npt);
     int index = 0;
     if (pt_dim == 3)
     {
         DTYPE *x = unit_pp->data;
-        DTYPE *y = unit_pp->data + npts;
-        DTYPE *z = unit_pp->data + npts * 2;
-        for (int i = 0; i < npts_axis; i++)
+        DTYPE *y = unit_pp->data + npt;
+        DTYPE *z = unit_pp->data + npt * 2;
+        DTYPE h_i = -1.0;
+        for (int i = 0; i < npt_axis; i++)
         {
-            DTYPE h_i = h * ((DTYPE) i + 1.0) - 1.0;
-            for (int j = 0; j < npts_axis; j++)
+            h_i += h;
+            DTYPE h_j = -1.0;
+            for (int j = 0; j < npt_axis; j++)
             {
-                DTYPE h_j = h * ((DTYPE) j + 1.0) - 1.0;
+                h_j += h;
                 
                 x[index + 0] = h_i;
                 y[index + 0] = h_j;
@@ -348,10 +350,11 @@ void H2P_generate_proxy_point_surface(
     if (pt_dim == 2)
     {
         DTYPE *x = unit_pp->data;
-        DTYPE *y = unit_pp->data + npts;
-        for (int i = 0; i < npts_axis; i++)
+        DTYPE *y = unit_pp->data + npt;
+        DTYPE h_i = -1.0;
+        for (int i = 0; i < npt_axis; i++)
         {
-            DTYPE h_i = h * ((DTYPE) i + 1.0) - 1.0;
+            h_i += h;
             
             x[index + 0] = h_i;
             y[index + 0] = -1.0;
@@ -371,23 +374,23 @@ void H2P_generate_proxy_point_surface(
     
     if (xpt_dim > pt_dim)
     {
-        DTYPE *ext = unit_pp->data + npts * pt_dim;
-        memset(ext, 0, sizeof(DTYPE) * npts);
+        DTYPE *ext = unit_pp->data + npt * pt_dim;
+        memset(ext, 0, sizeof(DTYPE) * npt);
     }
 
     // Scale proxy points on unit box surface to different size as
     // proxy points on different levels
     DTYPE pow_2_level = 0.5;
-    for (int level = 0; level < start_level; level++) pow_2_level *= 2.0;
-    for (int level = start_level; level <= max_level; level++)
+    for (int level = 0; level < min_level; level++) pow_2_level *= 2.0;
+    for (int level = min_level; level <= max_level; level++)
     {
         pow_2_level *= 2.0;
-        H2P_dense_mat_init(&pp[level], xpt_dim, npts);
+        H2P_dense_mat_init(&pp[level], xpt_dim, npt);
         DTYPE box_width = max_L / pow_2_level * 0.5;
         DTYPE adm_width = (1.0 + 2.0 * ALPHA_H2) * box_width;
         DTYPE *pp_level = pp[level]->data;
         #pragma omp simd
-        for (int i = 0; i < xpt_dim * npts; i++)
+        for (int i = 0; i < xpt_dim * npt; i++)
             pp_level[i] = adm_width * unit_pp->data[i];
     }
     
@@ -1008,29 +1011,24 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
     BLAS_SET_NUM_THREADS(n_thread);
 }
 
-// Build H2 generator matrices
+// Generate H2 generator matrices metadata
 // Input parameter:
 //   h2pack : H2Pack structure with H2 projection matrices
 // Output parameter:
-//   h2pack : H2Pack structure with H2 generator matrices
-void H2P_build_B(H2Pack_t h2pack)
+//   h2pack : H2Pack structure with H2 generator matrices metadata
+void H2P_generate_B_metadata(H2Pack_t h2pack)
 {
     int    BD_JIT          = h2pack->BD_JIT;
     int    krnl_dim        = h2pack->krnl_dim;
     int    n_node          = h2pack->n_node;
-    int    n_point         = h2pack->n_point;
     int    n_thread        = h2pack->n_thread;
     int    krnl_bimv_flops = h2pack->krnl_bimv_flops;
+    int    is_RPY_Ewald    = h2pack->is_RPY_Ewald;
     int    *node_level     = h2pack->node_level;
     int    *pt_cluster     = h2pack->pt_cluster;
-    DTYPE  *coord          = h2pack->coord;
     size_t *mat_size       = h2pack->mat_size;
-    void   *krnl_param     = h2pack->krnl_param;
     double *JIT_flops      = h2pack->JIT_flops;
-    kernel_eval_fptr krnl_eval = h2pack->krnl_eval;
-    H2P_int_vec_t    B_blk     = h2pack->B_blk;
-    H2P_dense_mat_t  *J_coord  = h2pack->J_coord;
-    H2P_thread_buf_t *thread_buf = h2pack->tb;
+    H2P_int_vec_t B_blk    = h2pack->B_blk;
 
     int n_r_adm_pair, *r_adm_pairs; 
     if (h2pack->is_HSS)
@@ -1042,7 +1040,7 @@ void H2P_build_B(H2Pack_t h2pack)
         r_adm_pairs  = h2pack->r_adm_pairs;
     }
 
-    // 1. Allocate B
+    // 1. Allocate arrays for storing sizes and pair information of B matrices
     h2pack->n_B = n_r_adm_pair;
     h2pack->B_nrow = (int*)    malloc(sizeof(int)    * n_r_adm_pair);
     h2pack->B_ncol = (int*)    malloc(sizeof(int)    * n_r_adm_pair);
@@ -1064,8 +1062,7 @@ void H2P_build_B(H2Pack_t h2pack)
         "Failed to allocate working buffer for B matrices indexing\n"
     );
     
-    // 2. Partition B matrices into multiple blocks s.t. each block has approximately
-    //    the same workload (total size of B matrices in a block)
+    // 2. Generate size, pair, and statistic information of each B matrix
     B_ptr[0] = 0;
     size_t B_total_size = 0;
     H2P_int_vec_t *J = h2pack->J;
@@ -1114,20 +1111,28 @@ void H2P_build_B(H2Pack_t h2pack)
         B_pair_j[B_pair_cnt] = node1;
         B_pair_v[B_pair_cnt] = i + 1;
         B_pair_cnt++;
-        B_pair_i[B_pair_cnt] = node1;
-        B_pair_j[B_pair_cnt] = node0;
-        B_pair_v[B_pair_cnt] = -(i + 1);
-        B_pair_cnt++;
+        if (is_RPY_Ewald == 0)
+        {
+            B_pair_i[B_pair_cnt] = node1;
+            B_pair_j[B_pair_cnt] = node0;
+            B_pair_v[B_pair_cnt] = -(i + 1);
+            B_pair_cnt++;
+        }
         // Add Statistic info
         mat_size[_MV_MID_SIZE_IDX]  += B_nrow[i] * B_ncol[i];
-        mat_size[_MV_MID_SIZE_IDX]  += 2 * (B_nrow[i] + B_ncol[i]);
+        mat_size[_MV_MID_SIZE_IDX]  += (B_nrow[i] + B_ncol[i]);
         JIT_flops[_JIT_B_FLOPS_IDX] += (double)(krnl_bimv_flops) * (double)(node0_npt * node1_npt);
+        if (is_RPY_Ewald == 0) mat_size[_MV_MID_SIZE_IDX] += (B_nrow[i] + B_ncol[i]);
     }
+        
+    // 3. Partition B matrices into multiple blocks s.t. each block has approximately
+    //    the same workload (total size of B matrices in a block)
     int BD_ntask_thread = (BD_JIT == 1) ? BD_NTASK_THREAD : 1;
     H2P_partition_workload(n_r_adm_pair, B_ptr + 1, B_total_size, n_thread * BD_ntask_thread, B_blk);
     for (int i = 1; i <= n_r_adm_pair; i++) B_ptr[i] += B_ptr[i - 1];
     mat_size[_B_SIZE_IDX] = B_total_size;
 
+    // 4. Store pair-to-index relations in a CSR matrix for matvec, matmul, and SPDHSS construction
     h2pack->B_p2i_rowptr = (int*) malloc(sizeof(int) * (n_node + 1));
     h2pack->B_p2i_colidx = (int*) malloc(sizeof(int) * n_r_adm_pair * 2);
     h2pack->B_p2i_val    = (int*) malloc(sizeof(int) * n_r_adm_pair * 2);
@@ -1138,14 +1143,42 @@ void H2P_build_B(H2Pack_t h2pack)
         n_node, B_pair_cnt, B_pair_i, B_pair_j, B_pair_v, 
         h2pack->B_p2i_rowptr, h2pack->B_p2i_colidx, h2pack->B_p2i_val
     );
-
     free(B_pair_i);
     free(B_pair_j);
     free(B_pair_v);
+}
 
-    if (BD_JIT == 1) return;
+// Build H2 generator matrices for AOT mode
+// Input parameter:
+//   h2pack : H2Pack structure with H2 generator matrices metadata
+// Output parameter:
+//   h2pack : H2Pack structure with H2 generator matrices
+void H2P_build_B_AOT(H2Pack_t h2pack)
+{
+    int    krnl_dim    = h2pack->krnl_dim;
+    int    n_point     = h2pack->n_point;
+    int    n_thread    = h2pack->n_thread;
+    int    *node_level = h2pack->node_level;
+    int    *pt_cluster = h2pack->pt_cluster;
+    size_t *B_ptr      = h2pack->B_ptr;
+    DTYPE  *coord      = h2pack->coord;
+    void   *krnl_param = h2pack->krnl_param;
+    kernel_eval_fptr krnl_eval   = h2pack->krnl_eval;
+    H2P_int_vec_t    B_blk       = h2pack->B_blk;
+    H2P_dense_mat_t  *J_coord    = h2pack->J_coord;
+    H2P_thread_buf_t *thread_buf = h2pack->tb;
 
-    // 3. Generate B matrices
+    int n_r_adm_pair, *r_adm_pairs; 
+    if (h2pack->is_HSS)
+    {
+        n_r_adm_pair = h2pack->HSS_n_r_adm_pair;
+        r_adm_pairs  = h2pack->HSS_r_adm_pairs;
+    } else {
+        n_r_adm_pair = h2pack->n_r_adm_pair;
+        r_adm_pairs  = h2pack->r_adm_pairs;
+    }
+
+    size_t B_total_size = h2pack->mat_size[_B_SIZE_IDX];
     h2pack->B_data = (DTYPE*) malloc_aligned(sizeof(DTYPE) * B_total_size, 64);
     ASSERT_PRINTF(h2pack->B_data != NULL, "Failed to allocate space for storing all %zu B matrices elements\n", B_total_size);
     DTYPE *B_data = h2pack->B_data;
@@ -1230,30 +1263,26 @@ void H2P_build_B(H2Pack_t h2pack)
     #endif
 }
 
-// Build dense blocks in the original matrices
+// Generate H2 dense blocks metadata
 // Input parameter:
-//   h2pack : H2Pack structure with point partitioning info
+//   h2pack : H2Pack structure with H2 projection matrices
 // Output parameter:
-//   h2pack : H2Pack structure with dense blocks
-void H2P_build_D(H2Pack_t h2pack)
+//   h2pack : H2Pack structure with H2 dense blocks metadata
+void H2P_generate_D_metadata(H2Pack_t h2pack)
 {
     int    BD_JIT          = h2pack->BD_JIT;
     int    krnl_dim        = h2pack->krnl_dim;
     int    n_node          = h2pack->n_node;
     int    n_thread        = h2pack->n_thread;
-    int    n_point         = h2pack->n_point;
     int    n_leaf_node     = h2pack->n_leaf_node;
     int    krnl_bimv_flops = h2pack->krnl_bimv_flops;
+    int    is_RPY_Ewald    = h2pack->is_RPY_Ewald;
     int    *leaf_nodes     = h2pack->height_nodes;
     int    *pt_cluster     = h2pack->pt_cluster;
-    DTYPE  *coord          = h2pack->coord;
     size_t *mat_size       = h2pack->mat_size;
-    void   *krnl_param     = h2pack->krnl_param;
     double *JIT_flops      = h2pack->JIT_flops;
-    kernel_eval_fptr krnl_eval = h2pack->krnl_eval;
     H2P_int_vec_t    D_blk0    = h2pack->D_blk0;
     H2P_int_vec_t    D_blk1    = h2pack->D_blk1;
-    H2P_thread_buf_t *thread_buf = h2pack->tb;
     
     int n_r_inadm_pair, *r_inadm_pairs;
     if (h2pack->is_HSS)
@@ -1265,7 +1294,7 @@ void H2P_build_D(H2Pack_t h2pack)
         r_inadm_pairs  = h2pack->r_inadm_pairs;
     }
 
-    // 1. Allocate D
+    // 1. Allocate arrays for storing sizes and pair information of D blocks
     h2pack->n_D = n_leaf_node + n_r_inadm_pair;
     h2pack->D_nrow = (int*)    malloc(sizeof(int)    * h2pack->n_D);
     h2pack->D_ncol = (int*)    malloc(sizeof(int)    * h2pack->n_D);
@@ -1288,8 +1317,7 @@ void H2P_build_D(H2Pack_t h2pack)
         "Failed to allocate working buffer for D matrices indexing\n"
     );
     
-    // 2. Partition D matrices into multiple blocks s.t. each block has approximately
-    //    the same workload (total size of D matrices in a block)
+    // 2. Generate size, pair, and statistic information of each D matrix
     D_ptr[0] = 0;
     size_t D0_total_size = 0;
     for (int i = 0; i < n_leaf_node; i++)
@@ -1313,8 +1341,6 @@ void H2P_build_D(H2Pack_t h2pack)
         mat_size[_MV_DEN_SIZE_IDX]  += D_nrow[i] + D_ncol[i];
         JIT_flops[_JIT_D_FLOPS_IDX] += (double)(krnl_bimv_flops) * (double)(node_npt * node_npt);
     }
-    int BD_ntask_thread = (BD_JIT == 1) ? BD_NTASK_THREAD : 1;
-    H2P_partition_workload(n_leaf_node, D_ptr + 1, D0_total_size, n_thread * BD_ntask_thread, D_blk0);
     size_t D1_total_size = 0;
     for (int i = 0; i < n_r_inadm_pair; i++)
     {
@@ -1337,19 +1363,29 @@ void H2P_build_D(H2Pack_t h2pack)
         D_pair_j[D_pair_cnt] = node1;
         D_pair_v[D_pair_cnt] = ii + 1;
         D_pair_cnt++;
-        D_pair_i[D_pair_cnt] = node1;
-        D_pair_j[D_pair_cnt] = node0;
-        D_pair_v[D_pair_cnt] = -(ii + 1);
-        D_pair_cnt++;
+        if (is_RPY_Ewald == 0)
+        {
+            D_pair_i[D_pair_cnt] = node1;
+            D_pair_j[D_pair_cnt] = node0;
+            D_pair_v[D_pair_cnt] = -(ii + 1);
+            D_pair_cnt++;
+        }
         // Add statistic info
         mat_size[_MV_DEN_SIZE_IDX]  += D_nrow[ii] * D_ncol[ii];
-        mat_size[_MV_DEN_SIZE_IDX]  += 2 * (D_nrow[ii] + D_ncol[ii]);
+        mat_size[_MV_DEN_SIZE_IDX]  += (D_nrow[ii] + D_ncol[ii]);
         JIT_flops[_JIT_D_FLOPS_IDX] += (double)(krnl_bimv_flops) * (double)(node0_npt * node1_npt);
+        if (is_RPY_Ewald == 0) mat_size[_MV_DEN_SIZE_IDX]  += (D_nrow[ii] + D_ncol[ii]);
     }
+
+    // 3. Partition D blocks into multiple blocks s.t. each block has approximately
+    //    the same workload (total size of D blocks in a block)
+    int BD_ntask_thread = (BD_JIT == 1) ? BD_NTASK_THREAD : 1;
+    H2P_partition_workload(n_leaf_node,    D_ptr + 1,               D0_total_size, n_thread * BD_ntask_thread, D_blk0);
     H2P_partition_workload(n_r_inadm_pair, D_ptr + n_leaf_node + 1, D1_total_size, n_thread * BD_ntask_thread, D_blk1);
     for (int i = 1; i <= n_leaf_node + n_r_inadm_pair; i++) D_ptr[i] += D_ptr[i - 1];
     mat_size[_D_SIZE_IDX] = D0_total_size + D1_total_size;
     
+    // 4. Store pair-to-index relations in a CSR matrix for matvec, matmul, and SPDHSS construction
     h2pack->D_p2i_rowptr = (int*) malloc(sizeof(int) * (n_node + 1));
     h2pack->D_p2i_colidx = (int*) malloc(sizeof(int) * n_Dij_pair);
     h2pack->D_p2i_val    = (int*) malloc(sizeof(int) * n_Dij_pair);
@@ -1360,17 +1396,48 @@ void H2P_build_D(H2Pack_t h2pack)
         n_node, D_pair_cnt, D_pair_i, D_pair_j, D_pair_v, 
         h2pack->D_p2i_rowptr, h2pack->D_p2i_colidx, h2pack->D_p2i_val
     );
-
     free(D_pair_i);
     free(D_pair_j);
     free(D_pair_v);
+}
 
-    if (BD_JIT == 1) return;
+// Build H2 dense blocks for AOT mode
+// Input parameter:
+//   h2pack : H2Pack structure with H2 dense blocks metadata
+// Output parameter:
+//   h2pack : H2Pack structure with H2 dense blocks
+void H2P_build_D_AOT(H2Pack_t h2pack)
+{
+    int    krnl_dim    = h2pack->krnl_dim;
+    int    n_thread    = h2pack->n_thread;
+    int    n_point     = h2pack->n_point;
+    int    n_leaf_node = h2pack->n_leaf_node;
+    int    *leaf_nodes = h2pack->height_nodes;
+    int    *pt_cluster = h2pack->pt_cluster;
+    size_t *D_ptr      = h2pack->D_ptr;
+    DTYPE  *coord      = h2pack->coord;
+    void   *krnl_param = h2pack->krnl_param;
+    double *JIT_flops  = h2pack->JIT_flops;
+    kernel_eval_fptr krnl_eval = h2pack->krnl_eval;
+    H2P_int_vec_t    D_blk0    = h2pack->D_blk0;
+    H2P_int_vec_t    D_blk1    = h2pack->D_blk1;
+    H2P_thread_buf_t *thread_buf = h2pack->tb;
     
-    h2pack->D_data = (DTYPE*) malloc_aligned(sizeof(DTYPE) * (D0_total_size + D1_total_size), 64);
+    int n_r_inadm_pair, *r_inadm_pairs;
+    if (h2pack->is_HSS)
+    {
+        n_r_inadm_pair = h2pack->HSS_n_r_inadm_pair;
+        r_inadm_pairs  = h2pack->HSS_r_inadm_pairs;
+    } else {
+        n_r_inadm_pair = h2pack->n_r_inadm_pair;
+        r_inadm_pairs  = h2pack->r_inadm_pairs;
+    }
+
+    size_t D_total_size = h2pack->mat_size[_D_SIZE_IDX];
+    h2pack->D_data = (DTYPE*) malloc_aligned(sizeof(DTYPE) * D_total_size, 64);
     ASSERT_PRINTF(
         h2pack->D_data != NULL, 
-        "Failed to allocate space for storing all %zu D matrices elements\n", D0_total_size + D1_total_size
+        "Failed to allocate space for storing all %zu D matrices elements\n", D_total_size
     );
     DTYPE *D_data = h2pack->D_data;
     const int n_D0_blk = D_blk0->length - 1;
@@ -1466,15 +1533,13 @@ void H2P_build(
 
     if (pp == NULL)
     {
-        fprintf(stderr, "[ERROR] You need to provide a set of proxy points for H2P_build()!\n");
-        fprintf(stderr, "[ERROR] H2P_build() exits without doing anything.\n");
+        ERROR_PRINTF("You need to provide a set of proxy points.\n");
         return;
     }
     
     if (krnl_eval == NULL)
     {
-        fprintf(stderr, "[ERROR] You need to provide a valid krnl_eval() for H2P_build()!\n");
-        fprintf(stderr, "[ERROR] H2P_build() exits without doing anything.\n");
+        ERROR_PRINTF("You need to provide a valid krnl_eval().\n");
         return;
     }
 
@@ -1485,7 +1550,7 @@ void H2P_build(
     h2pack->krnl_bimv  = krnl_bimv;
     h2pack->krnl_bimv_flops = krnl_bimv_flops;
     if (BD_JIT == 1 && krnl_bimv == NULL) 
-        printf("[WARNING] krnl_eval() will be used in BD_JIT matvec. For better performance, krnl_bimv() should be provided. \n");
+        WARNING_PRINTF("krnl_eval() will be used in BD_JIT matvec. For better performance, consider using a krnl_bimv().\n");
 
     // 1. Build projection matrices and skeleton row sets
     st = get_wtime_sec();
@@ -1496,13 +1561,15 @@ void H2P_build(
 
     // 2. Build generator matrices
     st = get_wtime_sec();
-    H2P_build_B(h2pack);
+    H2P_generate_B_metadata(h2pack);
+    if (BD_JIT == 0) H2P_build_B_AOT(h2pack);
     et = get_wtime_sec();
     h2pack->timers[_B_BUILD_TIMER_IDX] = et - st;
     
     // 3. Build dense blocks
     st = get_wtime_sec();
-    H2P_build_D(h2pack);
+    H2P_generate_D_metadata(h2pack);
+    if (BD_JIT == 0) H2P_build_D_AOT(h2pack);
     et = get_wtime_sec();
     h2pack->timers[_D_BUILD_TIMER_IDX] = et - st;
 }

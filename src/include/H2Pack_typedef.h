@@ -50,7 +50,7 @@ typedef void (*kernel_eval_fptr) (
 typedef void (*kernel_mv_fptr) (
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
-    const void *krnl_param, const DTYPE *x_in_0, DTYPE *restrict x_out_0
+    const void *krnl_param, const DTYPE *x_in, DTYPE *restrict x_out
 );
 
 // Pointer to function that performs kernel matrix bi-matvec using given sets

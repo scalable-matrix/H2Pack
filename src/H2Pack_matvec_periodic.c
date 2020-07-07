@@ -13,12 +13,96 @@
 #include "x86_intrin_wrapper.h"
 #include "utils.h"
 
+// Extend the number of points to a multiple of SIMD_LEN and perform an n-body matvec
+// Input parameters:
+//   coord0     : Matrix, size dim-by-ld0, coordinates of the 1st point set
+//   ld0        : Leading dimension of coord0, should be >= n0
+//   n0         : Number of points in coord0 (each column in coord0 is a coordinate)
+//   coord1     : Matrix, size dim-by-ld1, coordinates of the 2nd point set
+//   ld1        : Leading dimension of coord1, should be >= n1
+//   n1         : Number of points in coord1 (each column in coord0 is a coordinate)
+//   x_in       : Matrix, size >= krnl_dim * n1, will be left multiplied by kernel_matrix(coord0, coord1)
+//   ldi, ldo   : Leading dimensions of x_in and x_out, ldi >= n1, ldo >= n0
+//   xpt_dim    : Dimension of extended point coordinate
+//   krnl_dim   : Dimension of tensor kernel's return
+//   workbuf    : H2P_dense_mat data structure for allocating working buffer
+//   krnl_param : Pointer to kernel function parameter array
+//   krnl_mv    : Pointer to kernel matrix matvec function
+// Output parameter:
+//   x_out  : Matrix, size >= krnl_dim * n0, x_out += kernel_matrix(coord0, coord1) * x_in
+// Note:
+//   For x_{in,out}, they are not stored as the original (n{0,1} * krnl_dim)-by-1 column vector,
+//   which can be viewed as n{0,1}-by-krnl_dim matrices. Instead, they are stored as krnl_dim-by-n{0,1}
+//   matrices so the krnl_mv can vectorize the load and store. 
+void H2P_ext_krnl_mv(
+    const DTYPE *coord0, const int ld0, const int n0,
+    const DTYPE *coord1, const int ld1, const int n1,
+    const DTYPE *x_in, const int ldi, DTYPE * restrict x_out, const int ldo, 
+    const int xpt_dim, const int krnl_dim, H2P_dense_mat_t workbuf, 
+    const void *krnl_param, kernel_mv_fptr krnl_mv
+)
+{
+    int n0_ext   = (n0 + SIMD_LEN - 1) / SIMD_LEN * SIMD_LEN;
+    int n1_ext   = (n1 + SIMD_LEN - 1) / SIMD_LEN * SIMD_LEN;
+    int n01_ext  = n0_ext + n1_ext;
+    int buf_size = (xpt_dim + krnl_dim) * n01_ext;
+    H2P_dense_mat_resize(workbuf, 1, buf_size);
+    DTYPE *trg_coord = workbuf->data;
+    DTYPE *src_coord = trg_coord + xpt_dim * n0_ext;
+    DTYPE *x_in_     = src_coord + xpt_dim * n1_ext;
+    DTYPE *x_out_    = x_in_     + n1_ext * krnl_dim;
+    
+    // Copy coordinates and pad the extend part
+    for (int i = 0; i < xpt_dim; i++)
+    {
+        const DTYPE *c0_src = coord0 + i * ld0;
+        const DTYPE *c1_src = coord1 + i * ld1;
+        DTYPE *c0_dst = trg_coord + i * n0_ext;
+        DTYPE *c1_dst = src_coord + i * n1_ext;
+        memcpy(c0_dst, c0_src, sizeof(DTYPE) * n0);
+        memcpy(c1_dst, c1_src, sizeof(DTYPE) * n1);
+        // Use an extremely large coordinate so the inverse distance of these 
+        // extra points to original points are numerically zero
+        for (int j = n0; j < n0_ext; j++) c0_dst[j] = 1e100;
+        for (int j = n1; j < n1_ext; j++) c1_dst[j] = 1e100;
+    }
+    
+    // Copy input vector and initialize output vector
+    // Must set the last n{0,1}_ext - n{0,1} elements in each row to 0,
+    // otherwise tensor kernel results might be incorrect
+    for (int i = 0; i < krnl_dim; i++)
+    {
+        const DTYPE *src = x_in + i * ldi;
+        DTYPE *dst = x_in_ + i * n1_ext;
+        memcpy(dst, src, sizeof(DTYPE) * n1);
+        for (int j = n1; j < n1_ext; j++) dst[j] = 0;
+    }
+    memset(x_out_, 0, sizeof(DTYPE) * n0_ext * krnl_dim);
+    
+    // Do the n-body bi-matvec
+    krnl_mv(
+        trg_coord, n0_ext, n0_ext,
+        src_coord, n1_ext, n1_ext,
+        krnl_param, x_in_, x_out_
+    );
+    
+    // Add results back to original output vectors
+    for (int i = 0; i < krnl_dim; i++)
+    {
+        DTYPE *dst = x_out  + i * ldo;
+        DTYPE *src = x_out_ + i * n0_ext;
+        #pragma omp simd
+        for (int j = 0; j < n0; j++) dst[j] += src[j];
+    }
+}
+
 // H2 matvec intermediate multiplication, calculate B_{ij} * (U_j^T * x_j)
 // Need to calculate all B_{ij} matrices before using it
 void H2P_matvec_periodic_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
 {
     int   pt_dim          = h2pack->pt_dim;
     int   xpt_dim         = h2pack->xpt_dim;
+    int   krnl_dim        = h2pack->krnl_dim;
     int   n_point         = h2pack->n_point;
     int   n_node          = h2pack->n_node;
     int   n_thread        = h2pack->n_thread;
@@ -42,14 +126,11 @@ void H2P_matvec_periodic_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
     H2P_matvec_init_y1(h2pack);
     H2P_dense_mat_t *y1 = h2pack->y1;
 
-    int root_idx = h2pack->root_idx;
-    H2P_dense_mat_resize(y1[root_idx], 1, h2pack->U[root_idx]->ncol + 1);
-    memset(y1[root_idx]->data, 0, sizeof(DTYPE) * (h2pack->U[root_idx]->ncol + 1));
-
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
         H2P_dense_mat_t Bij      = thread_buf[tid]->mat0;
+        H2P_dense_mat_t workbuf  = thread_buf[tid]->mat0;
         H2P_dense_mat_t coord1_s = thread_buf[tid]->mat1;
         DTYPE shift[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
@@ -79,9 +160,11 @@ void H2P_matvec_periodic_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
                 DTYPE *per_adm_shift_i = per_adm_shifts + pair_idx * pt_dim;
                 for (int k = 0; k < pt_dim; k++) shift[k] = per_adm_shift_i[k];
 
-                int Bij_nrow = B_nrow[pair_idx];
-                int Bij_ncol = B_ncol[pair_idx];
-                H2P_dense_mat_resize(Bij, Bij_nrow, Bij_ncol);
+                int Bij_nrow  = B_nrow[pair_idx];
+                int Bij_ncol  = B_ncol[pair_idx];
+                int node0_npt = Bij_nrow / krnl_dim;
+                int node1_npt = Bij_ncol / krnl_dim;
+                if (krnl_mv == NULL) H2P_dense_mat_resize(Bij, Bij_nrow, Bij_ncol);
 
                 // (1) Two nodes are of the same level, compress on both sides
                 if (level0 == level1)
@@ -90,7 +173,12 @@ void H2P_matvec_periodic_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
                     H2P_shift_coord(coord1_s, shift, 1.0);
                     if (krnl_mv != NULL)
                     {
-
+                        H2P_ext_krnl_mv(
+                            J_coord[node0]->data, J_coord[node0]->ld, J_coord[node0]->ncol,
+                            coord1_s->data,       coord1_s->ld,       coord1_s->ncol, 
+                            y0[node1]->data, node1_npt, y1[node0]->data, node0_npt, 
+                            xpt_dim, krnl_dim, workbuf, krnl_param, krnl_mv
+                        );
                     } else {
                         krnl_eval(
                             J_coord[node0]->data, J_coord[node0]->ld, J_coord[node0]->ncol,
@@ -119,6 +207,12 @@ void H2P_matvec_periodic_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
                     if (krnl_mv != NULL)
                     {
                         const DTYPE *x_spos = x + pt_s1;
+                        H2P_ext_krnl_mv(
+                            J_coord[node0]->data, J_coord[node0]->ld, J_coord[node0]->ncol,
+                            coord1_s->data,       coord1_s->ld,       coord1_s->ncol,
+                            x_spos, n_point, y1[node0]->data, node0_npt, 
+                            xpt_dim, krnl_dim, workbuf, krnl_param, krnl_mv
+                        );
                     } else {
                         const DTYPE *x_spos = x + vec_s1;
                         krnl_eval(
@@ -147,6 +241,12 @@ void H2P_matvec_periodic_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
                     if (krnl_mv != NULL)
                     {
                         DTYPE *y_spos = y + pt_s0;
+                        H2P_ext_krnl_mv(
+                            coord + pt_s0,  n_point,      node0_npt,
+                            coord1_s->data, coord1_s->ld, coord1_s->ncol,
+                            y0[node1]->data, node1_npt, y_spos, n_point, 
+                            xpt_dim, krnl_dim, workbuf, krnl_param, krnl_mv
+                        );
                     } else {
                         DTYPE *y_spos = y + vec_s0;
                         krnl_eval(
@@ -210,6 +310,7 @@ void H2P_matvec_periodic_dense_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
     {
         int tid = omp_get_thread_num();
         H2P_dense_mat_t Dij      = thread_buf[tid]->mat0;
+        H2P_dense_mat_t workbuf  = thread_buf[tid]->mat0;
         H2P_dense_mat_t coord1_s = thread_buf[tid]->mat1;
 
         DTYPE shift[8] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -235,7 +336,7 @@ void H2P_matvec_periodic_dense_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
 
                 int Dij_nrow = D_nrow[pair_idx];
                 int Dij_ncol = D_ncol[pair_idx];
-                H2P_dense_mat_resize(Dij, Dij_nrow, Dij_ncol);
+                if (krnl_mv == NULL) H2P_dense_mat_resize(Dij, Dij_nrow, Dij_ncol);
 
                 if (pair_idx < n_leaf_node)
                 {
@@ -253,7 +354,12 @@ void H2P_matvec_periodic_dense_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
                 
                 if (krnl_mv != NULL)
                 {
-
+                    H2P_ext_krnl_mv(
+                        coord + pt_s0,  n_point,      node0_npt,
+                        coord1_s->data, coord1_s->ld, coord1_s->ncol,
+                        x_spos, n_point, y_spos, n_point, 
+                        xpt_dim, krnl_dim, workbuf, krnl_param, krnl_mv
+                    );
                 } else {
                     krnl_eval(
                         coord + pt_s0,  n_point,      node0_npt,
@@ -265,7 +371,6 @@ void H2P_matvec_periodic_dense_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
                         1.0, Dij->data, Dij->ld, x_spos, 1, 1.0, y_spos, 1
                     );
                 }
-
             }  // End of i loop
         }  // End of node0 loop
         thread_buf[tid]->timer += get_wtime_sec();
@@ -316,7 +421,12 @@ void H2P_matvec_periodic(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
         y[i]  = 0.0;
         yT[i] = 0.0;
     }
-    if (need_trans) H2P_transpose_dmat(n_thread, n_point, krnl_dim, x, krnl_dim, xT, n_point);
+    h2pack->mat_size[_MV_RDC_SIZE_IDX] += 2 * h2pack->krnl_mat_size;
+    if (need_trans) 
+    {
+        H2P_transpose_dmat(n_thread, n_point, krnl_dim, x, krnl_dim, xT, n_point);
+        h2pack->mat_size[_MV_RDC_SIZE_IDX] += h2pack->krnl_mat_size;
+    }
     et = get_wtime_sec();
     h2pack->timers[_MV_RDC_TIMER_IDX] += et - st;
 
@@ -337,14 +447,23 @@ void H2P_matvec_periodic(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
         // "Lost butterfly"
     }
     // Multiply the periodic block for root node
-    // y1{root} = y1{root} + O * y0{root};
+    // y1{root} = y1{root} + O * y0{root};  % y1{root} should be empty
     int root_idx     = h2pack->root_idx;
-    int per_blk_size = h2pack->J[root_idx]->length * krnl_dim;
+    int root_J_npt   = h2pack->J[root_idx]->length;
+    int per_blk_size = root_J_npt * krnl_dim;
     H2P_dense_mat_t y0_root = h2pack->y0[root_idx];
     H2P_dense_mat_t y1_root = h2pack->y1[root_idx];
+    H2P_dense_mat_resize(y1_root, 1, per_blk_size);
+    if (need_trans) 
+    {
+        H2P_dense_mat_t y0_root_tmp = thread_buf[0]->mat0;
+        H2P_dense_mat_resize(y0_root_tmp, root_J_npt, krnl_dim);
+        H2P_transpose_dmat(1, krnl_dim, root_J_npt, y0_root->data, root_J_npt, y0_root_tmp->data, krnl_dim);
+        memcpy(y0_root->data, y0_root_tmp->data, sizeof(DTYPE) * per_blk_size);
+    }
     CBLAS_GEMV(
         CblasRowMajor, CblasNoTrans, per_blk_size, per_blk_size, 
-        1.0, h2pack->per_blk, per_blk_size, y0_root->data, 1, 1.0, y1_root->data, 1
+        1.0, h2pack->per_blk, per_blk_size, y0_root->data, 1, 0.0, y1_root->data, 1
     );
     et = get_wtime_sec();
     h2pack->timers[_MV_MID_TIMER_IDX] += et - st;
@@ -354,7 +473,7 @@ void H2P_matvec_periodic(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
     H2P_matvec_bwd_transform(h2pack, x, y);
     et = get_wtime_sec();
     h2pack->timers[_MV_BW_TIMER_IDX] += et - st;
-    
+
     // 5. Dense multiplication, calculate D_i * x_i
     st = get_wtime_sec();
     if (BD_JIT == 1)
@@ -374,7 +493,7 @@ void H2P_matvec_periodic(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
         H2P_transpose_dmat(n_thread, krnl_dim, n_point, yT, n_point, xT, krnl_dim);
         #pragma omp parallel for simd
         for (int i = 0; i < krnl_mat_size; i++) y[i] += xT[i];
-        h2pack->mat_size[_MV_RDC_SIZE_IDX] += 4 * h2pack->krnl_mat_size;
+        h2pack->mat_size[_MV_RDC_SIZE_IDX] += 2 * h2pack->krnl_mat_size;
     }
     et = get_wtime_sec();
     h2pack->timers[_MV_RDC_TIMER_IDX] += et - st;

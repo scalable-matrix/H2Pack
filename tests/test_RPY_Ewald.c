@@ -38,7 +38,7 @@ void parse_RPY_Ewald_params(int argc, char **argv)
     test_params.krnl_mv_flops = RPY_krnl_mv_flop;
     test_params.krnl_eval     = RPY_eval_std;
     test_params.pkrnl_eval    = RPY_Ewald_eval_std;
-    test_params.krnl_mv       = NULL; //RPY_krnl_mv_intrin_d;
+    test_params.krnl_mv       = RPY_krnl_mv_intrin_d;
 
     if (argc < 2)
     {
@@ -225,7 +225,6 @@ int main(int argc, char **argv)
     assert(x != NULL && y0 != NULL && y1 != NULL);
     for (int i = 0; i < test_params.krnl_mat_size; i++) 
     {
-        //x[i] = (DTYPE) drand48();
         x[i] = (DTYPE) drand48() - 0.5;
     }
 

@@ -18,6 +18,7 @@ void H2P_init(
 {
     H2Pack_t h2pack = (H2Pack_t) malloc(sizeof(struct H2Pack));
     ASSERT_PRINTF(h2pack != NULL, "Failed to allocate H2Pack structure\n");
+    memset(h2pack, 0, sizeof(struct H2Pack));
     
     h2pack->n_thread    = omp_get_max_threads();
     h2pack->pt_dim      = pt_dim;
@@ -340,9 +341,10 @@ void H2P_print_statistic(H2Pack_t h2pack)
     printf("%d\n", h2pack->height_n_node[h2pack->max_level]);
     printf("  * H2Pack running mode            : ");
     int is_H2 = 1;
-    if (h2pack->is_HSS   == 1) { printf("HSS\n");               is_H2 = 0; }
-    if (h2pack->is_RPY   == 1) { printf("H2 for RPY kernel\n"); is_H2 = 0; }
-    if (h2pack->is_H2ERI == 1) { printf("H2-ERI\n");            is_H2 = 0; }
+    if (h2pack->is_HSS       == 1) { printf("HSS\n");               is_H2 = 0; }
+    if (h2pack->is_RPY       == 1) { printf("RPY kernel\n");        is_H2 = 0; }
+    if (h2pack->is_RPY_Ewald == 1) { printf("RPY Ewald kernel\n");  is_H2 = 0; }
+    if (h2pack->is_H2ERI     == 1) { printf("H2-ERI\n");            is_H2 = 0; }
     if (is_H2 == 1) printf("H2\n");
     printf("  * Minimum admissible pair level  : %d\n", (h2pack->is_HSS == 0) ? h2pack->min_adm_level : h2pack->HSS_min_adm_level);
     printf("  * Number of reduced adm. pairs   : %d\n", h2pack->n_r_adm_pair);

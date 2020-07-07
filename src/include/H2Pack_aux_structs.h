@@ -189,6 +189,13 @@ static inline void H2P_dense_mat_resize(H2P_dense_mat_t mat, const int nrow, con
     }
 }
 
+// Copy the data in a H2P_dense_mat structure to another H2P_dense_mat structure
+// Input parameter:
+//   src_mat : Source H2P_dense_mat
+// Output parameter:
+//   dst_mat : Destination H2P_dense_mat
+void H2P_dense_mat_copy(H2P_dense_mat_t src_mat, H2P_dense_mat_t dst_mat);
+
 // Permute rows in a H2P_dense_mat structure
 // WARNING: This function DOES NOT perform sanity check!
 // Input parameters:

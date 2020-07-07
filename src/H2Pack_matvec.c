@@ -179,8 +179,8 @@ void H2P_matvec_fwd_transform(H2Pack_t h2pack, const DTYPE *x)
     }  // End of i loop
 }
 
-// Transpose y0[i] from npt*krnl_dim-by-1 vector (npt-by-krnl_dim 
-// matrices) to krnl_dim-by-npt matrices
+// Transpose y0[i] from a npt*krnl_dim-by-1 vector (npt-by-krnl_dim 
+// matrix) to a krnl_dim-by-npt matrix
 void H2P_transpose_y0_from_krnldim(H2Pack_t h2pack)
 {
     int n_node   = h2pack->n_node;
@@ -206,8 +206,8 @@ void H2P_transpose_y0_from_krnldim(H2Pack_t h2pack)
     }
 }
 
-// Transpose y1[i] from krnl_dim-by-npt matrices to 
-// npt*krnl_dim-by-1 vector (npt-by-krnl_dim matrices)
+// Transpose y1[i] from a krnl_dim-by-npt matrix to 
+// a npt*krnl_dim-by-1 vector (npt-by-krnl_dim matrix)
 void H2P_transpose_y1_to_krnldim(H2Pack_t h2pack)
 {
     int n_node   = h2pack->n_node;
@@ -261,6 +261,7 @@ void H2P_matvec_init_y1(H2Pack_t h2pack)
             // sweep, store the final results in this part and use the positions behind this as
             // thread buffers. The last position of each row is used to mark if this row has data.
             H2P_dense_mat_resize(y1[i], n_thread, U[i]->ncol + 1);
+            memset(y1[i]->data, 0, sizeof(DTYPE) * n_thread * (U[i]->ncol + 1));
             y1[i]->ld = 1;
         }
     }

@@ -28,6 +28,9 @@
 // H2Pack H2/HSS fast matrix-vector multiplication
 #include "H2Pack_matvec.h"
 
+// H2Pack H2 fast matrix-vector multiplication for periodic system
+#include "H2Pack_matvec_periodic.h"
+
 // H2Pack H2/HSS fast matrix-matrix multiplication
 #include "H2Pack_matmul.h"
 

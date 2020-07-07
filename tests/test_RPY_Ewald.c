@@ -38,7 +38,7 @@ void parse_RPY_Ewald_params(int argc, char **argv)
     test_params.krnl_mv_flops = RPY_krnl_mv_flop;
     test_params.krnl_eval     = RPY_eval_std;
     test_params.pkrnl_eval    = RPY_Ewald_eval_std;
-    test_params.krnl_mv       = RPY_krnl_mv_intrin_d;
+    test_params.krnl_mv       = NULL; //RPY_krnl_mv_intrin_d;
 
     if (argc < 2)
     {
@@ -154,13 +154,6 @@ int main(int argc, char **argv)
     srand48(time(NULL));
 
     parse_RPY_Ewald_params(argc, argv);
-    #if 0
-    printf(
-        "n_point, left corner, L = %d, (%lf, %lf, %lf), %lf\n", 
-        test_params.n_point, test_params.unit_cell[0], test_params.unit_cell[1], 
-        test_params.unit_cell[2], test_params.unit_cell[3]
-    );
-    #endif
 
     H2Pack_t ph2mat;
     
@@ -195,7 +188,7 @@ int main(int argc, char **argv)
 
     // Set up RPY Ewald parameters and work buffer
     const int nr = 4, nk = 4;
-    const DTYPE eta = 1.0;
+    const DTYPE eta = 1.0 / 6.0 / M_PI;
     const DTYPE L   = test_params.unit_cell[3];
     const DTYPE xi  = DSQRT(M_PI) / L;
     DTYPE RPY_param[1] = {eta};
@@ -213,10 +206,65 @@ int main(int argc, char **argv)
         RPY_Ewald_param, test_params.pkrnl_eval, test_params.krnl_mv, 
         test_params.krnl_mv_flops
     );
-    DEBUG_PRINTF("H2P_build_periodic done\n");
-    for (int i = 0; i < ph2mat->n_node; i++)
-        DEBUG_PRINTF("U[%d] size = %d * %d\n", i, ph2mat->U[i]->nrow, ph2mat->U[i]->ncol);
 
+    int n_check_pt = 1000, check_pt_s;
+    if (n_check_pt >= test_params.n_point)
+    {
+        n_check_pt = test_params.n_point;
+        check_pt_s = 0;
+    } else {
+        srand(time(NULL));
+        check_pt_s = rand() % (test_params.n_point - n_check_pt);
+    }
+    printf("Calculating direct n-body reference result for points %d -> %d\n", check_pt_s, check_pt_s + n_check_pt - 1);
+    
+    DTYPE *x, *y0, *y1;
+    x  = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
+    y0 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
+    y1 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
+    assert(x != NULL && y0 != NULL && y1 != NULL);
+    for (int i = 0; i < test_params.krnl_mat_size; i++) 
+    {
+        //x[i] = (DTYPE) drand48();
+        x[i] = (DTYPE) drand48() - 0.5;
+    }
+
+    // Get reference results
+    direct_nbody(
+        RPY_Ewald_param, test_params.pkrnl_eval, test_params.pt_dim, test_params.krnl_dim, 
+        ph2mat->coord,              test_params.n_point, test_params.n_point, x, 
+        ph2mat->coord + check_pt_s, test_params.n_point, n_check_pt,          y0
+    );
+
+    // Warm up, reset timers, and test the matvec performance
+    H2P_matvec_periodic(ph2mat, x, y1); 
+    ph2mat->n_matvec = 0;
+    ph2mat->timers[_MV_FW_TIMER_IDX]  = 0.0;
+    ph2mat->timers[_MV_MID_TIMER_IDX] = 0.0;
+    ph2mat->timers[_MV_BW_TIMER_IDX]  = 0.0;
+    ph2mat->timers[_MV_DEN_TIMER_IDX] = 0.0;
+    ph2mat->timers[_MV_RDC_TIMER_IDX] = 0.0;
+    for (int i = 0; i < 10; i++) 
+        H2P_matvec_periodic(ph2mat, x, y1);
+
+    H2P_print_statistic(ph2mat);
+
+    // Verify H2 matvec results
+    DTYPE ref_norm = 0.0, err_norm = 0.0;
+    for (int i = 0; i < test_params.krnl_dim * n_check_pt; i++)
+    {
+        DTYPE y1_i = y1[test_params.krnl_dim * check_pt_s + i];
+        DTYPE diff = y1_i - y0[i];
+        ref_norm += y0[i] * y0[i];
+        err_norm += diff * diff;
+    }
+    ref_norm = DSQRT(ref_norm);
+    err_norm = DSQRT(err_norm);
+    printf("For %d validation points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / ref_norm);
+
+    free(x);
+    free(y0);
+    free(y1);
     free(ewald_workbuf);
     H2P_destroy(ph2mat);
 }

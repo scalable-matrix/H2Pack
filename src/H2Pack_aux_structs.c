@@ -157,6 +157,18 @@ void H2P_dense_mat_destroy(H2P_dense_mat_t mat)
     mat->ld   = 0;
 }
 
+// Copy the data in a H2P_dense_mat structure to another H2P_dense_mat structure
+void H2P_dense_mat_copy(H2P_dense_mat_t src_mat, H2P_dense_mat_t dst_mat)
+{
+    H2P_dense_mat_resize(dst_mat, src_mat->nrow, src_mat->ncol);
+    for (int i = 0; i < src_mat->nrow; i++)
+    {
+        DTYPE *src_ptr = src_mat->data + i * src_mat->ld;
+        DTYPE *dst_ptr = dst_mat->data + i * dst_mat->ld;
+        memcpy(dst_ptr, src_ptr, sizeof(DTYPE) * src_mat->ncol);
+    }
+}
+
 // Permute rows in a H2P_dense_mat structure
 void H2P_dense_mat_permute_rows(H2P_dense_mat_t mat, const int *p)
 {

@@ -1080,7 +1080,7 @@ void H2P_generate_B_metadata(H2Pack_t h2pack)
         int level0 = node_level[node0];
         int level1 = node_level[node1];
         node_n_r_adm[node0]++;
-        node_n_r_adm[node1]++;
+        if (is_RPY_Ewald == 0) node_n_r_adm[node1]++;
         int node0_npt = 0, node1_npt = 0;
         if (level0 == level1)
         {

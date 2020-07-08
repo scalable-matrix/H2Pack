@@ -279,6 +279,30 @@ void H2P_transpose_y1_to_krnldim(H2Pack_t h2pack);
 void H2P_matvec_bwd_transform(H2Pack_t h2pack, const DTYPE *x, DTYPE *y);
 // ================================================================================
 
+
+// ================================================================================
+// The following 4 functions are implemented in H2Pack_matmul.c and used by 
+// both H2Pack_matmul.c and H2Pack_matmul_periodic.c
+
+// Initialize auxiliary array y0 used in H2 matmul forward transformation
+void H2P_matmul_init_y0(H2Pack_t h2pack, const int n_vec);
+
+// Initialize auxiliary array y1 used in H2 matmul intermediate multiplication
+void H2P_matmul_init_y1(H2Pack_t h2pack, const int n_vec);
+
+// H2 matmul forward transformation, calculate U_j^T * x_j
+void H2P_matmul_fwd_transform(
+    H2Pack_t h2pack, const int n_vec, 
+    const DTYPE *mat_x, const int ldx, const int x_row_stride, const CBLAS_TRANSPOSE x_trans
+);
+
+// H2 matmul backward transformation, calculate U_i * (B_{ij} * (U_j^T * x_j))
+void H2P_matmul_bwd_transform(
+    H2Pack_t h2pack, const int n_vec, 
+    DTYPE *mat_y, const int ldy, const int y_row_stride, const CBLAS_TRANSPOSE y_trans
+);
+// ================================================================================
+
 #ifdef __cplusplus
 }
 #endif

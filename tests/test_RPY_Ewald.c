@@ -218,12 +218,14 @@ int main(int argc, char **argv)
     }
     printf("Calculating direct n-body reference result for points %d -> %d\n", check_pt_s, check_pt_s + n_check_pt - 1);
     
-    DTYPE *x, *y0, *y1;
-    x  = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
-    y0 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
-    y1 = (DTYPE*) malloc(sizeof(DTYPE) * test_params.krnl_mat_size);
-    assert(x != NULL && y0 != NULL && y1 != NULL);
-    for (int i = 0; i < test_params.krnl_mat_size; i++) 
+    int n_vec = 10, krnl_mat_size = test_params.krnl_mat_size;
+    DTYPE *x, *y0, *y1, *y2;
+    x  = (DTYPE*) malloc(sizeof(DTYPE) * krnl_mat_size * n_vec);
+    y0 = (DTYPE*) malloc(sizeof(DTYPE) * krnl_mat_size);
+    y1 = (DTYPE*) malloc(sizeof(DTYPE) * krnl_mat_size * n_vec);
+    y2 = (DTYPE*) malloc(sizeof(DTYPE) * krnl_mat_size * n_vec);
+    assert(x != NULL && y0 != NULL && y1 != NULL && y2 != NULL);
+    for (int i = 0; i < krnl_mat_size * n_vec; i++) 
     {
         x[i] = (DTYPE) drand48() - 0.5;
     }
@@ -235,20 +237,8 @@ int main(int argc, char **argv)
         ph2mat->coord + check_pt_s, test_params.n_point, n_check_pt,          y0
     );
 
-    // Warm up, reset timers, and test the matvec performance
-    H2P_matvec_periodic(ph2mat, x, y1); 
-    ph2mat->n_matvec = 0;
-    ph2mat->timers[_MV_FW_TIMER_IDX]  = 0.0;
-    ph2mat->timers[_MV_MID_TIMER_IDX] = 0.0;
-    ph2mat->timers[_MV_BW_TIMER_IDX]  = 0.0;
-    ph2mat->timers[_MV_DEN_TIMER_IDX] = 0.0;
-    ph2mat->timers[_MV_RDC_TIMER_IDX] = 0.0;
-    for (int i = 0; i < 10; i++) 
-        H2P_matvec_periodic(ph2mat, x, y1);
-
-    H2P_print_statistic(ph2mat);
-
     // Verify H2 matvec results
+    H2P_matvec_periodic(ph2mat, x, y1); 
     DTYPE ref_norm = 0.0, err_norm = 0.0;
     for (int i = 0; i < test_params.krnl_dim * n_check_pt; i++)
     {
@@ -261,9 +251,48 @@ int main(int argc, char **argv)
     err_norm = DSQRT(err_norm);
     printf("For %d validation points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / ref_norm);
 
+    // Test matvec performance
+    ph2mat->n_matvec = 0;
+    ph2mat->timers[_MV_FW_TIMER_IDX]  = 0.0;
+    ph2mat->timers[_MV_MID_TIMER_IDX] = 0.0;
+    ph2mat->timers[_MV_BW_TIMER_IDX]  = 0.0;
+    ph2mat->timers[_MV_DEN_TIMER_IDX] = 0.0;
+    ph2mat->timers[_MV_RDC_TIMER_IDX] = 0.0;
+    for (int i = 0; i < n_vec; i++) 
+    {
+        DTYPE *x_i  = x  + i * krnl_mat_size;
+        DTYPE *y1_i = y1 + i * krnl_mat_size;
+        H2P_matvec_periodic(ph2mat, x_i, y1_i);
+    }
+
+    H2P_print_statistic(ph2mat);
+
+    // Test column-major matmul performance
+    double st = get_wtime_sec();
+    H2P_matmul_periodic(ph2mat, CblasColMajor, n_vec, x, krnl_mat_size, y2, krnl_mat_size);
+    double et = get_wtime_sec();
+    printf("One col-major matmul used %.3lf sec\n", et - st);
+
+    // Check H2 column-major matmul results
+    DTYPE cm_max_relerr = 0.0;
+    DTYPE cm_avg_relerr = 0.0; 
+    DTYPE y0_2norm, err_2norm, relerr;
+    for (int i = 0; i < n_vec; i++)
+    {
+        DTYPE *y1_ivec = y1 + i * krnl_mat_size;
+        DTYPE *y2_ivec = y2 + i * krnl_mat_size;
+        calc_err_2norm(krnl_mat_size, y1_ivec, y2_ivec, &y0_2norm, &err_2norm);
+        relerr = err_2norm / y0_2norm;
+        if (relerr > cm_max_relerr) cm_max_relerr = relerr;
+        cm_avg_relerr += relerr;
+    }
+    cm_avg_relerr /= (DTYPE) n_vec;
+    printf("%d vectors col-major matmul max/avg relerr = %e, %e\n", n_vec, cm_max_relerr, cm_avg_relerr);
+
     free(x);
     free(y0);
     free(y1);
+    free(y2);
     free(ewald_workbuf);
     H2P_destroy(ph2mat);
 }

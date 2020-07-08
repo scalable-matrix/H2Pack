@@ -18,7 +18,7 @@ void test_H2_matmul(H2Pack_t h2pack, const int n_vec)
     for (int i = 0; i < mat_size; i++) 
     {
         //x0[i] = (DTYPE) pseudo_randn();
-        x0[i] = (DTYPE) drand48();
+        x0[i] = (DTYPE) drand48() - 0.5;
         y0[i] = 0.0;
         y1[i] = 0.0;
     }
@@ -73,7 +73,7 @@ void test_H2_matmul(H2Pack_t h2pack, const int n_vec)
     et = get_wtime_sec();
     trans_t += et - st;
     total_t = matmul_t + trans_t;
-    printf("One row-major matmul used %.3lf sec, transpose / calc used %.3lf / %.3lf sec\n", total_t, trans_t, matmul_t);
+    printf("One row-major matmul used %.3lf sec\n", matmul_t);
 
     // Check H2 row-major matmul results
     DTYPE rm_max_relerr = 0.0;

@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <malloc.h>
 #include <math.h>
 #include <omp.h>
 
@@ -508,6 +509,8 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_t h2mat, const int n_vec, H2P_dense_mat_t *
     {
         H2P_dense_mat_destroy(exU[i]);
         H2P_dense_mat_destroy(y0[i]);
+        free(exU[i]);
+        free(y0[i]);
     }
     free(exU);
     free(y0);
@@ -1607,6 +1610,15 @@ void H2P_SPDHSS_H2_build(
         return;
     }
 
+    if (h2mat->is_RPY_Ewald)
+    {
+        ERROR_PRINTF("Cannot construct SPDHSS for RPY Ewald kernel\n");
+        return;
+    }
+
+    // Any H2P_dense_mat_t->data allocation > 1KB will use mmap instead of sbrk and can be released later
+    mallopt(M_MMAP_THRESHOLD, 1024);
+
     int n_node          = h2mat->n_node;
     int n_thread        = h2mat->n_thread;
     int n_leaf_node     = h2mat->n_leaf_node;
@@ -2178,20 +2190,36 @@ void H2P_SPDHSS_H2_build(
     (*hssmat_)->timers[_B_BUILD_TIMER_IDX] = build_B_t;
     (*hssmat_)->timers[_D_BUILD_TIMER_IDX] = build_D_t;
 
+    // Restore default value
+    mallopt(M_MMAP_THRESHOLD, 128 * 1024);
+
     // 8. Delete intermediate arrays and matrices
     for (int i = 0; i < n_level; i++)
+    {
         H2P_int_vec_destroy(level_HSS_Bij_pairs[i]);
+        free(level_HSS_Bij_pairs[i]);
+    }
     for (int i = 0; i < n_node; i++)
     {
         H2P_dense_mat_destroy(S[i]);
         H2P_dense_mat_destroy(V[i]);
         H2P_dense_mat_destroy(W[i]);
         H2P_dense_mat_destroy(Minv[i]);
+        free(S[i]);
+        free(V[i]);
+        free(W[i]);
+        free(Minv[i]);
     }
     for (int i = 0; i < n_HSS_Bij_pair; i++)
+    {
         H2P_dense_mat_destroy(HSS_B[i]);
+        free(HSS_B[i]);
+    }
     for (int i = 0; i < n_leaf_node; i++)
+    {
         H2P_dense_mat_destroy(HSS_D[i]);
+        free(HSS_D[i]);
+    }
     for (int i = 0; i < n_node * max_level; i++)
     {
         if (Yk[i] == NULL) continue;

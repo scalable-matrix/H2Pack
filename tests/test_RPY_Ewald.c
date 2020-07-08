@@ -160,7 +160,7 @@ int main(int argc, char **argv)
     H2P_init(&ph2mat, test_params.pt_dim, test_params.krnl_dim, QR_REL_NRM, &test_params.rel_tol);
 
     // Partition points and generate (in)adm pairs
-    int max_leaf_points = 200;
+    int max_leaf_points = 300;
     DTYPE max_leaf_size = 0.0;
     H2P_run_RPY_Ewald(ph2mat);
     // We need to ensure the size of each leaf box >= 2 * max(radii), but the 

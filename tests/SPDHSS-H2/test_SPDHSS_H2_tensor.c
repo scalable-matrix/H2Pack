@@ -98,8 +98,8 @@ int main(int argc, char **argv)
     assert(y0 != NULL && y1 != NULL);
     for (int i = 0; i < test_params.krnl_mat_size; i++) 
     {
-        x0[i] = (DTYPE) pseudo_randn();
-        // x0[i] = (DTYPE) drand48();
+        //x0[i] = (DTYPE) pseudo_randn();
+        x0[i] = (DTYPE) drand48() - 0.5;
     }
 
     // Get reference results
@@ -127,7 +127,7 @@ int main(int argc, char **argv)
     printf("For %d validation points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / ref_norm);
 
     printf("\nConstructing SPDHSS from H2\n");
-    const int max_rank = 100 * 3;
+    const int max_rank = 200;
     const DTYPE shift  = 1e-2;
     H2P_SPDHSS_H2_build(max_rank, shift, h2mat, &hssmat);
  

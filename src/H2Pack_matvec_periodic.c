@@ -290,7 +290,6 @@ void H2P_matvec_periodic_dense_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
     int   n_node            = h2pack->n_node;
     int   n_leaf_node       = h2pack->n_leaf_node;
     int   n_thread          = h2pack->n_thread;
-    int   *leaf_nodes       = h2pack->level_nodes;
     int   *pt_cluster       = h2pack->pt_cluster;
     int   *mat_cluster      = h2pack->mat_cluster;
     int   *D_nrow           = h2pack->D_nrow;
@@ -301,7 +300,6 @@ void H2P_matvec_periodic_dense_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
     DTYPE *coord            = h2pack->coord;
     DTYPE *per_inadm_shifts = h2pack->per_inadm_shifts;
     void  *krnl_param       = h2pack->krnl_param;
-    H2P_dense_mat_t  *y0 = h2pack->y0;
     kernel_eval_fptr krnl_eval   = h2pack->krnl_eval;
     kernel_mv_fptr   krnl_mv     = h2pack->krnl_mv;
     H2P_thread_buf_t *thread_buf = h2pack->tb;

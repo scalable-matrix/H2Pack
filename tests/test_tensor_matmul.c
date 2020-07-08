@@ -21,7 +21,6 @@ int main(int argc, char **argv)
     parse_tensor_params(argc, argv);
     
     H2Pack_t h2pack;
-    double st, et;
     
     H2P_init(&h2pack, test_params.pt_dim, test_params.krnl_dim, QR_REL_NRM, &test_params.rel_tol);
     

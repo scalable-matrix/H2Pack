@@ -22,7 +22,6 @@ void H2P_matmul_periodic_intmd_mult(
 {
     int   pt_dim          = h2pack->pt_dim;
     int   xpt_dim         = h2pack->xpt_dim;
-    int   krnl_dim        = h2pack->krnl_dim;
     int   n_point         = h2pack->n_point;
     int   n_node          = h2pack->n_node;
     int   n_thread        = h2pack->n_thread;
@@ -40,7 +39,6 @@ void H2P_matmul_periodic_intmd_mult(
     H2P_dense_mat_t  *y0 = h2pack->y0;
     H2P_dense_mat_t  *J_coord = h2pack->J_coord;
     kernel_eval_fptr krnl_eval   = h2pack->krnl_eval;
-    kernel_mv_fptr   krnl_mv     = h2pack->krnl_mv;
     H2P_thread_buf_t *thread_buf = h2pack->tb;
 
     // 1. Initialize y1 on the first run or reset the size of each y1
@@ -74,10 +72,8 @@ void H2P_matmul_periodic_intmd_mult(
                 DTYPE *per_adm_shift_i = per_adm_shifts + pair_idx * pt_dim;
                 for (int k = 0; k < pt_dim; k++) shift[k] = per_adm_shift_i[k];
 
-                int Bij_nrow  = B_nrow[pair_idx];
-                int Bij_ncol  = B_ncol[pair_idx];
-                int node0_npt = Bij_nrow / krnl_dim;
-                int node1_npt = Bij_ncol / krnl_dim;
+                int Bij_nrow = B_nrow[pair_idx];
+                int Bij_ncol = B_ncol[pair_idx];
                 H2P_dense_mat_resize(Bij, Bij_nrow, Bij_ncol);
 
                 // (1) Two nodes are of the same level, compress on both sides
@@ -164,12 +160,10 @@ void H2P_matmul_periodic_dense_mult(
 {
     int   pt_dim            = h2pack->pt_dim;
     int   xpt_dim           = h2pack->xpt_dim;
-    int   krnl_dim          = h2pack->krnl_dim;
     int   n_point           = h2pack->n_point;
     int   n_node            = h2pack->n_node;
     int   n_leaf_node       = h2pack->n_leaf_node;
     int   n_thread          = h2pack->n_thread;
-    int   *leaf_nodes       = h2pack->level_nodes;
     int   *pt_cluster       = h2pack->pt_cluster;
     int   *mat_cluster      = h2pack->mat_cluster;
     int   *D_nrow           = h2pack->D_nrow;
@@ -180,9 +174,7 @@ void H2P_matmul_periodic_dense_mult(
     DTYPE *coord            = h2pack->coord;
     DTYPE *per_inadm_shifts = h2pack->per_inadm_shifts;
     void  *krnl_param       = h2pack->krnl_param;
-    H2P_dense_mat_t  *y0 = h2pack->y0;
     kernel_eval_fptr krnl_eval   = h2pack->krnl_eval;
-    kernel_mv_fptr   krnl_mv     = h2pack->krnl_mv;
     H2P_thread_buf_t *thread_buf = h2pack->tb;
 
     #pragma omp parallel num_threads(n_thread)

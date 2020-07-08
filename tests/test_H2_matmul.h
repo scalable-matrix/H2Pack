@@ -57,23 +57,23 @@ void test_H2_matmul(H2Pack_t h2pack, const int n_vec)
     cm_avg_relerr /= (DTYPE) n_vec;
     
     // Test row-major matmul performance
-    double trans_t = 0.0, matmul_t = 0.0, total_t = 0.0;
-    st = get_wtime_sec();
+    //double trans_t = 0.0, matmul_t = 0.0, total_t = 0.0;
+    //st = get_wtime_sec();
     H2P_transpose_dmat(n_thread, n_vec, krnl_mat_size, x0, krnl_mat_size, x1, n_vec);
-    et = get_wtime_sec();
-    trans_t += et - st;
+    //et = get_wtime_sec();
+    //trans_t += et - st;
 
     st = get_wtime_sec();
     H2P_matmul(h2pack, CblasRowMajor, n_vec, x1, n_vec, y1, n_vec);
     et = get_wtime_sec();
-    matmul_t = et - st;
+    //matmul_t = et - st;
 
-    st = get_wtime_sec();
+    //st = get_wtime_sec();
     H2P_transpose_dmat(n_thread, krnl_mat_size, n_vec, y1, n_vec, y2, krnl_mat_size);
-    et = get_wtime_sec();
-    trans_t += et - st;
-    total_t = matmul_t + trans_t;
-    printf("One row-major matmul used %.3lf sec\n", matmul_t);
+    //et = get_wtime_sec();
+    //trans_t += et - st;
+    //total_t = matmul_t + trans_t;
+    printf("One row-major matmul used %.3lf sec\n", et - st);
 
     // Check H2 row-major matmul results
     DTYPE rm_max_relerr = 0.0;

@@ -97,7 +97,6 @@ void H2P_matvec_fwd_transform(H2Pack_t h2pack, const DTYPE *x)
 {
     int n_thread       = h2pack->n_thread;
     int max_child      = h2pack->max_child;
-    int n_node         = h2pack->n_node;
     int n_leaf_node    = h2pack->n_leaf_node;
     int max_level      = h2pack->max_level;
     int min_adm_level  = (h2pack->is_HSS) ? h2pack->HSS_min_adm_level : h2pack->min_adm_level;

@@ -882,8 +882,6 @@ static void RPY_Ewald_eval_std(KRNL_EVAL_PARAM)
     const DTYPE xi5 = xi3 * xi2;
     const DTYPE xi7 = xi5 * xi2;
 
-    const DTYPE V_inv        = 1.0 / (L * L * L);
-    const DTYPE _2_PI_o_L    = 2.0 * M_PI / L;
     const DTYPE _40_o_3_xi2  = 40.0 / 3.0 * xi * xi;
     const DTYPE xi_o_sqrt_PI = xi  / DSQRT(M_PI);
     const DTYPE inv_sqrt_PI  = 1.0 / DSQRT(M_PI);

@@ -328,7 +328,6 @@ void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0
     int   *children     = h2pack->children;
     int   *n_child      = h2pack->n_child;
     int   *node_level   = h2pack->node_level;
-    int   *node_height  = h2pack->node_height;
     DTYPE *enbox        = h2pack->enbox;
     
     if (n0 == n1)
@@ -363,8 +362,6 @@ void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0
         int n_child_n1 = n_child[n1];
         int level_n0   = node_level[n0];
         int level_n1   = node_level[n1];
-        int height_n0  = node_height[n0];
-        int height_n1  = node_height[n1];
         
         // 1. Admissible pair and the level of both node is larger than 
         //    the minimum level of reduced admissible box pair 
@@ -510,7 +507,6 @@ void H2P_HSS_calc_adm_inadm_pairs(H2Pack_t h2pack)
     H2P_partition_vars_init(&part_vars);
 
     // Calculate reduced HSS (in)admissible pairs
-    int estimated_n_pair = h2pack->n_node * h2pack->max_child;
     int H2_min_adm_level = h2pack->min_adm_level;
     h2pack->min_adm_level = 0;
     part_vars->min_adm_level = h2pack->max_level;
@@ -648,7 +644,6 @@ void H2P_partition_points(
     }
     
     // 4. Calculate reduced (in)admissible pairs
-    int estimated_n_pair = h2pack->n_node * h2pack->max_child;
     // h2pack->min_adm_level can be set manually to restrict the minimal admissible level
     // If h2pack->min_adm_level != 0, part_vars->min_adm_level is useless
     h2pack->min_adm_level = 0;

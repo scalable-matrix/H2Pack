@@ -159,7 +159,6 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift)
                         int child_k = node_children[k];
                         // idx_k = offset(k) : offset(k+1)-1;
                         int idx_k_s = offset[k];
-                        int idx_k_len = offset[k + 1] - idx_k_s;
                         // Diagonal blocks
                         // tmpU(idx_k, idx_k) = U_mid{child_k};
                         H2P_copy_matrix_block(
@@ -542,7 +541,6 @@ void H2P_HSS_ULV_Cholesky_solve(H2Pack_t h2pack, const int op, const DTYPE *b, D
                         L_size, 1, 1.0, L22, L->ld, b2, 1
                     );
                     // x(idx) = Q{node} * [b1; b2];
-                    DTYPE *b3  = x0->data;
                     DTYPE *A   = Q->data;
                     DTYPE *tau = Q->data + (Q->nrow - 1) * Q->ncol;
                     LAPACK_ORMQR(LAPACK_ROW_MAJOR, 'L', 'N', L->nrow, 1, Q->ncol, A, Q->ncol, tau, x0->data, 1);

@@ -1155,28 +1155,19 @@ void H2P_generate_B_metadata(H2Pack_t h2pack)
 //   h2pack : H2Pack structure with H2 generator matrices
 void H2P_build_B_AOT(H2Pack_t h2pack)
 {
-    int    krnl_dim    = h2pack->krnl_dim;
-    int    n_point     = h2pack->n_point;
-    int    n_thread    = h2pack->n_thread;
-    int    *node_level = h2pack->node_level;
-    int    *pt_cluster = h2pack->pt_cluster;
-    size_t *B_ptr      = h2pack->B_ptr;
-    DTYPE  *coord      = h2pack->coord;
-    void   *krnl_param = h2pack->krnl_param;
+    int    krnl_dim     = h2pack->krnl_dim;
+    int    n_point      = h2pack->n_point;
+    int    n_thread     = h2pack->n_thread;
+    int    *node_level  = h2pack->node_level;
+    int    *pt_cluster  = h2pack->pt_cluster;
+    int    *r_adm_pairs = (h2pack->is_HSS) ? h2pack->HSS_r_adm_pairs : h2pack->r_adm_pairs;
+    size_t *B_ptr       = h2pack->B_ptr;
+    DTYPE  *coord       = h2pack->coord;
+    void   *krnl_param  = h2pack->krnl_param;
     kernel_eval_fptr krnl_eval   = h2pack->krnl_eval;
     H2P_int_vec_t    B_blk       = h2pack->B_blk;
     H2P_dense_mat_t  *J_coord    = h2pack->J_coord;
     H2P_thread_buf_t *thread_buf = h2pack->tb;
-
-    int n_r_adm_pair, *r_adm_pairs; 
-    if (h2pack->is_HSS)
-    {
-        n_r_adm_pair = h2pack->HSS_n_r_adm_pair;
-        r_adm_pairs  = h2pack->HSS_r_adm_pairs;
-    } else {
-        n_r_adm_pair = h2pack->n_r_adm_pair;
-        r_adm_pairs  = h2pack->r_adm_pairs;
-    }
 
     size_t B_total_size = h2pack->mat_size[_B_SIZE_IDX];
     h2pack->B_data = (DTYPE*) malloc_aligned(sizeof(DTYPE) * B_total_size, 64);
@@ -1408,30 +1399,20 @@ void H2P_generate_D_metadata(H2Pack_t h2pack)
 //   h2pack : H2Pack structure with H2 dense blocks
 void H2P_build_D_AOT(H2Pack_t h2pack)
 {
-    int    krnl_dim    = h2pack->krnl_dim;
-    int    n_thread    = h2pack->n_thread;
-    int    n_point     = h2pack->n_point;
-    int    n_leaf_node = h2pack->n_leaf_node;
-    int    *leaf_nodes = h2pack->height_nodes;
-    int    *pt_cluster = h2pack->pt_cluster;
-    size_t *D_ptr      = h2pack->D_ptr;
-    DTYPE  *coord      = h2pack->coord;
-    void   *krnl_param = h2pack->krnl_param;
-    double *JIT_flops  = h2pack->JIT_flops;
-    kernel_eval_fptr krnl_eval = h2pack->krnl_eval;
-    H2P_int_vec_t    D_blk0    = h2pack->D_blk0;
-    H2P_int_vec_t    D_blk1    = h2pack->D_blk1;
+    int    krnl_dim       = h2pack->krnl_dim;
+    int    n_thread       = h2pack->n_thread;
+    int    n_point        = h2pack->n_point;
+    int    n_leaf_node    = h2pack->n_leaf_node;
+    int    *leaf_nodes    = h2pack->height_nodes;
+    int    *pt_cluster    = h2pack->pt_cluster;
+    int    *r_inadm_pairs = (h2pack->is_HSS) ? h2pack->HSS_r_inadm_pairs : h2pack->r_inadm_pairs;
+    size_t *D_ptr         = h2pack->D_ptr;
+    DTYPE  *coord         = h2pack->coord;
+    void   *krnl_param    = h2pack->krnl_param;
+    kernel_eval_fptr krnl_eval   = h2pack->krnl_eval;
+    H2P_int_vec_t    D_blk0      = h2pack->D_blk0;
+    H2P_int_vec_t    D_blk1      = h2pack->D_blk1;
     H2P_thread_buf_t *thread_buf = h2pack->tb;
-    
-    int n_r_inadm_pair, *r_inadm_pairs;
-    if (h2pack->is_HSS)
-    {
-        n_r_inadm_pair = h2pack->HSS_n_r_inadm_pair;
-        r_inadm_pairs  = h2pack->HSS_r_inadm_pairs;
-    } else {
-        n_r_inadm_pair = h2pack->n_r_inadm_pair;
-        r_inadm_pairs  = h2pack->r_inadm_pairs;
-    }
 
     size_t D_total_size = h2pack->mat_size[_D_SIZE_IDX];
     h2pack->D_data = (DTYPE*) malloc_aligned(sizeof(DTYPE) * D_total_size, 64);

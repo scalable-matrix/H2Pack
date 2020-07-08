@@ -27,14 +27,11 @@ void H2P_calc_reduced_adm_pairs_per(
     const DTYPE *shift, const int lattice_id, H2P_partition_vars_t part_vars
 )
 {
-    int   pt_dim        = h2pack->pt_dim;
-    int   max_child     = h2pack->max_child;
-    int   min_adm_level = h2pack->min_adm_level;
-    int   *children     = h2pack->children;
-    int   *n_child      = h2pack->n_child;
-    int   *node_level   = h2pack->node_level;
-    int   *node_height  = h2pack->node_height;
-    DTYPE *enbox        = h2pack->enbox;
+    int   pt_dim    = h2pack->pt_dim;
+    int   max_child = h2pack->max_child;
+    int   *children = h2pack->children;
+    int   *n_child  = h2pack->n_child;
+    DTYPE *enbox    = h2pack->enbox;
 
     DTYPE shifted_box[8];
     int has_shift = 0;
@@ -71,10 +68,6 @@ void H2P_calc_reduced_adm_pairs_per(
         // Interaction between two different nodes
         int n_child_n0 = n_child[n0];
         int n_child_n1 = n_child[n1];
-        int level_n0   = node_level[n0];
-        int level_n1   = node_level[n1];
-        int height_n0  = node_height[n0];
-        int height_n1  = node_height[n1];
         
         // 1. Admissible pair and the level of both node is larger than 
         //    the minimum level of reduced admissible box pair 

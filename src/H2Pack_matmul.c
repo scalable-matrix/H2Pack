@@ -50,14 +50,12 @@ void H2P_matmul_fwd_transform(
     int max_child      = h2pack->max_child;
     int max_level      = h2pack->max_level;
     int min_adm_level  = (h2pack->is_HSS) ? h2pack->HSS_min_adm_level : h2pack->min_adm_level;
-    int n_node         = h2pack->n_node;
     int n_leaf_node    = h2pack->n_leaf_node;
     int *children      = h2pack->children;
     int *n_child       = h2pack->n_child;
     int *level_nodes   = h2pack->level_nodes;
     int *level_n_node  = h2pack->level_n_node;
     int *mat_cluster   = h2pack->mat_cluster;
-    H2P_thread_buf_t *thread_buf = h2pack->tb;
 
     // 1. Initialize y0 on the first run
     H2P_matmul_init_y0(h2pack, n_vec);
@@ -73,9 +71,6 @@ void H2P_matmul_fwd_transform(
 
         #pragma omp parallel num_threads(n_thread_i)
         {
-            int tid = omp_get_thread_num();
-            H2P_int_vec_t   idx    = thread_buf[tid]->idx0;
-            H2P_dense_mat_t y0_tmp = thread_buf[tid]->mat0;
             #pragma omp for schedule(dynamic)
             for (int j = 0; j < level_i_n_node; j++)
             {
@@ -155,7 +150,6 @@ void H2P_matmul_intmd_mult(
     int *mat_cluster  = h2pack->mat_cluster;
     int *B_p2i_rowptr = h2pack->B_p2i_rowptr;
     int *B_p2i_colidx = h2pack->B_p2i_colidx;
-    int *B_p2i_val    = h2pack->B_p2i_val;
     H2P_thread_buf_t *thread_buf = h2pack->tb;
     H2P_dense_mat_t *y0 = h2pack->y0;
 
@@ -368,7 +362,6 @@ void H2P_matmul_dense_mult(
     int *mat_cluster  = h2pack->mat_cluster;
     int *D_p2i_rowptr = h2pack->D_p2i_rowptr;
     int *D_p2i_colidx = h2pack->D_p2i_colidx;
-    int *D_p2i_val    = h2pack->D_p2i_val;
     H2P_thread_buf_t *thread_buf = h2pack->tb;
 
     #pragma omp parallel num_threads(n_thread)

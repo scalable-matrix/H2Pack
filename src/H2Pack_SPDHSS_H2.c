@@ -45,9 +45,9 @@ void H2P_build_explicit_U(H2Pack_t h2pack, H2P_dense_mat_t **exU_)
         #pragma omp parallel num_threads(n_thread_i)
         {
             int tid = omp_get_thread_num();
-            H2P_int_vec_t   idx  = thread_buf[tid]->idx0;
-            H2P_dense_mat_t bd_U = thread_buf[tid]->mat0;
+            H2P_int_vec_t idx = thread_buf[tid]->idx0;
             H2P_int_vec_set_capacity(idx, max_child);
+
             #pragma omp for schedule(dynamic) nowait
             for (int j = 0; j < level_i_n_node; j++)
             {
@@ -159,33 +159,24 @@ int H2P_tree_common_ancestor_level(
 //          a matrix of n_vec columns
 void H2P_SPDHSS_H2_acc_matvec(H2Pack_t h2mat, const int n_vec, H2P_dense_mat_t **Yk_)
 {
-    int n_node              = h2mat->n_node;
-    int n_leaf_node         = h2mat->n_leaf_node;
-    int n_thread            = h2mat->n_thread;
-    int n_r_inadm_pair      = h2mat->n_r_inadm_pair;
-    int n_r_adm_pair        = h2mat->n_r_adm_pair;
-    int max_level           = h2mat->max_level;
-    int max_child           = h2mat->max_child;
-    int max_neighbor        = h2mat->max_neighbor;
-    int min_adm_level       = h2mat->min_adm_level;
-    int *parent             = h2mat->parent;
-    int *n_child            = h2mat->n_child;
-    int *children           = h2mat->children;
-    int *level_nodes        = h2mat->level_nodes;
-    int *level_n_node       = h2mat->level_n_node;
-    int *leaf_nodes         = h2mat->height_nodes;
-    int *node_level         = h2mat->node_level;
-    int *r_adm_pairs        = h2mat->r_adm_pairs;
-    int *r_inadm_pairs      = h2mat->r_inadm_pairs;
-    int *mat_cluster        = h2mat->mat_cluster;
-    int *node_inadm_lists   = h2mat->node_inadm_lists;
-    int *node_n_r_inadm     = h2mat->node_n_r_inadm;
-    int *B_p2i_rowptr       = h2mat->B_p2i_rowptr;
-    int *B_p2i_colidx       = h2mat->B_p2i_colidx;
-    int *B_p2i_val          = h2mat->B_p2i_val;
-    int *D_p2i_rowptr       = h2mat->D_p2i_rowptr;
-    int *D_p2i_colidx       = h2mat->D_p2i_colidx;
-    int *D_p2i_val          = h2mat->D_p2i_val;
+    int n_node          = h2mat->n_node;
+    int n_leaf_node     = h2mat->n_leaf_node;
+    int n_thread        = h2mat->n_thread;
+    int max_level       = h2mat->max_level;
+    int max_child       = h2mat->max_child;
+    int min_adm_level   = h2mat->min_adm_level;
+    int *parent         = h2mat->parent;
+    int *n_child        = h2mat->n_child;
+    int *children       = h2mat->children;
+    int *level_nodes    = h2mat->level_nodes;
+    int *level_n_node   = h2mat->level_n_node;
+    int *leaf_nodes     = h2mat->height_nodes;
+    int *node_level     = h2mat->node_level;
+    int *mat_cluster    = h2mat->mat_cluster;
+    int *B_p2i_rowptr   = h2mat->B_p2i_rowptr;
+    int *B_p2i_colidx   = h2mat->B_p2i_colidx;
+    int *D_p2i_rowptr   = h2mat->D_p2i_rowptr;
+    int *D_p2i_colidx   = h2mat->D_p2i_colidx;
     H2P_dense_mat_t  *U = h2mat->U;
     H2P_thread_buf_t *thread_buf = h2mat->tb;
 
@@ -223,9 +214,6 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_t h2mat, const int n_vec, H2P_dense_mat_t *
 
         #pragma omp parallel num_threads(n_thread_i)
         {
-            int tid = omp_get_thread_num();
-            H2P_int_vec_t   idx    = thread_buf[tid]->idx0;
-            H2P_dense_mat_t y0_tmp = thread_buf[tid]->mat0;
             #pragma omp for schedule(dynamic)
             for (int j = 0; j < level_i_n_node; j++)
             {
@@ -486,7 +474,6 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_t h2mat, const int n_vec, H2P_dense_mat_t *
     for (int i = 0; i < n_node * max_level; i++) Yk[i] = NULL;
     #pragma omp parallel num_threads(n_thread)
     {
-        int tid = omp_get_thread_num();
         #pragma omp for schedule(dynamic)
         for (int i = 0; i < n_leaf_node; i++)
         {
@@ -591,7 +578,7 @@ void H2P_SPDHSS_H2_gather_HSS_B(
     int s_row = 0;
     for (int i = 0; i < n_blk0; i++)
     {
-        int s_col = 0, nrow_i, ncol_j;
+        int s_col = 0, nrow_i = 0, ncol_j;
         for (int j = 0; j < n_blk1; j++)
         {
             int B_idx_ij = H2P_get_int_CSR_elem(HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, blk0[i], blk1[j]);
@@ -1300,7 +1287,6 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
     size_t int_n_node_msize  = sizeof(int)   * n_node;
     size_t int_n_level_msize = sizeof(int)   * (max_level + 1);
     size_t enbox_msize       = sizeof(DTYPE) * n_node * 2 * pt_dim;
-    size_t xT_yT_msize       = sizeof(DTYPE) * h2mat->krnl_mat_size;
     hssmat->parent        = malloc(int_n_node_msize);
     hssmat->children      = malloc(int_n_node_msize * max_child);
     hssmat->pt_cluster    = malloc(int_n_node_msize * 2);
@@ -1385,11 +1371,8 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
     hssmat->krnl_bimv       = h2mat->krnl_bimv;
     hssmat->krnl_bimv_flops = h2mat->krnl_bimv_flops;
 
-    int    krnl_dim         = hssmat->krnl_dim;
     int    n_thread         = hssmat->n_thread;
     int    n_leaf_node      = hssmat->n_leaf_node;
-    int    *node_level      = hssmat->node_level;
-    int    *pt_cluster      = hssmat->pt_cluster;
     int    *leaf_nodes      = hssmat->height_nodes;
     size_t *mat_size        = hssmat->mat_size;
     int    BD_ntask_thread  = (hssmat->BD_JIT == 1) ? BD_NTASK_THREAD : 1;
@@ -1624,24 +1607,18 @@ void H2P_SPDHSS_H2_build(
         return;
     }
 
-    int n_node              = h2mat->n_node;
-    int n_thread            = h2mat->n_thread;
-    int n_leaf_node         = h2mat->n_leaf_node;
-    int max_child           = h2mat->max_child;
-    int max_level           = h2mat->max_level;
-    int H2_n_r_adm_pairs    = h2mat->n_r_adm_pair;
-    int H2_n_r_inadm_pairs  = h2mat->n_r_inadm_pair;
-    int krnl_mat_size       = h2mat->krnl_mat_size;
-    int *parent             = h2mat->parent;
-    int *children           = h2mat->children;
-    int *n_child            = h2mat->n_child;
-    int *level_n_node       = h2mat->level_n_node;
-    int *level_nodes        = h2mat->level_nodes;
-    int *node_level         = h2mat->node_level;
-    int *leaf_nodes         = h2mat->height_nodes;
-    int *H2_r_adm_pairs     = h2mat->r_adm_pairs;
-    int *H2_r_inadm_pairs   = h2mat->r_inadm_pairs;
-    H2P_dense_mat_t *H2_U   = h2mat->U;
+    int n_node          = h2mat->n_node;
+    int n_thread        = h2mat->n_thread;
+    int n_leaf_node     = h2mat->n_leaf_node;
+    int max_child       = h2mat->max_child;
+    int max_level       = h2mat->max_level;
+    int *children       = h2mat->children;
+    int *n_child        = h2mat->n_child;
+    int *level_n_node   = h2mat->level_n_node;
+    int *level_nodes    = h2mat->level_nodes;
+    int *node_level     = h2mat->node_level;
+    int *leaf_nodes     = h2mat->height_nodes;
+    H2P_dense_mat_t  *H2_U = h2mat->U;
     H2P_thread_buf_t *thread_buf = h2mat->tb;
 
     int n_level = max_level + 1;  // This is the total number of levels
@@ -1786,7 +1763,7 @@ void H2P_SPDHSS_H2_build(
         int *level_i_nodes = level_nodes + i * n_leaf_node;
         int level_i_n_node = level_n_node[i];
         int n_thread_i = MIN(level_i_n_node, n_thread);
-        int level = i;
+
         if (!is_SPD) continue;
 
         int level_i_HSS_Bij_n_pair = level_HSS_Bij_pairs[i]->length / 2;
@@ -1836,7 +1813,6 @@ void H2P_SPDHSS_H2_build(
                     H2P_dense_mat_t *node_Yk = Yk + node * max_level;
                     H2P_dense_mat_t tmpY = mat0;
                     H2P_dense_mat_resize(tmpY, node_Yk[0]->nrow + 1, node_Yk[0]->ncol);
-                    DTYPE *tmpY_data = tmpY->data;
                     DTYPE *tau = tmpY->data + node_Yk[0]->nrow * node_Yk[0]->ncol;
                     tmpY->nrow--;
                     H2P_copy_matrix_block(tmpY->nrow, tmpY->ncol, node_Yk[0]->data, node_Yk[0]->ld, tmpY->data, tmpY->ld);
@@ -1936,7 +1912,6 @@ void H2P_SPDHSS_H2_build(
                             int child_l = node_children[l];
                             // idx_l = offset(l) : offset(l+1)-1;
                             int idx_l_s = offset[l];
-                            int idx_l_len = offset[l + 1] - idx_l_s;
                             // B_idx = B_pair2idx(child_k, child_l);
                             int HSS_B_idx = H2P_get_int_CSR_elem(HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, child_k, child_l);
                             ASSERT_PRINTF(HSS_B_idx != 0, "SPDHSS_B{%d, %d} does not exist!\n", child_k, child_l);
@@ -2044,7 +2019,6 @@ void H2P_SPDHSS_H2_build(
                     // tmpY = Minv{node} * Yk{node}{1};
                     H2P_dense_mat_t tmpY = mat0;
                     H2P_dense_mat_resize(tmpY, Minv[node]->nrow + 1, node_Yk[0]->ncol);
-                    DTYPE *tmpY_data = tmpY->data;
                     DTYPE *tau = tmpY->data + Minv[node]->nrow * node_Yk[0]->ncol;
                     tmpY->nrow--;
                     ASSERT_PRINTF(
@@ -2115,7 +2089,6 @@ void H2P_SPDHSS_H2_build(
                     H2P_dense_mat_t H2_U_node = H2_U[node];
                     if (H2_U_node->ld > 0)
                     {
-                        H2P_dense_mat_t tmpW  = mat0;
                         H2P_dense_mat_t tmpM0 = mat1;
                         H2P_dense_mat_t tmpM1 = mat2;
                         // Don't use blkdiag, directly multiple each child node's W with H2_U{node}

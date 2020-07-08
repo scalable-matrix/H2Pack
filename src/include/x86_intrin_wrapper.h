@@ -12,6 +12,7 @@ Tested platforms:
 5. Intel Xeon E5-1620,       AVX,     Ubuntu 18.04.4 LTS,     ICC 18.0.5, GCC 7.5.0
 6. AMD Threadripper 2950X,   AVX-2,   Ubuntu 18.04.4 LTS,     GCC 7.5.0  <-- Thanks to KaraRyougi@GitHub !
 7. Intel Core i5-7300U,      AVX-2,   macOS 10.15.4,          GCC 9.2.0
+8. Intel Core i5-4570S,      AVX-2,   Ubuntu 18.04.4 LTS,     ICC 19.1.1
 
 Naming: vec_<operation>_<s/d>, suffix s is for float, d is for double 
 vec_zero_*()            : Set all lanes of a vector to zero and return this vector
@@ -79,11 +80,13 @@ extern "C" {
 #if !defined(USE_AVX) && !defined(USE_AVX512)
 #ifdef __AVX512F__
 #define USE_AVX512
-#warning x86_intrin_wrapper.h detected AVX-512 and will use it. Add -DUSE_AVX to your CFLAGS to force use AVX & AVX2.
 #else
 #define USE_AVX
-#warning x86_intrin_wrapper.h did not detect AVX-512 and will use AVX & AVX2. Add -DUSE_AVX512 to your CFLAGS to force use AVX-512.
 #endif
+#endif
+
+#if defined(__AVX512F__) && defined(USE_AVX)
+#warning AVX-512 instruction set detected, but AVX/AVX2 instructions will be used due to -DUSE_AVX flag
 #endif
 
 #ifdef USE_AVX

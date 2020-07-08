@@ -97,7 +97,6 @@ void H2P_matvec_fwd_transform(H2Pack_t h2pack, const DTYPE *x)
 {
     int n_thread       = h2pack->n_thread;
     int max_child      = h2pack->max_child;
-    int n_node         = h2pack->n_node;
     int n_leaf_node    = h2pack->n_leaf_node;
     int max_level      = h2pack->max_level;
     int min_adm_level  = (h2pack->is_HSS) ? h2pack->HSS_min_adm_level : h2pack->min_adm_level;
@@ -179,8 +178,8 @@ void H2P_matvec_fwd_transform(H2Pack_t h2pack, const DTYPE *x)
     }  // End of i loop
 }
 
-// Transpose y0[i] from npt*krnl_dim-by-1 vector (npt-by-krnl_dim 
-// matrices) to krnl_dim-by-npt matrices
+// Transpose y0[i] from a npt*krnl_dim-by-1 vector (npt-by-krnl_dim 
+// matrix) to a krnl_dim-by-npt matrix
 void H2P_transpose_y0_from_krnldim(H2Pack_t h2pack)
 {
     int n_node   = h2pack->n_node;
@@ -206,8 +205,8 @@ void H2P_transpose_y0_from_krnldim(H2Pack_t h2pack)
     }
 }
 
-// Transpose y1[i] from krnl_dim-by-npt matrices to 
-// npt*krnl_dim-by-1 vector (npt-by-krnl_dim matrices)
+// Transpose y1[i] from a krnl_dim-by-npt matrix to 
+// a npt*krnl_dim-by-1 vector (npt-by-krnl_dim matrix)
 void H2P_transpose_y1_to_krnldim(H2Pack_t h2pack)
 {
     int n_node   = h2pack->n_node;
@@ -224,7 +223,7 @@ void H2P_transpose_y1_to_krnldim(H2Pack_t h2pack)
         {
             H2P_dense_mat_t y1_node = h2pack->y1[node];
             if (y1_node->ld == 0) continue;
-            int y1_len = y1_node->ncol - 1;   // Remember to -1, see H2P_matvec_init_y1
+            int y1_len = y1_node->ncol;
             int y1_npt = y1_len / krnl_dim;
             H2P_dense_mat_resize(y1_tmp, y1_len, 1);
             H2P_transpose_dmat(1, krnl_dim, y1_npt, y1_node->data, y1_npt, y1_tmp->data, krnl_dim);
@@ -251,17 +250,22 @@ void H2P_matvec_init_y1(H2Pack_t h2pack)
             H2P_dense_mat_init(&h2pack->y1[i], 0, 0);
     }
     H2P_dense_mat_t *y1 = h2pack->y1;
+    // Use ld to mark if y1[i] is visited in this intermediate sweep
+    // The first U[i]->ncol elements in y1[i]->data will be used in downward sweep
     for (int i = 0; i < n_node; i++) 
     {
-        // Use ld to mark if y1[i] is visited in this intermediate sweep
         y1[i]->ld = 0;
-        if (node_n_r_adm[i])
+        if (node_n_r_adm[i]) H2P_dense_mat_resize(y1[i], n_thread, U[i]->ncol);
+    }
+    // Each thread set its y1 buffer to 0 (NUMA first touch)
+    #pragma omp parallel
+    {
+        int tid = omp_get_thread_num();
+        for (int i = 0; i < n_node; i++)
         {
-            // The first U[node{0, 1}]->ncol elements in y1[node{0, 1}] will be used in downward
-            // sweep, store the final results in this part and use the positions behind this as
-            // thread buffers. The last position of each row is used to mark if this row has data.
-            H2P_dense_mat_resize(y1[i], n_thread, U[i]->ncol + 1);
-            y1[i]->ld = 1;
+            if (y1[i]->ld == 0) continue;
+            DTYPE *y1_i_thread = y1[i]->data + tid * y1[i]->ncol;
+            memset(y1_i_thread, 0, sizeof(DTYPE) * y1[i]->ncol);
         }
     }
 }
@@ -288,9 +292,8 @@ void H2P_matvec_sum_y1_thread(H2Pack_t h2pack)
             for (int j = 1; j < n_thread; j++)
             {
                 DTYPE *src_row = y1[i]->data + j * ncol;
-                if (src_row[ncol - 1] != 1.0) continue;
                 #pragma omp simd
-                for (int k = 0; k < ncol - 1; k++)
+                for (int k = 0; k < ncol; k++)
                     dst_row[k] += src_row[k];
             }
         }
@@ -335,13 +338,6 @@ void H2P_matvec_intmd_mult_AOT_task_block(
             int ncol1 = y1[node1]->ncol;
             DTYPE *y1_dst_0 = y1[node0]->data + tid * ncol0;
             DTYPE *y1_dst_1 = y1[node1]->data + tid * ncol1;
-            DTYPE beta0 = y1_dst_0[ncol0 - 1];
-            DTYPE beta1 = y1_dst_1[ncol1 - 1];
-            y1_dst_0[ncol0 - 1] = 1.0;
-            y1_dst_1[ncol1 - 1] = 1.0;
-            
-            if (beta0 == 0.0) memset(y1_dst_0, 0, sizeof(DTYPE) * Bi_nrow);
-            if (beta1 == 0.0) memset(y1_dst_1, 0, sizeof(DTYPE) * Bi_ncol);
             CBLAS_BI_GEMV(
                 Bi_nrow, Bi_ncol, Bi, Bi_ncol,
                 y0[node1]->data, y0[node0]->data, y1_dst_0, y1_dst_1
@@ -357,12 +353,10 @@ void H2P_matvec_intmd_mult_AOT_task_block(
             DTYPE       *y_spos = y + vec_s1;
             const DTYPE *x_spos = x + vec_s1;
             
-            int ncol0       = y1[node0]->ncol;
+            int   ncol0     = y1[node0]->ncol;
             DTYPE *y1_dst_0 = y1[node0]->data + tid * ncol0;
-            DTYPE beta0     = y1_dst_0[ncol0 - 1];
             y1_dst_0[ncol0 - 1] = 1.0;
             
-            if (beta0 == 0.0) memset(y1_dst_0, 0, sizeof(DTYPE) * Bi_nrow);
             CBLAS_BI_GEMV(
                 Bi_nrow, Bi_ncol, Bi, Bi_ncol,
                 x_spos, y0[node0]->data, y1_dst_0, y_spos
@@ -378,12 +372,10 @@ void H2P_matvec_intmd_mult_AOT_task_block(
             DTYPE       *y_spos = y + vec_s0;
             const DTYPE *x_spos = x + vec_s0;
             
-            int ncol1       = y1[node1]->ncol;
+            int   ncol1     = y1[node1]->ncol;
             DTYPE *y1_dst_1 = y1[node1]->data + tid * ncol1;
-            DTYPE beta1     = y1_dst_1[ncol1 - 1];
             y1_dst_1[ncol1 - 1] = 1.0;
             
-            if (beta1 == 0.0) memset(y1_dst_1, 0, sizeof(DTYPE) * Bi_ncol);
             CBLAS_BI_GEMV(
                 Bi_nrow, Bi_ncol, Bi, Bi_ncol,
                 y0[node1]->data, x_spos, y_spos, y1_dst_1
@@ -417,19 +409,6 @@ void H2P_matvec_intmd_mult_AOT(H2Pack_t h2pack, const DTYPE *x)
         DTYPE *y = thread_buf[tid]->y;
         
         thread_buf[tid]->timer = -get_wtime_sec();
-        #pragma omp for schedule(static)
-        for (int i = 0; i < n_node; i++)
-        {
-            if (y1[i]->ld == 0) continue;
-            const int ncol = y1[i]->ncol;
-            // Need not to reset all copies of y1 to be 0 here, use the last element in
-            // each row as the beta value to rewrite / accumulate y1 results in GEMV
-            memset(y1[i]->data, 0, sizeof(DTYPE) * ncol);
-            for (int j = 1; j < n_thread; j++)
-                y1[i]->data[(j + 1) * ncol - 1] = 0.0;
-        }
-        
-        #pragma omp barrier
 
         if (n_B_blk <= n_thread)
         {
@@ -648,19 +627,6 @@ void H2P_matvec_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x)
         H2P_dense_mat_t workbuf = thread_buf[tid]->mat1;
         
         thread_buf[tid]->timer = -get_wtime_sec();
-        #pragma omp for schedule(static)
-        for (int i = 0; i < n_node; i++)
-        {
-            if (y1[i]->ld == 0) continue;
-            const int ncol = y1[i]->ncol;
-            // Need not to reset all copies of y1 to be 0 here, use the last element in
-            // each row as the beta value to rewrite / accumulate y1 results in GEMV
-            memset(y1[i]->data, 0, sizeof(DTYPE) * ncol);
-            for (int j = 1; j < n_thread; j++)
-                y1[i]->data[(j + 1) * ncol - 1] = 0.0;
-        }
-        
-        #pragma omp barrier
         
         #pragma omp for schedule(dynamic) nowait
         for (int i_blk = 0; i_blk < n_B_blk; i_blk++)
@@ -688,13 +654,7 @@ void H2P_matvec_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x)
                     int ncol1 = y1[node1]->ncol;
                     DTYPE *y1_dst_0 = y1[node0]->data + tid * ncol0;
                     DTYPE *y1_dst_1 = y1[node1]->data + tid * ncol1;
-                    DTYPE beta0 = y1_dst_0[ncol0 - 1];
-                    DTYPE beta1 = y1_dst_1[ncol1 - 1];
-                    y1_dst_0[ncol0 - 1] = 1.0;
-                    y1_dst_1[ncol1 - 1] = 1.0;
 
-                    if (beta0 == 0.0) memset(y1_dst_0, 0, sizeof(DTYPE) * Bi_nrow);
-                    if (beta1 == 0.0) memset(y1_dst_1, 0, sizeof(DTYPE) * Bi_ncol);
                     if (krnl_bimv != NULL)
                     {
                         int node0_npt = Bi_nrow / krnl_dim;
@@ -726,12 +686,9 @@ void H2P_matvec_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x)
                     int node1_npt = pt_cluster[node1 * 2 + 1] - pt_s1 + 1;
                     int vec_s1    = mat_cluster[node1 * 2];
                     
-                    int ncol0 = y1[node0]->ncol;
-                    DTYPE *y1_dst_0     = y1[node0]->data + tid * ncol0;
-                    DTYPE beta0         = y1_dst_0[ncol0 - 1];
-                    y1_dst_0[ncol0 - 1] = 1.0;
-                    
-                    if (beta0 == 0.0) memset(y1_dst_0, 0, sizeof(DTYPE) * Bi_nrow);
+                    int   ncol0     = y1[node0]->ncol;
+                    DTYPE *y1_dst_0 = y1[node0]->data + tid * ncol0;
+
                     if (krnl_bimv != NULL)
                     {
                         const DTYPE *x_spos = x + pt_s1;
@@ -765,12 +722,9 @@ void H2P_matvec_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x)
                     int node0_npt = pt_cluster[node0 * 2 + 1] - pt_s0 + 1;
                     int vec_s0    = mat_cluster[node0 * 2];
                     
-                    int ncol1 = y1[node1]->ncol;
-                    DTYPE *y1_dst_1     = y1[node1]->data + tid * ncol1;
-                    DTYPE beta1         = y1_dst_1[ncol1 - 1];
-                    y1_dst_1[ncol1 - 1] = 1.0;
-                    
-                    if (beta1 == 0.0) memset(y1_dst_1, 0, sizeof(DTYPE) * Bi_ncol);
+                    int   ncol1     = y1[node1]->ncol;
+                    DTYPE *y1_dst_1 = y1[node1]->data + tid * ncol1;
+
                     if (krnl_bimv != NULL)
                     {
                         const DTYPE *x_spos = x + pt_s0;

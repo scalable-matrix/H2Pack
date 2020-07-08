@@ -366,7 +366,7 @@ void H2P_get_Bij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_de
                 krnl_param, Bij->data, J_coord[node1_]->ncol * krnl_dim
             );
         }
-    }
+    }  // End of "if (h2pack->BD_JIT == 0)"
     if (need_trans) Bij->ld = -Bij->ld;
 }
 
@@ -413,7 +413,7 @@ void H2P_get_Dij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_de
             coord + pt_s1, n_point, node1_npt,
             h2pack->krnl_param, Dij->data, node1_npt * krnl_dim
         );
-    }
+    }  // End of "if (h2pack->BD_JIT == 0)"
     if (need_trans) Dij->ld = -Dij->ld;
 }
 
@@ -486,6 +486,17 @@ void H2P_transpose_dmat(
                         dst_irow[j] = src[j * lds + i];
                 }
             }
-        }
+        }  // End of "if (src_nrow > src_ncol)"
+    }  // End of "if (n_thread == 1)"
+}
+
+// Shift the coordinates
+void H2P_shift_coord(H2P_dense_mat_t coord, const DTYPE *shift, const DTYPE scale)
+{
+    for (int i = 0; i < coord->nrow; i++)
+    {
+        DTYPE *coord_dim_i = coord->data + i * coord->ld;
+        #pragma omp simd
+        for (int j = 0; j < coord->ncol; j++) coord_dim_i[j] += scale * shift[i];
     }
 }

@@ -16,6 +16,7 @@ endif
 
 ifeq ($(strip $(CC)), gcc)
 CFLAGS  += -fopenmp -lm -march=native -Wno-unused-result -Wno-unused-function
+LDFLAGS += -lgfortran
 endif
 
 ifeq ($(strip $(USE_MKL)), 1)

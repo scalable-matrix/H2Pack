@@ -1,6 +1,6 @@
 // @brief    : Implementations of some helper functions I use here and there
 // @author   : Hua Huang <huangh223@gatech.edu>
-// @modified : 2020-02-10
+// @modified : 2020-07-06
 
 #include <stdio.h>
 #include <string.h>
@@ -67,11 +67,11 @@ void free_aligned(void *mem)
 }
 
 // Calculate the 2-norm of a vector
+// Warning: this is a naive implementation, not numerically stable
 double calc_2norm(const int len, const double *x)
 {
     double res = 0.0;
-    for (int i = 0; i < len; i++)
-        res += x[i] * x[i];
+    for (int i = 0; i < len; i++) res += x[i] * x[i];
     return sqrt(res);
 }
 
@@ -100,7 +100,11 @@ void copy_int_mat_blk(
 )
 {
     for (int irow = 0; irow < nrow; irow++)
-        memcpy(dst + irow * ldd, src + irow * lds, INT_MSIZE * ncol);
+    {
+        size_t src_offset = (size_t) irow * (size_t) lds;
+        size_t dst_offset = (size_t) irow * (size_t) ldd;
+        memcpy(dst + dst_offset, src + src_offset, INT_MSIZE * ncol);
+    }
 }
 
 // Copy a row-major double matrix block to another row-major double matrix
@@ -110,7 +114,11 @@ void copy_dbl_mat_blk(
 )
 {
     for (int irow = 0; irow < nrow; irow++)
-        memcpy(dst + irow * ldd, src + irow * lds, DBL_MSIZE * ncol);
+    {
+        size_t src_offset = (size_t) irow * (size_t) lds;
+        size_t dst_offset = (size_t) irow * (size_t) ldd;
+        memcpy(dst + dst_offset, src + src_offset, DBL_MSIZE * ncol);
+    }
 }
 
 // Print a row-major int matrix block to standard output

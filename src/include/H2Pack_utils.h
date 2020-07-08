@@ -213,6 +213,96 @@ void H2P_transpose_dmat(
     const DTYPE *src, const int lds, DTYPE *dst, const int ldd
 );
 
+// Shift the coordinates
+// Input parameters:
+//   coord : Matrix, size unknown, each column is a coordinate
+//   shift : Array, size >= coord->nrow, coordinate shift
+//   scale : Scaling factor of shift
+// Output paramater:
+//   coord : Shifted coordinates
+void H2P_shift_coord(H2P_dense_mat_t coord, const DTYPE *shift, const DTYPE scale);
+
+// ================================================================================
+// The following 2 functions are implemented in H2Pack_partition.c and used by 
+// both H2Pack_partition.c and H2Pack_partition_periodic.c
+
+// Hierarchical partitioning of the given points
+H2P_tree_node_t H2P_bisection_partition_points(
+    int level, int coord_s, int coord_e, const int pt_dim, const int xpt_dim, const int n_point, 
+    const DTYPE max_leaf_size, const int max_leaf_points, DTYPE *enbox, 
+    DTYPE *coord, DTYPE *coord_tmp, int *coord_idx, int *coord_idx_tmp, 
+    H2P_partition_vars_t part_vars
+);
+
+// Convert a linked list H2 tree to arrays
+void H2P_tree_to_array(H2P_tree_node_t node, H2Pack_t h2pack);
+// ================================================================================
+
+
+// ================================================================================
+// The following 3 functions are implemented in H2Pack_build.c and used by 
+// both H2Pack_build.c and H2Pack_build_periodic.c
+
+// Build H2 projection matrices using proxy points, in H2Pack_build.c
+void H2P_build_H2_UJ_proxy(H2Pack_t h2pack);
+
+// Generate H2 generator matrices metadata
+void H2P_generate_B_metadata(H2Pack_t h2pack);
+
+// Generate H2 dense blocks metadata
+void H2P_generate_D_metadata(H2Pack_t h2pack);
+// ================================================================================
+
+
+// ================================================================================
+// The following 6 functions are implemented in H2Pack_matvec.c and used by 
+// both H2Pack_matvec.c and H2Pack_matvec_periodic.c
+
+// Initialize auxiliary array y0 used in H2 matvec forward transformation
+void H2P_matvec_init_y0(H2Pack_t h2pack);
+
+// Initialize auxiliary array y1 used in H2 matvec intermediate multiplication
+void H2P_matvec_init_y1(H2Pack_t h2pack);
+
+// H2 matvec forward transformation, calculate U_j^T * x_j
+void H2P_matvec_fwd_transform(H2Pack_t h2pack, const DTYPE *x);
+
+// Transpose y0[i] from a npt*krnl_dim-by-1 vector (npt-by-krnl_dim 
+// matrix) to a krnl_dim-by-npt matrix
+void H2P_transpose_y0_from_krnldim(H2Pack_t h2pack);
+
+// Transpose y1[i] from a krnl_dim-by-npt matrix to 
+// a npt*krnl_dim-by-1 vector (npt-by-krnl_dim matrix)
+void H2P_transpose_y1_to_krnldim(H2Pack_t h2pack);
+
+// H2 matvec backward transformation, calculate U_i * (B_{ij} * (U_j^T * x_j))
+void H2P_matvec_bwd_transform(H2Pack_t h2pack, const DTYPE *x, DTYPE *y);
+// ================================================================================
+
+
+// ================================================================================
+// The following 4 functions are implemented in H2Pack_matmul.c and used by 
+// both H2Pack_matmul.c and H2Pack_matmul_periodic.c
+
+// Initialize auxiliary array y0 used in H2 matmul forward transformation
+void H2P_matmul_init_y0(H2Pack_t h2pack, const int n_vec);
+
+// Initialize auxiliary array y1 used in H2 matmul intermediate multiplication
+void H2P_matmul_init_y1(H2Pack_t h2pack, const int n_vec);
+
+// H2 matmul forward transformation, calculate U_j^T * x_j
+void H2P_matmul_fwd_transform(
+    H2Pack_t h2pack, const int n_vec, 
+    const DTYPE *mat_x, const int ldx, const int x_row_stride, const CBLAS_TRANSPOSE x_trans
+);
+
+// H2 matmul backward transformation, calculate U_i * (B_{ij} * (U_j^T * x_j))
+void H2P_matmul_bwd_transform(
+    H2Pack_t h2pack, const int n_vec, 
+    DTYPE *mat_y, const int ldy, const int y_row_stride, const CBLAS_TRANSPOSE y_trans
+);
+// ================================================================================
+
 #ifdef __cplusplus
 }
 #endif

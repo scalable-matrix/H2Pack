@@ -1,6 +1,6 @@
 // @brief    : Implementations of some helper functions I use here and there
 // @author   : Hua Huang <huangh223@gatech.edu>
-// @modified : 2020-05-16
+// @modified : 2020-07-06
 
 #ifndef __HUANGH223_UTILS_H__
 #define __HUANGH223_UTILS_H__
@@ -15,41 +15,41 @@ extern "C" {
 #define MIN(a, b)  ((a) < (b) ? (a) : (b))
 #define MAX(a, b)  ((a) > (b) ? (a) : (b))
 
-#define DEBUG_PRINTF(fmt, args...)                  \
+#define DEBUG_PRINTF(fmt, ...)                      \
     do                                              \
     {                                               \
         fprintf(stdout, "[DEBUG] %s, %d: "fmt,      \
-                __FILE__, __LINE__, ##args);        \
+                __FILE__, __LINE__, ##__VA_ARGS__); \
         fflush(stdout);                             \
     } while (0)
 
-#define WARNING_PRINTF(fmt, args...)                \
+#define WARNING_PRINTF(fmt, ...)                    \
     do                                              \
     {                                               \
         fprintf(stdout, "[WARNING] %s, %d: "fmt,    \
-                __FILE__, __LINE__, ##args);        \
+                __FILE__, __LINE__, ##__VA_ARGS__); \
         fflush(stdout);                             \
     } while (0)
 
-#define ERROR_PRINTF(fmt, args...)                  \
+#define ERROR_PRINTF(fmt, ...)                      \
     do                                              \
     {                                               \
         fprintf(stderr, "[ERROR] %s, %d: "fmt,      \
-                __FILE__, __LINE__, ##args);        \
+                __FILE__, __LINE__, ##__VA_ARGS__); \
         fflush(stderr);                             \
     } while (0)
 
-#define ASSERT_PRINTF(expr, fmt, args...)           \
-    do                                              \
-    {                                               \
-        if (!(expr))                                \
-        {                                           \
-            fprintf(stderr, "[FATAL] %s, %d: "fmt,  \
-                    __FILE__, __LINE__, ##args);    \
-            fflush(stderr);                         \
-            assert(expr);                           \
-        }                                           \
-    } while (0)                                     \
+#define ASSERT_PRINTF(expr, fmt, ...)                   \
+    do                                                  \
+    {                                                   \
+        if (!(expr))                                    \
+        {                                               \
+            fprintf(stderr, "[FATAL] %s, %d: "fmt,      \
+                    __FILE__, __LINE__, ##__VA_ARGS__); \
+            fflush(stderr);                             \
+            assert(expr);                               \
+        }                                               \
+    } while (0)                                         \
 
 // Get wall-clock time in seconds
 // Output parameter:
@@ -86,6 +86,7 @@ void *malloc_aligned(size_t size, size_t alignment);
 void free_aligned(void *mem);
 
 // Calculate the 2-norm of a vector
+// Warning: this is a naive implementation, not numerically stable
 // Input parameters:
 //   len : Length of the vector
 //   x   : Size >= len, vector

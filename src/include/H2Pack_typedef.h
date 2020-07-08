@@ -28,6 +28,31 @@ typedef void (*kernel_eval_fptr) (
     const void *krnl_param, DTYPE *restrict mat, const int ldm
 );
 
+// Pointer to function that performs kernel matrix matvec using a given set
+// of points and a given input vector:
+//   x_out = kernel_matrix(coord0, coord1) * x_in
+// Input parameters:
+//   coord0     : Matrix, size pt_dim-by-ld0, coordinates of the 1st point set
+//   ld0        : Leading dimension of coord0, should be >= n0
+//   n0         : Number of points in coord0 (each column in coord0 is a coordinate)
+//   coord1     : Matrix, size pt_dim-by-ld1, coordinates of the 2nd point set
+//   ld1        : Leading dimension of coord1, should be >= n1
+//   n1         : Number of points in coord1 (each column in coord0 is a coordinate)
+//   krnl_param : Pointer to kernel function parameter array
+//   x_in       : Vector, size >= krnl_dim * n1, will be left multiplied by kernel_matrix(coord0, coord1)
+// Output parameters:
+//   x_out : Vector, size >= krnl_dim * n0, x_out_0 += kernel_matrix(coord0, coord1) * x_in_0
+// Performance optimization notes:
+//   When calling a kernel_mv_fptr, H2Pack guarantees that:
+//     (1) n{0,1} are multiples of SIMD_LEN;
+//     (2) The lengths of x_{in,out} are multiples of (SIMD_LEN * krnl_dim)
+//     (3) The addresses of coord{0,1}, x_{in,out} are aligned to (SIMD_LEN * sizeof(DTYPE))
+typedef void (*kernel_mv_fptr) (
+    const DTYPE *coord0, const int ld0, const int n0,
+    const DTYPE *coord1, const int ld1, const int n1,
+    const void *krnl_param, const DTYPE *x_in, DTYPE *restrict x_out
+);
+
 // Pointer to function that performs kernel matrix bi-matvec using given sets
 // of points and given input vectors. The kernel function must be symmetric.
 // This function computes:
@@ -92,7 +117,9 @@ struct H2Pack
     int    is_H2ERI;                // If H2Pack is called from H2ERI
     int    is_HSS;                  // If H2Pack is running in HSS mode
     int    is_RPY;                  // If H2Pack is running RPY kernel
+    int    is_RPY_Ewald;            // If H2Pack is running RPY Ewald summation kernel
     int    is_HSS_SPD;              // If H2Pack in HSS mode is SPD 
+    int    n_lattice;               // Number of periodic lattices, == 3^pt_dim
     int    *parent;                 // Size n_node, parent index of each node
     int    *children;               // Size n_node * max_child, indices of a node's children nodes
     int    *pt_cluster;             // Size n_node * 2, start and end (included) indices of points belong to each node
@@ -126,12 +153,17 @@ struct H2Pack
     size_t *B_ptr;                  // Size n_B, offset of each generator matrix's data in B_data
     size_t *D_ptr;                  // Size n_D, offset of each dense block's data in D_data
     void   *krnl_param;             // Pointer to kernel function parameter array
+    void   *pkrnl_param;            // Pointer to periodic system kernel function parameter array
     DTYPE  max_leaf_size;           // Maximum size of a leaf node's box
     DTYPE  QR_stop_tol;             // Partial QR stop column norm tolerance
     DTYPE  *coord;                  // Size n_point * pt_dim, sorted point coordinates
     DTYPE  *enbox;                  // Size n_node * (2*pt_dim), enclosing box data of each node
+    DTYPE  *per_lattices;           // Size n_lattice     * pt_dim, for periodic system, each row is a periodic lattice
+    DTYPE  *per_adm_shifts;         // Size r_adm_pairs   * pt_dim, for periodic system, each row is a j node's shift in a admissible pair (i, j)
+    DTYPE  *per_inadm_shifts;       // Size r_inadm_pairs * pt_dim, for periodic system, each row is a j node's shift in a inadmissible pair (i, j)
     DTYPE  *B_data;                 // Size unknown, data of generator matrices
     DTYPE  *D_data;                 // Size unknown, data of dense blocks in the original matrix
+    DTYPE  *per_blk;                // Size unknown, periodic system matvec periodic block 
     DTYPE  *xT;                     // Size krnl_mat_size, use for transpose matvec input  "matrix" when krnl_dim > 1
     DTYPE  *yT;                     // Size krnl_mat_size, use for transpose matvec output "matrix" when krnl_dim > 1
     H2P_int_vec_t     B_blk;        // Size BD_NTASK_THREAD * n_thread, B matrices task partitioning
@@ -148,6 +180,8 @@ struct H2Pack
     H2P_dense_mat_t   *ULV_L;       // Size n_node, HSS ULV factorization Cholesky factor w.r.t. each node's diagonal block
     H2P_thread_buf_t  *tb;          // Size n_thread, thread-local buffer
     kernel_eval_fptr  krnl_eval;    // Pointer to kernel matrix evaluation function
+    kernel_eval_fptr  pkrnl_eval;   // Pointer to periodic system kernel matrix evaluation function
+    kernel_mv_fptr    krnl_mv;      // Pointer to kernel matrix matvec function, only used in periodic system
     kernel_bimv_fptr  krnl_bimv;    // Pointer to kernel matrix bi-matvec function
     DAG_task_queue_t  upward_tq;    // Upward sweep DAG task queue
 
@@ -203,17 +237,25 @@ void H2P_init(
     const int QR_stop_type, void *QR_stop_param
 );
 
-// Run H2Pack in HSS mode (by default, H2Pack runs in H2 mode). This function 
-// should be called after H2P_init() and before H2P_partition_points().
+// Run H2Pack in HSS mode (by default, H2Pack runs in H2 mode), conflict with 
+// H2P_run_RPY_Ewald(). This function should be called after H2P_init() and before 
+// H2P_partition_points().
 // Input & output parameter:
 //   h2pack  : H2Pack structure to be configured (h2pack->is_HSS = 1)
 void H2P_run_HSS(H2Pack_t h2pack);
 
-// Run the RPY kernel in H2Pack, conflict with H2P_run_HSS(). This function 
+// Run the RPY kernel in H2Pack, conflict with H2P_run_RPY_Ewald(). This function 
 // should be called after H2P_init() and before H2P_partition_points().
 // Input & output parameter:
 //   h2pack  : H2Pack structure to be configured (h2pack->is_RPY = 1)
 void H2P_run_RPY(H2Pack_t h2pack);
+
+// Run the RPY Ewald summation kernel in H2Pack, conflict with H2P_run_HSS()
+// and H2P_run_RPY(). This function should be called after H2P_init() and before 
+// H2P_partition_points().
+// Input & output parameter:
+//   h2pack  : H2Pack structure to be configured (h2pack->is_RPY_Ewald = 1)
+void H2P_run_RPY_Ewald(H2Pack_t h2pack);
 
 // Destroy a H2Pack structure
 // Input parameter:

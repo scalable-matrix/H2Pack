@@ -171,13 +171,14 @@ struct H2Pack
     H2P_int_vec_t     D_blk1;       // Size BD_NTASK_THREAD * n_thread, inadmissible blocks in D matrices task partitioning
     H2P_int_vec_t     *J;           // Size n_node, skeleton row sets
     H2P_int_vec_t     *ULV_idx;     // Size n_node, indices of the sub-matrix which ULV_Q and ULV_L performs on for each node in global sense
+    H2P_int_vec_t     *ULV_p;       // Size n_node, HSS ULV LU pivot indices of each node
     H2P_dense_mat_t   *J_coord;     // Size n_node, coordinate of J points
     H2P_dense_mat_t   *pp;          // Size max_level+1, proxy points on each level for generating U and J
     H2P_dense_mat_t   *U;           // Size n_node, Projection matrices
     H2P_dense_mat_t   *y0;          // Size n_node, temporary arrays used in matvec
     H2P_dense_mat_t   *y1;          // Size n_node, temporary arrays used in matvec
     H2P_dense_mat_t   *ULV_Q;       // Size n_node, HSS ULV factorization orthogonal matrix w.r.t. each node's basis
-    H2P_dense_mat_t   *ULV_L;       // Size n_node, HSS ULV factorization Cholesky factor w.r.t. each node's diagonal block
+    H2P_dense_mat_t   *ULV_L;       // Size n_node, HSS ULV factorization Cholesky / LU factor w.r.t. each node's diagonal block
     H2P_thread_buf_t  *tb;          // Size n_thread, thread-local buffer
     kernel_eval_fptr  krnl_eval;    // Pointer to kernel matrix evaluation function
     kernel_eval_fptr  pkrnl_eval;   // Pointer to periodic system kernel matrix evaluation function

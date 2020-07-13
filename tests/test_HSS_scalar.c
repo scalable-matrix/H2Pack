@@ -14,6 +14,8 @@
 #include "parse_scalar_params.h"
 #include "direct_nbody.h"
 
+#include "debug.h"
+
 int main(int argc, char **argv)
 {
     //__itt_pause();
@@ -115,6 +117,7 @@ int main(int argc, char **argv)
     err_norm = DSQRT(err_norm);
     printf("For %d validation points: ||y_{HSS} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / ref_norm);
     
+    #if 0
     // Test ULV Cholesky factorization
     const DTYPE shift = 0;
     H2P_HSS_ULV_Cholesky_factorize(h2pack, shift);
@@ -125,7 +128,7 @@ int main(int argc, char **argv)
     h2pack->n_ULV_solve = 0;
     h2pack->timers[_ULV_SLV_TIMER_IDX] = 0.0;
     for (int i = 0; i < 10; i++) 
-         H2P_HSS_ULV_Cholesky_solve(h2pack, 3, y1, x1);
+        H2P_HSS_ULV_Cholesky_solve(h2pack, 3, y1, x1);
     ref_norm = 0.0; 
     err_norm = 0.0;
     for (int i = 0; i < test_params.krnl_mat_size; i++)
@@ -137,6 +140,32 @@ int main(int argc, char **argv)
     ref_norm = DSQRT(ref_norm);
     err_norm = DSQRT(err_norm);
     printf("H2P_HSS_ULV_Cholesky_solve relerr = %e\n",  err_norm / ref_norm);
+    #endif
+
+    //dump_HSS(h2pack);
+
+    // Test ULV LU factorization
+    const DTYPE shift = 0;
+    H2P_HSS_ULV_LU_factorize(h2pack, shift);
+
+    for (int i = 0; i < test_params.krnl_mat_size; i++) y1[i] += shift * x0[i];
+    // Warm up, reset timers, and test the ULV solve performance
+    H2P_HSS_ULV_LU_solve(h2pack, 3, y1, x1);
+    h2pack->n_ULV_solve = 0;
+    h2pack->timers[_ULV_SLV_TIMER_IDX] = 0.0;
+    for (int i = 0; i < 10; i++) 
+        H2P_HSS_ULV_LU_solve(h2pack, 3, y1, x1);
+    ref_norm = 0.0; 
+    err_norm = 0.0;
+    for (int i = 0; i < test_params.krnl_mat_size; i++)
+    {
+        DTYPE diff = x1[i] - x0[i];
+        ref_norm += x0[i] * x0[i];
+        err_norm += diff * diff;
+    }
+    ref_norm = DSQRT(ref_norm);
+    err_norm = DSQRT(err_norm);
+    printf("H2P_HSS_ULV_LU_solve relerr = %e\n",  err_norm / ref_norm);
 
     H2P_print_statistic(h2pack);
 

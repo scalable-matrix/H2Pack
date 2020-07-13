@@ -8,6 +8,27 @@
 extern "C" {
 #endif
 
+// Construct the ULV LU factorization for a HSS matrix
+// Input parameters:
+//   h2pack : H2Pack structure with constructed HSS representation
+//   shift  : Shift coefficient k to make (A + k * I) non-singular
+// Output parameter:
+//   h2pack : H2Pack structure with ULV LU factorization
+void H2P_HSS_ULV_LU_factorize(H2Pack_t h2pack, const DTYPE shift);
+
+// Solve the linear system A_{HSS} * x = b using the HSS ULV LU factorization,
+// where A_{HSS} = L_{HSS} * U_{HSS}.
+// Input parameters:
+//   h2pack : H2Pack structure with ULV LU factorization
+//   op     : Operation type, 1, 2, or 3
+//   b      : Size >= h2pack->krnl_mat_size, right-hand side vector
+// Output parameter:
+//   x : Size >= h2pack->krnl_mat_size, solution vector. 
+//       If op == 1, x satisfies L_{HSS} * x = b.
+//       If op == 2, x satisfies U_{HSS} * x = b.
+//       If op == 3, x satisfies A_{HSS} * x = b.
+void H2P_HSS_ULV_LU_solve(H2Pack_t h2pack, const int op, const DTYPE *b, DTYPE *x);
+
 // Construct the ULV Cholesky factorization for a HSS matrix
 // Input parameters:
 //   h2pack : H2Pack structure with constructed HSS representation

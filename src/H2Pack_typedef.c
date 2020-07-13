@@ -69,6 +69,7 @@ void H2P_init(
     h2pack->D_p2i_colidx        = NULL;
     h2pack->D_p2i_val           = NULL;
     h2pack->ULV_Ls              = NULL;
+    h2pack->ULV_p               = NULL;
     h2pack->B_nrow              = NULL;
     h2pack->B_ncol              = NULL;
     h2pack->D_nrow              = NULL;
@@ -266,6 +267,13 @@ void H2P_destroy(H2Pack_t h2pack)
         for (int i = 0; i < h2pack->n_node; i++)
             H2P_int_vec_destroy(h2pack->ULV_idx[i]);
         free(h2pack->ULV_idx);
+    }
+
+    if (h2pack->ULV_p != NULL)
+    {
+        for (int i = 0; i < h2pack->n_node; i++)
+            H2P_int_vec_destroy(h2pack->ULV_p[i]);
+        free(h2pack->ULV_p);
     }
 
     if (h2pack->J_coord != NULL)

@@ -388,14 +388,12 @@ void H2P_matvec_intmd_mult_AOT_task_block(
 // All B_{ij} matrices have been calculated and stored
 void H2P_matvec_intmd_mult_AOT(H2Pack_t h2pack, const DTYPE *x)
 {
-    int n_node   = h2pack->n_node;
     int n_thread = h2pack->n_thread;
     H2P_int_vec_t B_blk = h2pack->B_blk;
     H2P_thread_buf_t *thread_buf = h2pack->tb;
 
     // 1. Initialize y1 
     H2P_matvec_init_y1(h2pack);
-    H2P_dense_mat_t *y1 = h2pack->y1;
 
     // 2. Intermediate sweep
     // If (n_B_blk <= n_thread), B is constructed in H2Pack using a static workload
@@ -594,7 +592,6 @@ void H2P_matvec_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x)
 {
     int    xpt_dim       = h2pack->xpt_dim;
     int    krnl_dim      = h2pack->krnl_dim;
-    int    n_node        = h2pack->n_node;
     int    n_point       = h2pack->n_point;
     int    n_thread      = h2pack->n_thread;
     int    *r_adm_pairs  = (h2pack->is_HSS) ? h2pack->HSS_r_adm_pairs : h2pack->r_adm_pairs;

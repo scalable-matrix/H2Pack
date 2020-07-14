@@ -79,7 +79,8 @@ void parse_scalar_params(int argc, char **argv)
     {
         case 0: 
         {
-            printf("Using Coulomb kernel : k(x, y) = 1 / |x-y|\n"); 
+            if (test_params.pt_dim == 3) printf("Using Coulomb kernel : k(x, y) = 1 / |x-y|\n"); 
+            if (test_params.pt_dim == 2) printf("Using Laplace kernel : k(x, y) = log(|x-y|)\n"); 
             break;
         }
         case 1: 
@@ -98,11 +99,6 @@ void parse_scalar_params(int argc, char **argv)
         {
             printf("Using Quadratic kernel : k(x, y) = (1 + c * |x-y|^2)^a, "); 
             printf("c = %.2lf, a = %.2lf\n", Quadratic_krnl_param[0], Quadratic_krnl_param[1]);
-            break;
-        }
-        case 4:
-        {
-            printf("Using Erf Coulomb kernel:k(x, y) = 1 / |x-y| * erf(0.5 * |x-y|)\n");
             break;
         }
     }
@@ -197,14 +193,6 @@ void parse_scalar_params(int argc, char **argv)
                 test_params.krnl_param      = (void*) &Quadratic_krnl_param[0];
                 break;
             }
-            case 4: 
-            {
-                test_params.krnl_eval       = ECoulomb_3D_eval_intrin_d; 
-                test_params.krnl_bimv       = ECoulomb_3D_krnl_bimv_intrin_d; 
-                test_params.krnl_bimv_flops = ECoulomb_3D_krnl_bimv_flop;
-                test_params.krnl_param      = NULL;
-                break;
-            }
         }
     }
 
@@ -214,9 +202,9 @@ void parse_scalar_params(int argc, char **argv)
         {
             case 0: 
             { 
-                test_params.krnl_eval       = Coulomb_2D_eval_intrin_d; 
-                test_params.krnl_bimv       = Coulomb_2D_krnl_bimv_intrin_d; 
-                test_params.krnl_bimv_flops = Coulomb_2D_krnl_bimv_flop;
+                test_params.krnl_eval       = Laplace_2D_eval_intrin_d; 
+                test_params.krnl_bimv       = Laplace_2D_krnl_bimv_intrin_d; 
+                test_params.krnl_bimv_flops = Laplace_2D_krnl_bimv_flop;
                 test_params.krnl_param      = NULL;
                 break;
             }
@@ -242,14 +230,6 @@ void parse_scalar_params(int argc, char **argv)
                 test_params.krnl_bimv       = Quadratic_2D_krnl_bimv_intrin_d; 
                 test_params.krnl_bimv_flops = Quadratic_2D_krnl_bimv_flop;
                 test_params.krnl_param      = (void*) &Quadratic_krnl_param[0];
-                break;
-            }
-            case 4: 
-            { 
-                test_params.krnl_eval       = ECoulomb_2D_eval_intrin_d; 
-                test_params.krnl_bimv       = ECoulomb_2D_krnl_bimv_intrin_d; 
-                test_params.krnl_bimv_flops = ECoulomb_2D_krnl_bimv_flop;
-                test_params.krnl_param      = NULL;
                 break;
             }
         }

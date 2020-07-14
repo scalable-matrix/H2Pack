@@ -156,8 +156,8 @@ static void Gaussian_3D_eval_intrin_d(KRNL_EVAL_PARAM)
     EXTRACT_3D_COORD();
     const int n1_vec = (n1 / SIMD_LEN) * SIMD_LEN;
     const DTYPE *param_ = (DTYPE*) param;
-    const DTYPE l = param_[0];
-    const vec_d l_v = vec_set1_d(l);
+    const DTYPE neg_l = -param_[0];
+    const vec_d neg_l_v = vec_set1_d(neg_l);
     for (int i = 0; i < n0; i++)
     {
         DTYPE *mat_irow = mat + i * ldm;
@@ -175,8 +175,7 @@ static void Gaussian_3D_eval_intrin_d(KRNL_EVAL_PARAM)
             r2 = vec_fmadd_d(dy, dy, r2);
             r2 = vec_fmadd_d(dz, dz, r2);
             
-            r2 = vec_fnmadd_d(r2, l_v, vec_zero_d());
-            r2 = vec_exp_d(r2);
+            r2 = vec_exp_d(vec_mul_d(neg_l_v, r2));
             
             vec_storeu_d(mat_irow + j, r2);
         }
@@ -190,7 +189,7 @@ static void Gaussian_3D_eval_intrin_d(KRNL_EVAL_PARAM)
             DTYPE dy = y0_i - y1[j];
             DTYPE dz = z0_i - z1[j];
             DTYPE r2 = dx * dx + dy * dy + dz * dz;
-            mat_irow[j] = exp(-l * r2);
+            mat_irow[j] = exp(neg_l * r2);
         }
     }
 }
@@ -199,8 +198,8 @@ static void Gaussian_3D_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
 {
     EXTRACT_3D_COORD();
     const DTYPE *param_ = (DTYPE*) param;
-    const DTYPE l = param_[0];
-    const vec_d l_v = vec_set1_d(l);
+    const DTYPE neg_l = -param_[0];
+    const vec_d neg_l_v = vec_set1_d(neg_l);
     for (int i = 0; i < n0; i += 2)
     {
         vec_d sum_v0 = vec_zero_d();
@@ -238,8 +237,116 @@ static void Gaussian_3D_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
             d0 = vec_load_d(x_in_0 + j);
             d1 = vec_load_d(x_out_1 + j);
             
-            r20 = vec_fnmadd_d(r20, l_v, vec_zero_d());
-            r21 = vec_fnmadd_d(r21, l_v, vec_zero_d());
+            r20 = vec_exp_d(vec_mul_d(neg_l_v, r20));
+            r21 = vec_exp_d(vec_mul_d(neg_l_v, r21));
+            
+            sum_v0 = vec_fmadd_d(d0, r20, sum_v0);
+            sum_v1 = vec_fmadd_d(d0, r21, sum_v1);
+            
+            d1 = vec_fmadd_d(x_in_1_i0v, r20, d1);
+            d1 = vec_fmadd_d(x_in_1_i1v, r21, d1);
+            vec_store_d(x_out_1 + j, d1);
+        }
+        x_out_0[i]   += vec_reduce_add_d(sum_v0);
+        x_out_0[i+1] += vec_reduce_add_d(sum_v1);
+    }
+}
+
+// ============================================================ //
+// ==================   Exponential Kernel   ================== //
+// ============================================================ //
+
+const  int  Expon_3D_krnl_bimv_flop = 15;
+
+static void Expon_3D_eval_intrin_d(KRNL_EVAL_PARAM)
+{
+    EXTRACT_3D_COORD();
+    const int n1_vec = (n1 / SIMD_LEN) * SIMD_LEN;
+    const DTYPE *param_ = (DTYPE*) param;
+    const DTYPE neg_l = -param_[0];
+    const vec_d neg_l_v = vec_set1_d(neg_l);
+    for (int i = 0; i < n0; i++)
+    {
+        DTYPE *mat_irow = mat + i * ldm;
+        
+        vec_d x0_iv = vec_bcast_d(x0 + i);
+        vec_d y0_iv = vec_bcast_d(y0 + i);
+        vec_d z0_iv = vec_bcast_d(z0 + i);
+        for (int j = 0; j < n1_vec; j += SIMD_LEN)
+        {
+            vec_d dx = vec_sub_d(x0_iv, vec_loadu_d(x1 + j));
+            vec_d dy = vec_sub_d(y0_iv, vec_loadu_d(y1 + j));
+            vec_d dz = vec_sub_d(z0_iv, vec_loadu_d(z1 + j));
+            
+            vec_d r2 = vec_mul_d(dx, dx);
+            r2 = vec_fmadd_d(dy, dy, r2);
+            r2 = vec_fmadd_d(dz, dz, r2);
+
+            r2 = vec_mul_d(neg_l_v, vec_sqrt_d(r2));
+            r2 = vec_exp_d(r2);
+            
+            vec_storeu_d(mat_irow + j, r2);
+        }
+        
+        const DTYPE x0_i = x0[i];
+        const DTYPE y0_i = y0[i];
+        const DTYPE z0_i = z0[i];
+        for (int j = n1_vec; j < n1; j++)
+        {
+            DTYPE dx = x0_i - x1[j];
+            DTYPE dy = y0_i - y1[j];
+            DTYPE dz = z0_i - z1[j];
+            DTYPE r2 = dx * dx + dy * dy + dz * dz;
+            mat_irow[j] = exp(neg_l * sqrt(r2));
+        }
+    }
+}
+
+static void Expon_3D_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
+{
+    EXTRACT_3D_COORD();
+    const DTYPE *param_ = (DTYPE*) param;
+    const DTYPE neg_l = -param_[0];
+    const vec_d neg_l_v = vec_set1_d(neg_l);
+    for (int i = 0; i < n0; i += 2)
+    {
+        vec_d sum_v0 = vec_zero_d();
+        vec_d sum_v1 = vec_zero_d();
+        const vec_d x0_i0v = vec_bcast_d(x0 + i);
+        const vec_d y0_i0v = vec_bcast_d(y0 + i);
+        const vec_d z0_i0v = vec_bcast_d(z0 + i);
+        const vec_d x0_i1v = vec_bcast_d(x0 + i + 1);
+        const vec_d y0_i1v = vec_bcast_d(y0 + i + 1);
+        const vec_d z0_i1v = vec_bcast_d(z0 + i + 1);
+        const vec_d x_in_1_i0v = vec_bcast_d(x_in_1 + i);
+        const vec_d x_in_1_i1v = vec_bcast_d(x_in_1 + i + 1);
+        for (int j = 0; j < n1; j += SIMD_LEN)
+        {
+            vec_d d0, d1, jv, r20, r21;
+            
+            jv  = vec_load_d(x1 + j);
+            d0  = vec_sub_d(x0_i0v, jv);
+            d1  = vec_sub_d(x0_i1v, jv);
+            r20 = vec_mul_d(d0, d0);
+            r21 = vec_mul_d(d1, d1);
+            
+            jv  = vec_load_d(y1 + j);
+            d0  = vec_sub_d(y0_i0v, jv);
+            d1  = vec_sub_d(y0_i1v, jv);
+            r20 = vec_fmadd_d(d0, d0, r20);
+            r21 = vec_fmadd_d(d1, d1, r21);
+            
+            jv  = vec_load_d(z1 + j);
+            d0  = vec_sub_d(z0_i0v, jv);
+            d1  = vec_sub_d(z0_i1v, jv);
+            r20 = vec_fmadd_d(d0, d0, r20);
+            r21 = vec_fmadd_d(d1, d1, r21);
+
+            d0 = vec_load_d(x_in_0 + j);
+            d1 = vec_load_d(x_out_1 + j);
+            
+            r20 = vec_mul_d(neg_l_v, vec_sqrt_d(r20));
+            r21 = vec_mul_d(neg_l_v, vec_sqrt_d(r21));
             r20 = vec_exp_d(r20);
             r21 = vec_exp_d(r21);
             
@@ -256,14 +363,14 @@ static void Gaussian_3D_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
 }
 
 // ============================================================ //
-// =====================   Matern Kernel   ==================== //
+// ===================   Matern 3/2 Kernel   ================== //
 // ============================================================ //
 
-const  int  Matern_3D_krnl_bimv_flop = 17;
+const  int  Matern32_3D_krnl_bimv_flop = 17;
 
 #define NSQRT3 -1.7320508075688772
 
-static void Matern_3D_eval_intrin_d(KRNL_EVAL_PARAM)
+static void Matern32_3D_eval_intrin_d(KRNL_EVAL_PARAM)
 {
     EXTRACT_3D_COORD();
     const int n1_vec = (n1 / SIMD_LEN) * SIMD_LEN;
@@ -310,7 +417,7 @@ static void Matern_3D_eval_intrin_d(KRNL_EVAL_PARAM)
     }
 }
 
-static void Matern_3D_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
+static void Matern32_3D_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
 {
     EXTRACT_3D_COORD();
     const DTYPE *param_ = (DTYPE*) param;
@@ -367,6 +474,139 @@ static void Matern_3D_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
             
             d1 = vec_fmadd_d(x_in_1_i0v, r0, d1);
             d1 = vec_fmadd_d(x_in_1_i1v, r1, d1);
+            vec_store_d(x_out_1 + j, d1);
+        }
+        x_out_0[i]   += vec_reduce_add_d(sum_v0);
+        x_out_0[i+1] += vec_reduce_add_d(sum_v1);
+    }
+}
+
+// ============================================================ //
+// ===================   Matern 5/2 Kernel   ================== //
+// ============================================================ //
+
+const  int  Matern52_3D_krnl_bimv_flop = 20;
+
+#define NSQRT5 -2.2360679774997896
+#define _1o3    0.3333333333333333
+
+static void Matern52_3D_eval_intrin_d(KRNL_EVAL_PARAM)
+{
+    EXTRACT_3D_COORD();
+    const int n1_vec = (n1 / SIMD_LEN) * SIMD_LEN;
+    const DTYPE *param_ = (DTYPE*) param;
+    const DTYPE nsqrt5_l = NSQRT5 * param_[0];
+    const vec_d nsqrt5_l_v = vec_set1_d(nsqrt5_l);
+    const vec_d v_1   = vec_set1_d(1.0);
+    const vec_d v_1o3 = vec_set1_d(_1o3);
+    for (int i = 0; i < n0; i++)
+    {
+        DTYPE *mat_irow = mat + i * ldm;
+        
+        vec_d x0_iv = vec_bcast_d(x0 + i);
+        vec_d y0_iv = vec_bcast_d(y0 + i);
+        vec_d z0_iv = vec_bcast_d(z0 + i);
+        for (int j = 0; j < n1_vec; j += SIMD_LEN)
+        {
+            vec_d dx = vec_sub_d(x0_iv, vec_loadu_d(x1 + j));
+            vec_d dy = vec_sub_d(y0_iv, vec_loadu_d(y1 + j));
+            vec_d dz = vec_sub_d(z0_iv, vec_loadu_d(z1 + j));
+            
+            vec_d r = vec_mul_d(dx, dx);
+            r = vec_fmadd_d(dy, dy, r);
+            r = vec_fmadd_d(dz, dz, r);
+            r = vec_sqrt_d(r);
+
+            vec_d lk  = vec_mul_d(nsqrt5_l_v, r);
+            vec_d val = vec_sub_d(v_1, lk);
+            vec_d lk2 = vec_mul_d(lk, lk);
+            val = vec_fmadd_d(v_1o3, lk2, val);
+            val = vec_mul_d(val, vec_exp_d(lk));
+            
+            vec_storeu_d(mat_irow + j, val);
+        }
+        
+        const DTYPE x0_i = x0[i];
+        const DTYPE y0_i = y0[i];
+        const DTYPE z0_i = z0[i];
+        for (int j = n1_vec; j < n1; j++)
+        {
+            DTYPE dx  = x0_i - x1[j];
+            DTYPE dy  = y0_i - y1[j];
+            DTYPE dz  = z0_i - z1[j];
+            DTYPE r   = sqrt(dx * dx + dy * dy + dz * dz);
+            DTYPE lk  = nsqrt5_l * r;
+            DTYPE val = (1.0 - lk + _1o3 * lk * lk) * exp(lk);
+            mat_irow[j] = val;
+        }
+    }
+}
+
+static void Matern52_3D_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
+{
+    EXTRACT_3D_COORD();
+    const DTYPE *param_ = (DTYPE*) param;
+    const DTYPE nsqrt5_l = NSQRT5 * param_[0];
+    const vec_d nsqrt5_l_v = vec_set1_d(nsqrt5_l);
+    const vec_d v_1   = vec_set1_d(1.0);
+    const vec_d v_1o3 = vec_set1_d(_1o3);
+    for (int i = 0; i < n0; i += 2)
+    {
+        vec_d sum_v0 = vec_zero_d();
+        vec_d sum_v1 = vec_zero_d();
+        const vec_d x0_i0v = vec_bcast_d(x0 + i);
+        const vec_d y0_i0v = vec_bcast_d(y0 + i);
+        const vec_d z0_i0v = vec_bcast_d(z0 + i);
+        const vec_d x0_i1v = vec_bcast_d(x0 + i + 1);
+        const vec_d y0_i1v = vec_bcast_d(y0 + i + 1);
+        const vec_d z0_i1v = vec_bcast_d(z0 + i + 1);
+        const vec_d x_in_1_i0v = vec_bcast_d(x_in_1 + i);
+        const vec_d x_in_1_i1v = vec_bcast_d(x_in_1 + i + 1);
+        for (int j = 0; j < n1; j += SIMD_LEN)
+        {
+            vec_d d0, d1, jv, r0, r1, lk0, lk1, lk02, lk12, val0, val1;
+            
+            jv = vec_load_d(x1 + j);
+            d0 = vec_sub_d(x0_i0v, jv);
+            d1 = vec_sub_d(x0_i1v, jv);
+            r0 = vec_mul_d(d0, d0);
+            r1 = vec_mul_d(d1, d1);
+            
+            jv = vec_load_d(y1 + j);
+            d0 = vec_sub_d(y0_i0v, jv);
+            d1 = vec_sub_d(y0_i1v, jv);
+            r0 = vec_fmadd_d(d0, d0, r0);
+            r1 = vec_fmadd_d(d1, d1, r1);
+            
+            jv = vec_load_d(z1 + j);
+            d0 = vec_sub_d(z0_i0v, jv);
+            d1 = vec_sub_d(z0_i1v, jv);
+            r0 = vec_fmadd_d(d0, d0, r0);
+            r1 = vec_fmadd_d(d1, d1, r1);
+            
+            r0 = vec_sqrt_d(r0);
+            r1 = vec_sqrt_d(r1);
+            
+            d0 = vec_load_d(x_in_0 + j);
+            d1 = vec_load_d(x_out_1 + j);
+            
+            lk0  = vec_mul_d(nsqrt5_l_v, r0);
+            val0 = vec_sub_d(v_1, lk0);
+            lk02 = vec_mul_d(lk0, lk0);
+            val0 = vec_fmadd_d(v_1o3, lk02, val0);
+            val0 = vec_mul_d(val0, vec_exp_d(lk0));
+
+            lk1  = vec_mul_d(nsqrt5_l_v, r1);
+            val1 = vec_sub_d(v_1, lk1);
+            lk12 = vec_mul_d(lk1, lk1);
+            val1 = vec_fmadd_d(v_1o3, lk12, val1);
+            val1 = vec_mul_d(val1, vec_exp_d(lk1));
+            
+            sum_v0 = vec_fmadd_d(d0, val0, sum_v0);
+            sum_v1 = vec_fmadd_d(d0, val1, sum_v1);
+            
+            d1 = vec_fmadd_d(x_in_1_i0v, val0, d1);
+            d1 = vec_fmadd_d(x_in_1_i1v, val1, d1);
             vec_store_d(x_out_1 + j, d1);
         }
         x_out_0[i]   += vec_reduce_add_d(sum_v0);

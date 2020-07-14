@@ -16,8 +16,10 @@ struct H2P_test_params
 };
 struct H2P_test_params test_params;
 
-DTYPE Gaussian_krnl_param[1]  = {1.0};
-DTYPE Matern_krnl_param[1]    = {1.0};
+DTYPE Gaussian_krnl_param[1]  = {0.5};
+DTYPE Expon_krnl_param[1]     = {0.5};
+DTYPE Matern32_krnl_param[1]  = {1.0};
+DTYPE Matern52_krnl_param[1]  = {1.0};
 DTYPE Quadratic_krnl_param[2] = {1.0, -0.5};
 
 static double pseudo_randn()
@@ -91,11 +93,23 @@ void parse_scalar_params(int argc, char **argv)
         }
         case 2: 
         {
-            printf("Using 3/2 Matern kernel : k(x, y) = (1 + l * k) * exp(-l * k), ");
-            printf("k = sqrt(3) * |x-y|, l = %.2lf\n", Matern_krnl_param[0]); 
+            printf("Using Exponential kernel : k(x, y) = exp(-l * |x-y|), ");
+            printf("l = %.2lf\n", Expon_krnl_param[0]); 
             break;
         }
         case 3: 
+        {
+            printf("Using 3/2 Matern kernel : k(x, y) = (1 + l*k) * exp(-l*k), ");
+            printf("k = sqrt(3) * |x-y|, l = %.2lf\n", Matern32_krnl_param[0]); 
+            break;
+        }
+        case 4: 
+        {
+            printf("Using 5/2 Matern kernel : k(x, y) = (1 + l*k + l^2*k^2/3) * exp(-l*k), ");
+            printf("k = sqrt(5) * |x-y|, l = %.2lf\n", Matern52_krnl_param[0]); 
+            break;
+        }
+        case 5: 
         {
             printf("Using Quadratic kernel : k(x, y) = (1 + c * |x-y|^2)^a, "); 
             printf("c = %.2lf, a = %.2lf\n", Quadratic_krnl_param[0], Quadratic_krnl_param[1]);
@@ -179,13 +193,28 @@ void parse_scalar_params(int argc, char **argv)
             }
             case 2: 
             {
-                test_params.krnl_eval       = Matern_3D_eval_intrin_d; 
-                test_params.krnl_bimv       = Matern_3D_krnl_bimv_intrin_d; 
-                test_params.krnl_bimv_flops = Matern_3D_krnl_bimv_flop;
-                test_params.krnl_param      = (void*) &Matern_krnl_param[0];
+                test_params.krnl_eval       = Expon_3D_eval_intrin_d; 
+                test_params.krnl_bimv       = Expon_3D_krnl_bimv_intrin_d; 
+                test_params.krnl_bimv_flops = Expon_3D_krnl_bimv_flop;
+                test_params.krnl_param      = (void*) &Expon_krnl_param[0];
                 break;
             }
             case 3: 
+            {
+                test_params.krnl_eval       = Matern32_3D_eval_intrin_d; 
+                test_params.krnl_bimv       = Matern32_3D_krnl_bimv_intrin_d; 
+                test_params.krnl_bimv_flops = Matern32_3D_krnl_bimv_flop;
+                test_params.krnl_param      = (void*) &Matern32_krnl_param[0];
+                break;
+            }
+            case 4: 
+            {
+                test_params.krnl_eval       = Matern52_3D_eval_intrin_d; 
+                test_params.krnl_bimv       = Matern52_3D_krnl_bimv_intrin_d; 
+                test_params.krnl_bimv_flops = Matern52_3D_krnl_bimv_flop;
+                test_params.krnl_param      = (void*) &Matern52_krnl_param[0];
+            }
+            case 5: 
             {
                 test_params.krnl_eval       = Quadratic_3D_eval_intrin_d; 
                 test_params.krnl_bimv       = Quadratic_3D_krnl_bimv_intrin_d; 
@@ -218,13 +247,29 @@ void parse_scalar_params(int argc, char **argv)
             }
             case 2: 
             {
-                test_params.krnl_eval       = Matern_2D_eval_intrin_d; 
-                test_params.krnl_bimv       = Matern_2D_krnl_bimv_intrin_d; 
-                test_params.krnl_bimv_flops = Matern_2D_krnl_bimv_flop;
-                test_params.krnl_param      = (void*) &Matern_krnl_param[0];
+                test_params.krnl_eval       = Expon_2D_eval_intrin_d; 
+                test_params.krnl_bimv       = Expon_2D_krnl_bimv_intrin_d; 
+                test_params.krnl_bimv_flops = Expon_2D_krnl_bimv_flop;
+                test_params.krnl_param      = (void*) &Expon_krnl_param[0];
                 break;
             }
             case 3: 
+            {
+                test_params.krnl_eval       = Matern32_2D_eval_intrin_d; 
+                test_params.krnl_bimv       = Matern32_2D_krnl_bimv_intrin_d; 
+                test_params.krnl_bimv_flops = Matern32_2D_krnl_bimv_flop;
+                test_params.krnl_param      = (void*) &Matern32_krnl_param[0];
+                break;
+            }
+            case 4: 
+            {
+                test_params.krnl_eval       = Matern52_2D_eval_intrin_d; 
+                test_params.krnl_bimv       = Matern52_2D_krnl_bimv_intrin_d; 
+                test_params.krnl_bimv_flops = Matern52_2D_krnl_bimv_flop;
+                test_params.krnl_param      = (void*) &Matern52_krnl_param[0];
+                break;
+            }
+            case 5: 
             {
                 test_params.krnl_eval       = Quadratic_2D_eval_intrin_d; 
                 test_params.krnl_bimv       = Quadratic_2D_krnl_bimv_intrin_d; 

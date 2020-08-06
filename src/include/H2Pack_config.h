@@ -35,6 +35,7 @@
 #define LAPACK_POTRF    LAPACKE_dpotrf  // LAPACK Cholesky factorization
 #define LAPACK_POTRS    LAPACKE_dpotrs  // LAPACK linear system solve using Cholesky factorization
 #define LAPACK_GEQRF    LAPACKE_dgeqrf  // LAPACK QR factorization
+#define LAPACK_GEQPF    LAPACKE_dgeqpf  // LAPACK QR factorization with column pivoting
 #define LAPACK_ORGQR    LAPACKE_dorgqr  // LAPACK QR Q matrix explicitly construction
 #define LAPACK_ORMQR    LAPACKE_dormqr  // LAPACK QR Q matrix multiples another matrix
 #define LAPACK_SYEVD    LAPACKE_dsyevd  // LAPACK eigenvalue decomposition
@@ -70,6 +71,7 @@
 #define LAPACK_POTRF    LAPACKE_spotrf
 #define LAPACK_POTRS    LAPACKE_spotrs
 #define LAPACK_GEQRF    LAPACKE_sgeqrf
+#define LAPACK_GEQPF    LAPACKE_sgeqpf
 #define LAPACK_ORGQR    LAPACKE_sorgqr
 #define LAPACK_ORMQR    LAPACKE_sormqr
 #define LAPACK_SYEVD    LAPACKE_ssyevd

@@ -111,8 +111,9 @@ int main(int argc, char **argv)
 
     printf("\nConstructing SPDHSS from H2\n");
     const int max_rank = 100;
+    const DTYPE reltol = 1e-6;
     const DTYPE shift  = 1e-5;
-    H2P_SPDHSS_H2_build(max_rank, shift, h2mat, &hssmat);
+    H2P_SPDHSS_H2_build(max_rank, reltol, shift, h2mat, &hssmat);
  
     // Check HSS matvec accuracy
     H2P_matvec(h2mat,  x0, y0);

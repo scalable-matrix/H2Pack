@@ -1593,14 +1593,8 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
 }
 
 // Build an SPD HSS matrix A_{HSS} from an H2 matrix s.t. A_{HSS} ~= A_{H2}
-// Input parameters:
-//   max_rank : Maximum rank of the new HSS matrix
-//   shift    : Diagonal shifting
-//   h2mat    : Source H2 matrix
-// Output parameter:
-//   *hssmat_ : New constructed SPD HSS matrix
 void H2P_SPDHSS_H2_build(
-    const int max_rank, const DTYPE shift, 
+    const int max_rank, const DTYPE reltol, const DTYPE shift, 
     H2Pack_t h2mat, H2Pack_t *hssmat_
 )
 {
@@ -1843,8 +1837,22 @@ void H2P_SPDHSS_H2_build(
                     int tmpQ_ncol = MIN(tmpY->nrow, tmpY->ncol);
                     int V_ncol = MIN(tmpQ_ncol, max_rank);
                     H2P_dense_mat_t tmpQ = tmpY;
-                    LAPACK_GEQRF(LAPACK_ROW_MAJOR, tmpQ->nrow, tmpQ->ncol, tmpQ->data, tmpQ->ld, tau);
+                    H2P_int_vec_t   jpvt = idx0;
+                    H2P_int_vec_set_capacity(jpvt, tmpQ->ncol);
+                    memset(jpvt->data, 0, sizeof(int) * tmpQ->ncol);
+                    LAPACK_GEQPF(LAPACK_ROW_MAJOR, tmpQ->nrow, tmpQ->ncol, tmpQ->data, tmpQ->ld, jpvt->data, tau);
                     LAPACK_ORGQR(LAPACK_ROW_MAJOR, tmpQ->nrow, tmpQ_ncol, tmpQ_ncol, tmpQ->data, tmpQ->ld, tau);
+                    int V_ncol1 = -1;
+                    DTYPE stop_diag = DABS(tmpQ->data[0]) * reltol;
+                    for (int k = 0; k < V_ncol; k++)
+                    {
+                        if (DABS(tmpQ->data[k * tmpQ->ld + k]) < stop_diag)
+                        {
+                            V_ncol1 = k - 1;
+                            break;
+                        }
+                    }
+                    if (V_ncol1 > 0) V_ncol = V_ncol1;
                     H2P_dense_mat_init(&V[node], tmpQ->nrow, V_ncol);
                     H2P_copy_matrix_block(tmpQ->nrow, V_ncol, tmpQ->data, tmpQ->ld, V[node]->data, V[node]->ld);
                     // HSS_U{node} = S{node} * V{node};
@@ -2048,8 +2056,22 @@ void H2P_SPDHSS_H2_build(
                     int tmpQ_ncol = MIN(tmpY->nrow, tmpY->ncol);
                     int V_ncol = MIN(tmpQ_ncol, max_rank);
                     tmpQ = tmpY;
-                    LAPACK_GEQRF(LAPACK_ROW_MAJOR, tmpQ->nrow, tmpQ->ncol, tmpQ->data, tmpQ->ld, tau);
+                    H2P_int_vec_t jpvt = idx0;
+                    H2P_int_vec_set_capacity(jpvt, tmpQ->ncol);
+                    memset(jpvt->data, 0, sizeof(int) * tmpQ->ncol);
+                    LAPACK_GEQPF(LAPACK_ROW_MAJOR, tmpQ->nrow, tmpQ->ncol, tmpQ->data, tmpQ->ld, jpvt->data, tau);
                     LAPACK_ORGQR(LAPACK_ROW_MAJOR, tmpQ->nrow, tmpQ_ncol, tmpQ_ncol, tmpQ->data, tmpQ->ld, tau);
+                    int V_ncol1 = -1;
+                    DTYPE stop_diag = DABS(tmpQ->data[0]) * reltol;
+                    for (int k = 0; k < V_ncol; k++)
+                    {
+                        if (DABS(tmpQ->data[k * tmpQ->ld + k]) < stop_diag)
+                        {
+                            V_ncol1 = k - 1;
+                            break;
+                        }
+                    }
+                    if (V_ncol1 > 0) V_ncol = V_ncol1;
                     H2P_dense_mat_init(&V[node], tmpQ->nrow, V_ncol);
                     H2P_copy_matrix_block(tmpQ->nrow, V_ncol, tmpQ->data, tmpQ->ld, V[node]->data, V[node]->ld);
                     // HSS_U{node} = tmpM * V{node};

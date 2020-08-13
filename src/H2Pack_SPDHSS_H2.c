@@ -2,9 +2,12 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <malloc.h>
 #include <math.h>
 #include <omp.h>
+
+#ifdef __linux__
+#include <malloc.h>
+#endif
 
 #include "H2Pack_config.h"
 #include "H2Pack_typedef.h"
@@ -1610,8 +1613,10 @@ void H2P_SPDHSS_H2_build(
         return;
     }
 
+    #ifdef __linux__
     // Any H2P_dense_mat_t->data allocation > 1KB will use mmap instead of sbrk and can be released later
     mallopt(M_MMAP_THRESHOLD, 1024);
+    #endif
 
     int n_node          = h2mat->n_node;
     int n_thread        = h2mat->n_thread;
@@ -2212,8 +2217,10 @@ void H2P_SPDHSS_H2_build(
     (*hssmat_)->timers[_B_BUILD_TIMER_IDX] = build_B_t;
     (*hssmat_)->timers[_D_BUILD_TIMER_IDX] = build_D_t;
 
+    #ifdef __linux__
     // Restore default value
     mallopt(M_MMAP_THRESHOLD, 128 * 1024);
+    #endif
 
     // 8. Delete intermediate arrays and matrices
     for (int i = 0; i < n_level; i++)

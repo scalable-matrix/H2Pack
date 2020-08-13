@@ -35,7 +35,8 @@ DEF    += -DUSE_OPENBLAS
 INC    += -I$(OPENBLAS_INSTALL_DIR)/include
 endif
 
-all: $(LIBA) $(LIBSO)
+
+all: $(LIBA) #$(LIBSO)
 
 $(LIBA): $(OBJS) 
 	${AR} $@ $^

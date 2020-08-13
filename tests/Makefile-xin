@@ -8,7 +8,7 @@ OPENBLAS_INSTALL_DIR = /usr/local/opt/openblas
 CC      = gcc
 DEF     = 
 CFLAGS  = $(INC) -Wall -g -std=gnu99 -O3 $(DEF)
-LDFLAGS = -g -O3
+LDFLAGS = -g -O3 -lgfortran
 
 ifeq ($(strip $(CC)), icc)
 CFLAGS  += -qopenmp -xHost
@@ -28,6 +28,7 @@ ifeq ($(strip $(USE_OPENBLAS)), 1)
 DEF     += -DUSE_OPENBLAS
 LIB     += $(OPENBLAS_INSTALL_DIR)/lib/libopenblas.a
 INC     += -I$(OPENBLAS_INSTALL_DIR)/include
+INC     += -I/usr/local/include
 LDFLAGS += -fopenmp -lm
 endif
 

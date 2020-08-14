@@ -69,11 +69,22 @@ void H2P_eval_kernel_matrix_OMP(
 // Check if a coordinate is in box [-L/2, L/2]^pt_dim
 // Input parameters:
 //   pt_dim : Dimension of point coordinate
-//   coord  : Coordinate
+//   coord  : Size pt_dim, point coordinate
 //   L      : Box size
 // Output parameter:
 //   <return> : If the coordinate is in the box
 int point_in_box(const int pt_dim, DTYPE *coord, DTYPE L);
+
+// Generate npt uniformly distributed random points in a ring 
+// [-L1/2, L1/2]^pt_dim excluding [-L0/2, L0/2]^pt_dim 
+// Input parameters:
+//   npt    : Number of random points
+//   pt_dim : Dimension of point coordinate
+//   L0, L1 : Inner and outer box size of the ring
+//   ldc    : Leading dimension of coord
+// Output parameter:
+//   coord : Size pt_dim-by-ldc, each column is a point coordinate
+void gen_coord_in_ring(const int npt, const int pt_dim, const DTYPE L0, const DTYPE L1, DTYPE *coord, const int ldc);
 
 // Generate a random sparse matrix A for calculating y^T := A^T * x^T,
 // where A is a random sparse matrix that has no more than max_nnz_col 

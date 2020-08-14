@@ -77,10 +77,15 @@ extern "C" {
 #define NEWTON_ITER 2   // Two Newton iterations is usually sufficient for rsqrt using double type
 #endif
 
+#if !defined(__AVX__)
+#error Your processor or compiler does not support AVX instruction set, cannot use this x86_intrin_wrapper.h
+#endif
+
 #if !defined(USE_AVX) && !defined(USE_AVX512)
 #ifdef __AVX512F__
 #define USE_AVX512
-#else
+#endif
+#ifdef __AVX__
 #define USE_AVX
 #endif
 #endif

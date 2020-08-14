@@ -104,6 +104,28 @@ int point_in_box(const int pt_dim, DTYPE *coord, DTYPE L)
     return res;
 }
 
+// Generate npt uniformly distributed random points in a ring 
+// [-L1/2, L1/2]^pt_dim excluding [-L0/2, L0/2]^pt_dim 
+void gen_coord_in_ring(const int npt, const int pt_dim, const DTYPE L0, const DTYPE L1, DTYPE *coord, const int ldc)
+{
+    const DTYPE semi_L1 = 0.5 * L1;
+    DTYPE coord_i[8];
+    ASSERT_PRINTF(pt_dim <= 8, "Temporary array too small (8 < %d)\n", pt_dim);
+    for (int i = 0; i < npt; i++)
+    {
+        int flag = 0;
+        while (flag == 0)
+        {
+            for (int j = 0; j < pt_dim; j++) coord_i[j] = (DTYPE) drand48() * L1 - semi_L1;
+            if ((point_in_box(pt_dim, coord_i, L1) == 1) && (point_in_box(pt_dim, coord_i, L0) == 0))
+            {
+                flag = 1;
+                for (int j = 0; j < pt_dim; j++) coord[j * ldc + i] = coord_i[j];
+            }
+        }
+    }
+}
+
 // Generate a random sparse matrix A for calculating y^T := A^T * x^T
 void H2P_gen_rand_sparse_mat_trans(
     const int max_nnz_col, const int k, const int n, 

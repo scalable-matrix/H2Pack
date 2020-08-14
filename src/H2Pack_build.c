@@ -21,7 +21,7 @@ void H2P_generate_proxy_point_ID(
     const int pt_dim, const int krnl_dim, const DTYPE tol_norm, const int max_level, const int min_level,
     DTYPE max_L, const void *krnl_param, kernel_eval_fptr krnl_eval, H2P_dense_mat_t **pp_
 )
-{   
+{
     // 1. Initialize proxy point arrays
     H2P_dense_mat_t *pp = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * (max_level + 1));
     ASSERT_PRINTF(pp != NULL, "Failed to allocate %d H2P_dense_mat structues for storing proxy points", max_level + 1);
@@ -71,7 +71,7 @@ void H2P_generate_proxy_point_ID(
         DTYPE L2 = (1.0 + 2.0 * ALPHA_H2) * L1;
         DTYPE semi_L1   = L1 * 0.5;
         DTYPE semi_L3_0 = max_L - L1;
-        DTYPE semi_L3_1 = (1.0 + 8.0 * ALPHA_H2) * L1;
+        DTYPE semi_L3_1 = (0.5 + 6.0 * ALPHA_H2) * L1;
         DTYPE semi_L3   = MIN(semi_L3_0, semi_L3_1);
         DTYPE L3 = 2.0 * semi_L3;
         
@@ -83,23 +83,27 @@ void H2P_generate_proxy_point_ID(
             DTYPE val = drand48();
             Nx_points->data[i] = L1 * val - semi_L1;
         }
-        H2P_dense_mat_resize(Ny_points, pt_dim, Ny_size);
-        for (int i = 0; i < Ny_size; i++)
+        int n_ring = 8;
+        int ring_npt[8], ring_npt_displs[9];
+        DTYPE ring_L0 = L2, ring_L1;
+        DTYPE ring_weights_sum = 0.0;
+        DTYPE ring_weights[8] = {2.5, 1.75, 1.25, 0.75, 0.5, 0.5, 0.5, 0.25};
+        DTYPE ring_vol = (DPOW(L3, (DTYPE) pt_dim) - DPOW(L2, (DTYPE) pt_dim)) / (DTYPE) n_ring;
+        for (int i = 0; i < n_ring; i++) ring_weights_sum += ring_weights[i];
+        ring_npt_displs[0] = 0;
+        for (int i = 0; i < n_ring; i++) 
         {
-            DTYPE *tmp_coord = tmpA->data;
-            int flag = 1;
-            while (flag == 1)
-            {
-                for (int j = 0; j < pt_dim; j++)
-                {
-                    DTYPE val = drand48();
-                    tmp_coord[j] = L3 * val - semi_L3;
-                }
-                flag = point_in_box(pt_dim, tmp_coord, L2);
-            }
-            DTYPE *Ny_i = Ny_points->data + i;
-            for (int j = 0; j < pt_dim; j++)
-                Ny_i[j * Ny_size] = tmp_coord[j];
+            ring_npt[i] = (int) DROUND(ring_weights[i] / ring_weights_sum * Ny_size);
+            ring_npt_displs[i+1] = ring_npt_displs[i] + ring_npt[i];
+        }
+        int curr_Ny_size = ring_npt_displs[n_ring];
+        H2P_dense_mat_resize(Ny_points, pt_dim, curr_Ny_size);
+        for (int i = 0; i < n_ring; i++)
+        {
+            ring_L1 = (ring_vol + DPOW(ring_L0, (DTYPE) pt_dim));
+            ring_L1 = DPOW(ring_L1, 1.0 / (DTYPE) pt_dim);
+            gen_coord_in_ring(ring_npt[i], pt_dim, ring_L0, ring_L1, Ny_points->data + ring_npt_displs[i], curr_Ny_size);
+            ring_L0 = ring_L1;
         }
         et = get_wtime_sec();
         other_t += et - st;

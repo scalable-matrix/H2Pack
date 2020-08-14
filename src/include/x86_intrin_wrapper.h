@@ -82,10 +82,9 @@ extern "C" {
 #endif
 
 #if !defined(USE_AVX) && !defined(USE_AVX512)
-#ifdef __AVX512F__
+#if defined(__AVX512F__)
 #define USE_AVX512
-#endif
-#ifdef __AVX__
+#elif defined(__AVX__)
 #define USE_AVX
 #endif
 #endif

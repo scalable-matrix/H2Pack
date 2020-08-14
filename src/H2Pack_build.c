@@ -70,8 +70,8 @@ void H2P_generate_proxy_point_ID(
         DTYPE L1 = max_L / pow_2_level;
         DTYPE L2 = (1.0 + 2.0 * ALPHA_H2) * L1;
         DTYPE semi_L1   = L1 * 0.5;
-        DTYPE semi_L3_0 = max_L - L1;
-        DTYPE semi_L3_1 = (0.5 + 6.0 * ALPHA_H2) * L1;
+        DTYPE semi_L3_0 = max_L - semi_L1;
+        DTYPE semi_L3_1 = (1.0 + 8.0 * ALPHA_H2) * semi_L1;
         DTYPE semi_L3   = MIN(semi_L3_0, semi_L3_1);
         DTYPE L3 = 2.0 * semi_L3;
         

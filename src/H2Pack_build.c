@@ -214,18 +214,20 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
         }  // End of "while (node != -1)"
         thread_buf[tid]->timer += get_wtime_sec();
     }  // End of "#pragma omp parallel num_thread(n_thread)"
-    #ifdef PROFILING_OUTPUT
-    double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
-    for (int i = 0; i < n_thread; i++)
+    
+    if (h2pack->print_timers == 1)
     {
-        double thread_i_timer = thread_buf[i]->timer;
-        avg_t += thread_i_timer;
-        max_t = MAX(max_t, thread_i_timer);
-        min_t = MIN(min_t, thread_i_timer);
+        double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
+        for (int i = 0; i < n_thread; i++)
+        {
+            double thread_i_timer = thread_buf[i]->timer;
+            avg_t += thread_i_timer;
+            max_t = MAX(max_t, thread_i_timer);
+            min_t = MIN(min_t, thread_i_timer);
+        }
+        avg_t /= (double) n_thread;
+        INFO_PRINTF("Build U: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
     }
-    avg_t /= (double) n_thread;
-    INFO_PRINTF("Build U: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
-    #endif
 
     // 3. Initialize other not touched U J & add statistic info
     for (int i = 0; i < h2pack->n_UJ; i++)
@@ -568,30 +570,31 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
             timers[_U_BUILD_OTHER_T_IDX] = other_t;
         }  // End of "pragma omp parallel"
         
-        #ifdef PROFILING_OUTPUT
-        double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
-        for (int i = 0; i < n_thread_i; i++)
+        if (h2pack->print_timers == 1)
         {
-            double thread_i_timer = thread_buf[i]->timer;
-            avg_t += thread_i_timer;
-            max_t = MAX(max_t, thread_i_timer);
-            min_t = MIN(min_t, thread_i_timer);
-        }
-        avg_t /= (double) n_thread_i;
-        INFO_PRINTF("Build U: level %d, %d/%d threads, %d nodes, ", i, n_thread_i, n_thread, level_n_node[i]);
-        INFO_PRINTF("    min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
-        INFO_PRINTF("Build U subroutine time consumption:\n");
-        INFO_PRINTF("    tid, kernel eval, randn gen, gemm, ID compress, misc, total\n");
-        for (int tid = 0; tid < n_thread_i; tid++)
-        {
-            double *timers = U_timers + 8 * tid;
-            INFO_PRINTF(
-                "    %3d, %6.3lf, %6.3lf, %6.3lf, %6.3lf, %6.3lf, %6.3lf\n",
-                tid, timers[_U_BUILD_KRNL_T_IDX], timers[_U_BUILD_RANDN_T_IDX], timers[_U_BUILD_GEMM_T_IDX], 
-                timers[_U_BUILD_QR_T_IDX], timers[_U_BUILD_OTHER_T_IDX], thread_buf[tid]->timer
-            );
-        }
-        #endif
+            double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
+            for (int i = 0; i < n_thread_i; i++)
+            {
+                double thread_i_timer = thread_buf[i]->timer;
+                avg_t += thread_i_timer;
+                max_t = MAX(max_t, thread_i_timer);
+                min_t = MIN(min_t, thread_i_timer);
+            }
+            avg_t /= (double) n_thread_i;
+            INFO_PRINTF("Build U: level %d, %d/%d threads, %d nodes\n", i, n_thread_i, n_thread, level_n_node[i]);
+            INFO_PRINTF("    min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
+            INFO_PRINTF("Build U subroutine time consumption:\n");
+            INFO_PRINTF("    tid, kernel eval, randn gen, gemm, ID compress, misc, total\n");
+            for (int tid = 0; tid < n_thread_i; tid++)
+            {
+                double *timers = U_timers + 8 * tid;
+                INFO_PRINTF(
+                    "    %3d, %6.3lf, %6.3lf, %6.3lf, %6.3lf, %6.3lf, %6.3lf\n",
+                    tid, timers[_U_BUILD_KRNL_T_IDX], timers[_U_BUILD_RANDN_T_IDX], timers[_U_BUILD_GEMM_T_IDX], 
+                    timers[_U_BUILD_QR_T_IDX], timers[_U_BUILD_OTHER_T_IDX], thread_buf[tid]->timer
+                );
+            }
+        }  // End of "if (h2pack->print_timers == 1)"
     }  // End of i loop
 
     // 3. Initialize other not touched U J & add statistic info
@@ -857,18 +860,19 @@ void H2P_build_B_AOT(H2Pack_t h2pack)
         thread_buf[tid]->timer += get_wtime_sec();
     }  // End of "pragma omp parallel"
     
-    #ifdef PROFILING_OUTPUT
-    double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
-    for (int i = 0; i < n_thread; i++)
+    if (h2pack->print_timers == 1)
     {
-        double thread_i_timer = thread_buf[i]->timer;
-        avg_t += thread_i_timer;
-        max_t = MAX(max_t, thread_i_timer);
-        min_t = MIN(min_t, thread_i_timer);
+        double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
+        for (int i = 0; i < n_thread; i++)
+        {
+            double thread_i_timer = thread_buf[i]->timer;
+            avg_t += thread_i_timer;
+            max_t = MAX(max_t, thread_i_timer);
+            min_t = MIN(min_t, thread_i_timer);
+        }
+        avg_t /= (double) n_thread;
+        INFO_PRINTF("Build B: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
     }
-    avg_t /= (double) n_thread;
-    printf("[PROFILING] Build B: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
-    #endif
 }
 
 // Generate H2 dense blocks metadata
@@ -1107,18 +1111,19 @@ void H2P_build_D_AOT(H2Pack_t h2pack)
         thread_buf[tid]->timer += get_wtime_sec();
     }  // End of "pragma omp parallel"
     
-    #ifdef PROFILING_OUTPUT
-    double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
-    for (int i = 0; i < n_thread; i++)
+    if (h2pack->print_timers == 1)
     {
-        double thread_i_timer = thread_buf[i]->timer;
-        avg_t += thread_i_timer;
-        max_t = MAX(max_t, thread_i_timer);
-        min_t = MIN(min_t, thread_i_timer);
+        double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
+        for (int i = 0; i < n_thread; i++)
+        {
+            double thread_i_timer = thread_buf[i]->timer;
+            avg_t += thread_i_timer;
+            max_t = MAX(max_t, thread_i_timer);
+            min_t = MIN(min_t, thread_i_timer);
+        }
+        avg_t /= (double) n_thread;
+        INFO_PRINTF("Build D: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
     }
-    avg_t /= (double) n_thread;
-    printf("[PROFILING] Build D: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
-    #endif
 }
 
 // Build H2 representation with a kernel function

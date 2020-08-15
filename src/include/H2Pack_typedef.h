@@ -120,6 +120,7 @@ struct H2Pack
     int    is_RPY_Ewald;            // If H2Pack is running RPY Ewald summation kernel
     int    is_HSS_SPD;              // If H2Pack in HSS mode is SPD 
     int    n_lattice;               // Number of periodic lattices, == 3^pt_dim
+    int    print_timers;            // If H2Pack prints internal timers for performance analysis
     int    *parent;                 // Size n_node, parent index of each node
     int    *children;               // Size n_node * max_child, indices of a node's children nodes
     int    *pt_cluster;             // Size n_node * 2, start and end (included) indices of points belong to each node

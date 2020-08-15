@@ -303,7 +303,15 @@ void H2P_generate_proxy_point_ID(
         if (Y0_lsize < 1000 || Y0_lsize > 20000) Y0_lsize = 4000;
         INFO_PRINTF("Overriding parameter %s : %d (default) --> %d (new)\n", "Y0_lsize", Y0_lsize0, Y0_lsize);
     }
+    
+    int print_timers = 0;
     double timers[4];
+    char *print_timers_p = getenv("H2P_PRINT_TIMERS");
+    if (print_timers_p != NULL)
+    {
+        print_timers = atoi(print_timers_p);
+        if (print_timers != 0) print_timers = 1;
+    }
 
     // 2. Construct proxy points on each level
     DTYPE pow_2_level = 0.5;
@@ -338,14 +346,15 @@ void H2P_generate_proxy_point_ID(
             X0_size, Y0_lsize, L1, L2, L3, pp[level], &timers[0]
         );
         
-        #ifdef PROFILING_OUTPUT
-        INFO_PRINTF("Level %d: %d proxy points generated\n", level, pp[level]->ncol);
-        INFO_PRINTF(
-            "    kernel, SpMM, ID, other time = %.3lf, %.3lf, %.3lf, %.3lf sec\n", 
-            timers[_GEN_PP_KRNL_T_IDX], timers[_GEN_PP_KRNL_T_IDX], 
-            timers[_GEN_PP_ID_T_IDX],   timers[_GEN_PP_MISC_T_IDX]
-        );
-        #endif
+        if (print_timers == 1)
+        {
+            INFO_PRINTF("Level %d: %d proxy points generated\n", level, pp[level]->ncol);
+            INFO_PRINTF(
+                "    kernel, SpMM, ID, other time = %.3lf, %.3lf, %.3lf, %.3lf sec\n", 
+                timers[_GEN_PP_KRNL_T_IDX], timers[_GEN_PP_KRNL_T_IDX], 
+                timers[_GEN_PP_ID_T_IDX],   timers[_GEN_PP_MISC_T_IDX]
+            );
+        }
     }  // End of level loop
     
     *pp_ = pp;

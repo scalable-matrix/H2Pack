@@ -430,12 +430,10 @@ void H2P_matmul(
     char *max_n_vec_p = getenv("H2P_MATMUL_MAX_N_VEC");
     if (max_n_vec_p != NULL)
     {
+        int max_n_vec0 = max_n_vec;
         max_n_vec = atoi(max_n_vec_p);
-        if (max_n_vec < 4 || max_n_vec > 512)
-        {
-            WARNING_PRINTF("H2P_MATMUL_MAX_N_VEC = %d is either too small or too large, reset to default value 128\n", max_n_vec);
-            max_n_vec = 128;
-        }
+        if (max_n_vec < 4 || max_n_vec > 512) max_n_vec = 128;
+        INFO_PRINTF("Overriding parameter %s : %d (default) --> %d (new)\n", "max_n_vec", max_n_vec0, max_n_vec);
     }
 
     int x_row_stride, x_col_stride, y_row_stride, y_col_stride;

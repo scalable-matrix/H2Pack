@@ -15,20 +15,28 @@ extern "C" {
 #define MIN(a, b)  ((a) < (b) ? (a) : (b))
 #define MAX(a, b)  ((a) > (b) ? (a) : (b))
 
+#define INFO_PRINTF(fmt, ...)                       \
+    do                                              \
+    {                                               \
+        fprintf(stdout, "[INFO] %s, %d: "fmt,       \
+                __FILE__, __LINE__, ##__VA_ARGS__); \
+        fflush(stdout);                             \
+    } while (0)
+
 #define DEBUG_PRINTF(fmt, ...)                      \
     do                                              \
     {                                               \
-        fprintf(stdout, "[DEBUG] %s, %d: "fmt,      \
+        fprintf(stderr, "[DEBUG] %s, %d: "fmt,      \
                 __FILE__, __LINE__, ##__VA_ARGS__); \
-        fflush(stdout);                             \
+        fflush(stderr);                             \
     } while (0)
 
 #define WARNING_PRINTF(fmt, ...)                    \
     do                                              \
     {                                               \
-        fprintf(stdout, "[WARNING] %s, %d: "fmt,    \
+        fprintf(stderr, "[WARNING] %s, %d: "fmt,    \
                 __FILE__, __LINE__, ##__VA_ARGS__); \
-        fflush(stdout);                             \
+        fflush(stderr);                             \
     } while (0)
 
 #define ERROR_PRINTF(fmt, ...)                      \

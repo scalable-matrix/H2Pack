@@ -43,7 +43,7 @@ int main(int argc, char **argv)
     H2P_dense_mat_t *pp;
     DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * test_params.pt_dim + test_params.pt_dim];
     int start_level = 2;
-    int num_pp = ceil(-log10(test_params.rel_tol)) - 1;
+    int num_pp = ceil(-log10(test_params.rel_tol));
     if (num_pp < 4 ) num_pp = 4;
     if (num_pp > 10) num_pp = 10;
     num_pp = 6 * num_pp * num_pp;

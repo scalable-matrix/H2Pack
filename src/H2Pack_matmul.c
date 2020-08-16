@@ -426,15 +426,8 @@ void H2P_matmul(
 {
     double st, et;
     int krnl_mat_size = h2pack->krnl_mat_size;
-    int max_n_vec = 128;
-    char *max_n_vec_p = getenv("H2P_MATMUL_MAX_N_VEC");
-    if (max_n_vec_p != NULL)
-    {
-        int max_n_vec0 = max_n_vec;
-        max_n_vec = atoi(max_n_vec_p);
-        if (max_n_vec < 4 || max_n_vec > 512) max_n_vec = 128;
-        INFO_PRINTF("Overriding parameter %s : %d (default) --> %d (new)\n", "max_n_vec", max_n_vec0, max_n_vec);
-    }
+    int max_n_vec;
+    GET_ENV_INT_VAR(max_n_vec, "H2P_MATMUL_MAX_N_VEC", "max_n_vec", 128, 4, 512);
 
     int x_row_stride, x_col_stride, y_row_stride, y_col_stride;
     CBLAS_TRANSPOSE x_trans, y_trans;

@@ -179,9 +179,9 @@ static void H2P_search_knn(H2Pack_t h2pack, const int k, int *knn)
                 int   *pt_idx_j = pt_idx->data + j * neighbor_pt_cnt;
                 qsort_DTYPE_int_pair(dist_j, pt_idx_j, 0, neighbor_pt_cnt - 1);
             }  // End of j loop
-            copy_int_mat_blk(pt_idx->data, neighbor_pt_cnt, node_npt, k, knn + node_pt_s * k, k);
+            copy_matrix_block(sizeof(int), node_npt, k, pt_idx->data, neighbor_pt_cnt, knn + node_pt_s * k, k);
         } else {
-            copy_int_mat_blk(pt_idx->data, neighbor_pt_cnt, node_npt, neighbor_pt_cnt, knn + node_pt_s * k, k);
+            copy_matrix_block(sizeof(int), node_npt, neighbor_pt_cnt, pt_idx->data, neighbor_pt_cnt, knn + node_pt_s * k, k);
             // Not enough neighbor points, set the rest as self
             #pragma omp parallel for
             for (int j = node_pt_s; j <= node_pt_e; j++)

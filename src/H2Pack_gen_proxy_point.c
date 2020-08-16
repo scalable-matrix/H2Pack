@@ -31,20 +31,26 @@
 //   X0_size    : Number of candidate points in X
 //   Y0_lsize   : Number of candidate points in Y per layer
 //   L1, L2, L3 : Box sizes of X and Y
+//   alg        : Algorithm for selecting Yp proxy points. 
+//                0 : Uniform candidate point distribution, one QR
+//                1 : Nonuniform candidate point distribution, one QR
+//                2 : Nonuniform candidate point distribution, multiple QR
+//   max_layer  : Maximum number of layers in domain Y
 // Output parameters:
-//   pp     : Generated proxy points, pp should have been initialized before this function
+//   pp     : Generated proxy points, pp should have been initialized 
 //   timers : Size 4, timers for different parts 
 void H2P_generate_proxy_point_nlayer(
     const int pt_dim, const int krnl_dim, const DTYPE reltol, 
     const void *krnl_param, kernel_eval_fptr krnl_eval, 
     const int X0_size, const int Y0_lsize, const DTYPE L1, const DTYPE L2, const DTYPE L3, 
-    H2P_dense_mat_t pp, DTYPE *timers
+    const int alg, const int max_layer, H2P_dense_mat_t pp, DTYPE *timers
 )
 {
     // 1. Initialize working arrays and parameters
     double st, et;
     int n_thread = omp_get_max_threads();
-    int n_layer  = DROUND((L3 - L2) / L1);
+    int n_layer  = (alg == 0) ? 1 : DROUND((L3 - L2) / L1);
+    if (n_layer > max_layer) n_layer = max_layer;
     int Y0_size  = n_layer * Y0_lsize;
     H2P_dense_mat_t X0_coord, Y0_coord, tmp_coord, Yp_coord;
     H2P_dense_mat_t tmpA, min_dist, QR_buff;
@@ -126,29 +132,16 @@ void H2P_generate_proxy_point_nlayer(
     et = get_wtime_sec();
     timers[_GEN_PP_MISC_T_IDX] += et - st;
 
-    // 4. Select proxy points in Y layer by layer
-    H2P_dense_mat_resize(Yp_coord, pt_dim, 0);
-    for (int i = 0; i < n_layer; i++)
+    if (alg == 0 || alg == 1)
     {
-        // (1) Put selected proxy points and i-th layer candidate points together
+        // 4. Select proxy points in domain Y
+        // (1) Generate the kernel matrix
         st = get_wtime_sec();
-        H2P_dense_mat_resize(tmp_coord, pt_dim, Yp_coord->ncol + Y0_lsize);
-        DTYPE *Yp_coord_ptr     = Yp_coord->data;
-        DTYPE *Y0_layer_i_ptr   = Y0_coord->data + i * Y0_lsize;
-        DTYPE *tmp_coord_Yp_ptr = tmp_coord->data;
-        DTYPE *tmp_coord_li_ptr = tmp_coord->data + Yp_coord->ncol;
-        H2P_copy_matrix_block(pt_dim, Yp_coord->ncol, Yp_coord_ptr,   Yp_coord->ld, tmp_coord_Yp_ptr, tmp_coord->ld);
-        H2P_copy_matrix_block(pt_dim, Y0_lsize,       Y0_layer_i_ptr, Y0_coord->ld, tmp_coord_li_ptr, tmp_coord->ld);
+        // Be careful, Y0_coord should be placed before Xp_coord
+        H2P_eval_kernel_matrix_OMP(krnl_param, krnl_eval, krnl_dim, Y0_coord, Xp_coord, tmpA1);
         et = get_wtime_sec();
-        timers[_GEN_PP_MISC_T_IDX] += et - st;
-
-        // (2) Generate kernel matrix for this layer 
-        st = get_wtime_sec();
-        // Be careful, tmp_coord should be placed before Xp_coord
-        H2P_eval_kernel_matrix_OMP(krnl_param, krnl_eval, krnl_dim, tmp_coord, Xp_coord, tmpA1);
-        et = get_wtime_sec();
-
-        // (3) Calculate ID approximation on the new kernel matrix and select new proxy points in Y
+        timers[_GEN_PP_KRNL_T_IDX] += et - st;
+        // (2) Calculate ID approximation on the kernel matrix and select new proxy points in Y
         st = get_wtime_sec();
         if (krnl_dim == 1)
         {
@@ -171,12 +164,67 @@ void H2P_generate_proxy_point_nlayer(
         timers[_GEN_PP_ID_T_IDX]   += et - st;
 
         st = get_wtime_sec();
-        H2P_dense_mat_select_columns(tmp_coord, skel_idx);
-        H2P_dense_mat_resize(Yp_coord, pt_dim, tmp_coord->ncol);
-        H2P_copy_matrix_block(pt_dim, tmp_coord->ncol, tmp_coord->data, tmp_coord->ld, Yp_coord->data, Yp_coord->ld);
+        H2P_dense_mat_select_columns(Y0_coord, skel_idx);
+        H2P_dense_mat_resize(Yp_coord, pt_dim, Y0_coord->ncol);
+        H2P_copy_matrix_block(pt_dim, Y0_coord->ncol, Y0_coord->data, Y0_coord->ld, Yp_coord->data, Yp_coord->ld);
         et = get_wtime_sec();
         timers[_GEN_PP_MISC_T_IDX] += et - st;
-    }  // End of i loop
+    }  // End of "if (alg == 1)"
+
+    if (alg == 2)
+    {
+        // 4. Select proxy points in domain Y layer by layer
+        H2P_dense_mat_resize(Yp_coord, pt_dim, 0);
+        for (int i = 0; i < n_layer; i++)
+        {
+            // (1) Put selected proxy points and i-th layer candidate points together
+            st = get_wtime_sec();
+            H2P_dense_mat_resize(tmp_coord, pt_dim, Yp_coord->ncol + Y0_lsize);
+            DTYPE *Yp_coord_ptr     = Yp_coord->data;
+            DTYPE *Y0_layer_i_ptr   = Y0_coord->data + i * Y0_lsize;
+            DTYPE *tmp_coord_Yp_ptr = tmp_coord->data;
+            DTYPE *tmp_coord_li_ptr = tmp_coord->data + Yp_coord->ncol;
+            H2P_copy_matrix_block(pt_dim, Yp_coord->ncol, Yp_coord_ptr,   Yp_coord->ld, tmp_coord_Yp_ptr, tmp_coord->ld);
+            H2P_copy_matrix_block(pt_dim, Y0_lsize,       Y0_layer_i_ptr, Y0_coord->ld, tmp_coord_li_ptr, tmp_coord->ld);
+            et = get_wtime_sec();
+            timers[_GEN_PP_MISC_T_IDX] += et - st;
+
+            // (2) Generate kernel matrix for this layer 
+            st = get_wtime_sec();
+            // Be careful, tmp_coord should be placed before Xp_coord
+            H2P_eval_kernel_matrix_OMP(krnl_param, krnl_eval, krnl_dim, tmp_coord, Xp_coord, tmpA1);
+            et = get_wtime_sec();
+
+            // (3) Calculate ID approximation on the new kernel matrix and select new proxy points in Y
+            st = get_wtime_sec();
+            if (krnl_dim == 1)
+            {
+                H2P_dense_mat_resize(QR_buff, tmpA1->nrow, 1);
+            } else {
+                int QR_buff_size = (2 * krnl_dim + 2) * tmpA1->ncol + (krnl_dim + 1) * tmpA1->nrow;
+                H2P_dense_mat_resize(QR_buff, QR_buff_size, 1);
+            }
+            H2P_int_vec_set_capacity(ID_buff, 4 * tmpA1->nrow);
+            et = get_wtime_sec();
+            timers[_GEN_PP_MISC_T_IDX] += et - st;
+
+            st = get_wtime_sec();
+            DTYPE reltol2 = reltol * 1e-2;
+            H2P_ID_compress(
+                tmpA1, QR_REL_NRM, &reltol2, NULL, skel_idx, 
+                n_thread, QR_buff->data, ID_buff->data, krnl_dim
+            );
+            et = get_wtime_sec();
+            timers[_GEN_PP_ID_T_IDX]   += et - st;
+
+            st = get_wtime_sec();
+            H2P_dense_mat_select_columns(tmp_coord, skel_idx);
+            H2P_dense_mat_resize(Yp_coord, pt_dim, tmp_coord->ncol);
+            H2P_copy_matrix_block(pt_dim, tmp_coord->ncol, tmp_coord->data, tmp_coord->ld, Yp_coord->data, Yp_coord->ld);
+            et = get_wtime_sec();
+            timers[_GEN_PP_MISC_T_IDX] += et - st;
+        }  // End of i loop
+    }  // End of "if (alg == 2)"
 
     // 5. Increase the density of selected proxy points if necessary
     if (reltol >= 1e-12) 
@@ -286,32 +334,16 @@ void H2P_generate_proxy_point_ID(
         pp[i]->ncol = 0;
     }
     
-    int X0_size = 2000, Y0_lsize = 4000;
-    char *X0_size_p  = getenv("H2P_GEN_PP_X0_SIZE");
-    char *Y0_lsize_p = getenv("H2P_GEN_PP_Y0_LSIZE");
-    if (X0_size_p != NULL)
-    {
-        int X0_size0 = X0_size;
-        X0_size = atoi(X0_size_p);
-        if (X0_size < 500 || X0_size > 5000) X0_size = 2000;
-        INFO_PRINTF("Overriding parameter %s : %d (default) --> %d (new)\n", "X0_size", X0_size0, X0_size);
-    }
-    if (Y0_lsize_p != NULL)
-    {
-        int Y0_lsize0 = Y0_lsize;
-        Y0_lsize = atoi(Y0_lsize_p);
-        if (Y0_lsize < 1000 || Y0_lsize > 20000) Y0_lsize = 4000;
-        INFO_PRINTF("Overriding parameter %s : %d (default) --> %d (new)\n", "Y0_lsize", Y0_lsize0, Y0_lsize);
-    }
-    
-    int print_timers = 0;
+    int gen_pp_alg, X0_size, Y0_lsize, L3_factor, max_layer, print_timers;
+    GET_ENV_INT_VAR(gen_pp_alg,   "H2P_GEN_PP_ALG",       "gen_pp_alg",   2,    0,    2);
+    GET_ENV_INT_VAR(X0_size,      "H2P_GEN_PP_X0_SIZE",   "X0_size",      2000, 500,  5000);
+    GET_ENV_INT_VAR(Y0_lsize,     "H2P_GEN_PP_Y0_LSIZE",  "Y0_lsize",     4000, 1000, 20000);
+    GET_ENV_INT_VAR(L3_factor,    "H2P_GEN_PP_L3_FACTOR", "L3_factor",    8,    8,    32);
+    GET_ENV_INT_VAR(max_layer,    "H2P_GEN_PP_MAX_LAYER", "max_layer",    8,    4,    32);
+    GET_ENV_INT_VAR(print_timers, "H2P_PRINT_TIMERS",     "print_timers", 0,    0,    1);
+
     double timers[4];
-    char *print_timers_p = getenv("H2P_PRINT_TIMERS");
-    if (print_timers_p != NULL)
-    {
-        print_timers = atoi(print_timers_p);
-        if (print_timers != 0) print_timers = 1;
-    }
+    DTYPE L3_factor_ = (DTYPE) L3_factor;
 
     // 2. Construct proxy points on each level
     DTYPE pow_2_level = 0.5;
@@ -330,9 +362,17 @@ void H2P_generate_proxy_point_ID(
         pow_2_level *= 2.0;
         DTYPE L1   = max_L / pow_2_level;
         DTYPE L2   = (1.0 + 2.0 * ALPHA_H2) * L1;
-        DTYPE L3_0 = (1.0 + 8.0 * ALPHA_H2) * L1;
+        DTYPE L3_0 = (1.0 + L3_factor_ * ALPHA_H2) * L1;
         DTYPE L3_1 = 2.0 * max_L - L1;
         DTYPE L3   = MIN(L3_0, L3_1);
+
+        int Y0_lsize_ = Y0_lsize;
+        if (gen_pp_alg == 0)  // Only one ring, multiple Y0_lsize_ by the number of rings
+        {
+            int n_layer = DROUND((L3 - L2) / L1);
+            if (n_layer > max_layer) n_layer = max_layer;
+            Y0_lsize_ *= n_layer;
+        }
         
         // Reset timers
         timers[_GEN_PP_KRNL_T_IDX] = 0.0;
@@ -342,8 +382,10 @@ void H2P_generate_proxy_point_ID(
 
         // Generate proxy points
         H2P_generate_proxy_point_nlayer(
-            pt_dim, krnl_dim, reltol, krnl_param, krnl_eval, 
-            X0_size, Y0_lsize, L1, L2, L3, pp[level], &timers[0]
+            pt_dim, krnl_dim, reltol, 
+            krnl_param, krnl_eval, 
+            X0_size, Y0_lsize_, L1, L2, L3, 
+            gen_pp_alg, max_layer, pp[level], &timers[0]
         );
         
         if (print_timers == 1)

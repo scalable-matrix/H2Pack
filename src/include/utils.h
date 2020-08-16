@@ -57,7 +57,22 @@ extern "C" {
             fflush(stderr);                             \
             assert(expr);                               \
         }                                               \
-    } while (0)                                         \
+    } while (0)
+
+
+#define GET_ENV_INT_VAR(var, env_str, var_str, default_val, min_val, max_val) \
+    do                                          \
+    {                                           \
+        char *env_str_p = getenv(env_str);      \
+        if (env_str_p != NULL)                  \
+        {                                       \
+            var = atoi(env_str_p);              \
+            if (var < min_val || var > max_val) var = default_val;  \
+            INFO_PRINTF("Overriding parameter %s: %d (default) --> %d (runtime)\n", var_str, default_val, var); \
+        } else {                                \
+            var = default_val;                  \
+        }                                       \
+    } while (0)
 
 // Get wall-clock time in seconds
 // Output parameter:
@@ -116,26 +131,21 @@ void calc_err_2norm(
     double *x0_2norm_, double *err_2norm_
 );
 
-// Copy a row-major int matrix block to another row-major int matrix
+// Copy a row-major matrix block to another row-major matrix
 // Input parameters:
-//   src  : Size >= lds * nrow, source matrix
-//   lds  : Leading dimension of src, >= ncol
-//   nrow : Number of rows to be copied
-//   ncol : Number of columns to be copied
-//   ldd  : Leading dimension of dst, >= ncol
+//   dt_size : Size of matrix element data type, in bytes
+//   nrow    : Number of rows to be copied
+//   ncol    : Number of columns to be copied
+//   src     : Size >= lds * nrow, source matrix
+//   lds     : Leading dimension of src, >= ncol
+//   ldd     : Leading dimension of dst, >= ncol
 // Output parameter:
 //   dst  : Size >= ldd * nrow, destination matrix
-void copy_int_mat_blk(
-    const int *src, const int lds, const int nrow, const int ncol, 
-    int *dst, const int ldd
+void copy_matrix_block(
+    const size_t dt_size, const int nrow, const int ncol,
+    const void *src, const int lds, void *dst, const int ldd
 );
 
-// Copy a row-major double matrix block to another row-major double matrix
-// Input / output parameters are the same as copy_int_mat_blk()
-void copy_dbl_mat_blk(
-    const double *src, const int lds, const int nrow, const int ncol,  
-    double *dst, const int ldd
-);
 
 // Print a row-major int matrix block to standard output
 // Input parameters:

@@ -9,11 +9,12 @@ const char description_setup[] =
                 point_coord      : 2d numpy array, point coordinates. Each row or column stores the coordinate of one point;\n\
                 point_dimension  : integer, dimension of the space points lying in (support 1D,2D,and 3D);\n\
                 rel_tol          : float, accuracy threshold for the H2 matrix representation;\n\
-                (optional) JIT_mode       : 1 or 0, flag for running matvec in JIT mode (JIT mode reduces storage cost but has sloer matvec);\n\
+                (optional) JIT_mode       : 1 or 0, flag for running matvec in JIT mode (JIT mode reduces storage cost but has slower matvec);\n\
                 (optional) kernel_param   : 1d numpy array, parameters of the kernel function;\n\
                 (optional) proxy_surface  : 1 or 0, flag for using proxy surface points (mainly work for potential kernel;\n\
                 (optional) max_leaf_points: integer, the maximum number of points in each leaf node.";    
 static PyObject *setup(PyObject *self, PyObject *args, PyObject *keywds);
+
 
 const char description_h2matvec[] = 
             "H2Pack function matvec(x) efficiently multiplies the kernel matrix with ONE vector\n\
@@ -22,12 +23,14 @@ const char description_h2matvec[] =
             ";
 static PyObject *h2matvec(PyObject *self, PyObject *args);
 
+
 const char description_directmatvec[] = 
             "H2Pack function direct_matvec(x) calculates the kernel matrix-vector multiplication directly by evaluating kernel matrix entries dynamically.\n\
              Input description (no need for keywords): \n\
                 x: 1d numpy array, the multiplied vector. should be of the same dimension as the matrix.\
             ";
 static PyObject *direct_matvec(PyObject *self, PyObject *args);
+
 
 const char description_printstat[] = 
             "H2Pack funciton print_statistic() prints out the main information of the constructed H2 matrix representation.";

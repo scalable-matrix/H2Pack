@@ -211,7 +211,7 @@ static PyObject *setup(PyObject *self, PyObject *args, PyObject *keywds) {
     {
         DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * h2pack_params.pts_dim + h2pack_params.pts_dim];
         int start_level = 2;
-        int num_pp = ceil(-log10(h2pack_params.rel_tol)) - 1;
+        int num_pp = ceil(-log10(h2pack_params.rel_tol));
         if (num_pp < 4 ) num_pp = 4;
         if (num_pp > 10) num_pp = 10;
         num_pp = 6 * num_pp * num_pp;

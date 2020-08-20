@@ -10,7 +10,7 @@ USE_MKL      = 0
 USE_OPENBLAS = 1
 OPENBLAS_INSTALL_DIR = /usr/local/opt/openblas
 
-CC      = gcc-9
+CC      = gcc
 DEF     = 
 INC     = ./include
 CFLAGS  = -I$(INC) -Wall -g -std=gnu99 -O3 -fPIC $(DEF)
@@ -20,7 +20,7 @@ AR      = xiar rcs
 CFLAGS += -qopenmp -xHost
 endif
 
-ifeq ($(strip $(CC)), gcc-9)
+ifeq ($(strip $(CC)), gcc)
 AR      = ar rcs
 CFLAGS += -fopenmp -lm -march=native -Wno-unused-result -Wno-unused-function
 endif

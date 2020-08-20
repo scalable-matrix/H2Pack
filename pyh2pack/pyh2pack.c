@@ -42,6 +42,7 @@ struct H2Pack_Params
 {
     DTYPE *pts_coord;           //  Coordinates of the points. 
     int    pts_dim;             //  Dimension of the space points lie in.
+    int    pts_xdim; 
     int    pts_num;             //  Number of points
 
     int    krnl_dim;            //  Dimension of the output of the kernel function
@@ -74,6 +75,7 @@ static PyObject *setup(PyObject *self, PyObject *args, PyObject *keywds) {
     double st, et;                      //  timing variable.
     int flag_proxysurface_in = -1;      //  flag for the use of proxy surface points
     int max_leaf_points = 0;
+
     //  Step 1: check whether h2pack has been setup before. 
     if (h2pack_params.flag_setup == 1)
     {
@@ -154,6 +156,11 @@ static PyObject *setup(PyObject *self, PyObject *args, PyObject *keywds) {
         return NULL;
     }
 
+    if (strcmp(krnl_name_in, "RPY"))
+        h2pack_params.pts_xdim = 4;
+    else
+        h2pack_params.pts_xdim = h2pack_params.pts_dim;
+
     snprintf(h2pack_params.krnl_name, sizeof(h2pack_params.krnl_name), "%s", krnl_name_in);
     snprintf(h2pack_params.krnl_param_descr, sizeof(h2pack_params.krnl_param_descr), "%s", kernel_info.param_descr);
     h2pack_params.krnl_eval = kernel_info.krnl_eval;
@@ -217,7 +224,7 @@ static PyObject *setup(PyObject *self, PyObject *args, PyObject *keywds) {
         num_pp = 6 * num_pp * num_pp;
         st = get_wtime_sec();
         H2P_generate_proxy_point_surface(
-            h2pack_params.pts_dim, num_pp, h2pack->max_level, 
+            h2pack_params.pts_dim, h2pack_params.pts_xdim, num_pp, h2pack->max_level, 
             start_level, max_L, &pp
         );
         et = get_wtime_sec();

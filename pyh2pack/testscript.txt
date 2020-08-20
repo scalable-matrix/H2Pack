@@ -6,7 +6,7 @@ N = 80000
 krnl_dim = 1
 coord = np.random.normal(0, 5, size=(3, N))
 
-pyh2pack.setup(kernel="Coulomb", kernel_dimension=krnl_dim, point_coord=coord, point_dimension=3, JIT_mode=1, rel_tol=1e-6, proxy_surface=1, max_leaf_points=0)
+pyh2pack.setup(kernel="Matern52_3D", kernel_dimension=krnl_dim, point_coord=coord, point_dimension=3, JIT_mode=1, rel_tol=1e-3, proxy_surface=0, max_leaf_points=0)
 
 x = np.random.normal(size=(krnl_dim*N))
 y = pyh2pack.h2matvec(x)

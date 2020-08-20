@@ -1,37 +1,55 @@
-H2Pack is a high-performance, shared-memory library for constructing and operating with ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix representations for kernel matrices. In the current version, the operations available are:
+H2Pack is a high-performance, shared-memory library for constructing and applying ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix representations for kernel matrices. 
+The key feature of H2Pack is the efficient ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix construction for kernel matrices based on the hybrid compression method called the proxy point method. 
 
-* ![](https://latex.codecogs.com/svg.latex?O(N)) complexity ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)  matrix representation construction of a kernel matrix
-* ![](https://latex.codecogs.com/svg.latex?O(N)) complexity ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)  matrix-vector multiplication
-* ![](https://latex.codecogs.com/svg.latex?O(N)) complexity ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)  matrix - dense matrix (multiple vectors) multiplication
+Currently, H2Pack supports kernel matrices of form ![](https://latex.codecogs.com/svg.latex?K(X,X)) defined by a translationally-invariant, symmetric kernel function ![](https://latex.codecogs.com/svg.latex?K(x,y)) (e.g., Gaussian, Matern, Laplace, and Stokes kernels) and a point set ![](https://latex.codecogs.com/svg.latex?X) in low-dimensional space (e.g., 1D, 2D, and 3D).
+H2Pack, written in C99, provides a C/C++ interface and an experimental Python interface. The Matlab prototype of H2Pack can be found in the [repo]().
 
-H2Pack is written in C99 and provides a C/C++ interface. H2Pack also has an experimental Python interface. 
+**Main Functions:**
 
-Please cite the following papers if you use H2Pack in your work:
+* ![](https://latex.codecogs.com/svg.latex?O(N)) complexity ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)  matrix representation construction for a kernel matrix (![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)-construction)
+* ![](https://latex.codecogs.com/svg.latex?O(N)) complexity ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)  matrix-vector multiplication (![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)-matvec)
+* ![](https://latex.codecogs.com/svg.latex?O(N)) complexity ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)  matrix-matrix  multiplication (![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)-matmul)
 
-* [Interpolative Decomposition via Proxy Points For Kernel Matrices](https://www.cc.gatech.edu/~echow/pubs/xing-chow-simax-2019.pdf)
-* [H2Pack: High-Performance H2 Matrix Package for Kernel Matrices Using the Proxy Point Method]()
 
+**References**:
+
+* _X. Xing and E. Chow, Interpolative decomposition via proxy points for kernel matrices, SIAM Journal on Matrix Analysis and Applications, 41(1), 221–243 (2020)_
+* _H. Huang, X. Xing, and E. Chow, H2Pack: High-performance H2 matrix package for kernel matrices using the proxy point method, ACM Transactions on Mathematical Software, accepted (2020)_
+
+**Additional Features:** 
+
+H2Pack also provides functions for constructing and applying HSS matrix representations: 
+
+* HSS matrix representation construction for a kernel matrix using the proxy point method 
+* HSS matrix-vector multiplication
+* HSS matrix-matrix multiplication
+* ULV decomposition of HSS matrix representation
+* Direct solve of HSS matrix representation based on ULV decomposition
 
 
 ## Getting Started
 
 * [Installing H2Pack](https://github.com/huanghua1994/H2Pack/wiki/Installing-H2Pack)
-* [Using H2Pack in C/C++](https://github.com/huanghua1994/H2Pack/wiki/Using-H2Pack-in-C-CPP)
-*  [Using and Writing Kernel Functions](https://github.com/huanghua1994/H2Pack/wiki/Using-and-Writing-Kernel-Functions) 
-* [Using H2Pack in Python](https://github.com/huanghua1994/H2Pack/wiki/Using-H2Pack-in-Python)
+* [Basic Usage](https://github.com/huanghua1994/H2Pack/wiki/Basic-Usage)
+* [Using and Writing Kernel Functions](https://github.com/huanghua1994/H2Pack/wiki/Using-and-Writing-Kernel-Functions) 
+* [Two Running Modes for H2Pack](https://github.com/huanghua1994/H2Pack/wiki/Two-Running-Modes-for-H2Pack)
+* [HSS-Related Computations](https://github.com/huanghua1994/H2Pack/wiki/HSS-Related-Computations)
+
+## Advanced Configurations and Tools
+
+* [Bi-Kernel Matvec (BKM) Functions](https://github.com/huanghua1994/H2Pack/wiki/Bi-Kernel-Matvec-Functions)
+* [Vector Wrapper Functions for Kernel Evaluations](https://github.com/huanghua1994/H2Pack/wiki/Vector-Wrapper-Functions-For-Kernel-Evaluations)
+* [Python Interface](https://github.com/huanghua1994/H2Pack/wiki/Using-H2Pack-in-Python)
 
 
-## Using H2Pack Efficiently
+## Numerical Tests
 
-* [Choosing the Running Mode (AOT/JIT)](https://github.com/huanghua1994/H2Pack/wiki/Choosing-the-Running-Mode)
-* [Writing Bi-Kernel Matvec (BKM) Functions](https://github.com/huanghua1994/H2Pack/wiki/Writing-BKM-Functions)
-* [Using Vector Wrapper Functions in Kernel Functions](https://github.com/huanghua1994/H2Pack/wiki/Using-VWF-in-Kernel-Functions)
-
-## Benchmarks
-
-* [Benchmarks On a Desktop](https://github.com/huanghua1994/H2Pack/wiki/Benchmarks-on-A-Desktop)
-* [Benchmarks On a Server](https://github.com/huanghua1994/H2Pack/wiki/Benchmarks-on-A-Server)
-
+* [Accuracy Tests on Various Kernels](https://github.com/huanghua1994/H2Pack/wiki/Accuracy-Tests-on-Various-Kernels)
+* [Linear Scaling Tests](https://github.com/huanghua1994/H2Pack/wiki/Linear-Scaling-Tests)
+* [Parallel Efficiency Tests](https://github.com/huanghua1994/H2Pack/wiki/Parallel-Efficiency-Tests)
+* [Comparative Tests on H2-matvec and H2-matmul](https://github.com/huanghua1994/H2Pack/wiki/Comparative-Tests-on-H2-matvec-and-H2-matmul)
+* [Comparative Tests on KME, BKM, and VWF](https://github.com/huanghua1994/H2Pack/wiki/Comparative-Tests-on-KME-BKM-and-VWF)
 ## Last But Not Least
 
 * [Can I ...](https://github.com/huanghua1994/H2Pack/wiki/Can-I)
+

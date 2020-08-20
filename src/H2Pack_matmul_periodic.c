@@ -251,17 +251,8 @@ void H2P_matmul_periodic(
     double st, et;
     int krnl_mat_size = h2pack->krnl_mat_size;
     int krnl_dim      = h2pack->krnl_dim;
-    int max_n_vec = 128;
-    char *max_n_vec_p = getenv("H2P_MATMUL_MAX_N_VEC");
-    if (max_n_vec_p != NULL)
-    {
-        max_n_vec = atoi(max_n_vec_p);
-        if (max_n_vec < 4 || max_n_vec > 512)
-        {
-            WARNING_PRINTF("H2P_MATMUL_MAX_N_VEC = %d is either too small or too large, reset to default value 128\n", max_n_vec);
-            max_n_vec = 128;
-        }
-    }
+    int max_n_vec;
+    GET_ENV_INT_VAR(max_n_vec, "H2P_MATMUL_MAX_N_VEC", "max_n_vec", 128, 4, 512);
 
     int x_row_stride, x_col_stride, y_row_stride, y_col_stride;
     CBLAS_TRANSPOSE x_trans, y_trans;

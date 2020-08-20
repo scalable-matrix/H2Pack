@@ -1202,7 +1202,7 @@ void H2P_SPDHSS_H2_get_level_HSS_Bij_pairs(H2Pack_t h2mat, H2P_int_vec_t **level
             val[valid_cnt] = k;
             valid_cnt++;
         }
-        qsort_int_key_val(key, val, 0, valid_cnt - 1);
+        H2P_qsort_int_key_val(key, val, 0, valid_cnt - 1);
         H2P_int_vec_set_capacity(prev_pairs1, valid_cnt * 2);
         int *pp1_data = prev_pairs1->data;
         int cnt = 0, curr_key = -19241112;

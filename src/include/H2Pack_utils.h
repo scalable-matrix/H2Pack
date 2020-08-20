@@ -73,7 +73,7 @@ void H2P_eval_kernel_matrix_OMP(
 //   L      : Box size
 // Output parameter:
 //   <return> : If the coordinate is in the box
-int point_in_box(const int pt_dim, DTYPE *coord, DTYPE L);
+int H2P_point_in_box(const int pt_dim, DTYPE *coord, DTYPE L);
 
 // Generate npt uniformly distributed random points in a ring 
 // [-L1/2, L1/2]^pt_dim excluding [-L0/2, L0/2]^pt_dim 
@@ -84,7 +84,7 @@ int point_in_box(const int pt_dim, DTYPE *coord, DTYPE L);
 //   ldc    : Leading dimension of coord
 // Output parameter:
 //   coord : Size pt_dim-by-ldc, each column is a point coordinate
-void gen_coord_in_ring(const int npt, const int pt_dim, const DTYPE L0, const DTYPE L1, DTYPE *coord, const int ldc);
+void H2P_gen_coord_in_ring(const int npt, const int pt_dim, const DTYPE L0, const DTYPE L1, DTYPE *coord, const int ldc);
 
 // Generate a random sparse matrix A for calculating y^T := A^T * x^T,
 // where A is a random sparse matrix that has no more than max_nnz_col 
@@ -138,7 +138,7 @@ void H2P_gen_normal_distribution(const DTYPE mu, const DTYPE sigma, const int ne
 //   l, r     : Sort range: [l, r-1]
 // Output parameters:
 //   key, val : Array, size >= r+1, sorted key-value pairs
-void qsort_int_key_val(int *key, int *val, int l, int r);
+void H2P_qsort_int_key_val(int *key, int *val, int l, int r);
 
 // Convert an integer COO matrix to a CSR matrix 
 // Input parameters:

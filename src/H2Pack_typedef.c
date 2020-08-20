@@ -97,6 +97,15 @@ void H2P_init(
     h2pack->ULV_L               = NULL;
     h2pack->tb                  = NULL;
     h2pack->upward_tq           = NULL;
+
+    h2pack->print_timers = 0;
+    char *print_timers_p = getenv("H2P_PRINT_TIMERS");
+    if (print_timers_p != NULL)
+    {
+        h2pack->print_timers = atoi(print_timers_p);
+        if (h2pack->print_timers != 0) h2pack->print_timers = 1;
+        if (h2pack->print_timers == 1) INFO_PRINTF("H2Pack will print internal timers for performance analysis\n");
+    }
     
     H2P_int_vec_init(&h2pack->B_blk,  h2pack->n_thread * BD_NTASK_THREAD + 5);
     H2P_int_vec_init(&h2pack->D_blk0, h2pack->n_thread * BD_NTASK_THREAD + 5);

@@ -107,10 +107,8 @@ void H2P_matvec_fwd_transform(H2Pack_t h2pack, const DTYPE *x)
     int *mat_cluster   = h2pack->mat_cluster;
     H2P_thread_buf_t *thread_buf = h2pack->tb;
     
-    // 1. Initialize y0 on the first run
     H2P_matvec_init_y0(h2pack);
-    
-    // 2. Upward sweep
+
     H2P_dense_mat_t *y0 = h2pack->y0;
     H2P_dense_mat_t *U  = h2pack->U;
     for (int i = max_level; i >= min_adm_level; i--)
@@ -162,19 +160,20 @@ void H2P_matvec_fwd_transform(H2Pack_t h2pack, const DTYPE *x)
             thread_buf[tid]->timer += get_wtime_sec();
         }  // End of "pragma omp parallel"
         
-        #ifdef PROFILING_OUTPUT
-        double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
-        for (int i = 0; i < n_thread_i; i++)
+        if (h2pack->print_timers == 1)
         {
-            double thread_i_timer = thread_buf[i]->timer;
-            avg_t += thread_i_timer;
-            max_t = MAX(max_t, thread_i_timer);
-            min_t = MIN(min_t, thread_i_timer);
+            double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
+            for (int i = 0; i < n_thread_i; i++)
+            {
+                double thread_i_timer = thread_buf[i]->timer;
+                avg_t += thread_i_timer;
+                max_t = MAX(max_t, thread_i_timer);
+                min_t = MIN(min_t, thread_i_timer);
+            }
+            avg_t /= (double) n_thread_i;
+            INFO_PRINTF("Matvec forward transformation: level %d, %d/%d threads, %d nodes\n", i, n_thread_i, n_thread, level_i_n_node);
+            INFO_PRINTF("    min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
         }
-        avg_t /= (double) n_thread_i;
-        printf("[PROFILING] MatVec upward sweep: height %d, %d/%d threads, %d nodes, ", i, n_thread_i, n_thread, height_i_n_node);
-        printf("min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
-        #endif
     }  // End of i loop
 }
 
@@ -425,18 +424,19 @@ void H2P_matvec_intmd_mult_AOT(H2Pack_t h2pack, const DTYPE *x)
     // 3. Sum thread-local buffers in y1
     H2P_matvec_sum_y1_thread(h2pack);
     
-    #ifdef PROFILING_OUTPUT
-    double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
-    for (int i = 0; i < n_thread; i++)
+    if (h2pack->print_timers == 1)
     {
-        double thread_i_timer = thread_buf[i]->timer;
-        avg_t += thread_i_timer;
-        max_t = MAX(max_t, thread_i_timer);
-        min_t = MIN(min_t, thread_i_timer);
+        double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
+        for (int i = 0; i < n_thread; i++)
+        {
+            double thread_i_timer = thread_buf[i]->timer;
+            avg_t += thread_i_timer;
+            max_t = MAX(max_t, thread_i_timer);
+            min_t = MIN(min_t, thread_i_timer);
+        }
+        avg_t /= (double) n_thread;
+        INFO_PRINTF("Matvec intermediate multiplication: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
     }
-    avg_t /= (double) n_thread;
-    printf("[PROFILING] MatVec intermediate sweep: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
-    #endif
 }
 
 // Extend the number of points to a multiple of SIMD_LEN and perform an n-body bi-matvec
@@ -753,18 +753,19 @@ void H2P_matvec_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x)
     // 3. Sum thread-local buffers in y1
     H2P_matvec_sum_y1_thread(h2pack);
     
-    #ifdef PROFILING_OUTPUT
-    double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
-    for (int i = 0; i < n_thread; i++)
+    if (h2pack->print_timers == 1)
     {
-        double thread_i_timer = thread_buf[i]->timer;
-        avg_t += thread_i_timer;
-        max_t = MAX(max_t, thread_i_timer);
-        min_t = MIN(min_t, thread_i_timer);
+        double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
+        for (int i = 0; i < n_thread; i++)
+        {
+            double thread_i_timer = thread_buf[i]->timer;
+            avg_t += thread_i_timer;
+            max_t = MAX(max_t, thread_i_timer);
+            min_t = MIN(min_t, thread_i_timer);
+        }
+        avg_t /= (double) n_thread;
+        INFO_PRINTF("Matvec intermediate multiplication: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
     }
-    avg_t /= (double) n_thread;
-    printf("[PROFILING] MatVec intermediate sweep: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
-    #endif
 }
 
 // H2 matvec backward transformation, calculate U_i * (B_{ij} * (U_j^T * x_j))
@@ -846,19 +847,21 @@ void H2P_matvec_bwd_transform(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
             }  // End of j loop
             thread_buf[tid]->timer += get_wtime_sec();
         }  // End of "pragma omp parallel"
-        #ifdef PROFILING_OUTPUT
-        double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
-        for (int i = 0; i < n_thread_i; i++)
+        
+        if (h2pack->print_timers == 1)
         {
-            double thread_i_timer = thread_buf[i]->timer;
-            avg_t += thread_i_timer;
-            max_t = MAX(max_t, thread_i_timer);
-            min_t = MIN(min_t, thread_i_timer);
-        }
-        avg_t /= (double) n_thread_i;
-        printf("[PROFILING] MatVec downward sweep: level %d, %d/%d threads, %d nodes, ", i, n_thread_i, n_thread, level_i_n_node);
-        printf("min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
-        #endif
+            double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
+            for (int i = 0; i < n_thread_i; i++)
+            {
+                double thread_i_timer = thread_buf[i]->timer;
+                avg_t += thread_i_timer;
+                max_t = MAX(max_t, thread_i_timer);
+                min_t = MIN(min_t, thread_i_timer);
+            }
+            avg_t /= (double) n_thread_i;
+            INFO_PRINTF("Matvec backward transformation: level %d, %d/%d threads, %d nodes\n", i, n_thread_i, n_thread, level_i_n_node);
+            INFO_PRINTF("    min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
+        }  // End of "if (h2pack->print_timers == 1)"
     }  // End of i loop
 }
 
@@ -984,18 +987,19 @@ void H2P_matvec_dense_mult_AOT(H2Pack_t h2pack, const DTYPE *x)
         thread_buf[tid]->timer += get_wtime_sec();
     }  // End of "pragma omp parallel"
     
-    #ifdef PROFILING_OUTPUT
-    double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
-    for (int i = 0; i < n_thread; i++)
+    if (h2pack->print_timers == 1)
     {
-        double thread_i_timer = thread_buf[i]->timer;
-        avg_t += thread_i_timer;
-        max_t = MAX(max_t, thread_i_timer);
-        min_t = MIN(min_t, thread_i_timer);
+        double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
+        for (int i = 0; i < n_thread; i++)
+        {
+            double thread_i_timer = thread_buf[i]->timer;
+            avg_t += thread_i_timer;
+            max_t = MAX(max_t, thread_i_timer);
+            min_t = MIN(min_t, thread_i_timer);
+        }
+        avg_t /= (double) n_thread;
+        INFO_PRINTF("Matvec dense multiplication: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
     }
-    avg_t /= (double) n_thread;
-    printf("[PROFILING] MatVec dense block sweep: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
-    #endif
 }
 
 // H2 matvec dense multiplication, calculate D_{ij} * x_j
@@ -1130,18 +1134,19 @@ void H2P_matvec_dense_mult_JIT(H2Pack_t h2pack, const DTYPE *x)
         thread_buf[tid]->timer += get_wtime_sec();
     }  // End of "pragma omp parallel"
     
-    #ifdef PROFILING_OUTPUT
-    double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
-    for (int i = 0; i < n_thread; i++)
+    if (h2pack->print_timers == 1)
     {
-        double thread_i_timer = thread_buf[i]->timer;
-        avg_t += thread_i_timer;
-        max_t = MAX(max_t, thread_i_timer);
-        min_t = MIN(min_t, thread_i_timer);
+        double max_t = 0.0, avg_t = 0.0, min_t = 19241112.0;
+        for (int i = 0; i < n_thread; i++)
+        {
+            double thread_i_timer = thread_buf[i]->timer;
+            avg_t += thread_i_timer;
+            max_t = MAX(max_t, thread_i_timer);
+            min_t = MIN(min_t, thread_i_timer);
+        }
+        avg_t /= (double) n_thread;
+        INFO_PRINTF("Matvec dense multiplication: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
     }
-    avg_t /= (double) n_thread;
-    printf("[PROFILING] MatVec dense block sweep: min/avg/max thread wall-time = %.3lf, %.3lf, %.3lf (s)\n", min_t, avg_t, max_t);
-    #endif
 }
 
 // H2 representation multiplies a column vector

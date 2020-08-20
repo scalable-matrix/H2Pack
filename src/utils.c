@@ -93,31 +93,22 @@ void calc_err_2norm(
     *err_2norm_ = sqrt(err_2norm);
 }
 
-// Copy a row-major int matrix block to another row-major int matrix
-void copy_int_mat_blk(
-    const int *src, const int lds, const int nrow, const int ncol, 
-    int *dst, const int ldd
+// Copy a row-major matrix block to another row-major matrix
+void copy_matrix_block(
+    const size_t dt_size, const int nrow, const int ncol, 
+    const void *src, const int lds, void *dst, const int ldd
 )
 {
+    const char *src_ = (char*) src;
+    char *dst_ = (char*) dst;
+    const size_t lds_ = dt_size * (size_t) lds;
+    const size_t ldd_ = dt_size * (size_t) ldd;
+    const size_t row_msize = dt_size * (size_t) ncol;
     for (int irow = 0; irow < nrow; irow++)
     {
-        size_t src_offset = (size_t) irow * (size_t) lds;
-        size_t dst_offset = (size_t) irow * (size_t) ldd;
-        memcpy(dst + dst_offset, src + src_offset, INT_MSIZE * ncol);
-    }
-}
-
-// Copy a row-major double matrix block to another row-major double matrix
-void copy_dbl_mat_blk(
-    const double *src, const int lds, const int nrow, const int ncol,  
-    double *dst, const int ldd
-)
-{
-    for (int irow = 0; irow < nrow; irow++)
-    {
-        size_t src_offset = (size_t) irow * (size_t) lds;
-        size_t dst_offset = (size_t) irow * (size_t) ldd;
-        memcpy(dst + dst_offset, src + src_offset, DBL_MSIZE * ncol);
+        size_t src_offset = (size_t) irow * lds_;
+        size_t dst_offset = (size_t) irow * ldd_;
+        memcpy(dst_ + dst_offset, src_ + src_offset, row_msize);
     }
 }
 

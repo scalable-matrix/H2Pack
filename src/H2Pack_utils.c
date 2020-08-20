@@ -88,7 +88,7 @@ void H2P_eval_kernel_matrix_OMP(
 }
 
 // Check if a coordinate is in box [-L/2, L/2]^pt_dim
-int point_in_box(const int pt_dim, DTYPE *coord, DTYPE L)
+int H2P_point_in_box(const int pt_dim, DTYPE *coord, DTYPE L)
 {
     int res = 1;
     DTYPE semi_L = L * 0.5;
@@ -106,7 +106,7 @@ int point_in_box(const int pt_dim, DTYPE *coord, DTYPE L)
 
 // Generate npt uniformly distributed random points in a ring 
 // [-L1/2, L1/2]^pt_dim excluding [-L0/2, L0/2]^pt_dim 
-void gen_coord_in_ring(const int npt, const int pt_dim, const DTYPE L0, const DTYPE L1, DTYPE *coord, const int ldc)
+void H2P_gen_coord_in_ring(const int npt, const int pt_dim, const DTYPE L0, const DTYPE L1, DTYPE *coord, const int ldc)
 {
     const DTYPE semi_L1 = 0.5 * L1;
     DTYPE coord_i[8];
@@ -117,7 +117,7 @@ void gen_coord_in_ring(const int npt, const int pt_dim, const DTYPE L0, const DT
         while (flag == 0)
         {
             for (int j = 0; j < pt_dim; j++) coord_i[j] = (DTYPE) drand48() * L1 - semi_L1;
-            if ((point_in_box(pt_dim, coord_i, L1) == 1) && (point_in_box(pt_dim, coord_i, L0) == 0))
+            if ((H2P_point_in_box(pt_dim, coord_i, L1) == 1) && (H2P_point_in_box(pt_dim, coord_i, L0) == 0))
             {
                 flag = 1;
                 for (int j = 0; j < pt_dim; j++) coord[j * ldc + i] = coord_i[j];
@@ -231,7 +231,7 @@ void H2P_gen_normal_distribution(const DTYPE mu, const DTYPE sigma, const int ne
 }
 
 // Quick sorting an integer key-value pair array by key
-void qsort_int_key_val(int *key, int *val, int l, int r)
+void H2P_qsort_int_key_val(int *key, int *val, int l, int r)
 {
     int i = l, j = r, tmp_key, tmp_val;
     int mid_key = key[(l + r) / 2];
@@ -246,8 +246,8 @@ void qsort_int_key_val(int *key, int *val, int l, int r)
             i++;  j--;
         }
     }
-    if (i < r) qsort_int_key_val(key, val, i, r);
-    if (j > l) qsort_int_key_val(key, val, l, j);
+    if (i < r) H2P_qsort_int_key_val(key, val, i, r);
+    if (j > l) H2P_qsort_int_key_val(key, val, l, j);
 }
 
 // Convert a integer COO matrix to a CSR matrix 
@@ -275,7 +275,7 @@ void H2P_int_COO_to_CSR(
     // Sort the non-zeros in each row according to column indices
     #pragma omp parallel for
     for (int i = 0; i < nrow; i++)
-        qsort_int_key_val(col_idx, val_, row_ptr[i], row_ptr[i + 1] - 1);
+        H2P_qsort_int_key_val(col_idx, val_, row_ptr[i], row_ptr[i + 1] - 1);
 }
 
 // Get the value of integer CSR matrix element A(row, col)

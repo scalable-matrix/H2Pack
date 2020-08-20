@@ -1,3 +1,40 @@
+
+
+//  Parameter structure
+typedef struct{
+    DTYPE *pts_coord;           //  Coordinates of the points. 
+    int    pts_dim;             //  Dimension of the space points lie in.
+    int    pts_xdim; 
+    int    pts_num;             //  Number of points
+
+    int    krnl_dim;            //  Dimension of the output of the kernel function
+    char   krnl_name[16];       //  Name of the kernel function. 
+    DTYPE *krnl_param;          //  parameters of the kernel function
+    char  krnl_param_descr[512];//  Description of the kernel.
+    int   krnl_param_len;       //  Number of parameters
+    int   krnl_bimv_flops;      //  Flops of bimv operation.
+    kernel_eval_fptr krnl_eval; //  Function pointer for kernel_evaluation
+    kernel_bimv_fptr krnl_bimv; //  Function pointer for kernel_bimv
+  
+    DTYPE rel_tol;              //  Relative error threshold for kernel matrix compression.
+    int   BD_JIT;               //  Flag of Just-In-Time matvec mode. 
+    int   krnl_mat_size;        //  Size of the defined kernel matrix K(coord, coord)
+    
+    int   flag_proxysurface;    //  Indicate whether to use proxy surface method instead.        
+} H2Pack_Params;
+
+//  MODULE CLASS
+typedef struct{
+    PyObject_HEAD
+    //  H2 matrix pointer
+    H2Pack_t h2mat;
+    //  H2 matrix parameters
+    H2Pack_Params params;
+    //  Indicate whether h2mat has been built
+    int flag_setup;
+} H2Mat;
+
+
 const char description_setup[] = 
             "H2Pack function setup(...) involves the following three computation steps:\n\
                 1. parse the test information \n\
@@ -13,7 +50,7 @@ const char description_setup[] =
                 (optional) kernel_param   : 1d numpy array, parameters of the kernel function;\n\
                 (optional) proxy_surface  : 1 or 0, flag for using proxy surface points (mainly work for potential kernel;\n\
                 (optional) max_leaf_points: integer, the maximum number of points in each leaf node.";    
-static PyObject *setup(PyObject *self, PyObject *args, PyObject *keywds);
+static PyObject *setup(H2Mat *self, PyObject *args, PyObject *keywds);
 
 
 const char description_h2matvec[] = 
@@ -21,7 +58,7 @@ const char description_h2matvec[] =
              Input description (no need for keywords): \n\
                 x: 1d numpy array, the multiplied vector. should be of the same dimension as the matrix.\
             ";
-static PyObject *h2matvec(PyObject *self, PyObject *args);
+static PyObject *h2matvec(H2Mat *self, PyObject *args);
 
 
 const char description_directmatvec[] = 
@@ -29,22 +66,22 @@ const char description_directmatvec[] =
              Input description (no need for keywords): \n\
                 x: 1d numpy array, the multiplied vector. should be of the same dimension as the matrix.\
             ";
-static PyObject *direct_matvec(PyObject *self, PyObject *args);
+static PyObject *direct_matvec(H2Mat *self, PyObject *args);
 
 
 const char description_printstat[] = 
             "H2Pack funciton print_statistic() prints out the main information of the constructed H2 matrix representation.";
-static PyObject *print_statistic(PyObject *self, PyObject *args);
+static PyObject *print_statistic(H2Mat *self, PyObject *args);
 
 const char description_printset[] = 
             "H2Pack funciton print_setting() prints out the main information of H2Pack setting.";
-static PyObject *print_setting(PyObject *self, PyObject *args);
+static PyObject *print_setting(H2Mat *self, PyObject *args);
 
 const char description_printkernel[] = 
             "H2Pack funciton print_kernels() lists all the supported kernel functions and their descriptions.";
 static PyObject *print_kernels(PyObject *self, PyObject *args);
 
-static PyObject *clean(PyObject *self, PyObject *args);
+static PyObject *clean(H2Mat *self);
 
 
 

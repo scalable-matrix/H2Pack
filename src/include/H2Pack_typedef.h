@@ -121,6 +121,7 @@ struct H2Pack
     int    is_HSS_SPD;              // If H2Pack in HSS mode is SPD 
     int    n_lattice;               // Number of periodic lattices, == 3^pt_dim
     int    print_timers;            // If H2Pack prints internal timers for performance analysis
+    int    print_dbginfo;           // If H2Pack prints debug information
     int    *parent;                 // Size n_node, parent index of each node
     int    *children;               // Size n_node * max_child, indices of a node's children nodes
     int    *pt_cluster;             // Size n_node * 2, start and end (included) indices of points belong to each node
@@ -159,6 +160,7 @@ struct H2Pack
     DTYPE  QR_stop_tol;             // Partial QR stop column norm tolerance
     DTYPE  *coord;                  // Size n_point * pt_dim, sorted point coordinates
     DTYPE  *enbox;                  // Size n_node * (2*pt_dim), enclosing box data of each node
+    DTYPE  *root_enbox;             // Size 2 * pt_dim, enclosing box of the root node
     DTYPE  *per_lattices;           // Size n_lattice     * pt_dim, for periodic system, each row is a periodic lattice
     DTYPE  *per_adm_shifts;         // Size r_adm_pairs   * pt_dim, for periodic system, each row is a j node's shift in a admissible pair (i, j)
     DTYPE  *per_inadm_shifts;       // Size r_inadm_pairs * pt_dim, for periodic system, each row is a j node's shift in a inadmissible pair (i, j)

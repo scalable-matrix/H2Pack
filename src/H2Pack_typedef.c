@@ -78,6 +78,7 @@ void H2P_init(
     h2pack->D_ptr               = NULL;
     h2pack->coord               = NULL;
     h2pack->enbox               = NULL;
+    h2pack->root_enbox          = NULL;
     h2pack->per_lattices        = NULL;
     h2pack->per_adm_shifts      = NULL;
     h2pack->per_inadm_shifts    = NULL;
@@ -98,14 +99,10 @@ void H2P_init(
     h2pack->tb                  = NULL;
     h2pack->upward_tq           = NULL;
 
-    h2pack->print_timers = 0;
-    char *print_timers_p = getenv("H2P_PRINT_TIMERS");
-    if (print_timers_p != NULL)
-    {
-        h2pack->print_timers = atoi(print_timers_p);
-        if (h2pack->print_timers != 0) h2pack->print_timers = 1;
-        if (h2pack->print_timers == 1) INFO_PRINTF("H2Pack will print internal timers for performance analysis\n");
-    }
+    GET_ENV_INT_VAR(h2pack->print_timers,  "H2P_PRINT_TIMERS",  "print_timers",  0, 0, 1);
+    GET_ENV_INT_VAR(h2pack->print_dbginfo, "H2P_PRINT_DBGINFO", "print_dbginfo", 0, 0, 1);
+    if (h2pack->print_timers  == 1) INFO_PRINTF("H2Pack will print internal timers for performance analysis\n");
+    if (h2pack->print_dbginfo == 1) INFO_PRINTF("H2Pack will print debug information\n");
     
     H2P_int_vec_init(&h2pack->B_blk,  h2pack->n_thread * BD_NTASK_THREAD + 5);
     H2P_int_vec_init(&h2pack->D_blk0, h2pack->n_thread * BD_NTASK_THREAD + 5);
@@ -241,6 +238,7 @@ void H2P_destroy(H2Pack_t h2pack)
     free(h2pack->D_ptr);
     free(h2pack->coord);
     free(h2pack->enbox);
+    free(h2pack->root_enbox);
     free(h2pack->per_lattices);
     free(h2pack->per_adm_shifts);
     free(h2pack->per_inadm_shifts);

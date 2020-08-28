@@ -12,7 +12,8 @@
 
 #define DTYPE           double          // Data type
 #define DABS            fabs            // Abs function
-#define DLOG            log             // Logarithm function
+#define DLOG            log             // Natural logarithm function
+#define DLOG2           log2            // Base-2 logarithm function
 #define DEXP            exp             // Exponential function
 #define DPOW            pow             // Power function
 #define DSQRT           sqrt            // Sqrt function
@@ -22,6 +23,7 @@
 #define DERFC           erfc            // Erfc function
 #define DFLOOR          floor           // Floor function
 #define DROUND          round           // Rounding function
+#define DCEIL           ceil            // Ceiling function
 #define DFMOD           fmod            // Floating point remainder function
 #define CBLAS_NRM2      cblas_dnrm2     // CBLAS vector 2-norm 
 #define CBLAS_DOT       cblas_ddot      // CBLAS vector dot product
@@ -49,6 +51,7 @@
 #define DTYPE           float
 #define DABS            fabsf
 #define DLOG            logf
+#define DLOG2           log2f
 #define DEXP            expf
 #define DPOW            powf
 #define DSQRT           sqrtf
@@ -59,6 +62,7 @@
 #define DFLOOR          floorf
 #define DROUND          roundf
 #define DFMOD           fmodf
+#define DCEIL           ceilf
 #define CBLAS_NRM2      cblas_snrm2
 #define CBLAS_DOT       cblas_sdot
 #define CBLAS_GEMV      cblas_sgemv

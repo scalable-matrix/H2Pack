@@ -580,7 +580,7 @@ void H2P_partition_points(
     );
     H2P_tree_node_t root = H2P_bisection_partition_points(
         0, 0, n_point-1, pt_dim, xpt_dim, n_point, 
-        max_leaf_size, max_leaf_points, NULL, 
+        max_leaf_size, max_leaf_points, h2pack->root_enbox, 
         h2pack->coord, coord_tmp, h2pack->coord_idx, coord_idx_tmp, part_vars
     );
     free(coord_tmp);

@@ -43,19 +43,22 @@ int main(int argc, char **argv)
             printf("\n");
 
             H2P_init(&h2pack, test_params.pt_dim, test_params.krnl_dim, QR_REL_NRM, &test_params.rel_tol);
+
+            H2P_calc_enclosing_box(test_params.pt_dim, test_params.n_point, test_params.coord, test_params.pp_fname, &h2pack->root_enbox);
             
-            H2P_partition_points(h2pack, test_params.n_point, test_params.coord, 0, 0);
+            int max_leaf_points = 0;
+            DTYPE max_leaf_size = 0.0;    
+            H2P_partition_points(h2pack, test_params.n_point, test_params.coord, max_leaf_points, max_leaf_size);
 
             // Generate proxy points
             H2P_dense_mat_t *pp = NULL;
-            DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * test_params.pt_dim + test_params.pt_dim];
             st = get_wtime_sec();
-            H2P_generate_proxy_point_ID(
-                test_params.pt_dim, test_params.krnl_dim, test_params.rel_tol, h2pack->max_level, 
-                h2pack->min_adm_level, max_L, test_params.krnl_param, test_params.krnl_eval, &pp
+            H2P_generate_proxy_point_ID_file(
+                h2pack, test_params.krnl_param, test_params.krnl_eval,
+                test_params.pp_fname, &pp
             );
             et = get_wtime_sec();
-            printf("H2Pack generate proxy points used %.3lf (s)\n", et - st);
+            printf("H2Pack load/generate proxy points used %.3lf (s)\n", et - st);
             
             // Build H2 representation
             st = get_wtime_sec();

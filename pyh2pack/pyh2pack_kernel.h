@@ -79,7 +79,7 @@ const H2P_kernel kernel_list[] =
         .krnl_eval = Coulomb_3D_eval_intrin_d, 
         .krnl_bimv = Coulomb_3D_krnl_bimv_intrin_d,
         .krnl_bimv_flops = Coulomb_3D_krnl_bimv_flop,
-        .flag_proxysurface = 0,
+        .flag_proxysurface = 1,
         .param_descr = "no parameters"
     },
     // 3D Stokes kernel
@@ -92,7 +92,7 @@ const H2P_kernel kernel_list[] =
         .krnl_eval = Stokes_eval_std, 
         .krnl_bimv = Stokes_krnl_bimv_intrin_d,
         .krnl_bimv_flops = Stokes_krnl_bimv_flop,
-        .flag_proxysurface = 0,
+        .flag_proxysurface = 1,
         .param_descr = "two parameters: (eta,  a)"
     },
     // 3D RPY

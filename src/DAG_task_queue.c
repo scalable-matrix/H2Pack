@@ -55,9 +55,10 @@ void DAG_task_queue_init(
     *tq_ = tq;
 }
 
-// Destroy a DAG_task_queue structure.
-void DAG_task_queue_free(DAG_task_queue_p tq)
+// Destroy a DAG_task_queue structure
+void DAG_task_queue_destroy(DAG_task_queue_p *tq_)
 {
+    DAG_task_queue_p tq = *tq_;
     if (tq == NULL) return;
     free(tq->DAG_src_ptr);
     free(tq->DAG_dst_idx);
@@ -65,6 +66,7 @@ void DAG_task_queue_free(DAG_task_queue_p tq)
     free(tq->curr_indeg);
     free(tq->task_queue);
     free(tq);
+    *tq_ = NULL;
 }
 
 // Get a new task from a DAG_task_queue structure and update its task queue.  

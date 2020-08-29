@@ -164,6 +164,6 @@ int main(int argc, char **argv)
     free(y0);
     free(y1);
     free_aligned(test_params.coord);
-    H2P_destroy(h2mat);
-    H2P_destroy(hssmat);
+    H2P_destroy(&h2mat);
+    H2P_destroy(&hssmat);
 }

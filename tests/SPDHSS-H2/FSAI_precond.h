@@ -42,7 +42,7 @@ void FSAI_precond_apply(FSAI_precond_p precond, const DTYPE *b, DTYPE *x);
 // Destroy a FSAI_precond structure
 // Input parameter:
 //   precond : FSAI_precond structure to be destroyed
-void FSAI_precond_destroy(FSAI_precond_p precond);
+void FSAI_precond_destroy(FSAI_precond_p *precond_);
 
 // Print statistic info of a FSAI_precond structure
 // Input parameter:

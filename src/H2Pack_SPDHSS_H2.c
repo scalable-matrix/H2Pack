@@ -510,10 +510,8 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_p h2mat, const int n_vec, H2P_dense_mat_p *
     // 7. Free intermediate arrays 
     for (int i = 0; i < n_node; i++)
     {
-        H2P_dense_mat_destroy(exU[i]);
-        H2P_dense_mat_destroy(y0[i]);
-        free(exU[i]);
-        free(y0[i]);
+        H2P_dense_mat_destroy(&exU[i]);
+        H2P_dense_mat_destroy(&y0[i]);
     }
     free(exU);
     free(y0);
@@ -623,7 +621,7 @@ void H2P_SPDHSS_H2_clean_HSS_B(
             int B_idx_ij = H2P_get_int_CSR_elem(HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, blk0[i], blk1[j]);
             ASSERT_PRINTF(B_idx_ij > 0, "SPDHSS_B{%d, %d} does not exist!\n", blk0[i], blk1[j]);
             B_idx_ij--;
-            H2P_dense_mat_destroy(HSS_B[B_idx_ij]);
+            H2P_dense_mat_destroy(&HSS_B[B_idx_ij]);
             H2P_set_int_CSR_elem(HSS_B_p2i_rowptr, HSS_B_p2i_colidx, HSS_B_p2i_val, blk0[i], blk1[j], 0);
         }
     }
@@ -682,8 +680,8 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             if (H2_Bij->nrow == 0)
             {
                 ERROR_PRINTF("Bug in case 1.1, node pair (%d, %d)\n", node0, node1);
-                H2P_dense_mat_destroy(H2_Bij);
-                H2P_dense_mat_destroy(tmpM);
+                H2P_dense_mat_reset(H2_Bij);
+                H2P_dense_mat_reset(tmpM);
                 return;
             }
             H2P_dense_mat_p W0 = W[node0];
@@ -714,8 +712,8 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             if (H2_Dij->nrow == 0)
             {
                 ERROR_PRINTF("Bug in case 1.2, node pair (%d, %d)\n", node0, node1);
-                H2P_dense_mat_destroy(H2_Dij);
-                H2P_dense_mat_destroy(tmpM);
+                H2P_dense_mat_reset(H2_Dij);
+                H2P_dense_mat_reset(tmpM);
                 return;
             }
             H2P_dense_mat_p S0 = S[node0];
@@ -761,9 +759,9 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             if (tmpB->nrow == 0)
             {
                 ERROR_PRINTF("Bug in case 1.3, node pair (%d, %d)\n", node0, node1);
-                H2P_dense_mat_destroy(tmpB);
-                H2P_dense_mat_destroy(tmpM0);
-                H2P_dense_mat_destroy(tmpM1);
+                H2P_dense_mat_reset(tmpB);
+                H2P_dense_mat_reset(tmpM0);
+                H2P_dense_mat_reset(tmpM1);
                 return;
             }
             H2P_dense_mat_p V0    = V[node0];
@@ -812,9 +810,9 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             if (tmpB->nrow == 0)
             {
                 ERROR_PRINTF("Bug in case 1.4, node pair (%d, %d)\n", node0, node1);
-                H2P_dense_mat_destroy(tmpB);
-                H2P_dense_mat_destroy(tmpM0);
-                H2P_dense_mat_destroy(tmpM1);
+                H2P_dense_mat_reset(tmpB);
+                H2P_dense_mat_reset(tmpM0);
+                H2P_dense_mat_reset(tmpM1);
                 return;
             }
             H2P_dense_mat_p V0    = V[node0];
@@ -865,9 +863,9 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             if (tmpB->nrow == 0)
             {
                 ERROR_PRINTF("Bug in case 1.5, node pair (%d, %d)\n", node0, node1);
-                H2P_dense_mat_destroy(tmpB);
-                H2P_dense_mat_destroy(tmpM0);
-                H2P_dense_mat_destroy(tmpM1);
+                H2P_dense_mat_reset(tmpB);
+                H2P_dense_mat_reset(tmpM0);
+                H2P_dense_mat_reset(tmpM1);
                 return;
             }
             H2P_dense_mat_p V0    = V[node0];
@@ -921,7 +919,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             if (H2_Bij->nrow == 0)
             {
                 ERROR_PRINTF("Bug in case 2.1, node pair (%d, %d)\n", node0, node1);
-                H2P_dense_mat_destroy(H2_Bij);
+                H2P_dense_mat_reset(H2_Bij);
                 return;
             }
             H2P_dense_mat_p W0 = W[node0];
@@ -945,7 +943,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             if (H2_Dij->nrow == 0)
             {
                 ERROR_PRINTF("Bug in case 2.2, node pair (%d, %d)\n", node0, node1);
-                H2P_dense_mat_destroy(H2_Dij);
+                H2P_dense_mat_reset(H2_Dij);
                 return;
             }
             H2P_dense_mat_p V0 = V[node0];
@@ -976,8 +974,8 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             if (tmpB->nrow == 0)
             {
                 ERROR_PRINTF("Bug in case 2.3, node pair (%d, %d)\n", node0, node1);
-                H2P_dense_mat_destroy(tmpB);
-                H2P_dense_mat_destroy(tmpM);
+                H2P_dense_mat_reset(tmpB);
+                H2P_dense_mat_reset(tmpM);
                 return;
             }
             H2P_dense_mat_p V0    = V[node0];
@@ -1020,7 +1018,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             if (H2_Bij->nrow == 0)
             {
                 ERROR_PRINTF("Bug in case 3.1, node pair (%d, %d)\n", node0, node1);
-                H2P_dense_mat_destroy(H2_Bij);
+                H2P_dense_mat_reset(H2_Bij);
                 return;
             }
             H2P_dense_mat_p W1 = W[node1];
@@ -1044,7 +1042,7 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             if (H2_Dij->nrow == 0)
             {
                 ERROR_PRINTF("Bug in case 3.2, node pair (%d, %d)\n", node0, node1);
-                H2P_dense_mat_destroy(H2_Dij);
+                H2P_dense_mat_reset(H2_Dij);
                 return;
             }
             H2P_dense_mat_p V1 = V[node1];
@@ -1077,8 +1075,8 @@ void H2P_SPDHSS_H2_calc_HSS_Bij(
             if (tmpB->nrow == 0)
             {
                 ERROR_PRINTF("Bug in case 3.3, node pair (%d, %d)\n", node0, node1);
-                H2P_dense_mat_destroy(tmpB);
-                H2P_dense_mat_destroy(tmpM);
+                H2P_dense_mat_reset(tmpB);
+                H2P_dense_mat_reset(tmpM);
                 return;
             }
             H2P_dense_mat_p V1    = V[node1];
@@ -1242,9 +1240,9 @@ void H2P_SPDHSS_H2_get_level_HSS_Bij_pairs(H2Pack_p h2mat, H2P_int_vec_p **level
     }  // End of i loop
     level_HSS_Bij_pairs[0] = NULL;
 
-    H2P_int_vec_destroy(prev_pairs);
-    H2P_int_vec_destroy(prev_pairs1);
-    H2P_int_vec_destroy(work_buf);
+    H2P_int_vec_destroy(&prev_pairs);
+    H2P_int_vec_destroy(&prev_pairs1);
+    H2P_int_vec_destroy(&work_buf);
     free(inadm_max_level);
     free(adm_max_level);
     *level_HSS_Bij_pairs_ = level_HSS_Bij_pairs;
@@ -1910,7 +1908,7 @@ void H2P_SPDHSS_H2_build(
                         );
                         last_k = k;
                     }  // End of k loop
-                    H2P_dense_mat_destroy(node_Yk[last_k]);
+                    H2P_dense_mat_destroy(&node_Yk[last_k]);
                     // if (~isempty(H2_U{node}))
                     //     W{node} = V{node}' * linsolve(S{node}, H2_U{node}, struct('LT', true));
                     // end
@@ -2060,7 +2058,7 @@ void H2P_SPDHSS_H2_build(
                         {
                             int child_k = node_children[k];
                             int Yk_idx = child_k * max_level + l;
-                            H2P_dense_mat_destroy(Yk[Yk_idx]);
+                            H2P_dense_mat_destroy(&Yk[Yk_idx]);
                         }
                     }
 
@@ -2142,7 +2140,7 @@ void H2P_SPDHSS_H2_build(
                         );
                         last_k = k;
                     }  // End of k loop
-                    H2P_dense_mat_destroy(node_Yk[last_k]);
+                    H2P_dense_mat_destroy(&node_Yk[last_k]);
                     // if (~isempty(H2_U{node}))
                     //     child_node = children(node, 1 : n_child_node);
                     //     tmpW = blkdiag(W{child_node});
@@ -2181,7 +2179,7 @@ void H2P_SPDHSS_H2_build(
                             );
                             tmpW_nrow += W_k->nrow;
                             tmpW_ncol += W_k->ncol;
-                            H2P_dense_mat_destroy(W_k);
+                            H2P_dense_mat_destroy(&W[child_k]);
                         }
                         // The rest GEMM 
                         H2P_dense_mat_resize(tmpM1, Minv[node]->nrow, tmpM0->ncol);
@@ -2247,37 +2245,20 @@ void H2P_SPDHSS_H2_build(
 
     // 8. Delete intermediate arrays and matrices
     for (int i = 0; i < n_level; i++)
-    {
-        H2P_int_vec_destroy(level_HSS_Bij_pairs[i]);
-        free(level_HSS_Bij_pairs[i]);
-    }
+        H2P_int_vec_destroy(&level_HSS_Bij_pairs[i]);
     for (int i = 0; i < n_node; i++)
     {
-        H2P_dense_mat_destroy(S[i]);
-        H2P_dense_mat_destroy(V[i]);
-        H2P_dense_mat_destroy(W[i]);
-        H2P_dense_mat_destroy(Minv[i]);
-        free(S[i]);
-        free(V[i]);
-        free(W[i]);
-        free(Minv[i]);
+        H2P_dense_mat_destroy(&S[i]);
+        H2P_dense_mat_destroy(&V[i]);
+        H2P_dense_mat_destroy(&W[i]);
+        H2P_dense_mat_destroy(&Minv[i]);
     }
     for (int i = 0; i < n_HSS_Bij_pair; i++)
-    {
-        H2P_dense_mat_destroy(HSS_B[i]);
-        free(HSS_B[i]);
-    }
+        H2P_dense_mat_destroy(&HSS_B[i]);
     for (int i = 0; i < n_leaf_node; i++)
-    {
-        H2P_dense_mat_destroy(HSS_D[i]);
-        free(HSS_D[i]);
-    }
+        H2P_dense_mat_destroy(&HSS_D[i]);
     for (int i = 0; i < n_node * max_level; i++)
-    {
-        if (Yk[i] == NULL) continue;
-        if (Yk[i]->size > 0) H2P_dense_mat_destroy(Yk[i]);
-        if (Yk[i]->size == 0) free(Yk[i]);
-    }
+        H2P_dense_mat_destroy(&Yk[i]);
     free(level_HSS_Bij_pairs);
     free(S);
     free(V);

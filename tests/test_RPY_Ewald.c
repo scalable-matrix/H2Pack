@@ -289,5 +289,7 @@ int main(int argc, char **argv)
     free(y1);
     free(y2);
     free(ewald_workbuf);
-    H2P_destroy(ph2mat);
+    H2P_destroy(&ph2mat);
+
+    return 0;
 }

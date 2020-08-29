@@ -43,7 +43,7 @@ void block_jacobi_precond_apply(block_jacobi_precond_p precond, const DTYPE *b, 
 // Destroy a block_jacobi_precond structure
 // Input parameter:
 //   precond : A block_jacobi_precond structure to be destroyed
-void block_jacobi_precond_destroy(block_jacobi_precond_p precond);
+void block_jacobi_precond_destroy(block_jacobi_precond_p *precond_);
 
 // Print statistic info of a block_jacobi_precond structure
 // Input parameter:

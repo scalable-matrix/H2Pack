@@ -53,5 +53,7 @@ int main(int argc, char **argv)
     H2P_print_statistic(h2pack);
 
     free_aligned(test_params.coord);
-    H2P_destroy(h2pack);
+    H2P_destroy(&h2pack);
+
+    return 0;
 }

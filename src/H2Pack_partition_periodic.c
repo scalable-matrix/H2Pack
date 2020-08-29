@@ -237,7 +237,7 @@ void H2P_partition_points_periodic(
     memset(h2pack->height_n_node, 0, int_max_level_msize);
     H2P_tree_to_array(root, h2pack);
     h2pack->parent[h2pack->root_idx] = -1;  // Root node doesn't have parent
-    H2P_tree_node_destroy(root);  // We don't need the linked list H2 tree anymore
+    H2P_tree_node_destroy(&root);  // We don't need the linked list H2 tree anymore
     
     // In H2ERI, mat_cluster and krnl_mat_size will be set outside and we don't need xT, yT
     if (h2pack->is_H2ERI == 0)
@@ -332,7 +332,7 @@ void H2P_partition_points_periodic(
     free(DAG_src_ptr);
     free(DAG_dst_idx);
 
-    H2P_partition_vars_destroy(part_vars);
+    H2P_partition_vars_destroy(&part_vars);
 
     et = get_wtime_sec();
     h2pack->timers[_PT_TIMER_IDX] = et - st;

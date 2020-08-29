@@ -367,10 +367,8 @@ void H2P_HSS_ULV_LU_factorize(H2Pack_p h2pack, const DTYPE shift)
                     for (int k = 0; k < node_n_child; k++)
                     {
                         int child_k = node_children[k];
-                        H2P_dense_mat_destroy(U_mid[child_k]);
-                        H2P_dense_mat_destroy(D_mid[child_k]);
-                        U_mid[child_k] = NULL;
-                        D_mid[child_k] = NULL;
+                        H2P_dense_mat_destroy(&U_mid[child_k]);
+                        H2P_dense_mat_destroy(&D_mid[child_k]);
                     }
                 }
             }  // End of j loop
@@ -380,8 +378,8 @@ void H2P_HSS_ULV_LU_factorize(H2Pack_p h2pack, const DTYPE shift)
     // Free intermediate matrices and set the output matrices
     for (int i = 0; i < n_node; i++)
     {
-        if (U_mid[i] != NULL) H2P_dense_mat_destroy(U_mid[i]);
-        if (D_mid[i] != NULL) H2P_dense_mat_destroy(D_mid[i]);
+        H2P_dense_mat_destroy(&U_mid[i]);
+        H2P_dense_mat_destroy(&D_mid[i]);
     }
     free(U_mid);
     free(D_mid);
@@ -910,10 +908,8 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_p h2pack, const DTYPE shift)
                     for (int k = 0; k < node_n_child; k++)
                     {
                         int child_k = node_children[k];
-                        H2P_dense_mat_destroy(U_mid[child_k]);
-                        H2P_dense_mat_destroy(D_mid[child_k]);
-                        U_mid[child_k] = NULL;
-                        D_mid[child_k] = NULL;
+                        H2P_dense_mat_destroy(&U_mid[child_k]);
+                        H2P_dense_mat_destroy(&D_mid[child_k]);
                     }
                 }
             }  // End of j loop
@@ -923,8 +919,8 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_p h2pack, const DTYPE shift)
     // Free intermediate matrices and set the output matrices
     for (int i = 0; i < n_node; i++)
     {
-        if (U_mid[i] != NULL) H2P_dense_mat_destroy(U_mid[i]);
-        if (D_mid[i] != NULL) H2P_dense_mat_destroy(D_mid[i]);
+        H2P_dense_mat_destroy(&U_mid[i]);
+        H2P_dense_mat_destroy(&D_mid[i]);
     }
     free(U_mid);
     free(D_mid);

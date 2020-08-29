@@ -251,26 +251,26 @@ void H2P_init(
 // H2P_run_RPY_Ewald(). This function should be called after H2P_init() and before 
 // H2P_partition_points().
 // Input & output parameter:
-//   h2pack  : H2Pack structure to be configured (h2pack->is_HSS = 1)
+//   h2pack : H2Pack structure to be configured (h2pack->is_HSS = 1)
 void H2P_run_HSS(H2Pack_p h2pack);
 
 // Run the RPY kernel in H2Pack, conflict with H2P_run_RPY_Ewald(). This function 
 // should be called after H2P_init() and before H2P_partition_points().
 // Input & output parameter:
-//   h2pack  : H2Pack structure to be configured (h2pack->is_RPY = 1)
+//   h2pack : H2Pack structure to be configured (h2pack->is_RPY = 1)
 void H2P_run_RPY(H2Pack_p h2pack);
 
 // Run the RPY Ewald summation kernel in H2Pack, conflict with H2P_run_HSS()
 // and H2P_run_RPY(). This function should be called after H2P_init() and before 
 // H2P_partition_points().
 // Input & output parameter:
-//   h2pack  : H2Pack structure to be configured (h2pack->is_RPY_Ewald = 1)
+//   h2pack : H2Pack structure to be configured (h2pack->is_RPY_Ewald = 1)
 void H2P_run_RPY_Ewald(H2Pack_p h2pack);
 
 // Destroy an H2Pack structure
 // Input parameter:
-//   h2pack : H2Pack structure to be destroyed
-void H2P_destroy(H2Pack_p h2pack);
+//   *h2pack : H2Pack structure to be destroyed
+void H2P_destroy(H2Pack_p *h2pack_);
 
 // Print statistical info of an H2Pack structure
 // Input parameter:

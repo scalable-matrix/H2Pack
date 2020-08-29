@@ -92,7 +92,7 @@ void pcg_tests(
         et = get_wtime_sec();
         printf("PCG stopped after %d iterations, relres = %e, used time = %.2lf sec\n", iter, relres, et - st);
         block_jacobi_precond_print_stat(bj_precond);
-        block_jacobi_precond_destroy(bj_precond);
+        block_jacobi_precond_destroy(&bj_precond);
     }
 
     if (method == 0 || method == 3)
@@ -111,7 +111,7 @@ void pcg_tests(
         et = get_wtime_sec();
         printf("PCG stopped after %d iterations, relres = %e, used time = %.2lf sec\n", iter, relres, et - st);
         LRD_precond_print_stat(lrd_precond);
-        LRD_precond_destroy(lrd_precond);
+        LRD_precond_destroy(&lrd_precond);
     }
 
     if (method == 0 || method == 4)
@@ -130,7 +130,7 @@ void pcg_tests(
         et = get_wtime_sec();
         printf("PCG stopped after %d iterations, relres = %e, used time = %.2lf sec\n", iter, relres, et - st);
         FSAI_precond_print_stat(fsai_precond);
-        FSAI_precond_destroy(fsai_precond);
+        FSAI_precond_destroy(&fsai_precond);
     }
 
     if (method == 0 || method == 5)

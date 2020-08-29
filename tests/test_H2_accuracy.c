@@ -113,7 +113,7 @@ int main(int argc, char **argv)
             printf("For %d validation points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / y0_norm);
 
             // Destroy H2Pack structure and I/O vectors
-            H2P_destroy(h2pack);
+            H2P_destroy(&h2pack);
             free(h2pack);
             free(x);
             free(y0);

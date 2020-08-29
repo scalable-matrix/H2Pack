@@ -112,7 +112,7 @@ static PyObject *setup(H2Mat *self, PyObject *args, PyObject *keywds) {
     {
         free_aligned(self->params.pts_coord);
         free(self->params.krnl_param);
-        H2P_destroy(self->h2mat);
+        H2P_destroy(&self->h2mat);
         self->flag_setup = 0;
     }
         
@@ -396,7 +396,7 @@ static PyObject *clean(H2Mat *self) {
     {
         free_aligned(self->params.pts_coord);
         free(self->params.krnl_param);
-        H2P_destroy(self->h2mat);
+        H2P_destroy(&self->h2mat);
         self->flag_setup = 0;
     }
     Py_RETURN_NONE;

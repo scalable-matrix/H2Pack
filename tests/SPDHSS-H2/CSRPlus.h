@@ -49,10 +49,10 @@ void CSRP_init_with_COO_mat(
     const int *col, const double *val, CSRP_mat_p *csrp_mat_
 );
 
-// Free a CSRP_mat structure
+// Destroy a CSRP_mat structure
 // Input parameter:
 //   csrp_mat : Pointer to a CSRP_mat structure
-void CSRP_free(CSRP_mat_p csrp_mat);
+void CSRP_destroy(CSRP_mat_p *csrp_mat_);
 
 // Partition a CSR matrix into multiple blocks with the same nnz
 // for multiple threads execution of SpMV

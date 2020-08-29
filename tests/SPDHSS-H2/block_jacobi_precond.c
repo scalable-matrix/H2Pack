@@ -121,14 +121,16 @@ void block_jacobi_precond_apply(block_jacobi_precond_p precond, const DTYPE *b, 
 }
 
 // Destroy a block_jacobi_precond structure
-void block_jacobi_precond_destroy(block_jacobi_precond_p precond)
+void block_jacobi_precond_destroy(block_jacobi_precond_p *precond_)
 {
+    block_jacobi_precond_p precond = *precond_;
     if (precond == NULL) return;
     free(precond->blk_sizes);
     free(precond->blk_displs);
     free(precond->blk_inv);
     free(precond->blk_inv_ptr);
     free(precond);
+    *precond_ = NULL;
 }
 
 // Print statistic info of a FSAI_precond structure

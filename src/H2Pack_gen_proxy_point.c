@@ -309,15 +309,15 @@ void H2P_generate_proxy_point_nlayer(
     }  // End of "if (reltol >= 1e-12)"
 
     // 6. Free working arrays
-    H2P_dense_mat_destroy(X0_coord);
-    H2P_dense_mat_destroy(Y0_coord);
-    H2P_dense_mat_destroy(tmp_coord);
-    H2P_dense_mat_destroy(Yp_coord);
-    H2P_dense_mat_destroy(tmpA);
-    H2P_dense_mat_destroy(min_dist);
-    H2P_dense_mat_destroy(QR_buff);
-    H2P_int_vec_destroy(skel_idx);
-    H2P_int_vec_destroy(ID_buff);
+    H2P_dense_mat_destroy(&X0_coord);
+    H2P_dense_mat_destroy(&Y0_coord);
+    H2P_dense_mat_destroy(&tmp_coord);
+    H2P_dense_mat_destroy(&Yp_coord);
+    H2P_dense_mat_destroy(&tmpA);
+    H2P_dense_mat_destroy(&min_dist);
+    H2P_dense_mat_destroy(&QR_buff);
+    H2P_int_vec_destroy(&skel_idx);
+    H2P_int_vec_destroy(&ID_buff);
     free(X0_coord);
     free(Y0_coord);
     free(tmp_coord);
@@ -671,11 +671,7 @@ void H2P_generate_proxy_point_ID_file(
         H2P_dense_mat_resize(pp[level], pp0[i]->nrow, pp0[i]->ncol);
         copy_matrix_block(sizeof(DTYPE), pp0[i]->nrow, pp0[i]->ncol, pp0[i]->data, pp0[i]->ld, pp[level]->data, pp[level]->ld);
     }
-    for (int i = 0; i < curr_num_pp; i++)
-    {
-        H2P_dense_mat_destroy(pp0[i]);
-        free(pp0[i]);
-    }
+    for (int i = 0; i < curr_num_pp; i++) H2P_dense_mat_destroy(&pp0[i]);
     free(pp0);
     *pp_ = pp;
 }
@@ -802,7 +798,7 @@ void H2P_generate_proxy_point_surface(
             pp_level[i] = adm_width * unit_pp->data[i];
     }
     
-    H2P_dense_mat_destroy(unit_pp);
+    H2P_dense_mat_destroy(&unit_pp);
     *pp_ = pp;
 }
 

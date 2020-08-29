@@ -11,7 +11,7 @@
 
 // ========================== H2P_tree_node ========================== //
 
-// Initialize a H2P_tree_node structure
+// Initialize an H2P_tree_node structure
 void H2P_tree_node_init(H2P_tree_node_p *node_, const int dim)
 {
     const int max_child = 1 << dim;
@@ -21,25 +21,28 @@ void H2P_tree_node_init(H2P_tree_node_p *node_, const int dim)
     node->enbox    = (DTYPE*) malloc(sizeof(DTYPE) * dim * 2);
     ASSERT_PRINTF(
         node->children != NULL && node->enbox != NULL,
-        "Failed to allocate arrays in a H2P_tree_node structure\n"
+        "Failed to allocate arrays in an H2P_tree_node structure\n"
     );
     for (int i = 0; i < max_child; i++) 
         node->children[i] = NULL;
     *node_ = node;
 }
 
-// Recursively destroy a H2P_tree_node node and its children nodes
-void H2P_tree_node_destroy(H2P_tree_node_p node)
+// Recursively destroy an H2P_tree_node node and its children nodes
+void H2P_tree_node_destroy(H2P_tree_node_p *node_)
 {
+    H2P_tree_node_p node = *node_;
     if (node == NULL) return;
     for (int i = 0; i < node->n_child; i++)
     {
         H2P_tree_node_p child_i = (H2P_tree_node_p) node->children[i];
-        if (child_i != NULL) H2P_tree_node_destroy(child_i);
+        if (child_i != NULL) H2P_tree_node_destroy(&child_i);
         free(child_i);
     }
     free(node->children);
     free(node->enbox);
+    free(node);
+    *node_ = NULL;
 }
 
 // ------------------------------------------------------------------- // 
@@ -47,7 +50,7 @@ void H2P_tree_node_destroy(H2P_tree_node_p node)
 
 // =========================== H2P_int_vec =========================== //
 
-// Initialize a H2P_int_vec structure
+// Initialize an H2P_int_vec structure
 void H2P_int_vec_init(H2P_int_vec_p *int_vec_, int capacity)
 {
     if (capacity < 0) capacity = 128;
@@ -60,17 +63,28 @@ void H2P_int_vec_init(H2P_int_vec_p *int_vec_, int capacity)
     *int_vec_ = int_vec;
 }
 
-// Destroy a H2P_int_vec structure
-void H2P_int_vec_destroy(H2P_int_vec_p int_vec)
+// Destroy an H2P_int_vec structure
+void H2P_int_vec_destroy(H2P_int_vec_p *int_vec_)
+{
+    H2P_int_vec_p int_vec = *int_vec_;
+    if (int_vec == NULL) return;
+    free(int_vec->data);
+    free(int_vec);
+    *int_vec_ = NULL;
+}
+
+// Free the memory used by an H2P_int_vec structure and reset its capacity to 128
+void H2P_int_vec_reset(H2P_int_vec_p int_vec)
 {
     if (int_vec == NULL) return;
     free(int_vec->data);
-    int_vec->data     = NULL;
-    int_vec->capacity = 0;
+    int_vec->capacity = 128;
     int_vec->length   = 0;
+    int_vec->data = (int*) malloc(sizeof(int) * int_vec->capacity);
+    ASSERT_PRINTF(int_vec->data != NULL, "Failed to allocate integer vector of size %d\n", int_vec->capacity);
 }
 
-// Concatenate values in a H2P_int_vec to another H2P_int_vec
+// Concatenate values in an H2P_int_vec to another H2P_int_vec
 void H2P_int_vec_concatenate(H2P_int_vec_p dst_vec, H2P_int_vec_p src_vec)
 {
     int s_len = src_vec->length;
@@ -82,7 +96,7 @@ void H2P_int_vec_concatenate(H2P_int_vec_p dst_vec, H2P_int_vec_p src_vec)
     dst_vec->length = new_length;
 }
 
-// Gather elements in a H2P_int_vec to another H2P_int_vec
+// Gather elements in an H2P_int_vec to another H2P_int_vec
 void H2P_int_vec_gather(H2P_int_vec_p src_vec, H2P_int_vec_p idx, H2P_int_vec_p dst_vec)
 {
     H2P_int_vec_set_capacity(dst_vec, idx->length);
@@ -96,7 +110,7 @@ void H2P_int_vec_gather(H2P_int_vec_p src_vec, H2P_int_vec_p idx, H2P_int_vec_p 
 
 // ======================= H2P_partition_vars ======================== //
 
-// Initialize a H2P_partition_vars structure
+// Initialize an H2P_partition_vars structure
 void H2P_partition_vars_init(H2P_partition_vars_p *part_vars_)
 {
     H2P_partition_vars_p part_vars = (H2P_partition_vars_p) malloc(sizeof(struct H2P_partition_vars));
@@ -108,14 +122,17 @@ void H2P_partition_vars_init(H2P_partition_vars_p *part_vars_)
     *part_vars_ = part_vars;
 }
 
-// Destroy a H2P_partition_vars structure
-void H2P_partition_vars_destroy(H2P_partition_vars_p part_vars)
+// Destroy an H2P_partition_vars structure
+void H2P_partition_vars_destroy(H2P_partition_vars_p *part_vars_)
 {
-    H2P_int_vec_destroy(part_vars->r_adm_pairs);
-    H2P_int_vec_destroy(part_vars->r_inadm_pairs);
+    H2P_partition_vars_p part_vars = *part_vars_;
+    if (part_vars == NULL) return;
+    H2P_int_vec_destroy(&part_vars->r_adm_pairs);
+    H2P_int_vec_destroy(&part_vars->r_inadm_pairs);
     free(part_vars->r_adm_pairs);
     free(part_vars->r_inadm_pairs);
     free(part_vars);
+    *part_vars_ = NULL;
 }
 
 // ------------------------------------------------------------------- // 
@@ -123,7 +140,7 @@ void H2P_partition_vars_destroy(H2P_partition_vars_p part_vars)
 
 // ========================== H2P_dense_mat ========================== //
 
-// Initialize a H2P_dense_mat structure
+// Initialize an H2P_dense_mat structure
 void H2P_dense_mat_init(H2P_dense_mat_p *mat_, const int nrow, const int ncol)
 {
     H2P_dense_mat_p mat = (H2P_dense_mat_p) malloc(sizeof(struct H2P_dense_mat));
@@ -144,8 +161,18 @@ void H2P_dense_mat_init(H2P_dense_mat_p *mat_, const int nrow, const int ncol)
     *mat_ = mat;
 }
 
-// Destroy a H2P_dense_mat structure
-void H2P_dense_mat_destroy(H2P_dense_mat_p mat)
+// Destroy an H2P_dense_mat structure
+void H2P_dense_mat_destroy(H2P_dense_mat_p *mat_)
+{
+    H2P_dense_mat_p mat = *mat_;
+    if (mat == NULL) return;
+    free_aligned(mat->data);
+    free(mat);
+    *mat_ = NULL;
+}
+
+// Reset an H2P_dense_mat structure to its default size (0-by-0) and release the memory
+void H2P_dense_mat_reset(H2P_dense_mat_p mat)
 {
     if (mat == NULL) return;
     free_aligned(mat->data);
@@ -156,14 +183,14 @@ void H2P_dense_mat_destroy(H2P_dense_mat_p mat)
     mat->ld   = 0;
 }
 
-// Copy the data in a H2P_dense_mat structure to another H2P_dense_mat structure
+// Copy the data in an H2P_dense_mat structure to another H2P_dense_mat structure
 void H2P_dense_mat_copy(H2P_dense_mat_p src_mat, H2P_dense_mat_p dst_mat)
 {
     H2P_dense_mat_resize(dst_mat, src_mat->nrow, src_mat->ncol);
     copy_matrix_block(sizeof(DTYPE), src_mat->nrow, src_mat->ncol, src_mat->data, src_mat->ld, dst_mat->data, dst_mat->ld);
 }
 
-// Permute rows in a H2P_dense_mat structure
+// Permute rows in an H2P_dense_mat structure
 void H2P_dense_mat_permute_rows(H2P_dense_mat_p mat, const int *p)
 {
     DTYPE *mat_dst = (DTYPE*) malloc_aligned(sizeof(DTYPE) * mat->nrow * mat->ncol, 64);
@@ -182,7 +209,7 @@ void H2P_dense_mat_permute_rows(H2P_dense_mat_p mat, const int *p)
     mat->data = mat_dst;
 }
 
-// Select rows in a H2P_dense_mat structure
+// Select rows in an H2P_dense_mat structure
 void H2P_dense_mat_select_rows(H2P_dense_mat_p mat, H2P_int_vec_p row_idx)
 {
     for (int irow = 0; irow < row_idx->length; irow++)
@@ -194,7 +221,7 @@ void H2P_dense_mat_select_rows(H2P_dense_mat_p mat, H2P_int_vec_p row_idx)
     mat->nrow = row_idx->length;
 }
 
-// Select columns in a H2P_dense_mat structure
+// Select columns in an H2P_dense_mat structure
 void H2P_dense_mat_select_columns(H2P_dense_mat_p mat, H2P_int_vec_p col_idx)
 {
     for (int irow = 0; irow < mat->nrow; irow++)
@@ -213,7 +240,7 @@ void H2P_dense_mat_select_columns(H2P_dense_mat_p mat, H2P_int_vec_p col_idx)
     mat->ld = mat->ncol;
 }
 
-// Normalize columns in a H2P_dense_mat structure
+// Normalize columns in an H2P_dense_mat structure
 void H2P_dense_mat_normalize_columns(H2P_dense_mat_p mat, H2P_dense_mat_p workbuf)
 {
     int nrow = mat->nrow, ncol = mat->ncol;
@@ -370,7 +397,7 @@ void H2P_dense_mat_horzcat(H2P_dense_mat_p *mats, H2P_int_vec_p idx, H2P_dense_m
     }
 }
 
-// Print a H2P_dense_mat structure, for debugging
+// Print an H2P_dense_mat structure, for debugging
 void H2P_dense_mat_print(H2P_dense_mat_p mat)
 {
     for (int irow = 0; irow < mat->nrow; irow++)
@@ -400,29 +427,28 @@ void H2P_thread_buf_init(H2P_thread_buf_p *thread_buf_, const int krnl_mat_size)
     *thread_buf_ = thread_buf;
 }
 
-void H2P_thread_buf_destroy(H2P_thread_buf_p thread_buf)
+void H2P_thread_buf_destroy(H2P_thread_buf_p *thread_buf_)
 {
+    H2P_thread_buf_p thread_buf = *thread_buf_;
     if (thread_buf == NULL) return;
-    H2P_int_vec_destroy(thread_buf->idx0);
-    H2P_int_vec_destroy(thread_buf->idx1);
-    H2P_dense_mat_destroy(thread_buf->mat0);
-    H2P_dense_mat_destroy(thread_buf->mat1);
-    H2P_dense_mat_destroy(thread_buf->mat2);
+    H2P_int_vec_destroy(&thread_buf->idx0);
+    H2P_int_vec_destroy(&thread_buf->idx1);
+    H2P_dense_mat_destroy(&thread_buf->mat0);
+    H2P_dense_mat_destroy(&thread_buf->mat1);
+    H2P_dense_mat_destroy(&thread_buf->mat2);
     free_aligned(thread_buf->y);
+    free(thread_buf);
+    *thread_buf_ = NULL;
 }
 
 void H2P_thread_buf_reset(H2P_thread_buf_p thread_buf)
 {
     if (thread_buf == NULL) return;
-    H2P_int_vec_destroy(thread_buf->idx0);
-    H2P_int_vec_destroy(thread_buf->idx1);
-    H2P_dense_mat_destroy(thread_buf->mat0);
-    H2P_dense_mat_destroy(thread_buf->mat1);
-    H2P_int_vec_set_capacity(thread_buf->idx0, 1024);
-    H2P_int_vec_set_capacity(thread_buf->idx1, 1024);
-    H2P_dense_mat_resize(thread_buf->mat0, 1024, 1);
-    H2P_dense_mat_resize(thread_buf->mat1, 1024, 1);
-    H2P_dense_mat_resize(thread_buf->mat2, 1024, 1);
+    H2P_int_vec_reset(thread_buf->idx0);
+    H2P_int_vec_reset(thread_buf->idx1);
+    H2P_dense_mat_reset(thread_buf->mat0);
+    H2P_dense_mat_reset(thread_buf->mat1);
+    H2P_dense_mat_reset(thread_buf->mat2);
 }
 
 // ------------------------------------------------------------------- // 

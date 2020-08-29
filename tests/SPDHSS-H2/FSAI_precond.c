@@ -192,9 +192,9 @@ static void H2P_search_knn(H2Pack_p h2pack, const int k, int *knn)
         }
     }  // End of i loop
 
-    H2P_dense_mat_destroy(dist);
-    H2P_dense_mat_destroy(neighbor_pt_coord);
-    H2P_int_vec_destroy(pt_idx);
+    H2P_dense_mat_destroy(&dist);
+    H2P_dense_mat_destroy(&neighbor_pt_coord);
+    H2P_int_vec_destroy(&pt_idx);
     free(dist);
     free(pt_idx);
 }
@@ -415,14 +415,16 @@ void FSAI_precond_apply(FSAI_precond_p precond, const DTYPE *b, DTYPE *x)
 // Destroy a FSAI_precond structure
 // Input parameter:
 //   precond : A FSAI_precond structure to be destroyed
-void FSAI_precond_destroy(FSAI_precond_p precond)
+void FSAI_precond_destroy(FSAI_precond_p *precond_)
 {
+    FSAI_precond_p precond = *precond_;
     if (precond == NULL) return;
-    CSRP_free(precond->G);
-    CSRP_free(precond->Gt);
+    CSRP_destroy(&precond->G);
+    CSRP_destroy(&precond->Gt);
     free(precond->G);
     free(precond->Gt);
     free(precond);
+    *precond_ = NULL;
 }
 
 // Print statistic info of a FSAI_precond structure

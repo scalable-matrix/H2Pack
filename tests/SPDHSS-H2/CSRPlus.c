@@ -91,9 +91,10 @@ void CSRP_init_with_COO_mat(
     *csrp_mat_ = csrp_mat;
 }
 
-// Free a CSRP_mat structure
-void CSRP_free(CSRP_mat_p csrp_mat)
+// Destroy a CSRP_mat structure
+void CSRP_destroy(CSRP_mat_p *csrp_mat_)
 {
+    CSRP_mat_p csrp_mat = *csrp_mat_;
     if (csrp_mat == NULL) return;
     free(csrp_mat->row_ptr);
     free(csrp_mat->col);
@@ -106,6 +107,8 @@ void CSRP_free(CSRP_mat_p csrp_mat)
     free(csrp_mat->lr_intact);
     free(csrp_mat->fr_res);
     free(csrp_mat->lr_res);
+    free(csrp_mat);
+    *csrp_mat_ = NULL;
 }
 
 static void partition_block_equal(const int len, const int nblk, int *displs)

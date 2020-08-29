@@ -205,8 +205,10 @@ void H2P_run_RPY_Ewald(H2Pack_p h2pack)
 }
 
 // Destroy an H2Pack structure
-void H2P_destroy(H2Pack_p h2pack)
+void H2P_destroy(H2Pack_p *h2pack_)
 {
+    H2Pack_p h2pack = *h2pack_;
+
     if (h2pack == NULL) return;
     
     free(h2pack->parent);
@@ -256,46 +258,46 @@ void H2P_destroy(H2Pack_p h2pack)
     free(h2pack->yT);
     free(h2pack->pmt_x);
     free(h2pack->pmt_y);
-    DAG_task_queue_free(h2pack->upward_tq);
+    DAG_task_queue_destroy(&h2pack->upward_tq);
     
-    if (h2pack->B_blk  != NULL) H2P_int_vec_destroy(h2pack->B_blk);
-    if (h2pack->D_blk0 != NULL) H2P_int_vec_destroy(h2pack->D_blk0);
-    if (h2pack->D_blk1 != NULL) H2P_int_vec_destroy(h2pack->D_blk1);
+    if (h2pack->B_blk  != NULL) H2P_int_vec_destroy(&h2pack->B_blk);
+    if (h2pack->D_blk0 != NULL) H2P_int_vec_destroy(&h2pack->D_blk0);
+    if (h2pack->D_blk1 != NULL) H2P_int_vec_destroy(&h2pack->D_blk1);
     
     // If H2Pack is called from H2P-ERI, pp == J == J_coord == NULL
     
     if (h2pack->pp != NULL)
     {
         for (int i = 0; i <= h2pack->max_level; i++)
-            H2P_dense_mat_destroy(h2pack->pp[i]);
+            H2P_dense_mat_destroy(&h2pack->pp[i]);
         free(h2pack->pp);
     }
     
     if (h2pack->J != NULL)
     {
         for (int i = 0; i < h2pack->n_UJ; i++)
-            H2P_int_vec_destroy(h2pack->J[i]);
+            H2P_int_vec_destroy(&h2pack->J[i]);
         free(h2pack->J);
     }
     
     if (h2pack->ULV_idx != NULL)
     {
         for (int i = 0; i < h2pack->n_node; i++)
-            H2P_int_vec_destroy(h2pack->ULV_idx[i]);
+            H2P_int_vec_destroy(&h2pack->ULV_idx[i]);
         free(h2pack->ULV_idx);
     }
 
     if (h2pack->ULV_p != NULL)
     {
         for (int i = 0; i < h2pack->n_node; i++)
-            H2P_int_vec_destroy(h2pack->ULV_p[i]);
+            H2P_int_vec_destroy(&h2pack->ULV_p[i]);
         free(h2pack->ULV_p);
     }
 
     if (h2pack->J_coord != NULL)
     {
         for (int i = 0; i < h2pack->n_UJ; i++)
-            H2P_dense_mat_destroy(h2pack->J_coord[i]);
+            H2P_dense_mat_destroy(&h2pack->J_coord[i]);
         free(h2pack->J_coord);
     }
     
@@ -303,7 +305,7 @@ void H2P_destroy(H2Pack_p h2pack)
     if (h2pack->U != NULL)
     {
         for (int i = 0; i < h2pack->n_UJ; i++)
-            H2P_dense_mat_destroy(h2pack->U[i]);
+            H2P_dense_mat_destroy(&h2pack->U[i]);
         free(h2pack->U);
     }
 
@@ -311,8 +313,8 @@ void H2P_destroy(H2Pack_p h2pack)
     {
         for (int i = 0; i < h2pack->n_node; i++)
         {
-            H2P_dense_mat_destroy(h2pack->ULV_Q[i]);
-            H2P_dense_mat_destroy(h2pack->ULV_L[i]);
+            H2P_dense_mat_destroy(&h2pack->ULV_Q[i]);
+            H2P_dense_mat_destroy(&h2pack->ULV_L[i]);
         }
         free(h2pack->ULV_Q);
         free(h2pack->ULV_L);
@@ -323,8 +325,8 @@ void H2P_destroy(H2Pack_p h2pack)
     {
         for (int i = 0; i < h2pack->n_node; i++)
         {
-            H2P_dense_mat_destroy(h2pack->y0[i]);
-            H2P_dense_mat_destroy(h2pack->y1[i]);
+            H2P_dense_mat_destroy(&h2pack->y0[i]);
+            H2P_dense_mat_destroy(&h2pack->y1[i]);
         }
         free(h2pack->y0);
         free(h2pack->y1);
@@ -333,9 +335,12 @@ void H2P_destroy(H2Pack_p h2pack)
     if (h2pack->tb != NULL)
     {
         for (int i = 0; i < h2pack->n_thread; i++)
-            H2P_thread_buf_destroy(h2pack->tb[i]);
+            H2P_thread_buf_destroy(&h2pack->tb[i]);
         free(h2pack->tb);
     }
+
+    free(h2pack);
+    *h2pack_ = NULL;
 }
 
 // Print statistic info of an H2Pack structure

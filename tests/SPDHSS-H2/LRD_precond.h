@@ -43,7 +43,7 @@ void LRD_precond_apply(LRD_precond_p precond, const DTYPE *b, DTYPE *x);
 // Destroy a LRD_precond structure
 // Input parameter:
 //   precond : A LRD_precond structure to be destroyed
-void LRD_precond_destroy(LRD_precond_p precond);
+void LRD_precond_destroy(LRD_precond_p *precond_);
 
 // Print statistic info of a LRD_precond structure
 // Input parameter:

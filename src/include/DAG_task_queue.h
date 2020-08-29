@@ -38,7 +38,7 @@ void DAG_task_queue_init(
 // Destroy a DAG_task_queue structure.
 // Input parameter:
 //   tq : A DAG_task_queue structure to be destroyed
-void DAG_task_queue_free(DAG_task_queue_p tq);
+void DAG_task_queue_destroy(DAG_task_queue_p *tq_);
 
 // Get a new task from a DAG_task_queue structure and update its task queue.  
 // This function can be called by multiple threads at the same time.

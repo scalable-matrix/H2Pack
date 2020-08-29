@@ -497,7 +497,7 @@ void H2P_calc_node_inadm_lists(H2Pack_p h2pack)
 
     h2pack->node_inadm_lists = node_inadm_lists;
     h2pack->node_n_r_inadm   = node_n_r_inadm;
-    H2P_int_vec_destroy(target_list);
+    H2P_int_vec_destroy(&target_list);
 }
 
 // Calculate reduced (in)admissible pairs for HSS
@@ -533,7 +533,7 @@ void H2P_HSS_calc_adm_inadm_pairs(H2Pack_p h2pack)
     // Calculate inadmissible node list for each node
     H2P_calc_node_inadm_lists(h2pack);
 
-    H2P_partition_vars_destroy(part_vars);
+    H2P_partition_vars_destroy(&part_vars);
 }
 
 // Partition points for a H2 tree
@@ -626,7 +626,7 @@ void H2P_partition_points(
     memset(h2pack->height_n_node, 0, int_max_level_msize);
     H2P_tree_to_array(root, h2pack);
     h2pack->parent[h2pack->root_idx] = -1;  // Root node doesn't have parent
-    H2P_tree_node_destroy(root);  // We don't need the linked list H2 tree anymore
+    H2P_tree_node_destroy(&root);  // We don't need the linked list H2 tree anymore
     
     // In H2ERI, mat_cluster and krnl_mat_size will be set outside and we don't need xT, yT
     if (h2pack->is_H2ERI == 0)
@@ -702,7 +702,7 @@ void H2P_partition_points(
     // 8: Optional: calculate reduced (in)admissible pairs for HSS
     if (h2pack->is_HSS == 1) H2P_HSS_calc_adm_inadm_pairs(h2pack);
 
-    H2P_partition_vars_destroy(part_vars);
+    H2P_partition_vars_destroy(&part_vars);
 
     et = get_wtime_sec();
     h2pack->timers[_PT_TIMER_IDX] = et - st;

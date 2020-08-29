@@ -42,7 +42,7 @@ void dump_HSS(H2Pack_p h2pack)
     }
     fprintf(ouf0, "];\n");
 
-    H2P_dense_mat_destroy(tmpM);
+    H2P_dense_mat_destroy(&tmpM);
 
     fclose(ouf0);
     fclose(ouf1);

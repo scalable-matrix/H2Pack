@@ -115,12 +115,12 @@ void H2P_build_LRD_precond(H2Pack_p h2pack, const int rank, const DTYPE shift, L
     );
     memcpy(Ut_, Ut->data, sizeof(DTYPE) * nrow * mat_size);
 
-    H2P_dense_mat_destroy(coord_all);
-    H2P_dense_mat_destroy(coord_skel);
-    H2P_dense_mat_destroy(L);
-    H2P_dense_mat_destroy(Ut);
-    H2P_dense_mat_destroy(tmp);
-    H2P_int_vec_destroy(skel_idx);
+    H2P_dense_mat_destroy(&coord_all);
+    H2P_dense_mat_destroy(&coord_skel);
+    H2P_dense_mat_destroy(&L);
+    H2P_dense_mat_destroy(&Ut);
+    H2P_dense_mat_destroy(&tmp);
+    H2P_int_vec_destroy(&skel_idx);
     free(coord_all);
     free(coord_skel);
     free(skel_idx);
@@ -163,12 +163,14 @@ void LRD_precond_apply(LRD_precond_p precond, const DTYPE *b, DTYPE *x)
 }
 
 // Destroy a LRD_precond structure
-void LRD_precond_destroy(LRD_precond_p precond)
+void LRD_precond_destroy(LRD_precond_p *precond_)
 {
+    LRD_precond_p precond = *precond_;
     if (precond == NULL) return;
     free(precond->Ut);
     free(precond->workbuf);
     free(precond);
+    *precond_ = NULL;
 }
 
 // Print statistic info of a FSAI_precond structure

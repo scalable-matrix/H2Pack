@@ -152,9 +152,9 @@ int main()
     free(ID_buff);
     free(coord0);
     free(coord1);
-    H2P_int_vec_destroy(J);
-    H2P_dense_mat_destroy(U);
-    H2P_dense_mat_destroy(A);
-    H2P_dense_mat_destroy(A0);
+    H2P_int_vec_destroy(&J);
+    H2P_dense_mat_destroy(&U);
+    H2P_dense_mat_destroy(&A);
+    H2P_dense_mat_destroy(&A0);
     return 0;
 }

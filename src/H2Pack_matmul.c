@@ -14,17 +14,17 @@
 #include "utils.h"
 
 // Initialize auxiliary array y0 used in H2 matmul forward transformation
-void H2P_matmul_init_y0(H2Pack_t h2pack, const int n_vec)
+void H2P_matmul_init_y0(H2Pack_p h2pack, const int n_vec)
 {
     if (h2pack->y0 != NULL) return;
     int n_node = h2pack->n_node;
-    h2pack->y0 = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
+    h2pack->y0 = (H2P_dense_mat_p*) malloc(sizeof(H2P_dense_mat_p) * n_node);
     ASSERT_PRINTF(
         h2pack->y0 != NULL, 
-        "Failed to allocate %d H2P_dense_mat_t for H2 matmul buffer\n", n_node
+        "Failed to allocate %d H2P_dense_mat_p for H2 matmul buffer\n", n_node
     );
-    H2P_dense_mat_t *y0 = h2pack->y0;
-    H2P_dense_mat_t *U  = h2pack->U;
+    H2P_dense_mat_p *y0 = h2pack->y0;
+    H2P_dense_mat_p *U  = h2pack->U;
     for (int node = 0; node < n_node; node++)
     {
         int ncol = U[node]->ncol;
@@ -42,7 +42,7 @@ void H2P_matmul_init_y0(H2Pack_t h2pack, const int n_vec)
 
 // H2 matmul forward transformation, calculate U_j^T * x_j
 void H2P_matmul_fwd_transform(
-    H2Pack_t h2pack, const int n_vec, 
+    H2Pack_p h2pack, const int n_vec, 
     const DTYPE *mat_x, const int ldx, const int x_row_stride, const CBLAS_TRANSPOSE x_trans
 )
 {
@@ -61,8 +61,8 @@ void H2P_matmul_fwd_transform(
     H2P_matmul_init_y0(h2pack, n_vec);
 
     // 2. Upward sweep
-    H2P_dense_mat_t *y0 = h2pack->y0;
-    H2P_dense_mat_t *U  = h2pack->U;
+    H2P_dense_mat_p *y0 = h2pack->y0;
+    H2P_dense_mat_p *U  = h2pack->U;
     for (int i = max_level; i >= min_adm_level; i--)
     {
         int *level_i_nodes = level_nodes + i * n_leaf_node;
@@ -76,7 +76,7 @@ void H2P_matmul_fwd_transform(
             {
                 int node = level_i_nodes[j];
                 int n_child_node = n_child[node];
-                H2P_dense_mat_t U_node = U[node];
+                H2P_dense_mat_p U_node = U[node];
 
                 H2P_dense_mat_resize(y0[node], U_node->ncol, n_vec);
                 if (n_child_node == 0)
@@ -97,7 +97,7 @@ void H2P_matmul_fwd_transform(
                     for (int k = 0; k < n_child_node; k++)
                     {
                         int child_k = node_children[k];
-                        H2P_dense_mat_t y0_k = y0[child_k];
+                        H2P_dense_mat_p y0_k = y0[child_k];
                         DTYPE *U_node_k = U_node->data + U_srow * U_node->ld;
                         DTYPE beta = (k == 0) ? 0.0 : 1.0;
                         CBLAS_GEMM(
@@ -113,14 +113,14 @@ void H2P_matmul_fwd_transform(
 }
 
 // Initialize auxiliary array y1 used in H2 matmul intermediate multiplication
-void H2P_matmul_init_y1(H2Pack_t h2pack, const int n_vec)
+void H2P_matmul_init_y1(H2Pack_p h2pack, const int n_vec)
 {
     int n_node = h2pack->n_node;
     int *node_n_r_adm = (h2pack->is_HSS == 1) ? h2pack->node_n_r_inadm : h2pack->node_n_r_adm;
-    H2P_dense_mat_t *U = h2pack->U;
+    H2P_dense_mat_p *U = h2pack->U;
     if (h2pack->y1 == NULL)
     {
-        h2pack->y1 = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
+        h2pack->y1 = (H2P_dense_mat_p*) malloc(sizeof(H2P_dense_mat_p) * n_node);
         ASSERT_PRINTF(
             h2pack->y1 != NULL,
             "Failed to allocate %d H2P_dense_mat_t for H2 matvec buffer\n", n_node
@@ -128,7 +128,7 @@ void H2P_matmul_init_y1(H2Pack_t h2pack, const int n_vec)
         for (int i = 0; i < n_node; i++) 
             H2P_dense_mat_init(&h2pack->y1[i], 0, 0);
     }
-    H2P_dense_mat_t *y1 = h2pack->y1;
+    H2P_dense_mat_p *y1 = h2pack->y1;
     for (int i = 0; i < n_node; i++) 
     {
         // Use ld to mark if y1[i] is visited in this intermediate sweep
@@ -139,7 +139,7 @@ void H2P_matmul_init_y1(H2Pack_t h2pack, const int n_vec)
 
 // H2 matmul intermediate multiplication, calculate B_{ij} * (U_j^T * x_j)
 void H2P_matmul_intmd_mult(
-    H2Pack_t h2pack, const int n_vec, 
+    H2Pack_p h2pack, const int n_vec, 
     const DTYPE *mat_x, const int ldx, const int x_row_stride, const CBLAS_TRANSPOSE x_trans,
           DTYPE *mat_y, const int ldy, const int y_row_stride, const CBLAS_TRANSPOSE y_trans
 )
@@ -150,25 +150,25 @@ void H2P_matmul_intmd_mult(
     int *mat_cluster  = h2pack->mat_cluster;
     int *B_p2i_rowptr = h2pack->B_p2i_rowptr;
     int *B_p2i_colidx = h2pack->B_p2i_colidx;
-    H2P_thread_buf_t *thread_buf = h2pack->tb;
-    H2P_dense_mat_t *y0 = h2pack->y0;
+    H2P_thread_buf_p *thread_buf = h2pack->tb;
+    H2P_dense_mat_p *y0 = h2pack->y0;
 
     // 1. Initialize y1 on the first run or reset the size of each y1
     H2P_matmul_init_y1(h2pack, n_vec);
-    H2P_dense_mat_t *y1 = h2pack->y1;
+    H2P_dense_mat_p *y1 = h2pack->y1;
 
     // 2. Intermediate sweep
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
-        H2P_dense_mat_t Bij = thread_buf[tid]->mat0;
+        H2P_dense_mat_p Bij = thread_buf[tid]->mat0;
 
         #pragma omp for schedule(dynamic)
         for (int node0 = 0; node0 < n_node; node0++)
         {
             int level0 = node_level[node0];
             
-            H2P_dense_mat_t y1_0 = y1[node0];
+            H2P_dense_mat_p y1_0 = y1[node0];
             memset(y1_0->data, 0, sizeof(DTYPE) * y1_0->nrow * y1_0->ncol);
 
             for (int i = B_p2i_rowptr[node0]; i < B_p2i_rowptr[node0 + 1]; i++)
@@ -177,7 +177,7 @@ void H2P_matmul_intmd_mult(
                 int level1 = node_level[node1];
 
                 int Bij_nrow, Bij_ncol, Bij_ld, Bij_trans;
-                H2P_dense_mat_t y0_1 = y0[node1];
+                H2P_dense_mat_p y0_1 = y0[node1];
                 H2P_get_Bij_block(h2pack, node0, node1, Bij);
                 DTYPE *Bij_data = Bij->data;
                 if (Bij->ld > 0)
@@ -247,7 +247,7 @@ void H2P_matmul_intmd_mult(
 
 // H2 matmul backward transformation, calculate U_i * (B_{ij} * (U_j^T * x_j))
 void H2P_matmul_bwd_transform(
-    H2Pack_t h2pack, const int n_vec, 
+    H2Pack_p h2pack, const int n_vec, 
     DTYPE *mat_y, const int ldy, const int y_row_stride, const CBLAS_TRANSPOSE y_trans
 )
 {
@@ -261,9 +261,9 @@ void H2P_matmul_bwd_transform(
     int *level_n_node   = h2pack->level_n_node;
     int *level_nodes    = h2pack->level_nodes;
     int *mat_cluster    = h2pack->mat_cluster;
-    H2P_dense_mat_t *U  = h2pack->U;
-    H2P_dense_mat_t *y1 = h2pack->y1;
-    H2P_thread_buf_t *thread_buf = h2pack->tb;
+    H2P_dense_mat_p *U  = h2pack->U;
+    H2P_dense_mat_p *y1 = h2pack->y1;
+    H2P_thread_buf_p *thread_buf = h2pack->tb;
     
     for (int i = min_adm_level; i <= max_level; i++)
     {
@@ -274,7 +274,7 @@ void H2P_matmul_bwd_transform(
         #pragma omp parallel num_threads(n_thread_i) 
         {
             int tid = omp_get_thread_num();
-            H2P_dense_mat_t y1_tmp = thread_buf[tid]->mat0;
+            H2P_dense_mat_p y1_tmp = thread_buf[tid]->mat0;
             
             thread_buf[tid]->timer = -get_wtime_sec();
             #pragma omp for schedule(dynamic) nowait
@@ -352,7 +352,7 @@ void H2P_matmul_bwd_transform(
 
 // H2 matmul dense multiplication, calculate D_{ij} * x_j
 void H2P_matmul_dense_mult(
-    H2Pack_t h2pack, const int n_vec, 
+    H2Pack_p h2pack, const int n_vec, 
     const DTYPE *mat_x, const int ldx, const int x_row_stride, const CBLAS_TRANSPOSE x_trans,
           DTYPE *mat_y, const int ldy, const int y_row_stride, const CBLAS_TRANSPOSE y_trans
 )
@@ -362,12 +362,12 @@ void H2P_matmul_dense_mult(
     int *mat_cluster  = h2pack->mat_cluster;
     int *D_p2i_rowptr = h2pack->D_p2i_rowptr;
     int *D_p2i_colidx = h2pack->D_p2i_colidx;
-    H2P_thread_buf_t *thread_buf = h2pack->tb;
+    H2P_thread_buf_p *thread_buf = h2pack->tb;
 
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
-        H2P_dense_mat_t Dij = thread_buf[tid]->mat0;
+        H2P_dense_mat_p Dij = thread_buf[tid]->mat0;
 
         #pragma omp for schedule(dynamic)
         for (int node0 = 0; node0 < n_node; node0++)
@@ -421,7 +421,7 @@ void H2P_matmul_dense_mult(
 // Permute the multiplicand matrix from the original point ordering to the 
 // sorted point ordering inside H2Pack
 void H2P_permute_matrix_row_forward(
-    H2Pack_t h2pack, const CBLAS_LAYOUT layout, const int n_vec, 
+    H2Pack_p h2pack, const CBLAS_LAYOUT layout, const int n_vec, 
     const DTYPE *mat_x, const int ldx, DTYPE *pmt_mat_x, const int ldp
 )
 {
@@ -438,7 +438,7 @@ void H2P_permute_matrix_row_forward(
 // Permute the output matrix from the sorted point ordering inside H2Pack 
 // to the original point ordering
 void H2P_permute_matrix_row_backward(
-    H2Pack_t h2pack, const CBLAS_LAYOUT layout, const int n_vec, 
+    H2Pack_p h2pack, const CBLAS_LAYOUT layout, const int n_vec, 
     const DTYPE *mat_x, const int ldx, DTYPE *pmt_mat_x, const int ldp
 )
 {
@@ -454,7 +454,7 @@ void H2P_permute_matrix_row_backward(
 
 // H2 representation multiplies a dense general matrix
 void H2P_matmul(
-    H2Pack_t h2pack, const CBLAS_LAYOUT layout, const int n_vec, 
+    H2Pack_p h2pack, const CBLAS_LAYOUT layout, const int n_vec, 
     const DTYPE *mat_x, const int ldx, DTYPE *mat_y, const int ldy
 )
 {

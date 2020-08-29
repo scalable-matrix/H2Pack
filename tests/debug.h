@@ -3,14 +3,14 @@
 #include "H2Pack_utils.h"
 #include "utils.h"
 
-void dump_HSS(H2Pack_t h2pack)
+void dump_HSS(H2Pack_p h2pack)
 {
     // Assumption: MATLAB code is using the same point set
     // and has the same r_adm_pairs
     FILE *ouf0 = fopen("add_C_HSS_mat_metadata.m", "w");
     FILE *ouf1 = fopen("C_HSS_mat.bin", "wb");
 
-    H2P_dense_mat_t tmpM;
+    H2P_dense_mat_p tmpM;
     H2P_dense_mat_init(&tmpM, 1024, 1024);
 
     fprintf(ouf0, "C_U_sizes = [\n");

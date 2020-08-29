@@ -37,10 +37,10 @@ static void qsort_int_dbl_pair(int *key, double *val, int l, int r)
 // Initialize a CSRP_mat structure using a COO matrix
 void CSRP_init_with_COO_mat(
     const int nrow, const int ncol, const int nnz, const int *row,
-    const int *col, const double *val, CSRP_mat_t *csrp_mat_
+    const int *col, const double *val, CSRP_mat_p *csrp_mat_
 )
 {
-    CSRP_mat_t csrp_mat = (CSRP_mat_t) malloc(sizeof(CSRP_mat_s));
+    CSRP_mat_p csrp_mat = (CSRP_mat_p) malloc(sizeof(CSRP_mat_s));
     
     csrp_mat->nrow    = nrow;
     csrp_mat->ncol    = ncol;
@@ -92,7 +92,7 @@ void CSRP_init_with_COO_mat(
 }
 
 // Free a CSRP_mat structure
-void CSRP_free(CSRP_mat_t csrp_mat)
+void CSRP_free(CSRP_mat_p csrp_mat)
 {
     if (csrp_mat == NULL) return;
     free(csrp_mat->row_ptr);
@@ -134,7 +134,7 @@ static int calc_lower_bound(const int *a, int n, int x)
 
 // Partition a CSR matrix into multiple blocks with the same nnz
 // for multiple threads execution of SpMV
-void CSRP_partition_multithread(CSRP_mat_t csrp_mat, const int nblk, const int nthread)
+void CSRP_partition_multithread(CSRP_mat_p csrp_mat, const int nblk, const int nthread)
 {
     csrp_mat->nblk      = nblk;
     csrp_mat->nthread   = nthread;
@@ -201,7 +201,7 @@ void CSRP_partition_multithread(CSRP_mat_t csrp_mat, const int nblk, const int n
 }
 
 // Use Use first-touch policy to optimize the storage of CSR arrays in a CSRP_mat structure
-void CSRP_optimize_NUMA(CSRP_mat_t csrp_mat)
+void CSRP_optimize_NUMA(CSRP_mat_p csrp_mat)
 {
     int nnz     = csrp_mat->nnz;
     int nrow    = csrp_mat->nrow;
@@ -271,7 +271,7 @@ static void CSR_SpMV_row_block(
     }
 }
 
-static void CSRP_SpMV_block(CSRP_mat_t csrp_mat, const int iblk, const double *x, double *y)
+static void CSRP_SpMV_block(CSRP_mat_p csrp_mat, const int iblk, const double *x, double *y)
 {
     int    *row_ptr   = csrp_mat->row_ptr;
     int    *col       = csrp_mat->col;
@@ -332,7 +332,7 @@ static void CSRP_SpMV_block(CSRP_mat_t csrp_mat, const int iblk, const double *x
 }
 
 // Perform OpenMP parallelized CSR SpMV with a CSRP_mat structure
-void CSRP_SpMV(CSRP_mat_t csrp_mat, const double *x, double *y)
+void CSRP_SpMV(CSRP_mat_p csrp_mat, const double *x, double *y)
 {
     int nblk    = csrp_mat->nblk;
     int nthread = csrp_mat->nthread;

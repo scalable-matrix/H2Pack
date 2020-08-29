@@ -29,8 +29,8 @@ extern "C" {
 //        the projection matrix will not be calculated.
 //   J  : Row indices of the skeleton A
 void H2P_ID_compress(
-    H2P_dense_mat_t A, const int stop_type, void *stop_param, H2P_dense_mat_t *U_, 
-    H2P_int_vec_t J, const int n_thread, DTYPE *QR_buff, int *ID_buff, const int kdim
+    H2P_dense_mat_p A, const int stop_type, void *stop_param, H2P_dense_mat_p *U_, 
+    H2P_int_vec_p J, const int n_thread, DTYPE *QR_buff, int *ID_buff, const int kdim
 );
 
 #ifdef __cplusplus

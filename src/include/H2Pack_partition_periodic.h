@@ -22,7 +22,7 @@ extern "C" {
 // Output parameter:
 //   h2pack : H2Pack structure with point partitioning info
 void H2P_partition_points_periodic(
-    H2Pack_t h2pack, const int n_point, const DTYPE *coord, int max_leaf_points, 
+    H2Pack_p h2pack, const int n_point, const DTYPE *coord, int max_leaf_points, 
     DTYPE max_leaf_size, DTYPE *unit_cell
 );
 

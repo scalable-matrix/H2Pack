@@ -14,7 +14,7 @@ static DTYPE shift_;
 
 void H2Pack_matvec(const void *h2pack_, const DTYPE *b, DTYPE *x)
 {
-    H2Pack_t h2pack = (H2Pack_t) h2pack_;
+    H2Pack_p h2pack = (H2Pack_p) h2pack_;
     H2P_matvec(h2pack, b, x);
     #pragma omp simd
     for (int i = 0; i < h2pack->krnl_mat_size; i++) x[i] += shift_ * b[i];
@@ -22,31 +22,31 @@ void H2Pack_matvec(const void *h2pack_, const DTYPE *b, DTYPE *x)
 
 void block_jacobi_precond(const void *precond_, const DTYPE *b, DTYPE *x)
 {
-    block_jacobi_precond_t precond = (block_jacobi_precond_t) precond_;
+    block_jacobi_precond_p precond = (block_jacobi_precond_p) precond_;
     block_jacobi_precond_apply(precond, b, x);
 }
 
 void LRD_precond(const void *precond_, const DTYPE *b, DTYPE *x)
 {
-    LRD_precond_t precond = (LRD_precond_t) precond_;
+    LRD_precond_p precond = (LRD_precond_p) precond_;
     LRD_precond_apply(precond, b, x);
 }
 
 void FSAI_precond(const void *precond_, const DTYPE *b, DTYPE *x)
 {
-    FSAI_precond_t precond = (FSAI_precond_t) precond_;
+    FSAI_precond_p precond = (FSAI_precond_p) precond_;
     FSAI_precond_apply(precond, b, x);
 }
 
 void HSS_ULV_Chol_precond(const void *hssmat_, const DTYPE *b, DTYPE *x)
 {
-    H2Pack_t hssmat = (H2Pack_t) hssmat_;
+    H2Pack_p hssmat = (H2Pack_p) hssmat_;
     H2P_HSS_ULV_Cholesky_solve(hssmat, 3, b, x);
 }
 
 // Test preconditioned conjugate gradient solver with different preconditioner
 void pcg_tests(
-    const int krnl_mat_size, H2Pack_t h2mat, H2Pack_t hssmat, const DTYPE shift, 
+    const int krnl_mat_size, H2Pack_p h2mat, H2Pack_p hssmat, const DTYPE shift, 
     const int max_rank, const int max_iter, const DTYPE CG_tol, const int method
 )
 {
@@ -79,7 +79,7 @@ void pcg_tests(
     if (method == 0 || method == 2)
     {
         printf("\nConstructing block Jacobi preconditioner...\n");
-        block_jacobi_precond_t bj_precond;
+        block_jacobi_precond_p bj_precond;
         H2P_build_block_jacobi_precond(h2mat, shift, &bj_precond);
         printf("Starting PCG solve with block Jacobi preconditioner...\n");
         memset(x, 0, sizeof(DTYPE) * krnl_mat_size);
@@ -98,7 +98,7 @@ void pcg_tests(
     if (method == 0 || method == 3)
     {
         printf("\nConstructing LRD preconditioner...\n");
-        LRD_precond_t lrd_precond;
+        LRD_precond_p lrd_precond;
         H2P_build_LRD_precond(h2mat, max_rank, shift, &lrd_precond);
         printf("Starting PCG solve with LRD preconditioner...\n");
         memset(x, 0, sizeof(DTYPE) * krnl_mat_size);
@@ -117,7 +117,7 @@ void pcg_tests(
     if (method == 0 || method == 4)
     {
         printf("\nConstructing FSAI preconditioner...\n");
-        FSAI_precond_t fsai_precond;
+        FSAI_precond_p fsai_precond;
         H2P_build_FSAI_precond(h2mat, max_rank, shift, &fsai_precond);
         printf("Starting PCG solve with FSAI preconditioner...\n");
         memset(x, 0, sizeof(DTYPE) * krnl_mat_size);

@@ -39,7 +39,7 @@ void H2P_ext_krnl_mv(
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
     const DTYPE *x_in, const int ldi, DTYPE * restrict x_out, const int ldo, 
-    const int xpt_dim, const int krnl_dim, H2P_dense_mat_t workbuf, 
+    const int xpt_dim, const int krnl_dim, H2P_dense_mat_p workbuf, 
     const void *krnl_param, kernel_mv_fptr krnl_mv
 )
 {
@@ -99,7 +99,7 @@ void H2P_ext_krnl_mv(
 
 // H2 matvec intermediate multiplication, calculate B_{ij} * (U_j^T * x_j)
 // Need to calculate all B_{ij} matrices before using it
-void H2P_matvec_periodic_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
+void H2P_matvec_periodic_intmd_mult_JIT(H2Pack_p h2pack, const DTYPE *x, DTYPE *y)
 {
     int   pt_dim          = h2pack->pt_dim;
     int   xpt_dim         = h2pack->xpt_dim;
@@ -118,21 +118,21 @@ void H2P_matvec_periodic_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
     DTYPE *coord          = h2pack->coord;
     DTYPE *per_adm_shifts = h2pack->per_adm_shifts;
     void  *krnl_param     = h2pack->krnl_param;
-    H2P_dense_mat_t  *y0 = h2pack->y0;
-    H2P_dense_mat_t  *J_coord = h2pack->J_coord;
+    H2P_dense_mat_p  *y0 = h2pack->y0;
+    H2P_dense_mat_p  *J_coord = h2pack->J_coord;
     kernel_eval_fptr krnl_eval   = h2pack->krnl_eval;
     kernel_mv_fptr   krnl_mv     = h2pack->krnl_mv;
-    H2P_thread_buf_t *thread_buf = h2pack->tb;
+    H2P_thread_buf_p *thread_buf = h2pack->tb;
 
     H2P_matvec_init_y1(h2pack);
-    H2P_dense_mat_t *y1 = h2pack->y1;
+    H2P_dense_mat_p *y1 = h2pack->y1;
 
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
-        H2P_dense_mat_t Bij      = thread_buf[tid]->mat0;
-        H2P_dense_mat_t workbuf  = thread_buf[tid]->mat0;
-        H2P_dense_mat_t coord1_s = thread_buf[tid]->mat1;
+        H2P_dense_mat_p Bij      = thread_buf[tid]->mat0;
+        H2P_dense_mat_p workbuf  = thread_buf[tid]->mat0;
+        H2P_dense_mat_p coord1_s = thread_buf[tid]->mat1;
         DTYPE shift[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
         thread_buf[tid]->timer = -get_wtime_sec();
@@ -149,7 +149,7 @@ void H2P_matvec_periodic_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
         {
             int level0 = node_level[node0];
             
-            H2P_dense_mat_t y1_0 = y1[node0];
+            H2P_dense_mat_p y1_0 = y1[node0];
             memset(y1_0->data, 0, sizeof(DTYPE) * y1_0->nrow * y1_0->ncol);
 
             for (int i = B_p2i_rowptr[node0]; i < B_p2i_rowptr[node0 + 1]; i++)
@@ -283,7 +283,7 @@ void H2P_matvec_periodic_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
 
 // H2 matvec dense multiplication, calculate D_{ij} * x_j
 // Need to calculate all D_{ij} matrices before using it
-void H2P_matvec_periodic_dense_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
+void H2P_matvec_periodic_dense_mult_JIT(H2Pack_p h2pack, const DTYPE *x, DTYPE *y)
 {
     int   pt_dim            = h2pack->pt_dim;
     int   xpt_dim           = h2pack->xpt_dim;
@@ -304,14 +304,14 @@ void H2P_matvec_periodic_dense_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
     void  *krnl_param       = h2pack->krnl_param;
     kernel_eval_fptr krnl_eval   = h2pack->krnl_eval;
     kernel_mv_fptr   krnl_mv     = h2pack->krnl_mv;
-    H2P_thread_buf_t *thread_buf = h2pack->tb;
+    H2P_thread_buf_p *thread_buf = h2pack->tb;
 
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
-        H2P_dense_mat_t Dij      = thread_buf[tid]->mat0;
-        H2P_dense_mat_t workbuf  = thread_buf[tid]->mat0;
-        H2P_dense_mat_t coord1_s = thread_buf[tid]->mat1;
+        H2P_dense_mat_p Dij      = thread_buf[tid]->mat0;
+        H2P_dense_mat_p workbuf  = thread_buf[tid]->mat0;
+        H2P_dense_mat_p coord1_s = thread_buf[tid]->mat1;
 
         DTYPE shift[8] = {0, 0, 0, 0, 0, 0, 0, 0};
         
@@ -392,7 +392,7 @@ void H2P_matvec_periodic_dense_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
 }
 
 // H2 representation multiplies a column vector
-void H2P_matvec_periodic(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
+void H2P_matvec_periodic(H2Pack_p h2pack, const DTYPE *x, DTYPE *y)
 {
     double st, et;
     int    krnl_mat_size = h2pack->krnl_mat_size;
@@ -407,7 +407,7 @@ void H2P_matvec_periodic(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
     DTYPE  *pmt_y        = h2pack->pmt_y;
     double *timers       = h2pack->timers;
     size_t *mat_size     = h2pack->mat_size;
-    H2P_thread_buf_t *thread_buf = h2pack->tb;
+    H2P_thread_buf_p *thread_buf = h2pack->tb;
 
     DTYPE *x_ = need_trans ? xT : pmt_x;
     DTYPE *y_ = need_trans ? yT : pmt_y;
@@ -465,12 +465,12 @@ void H2P_matvec_periodic(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
     int root_idx     = h2pack->root_idx;
     int root_J_npt   = h2pack->J[root_idx]->length;
     int per_blk_size = root_J_npt * krnl_dim;
-    H2P_dense_mat_t y0_root = h2pack->y0[root_idx];
-    H2P_dense_mat_t y1_root = h2pack->y1[root_idx];
+    H2P_dense_mat_p y0_root = h2pack->y0[root_idx];
+    H2P_dense_mat_p y1_root = h2pack->y1[root_idx];
     H2P_dense_mat_resize(y1_root, 1, per_blk_size);
     if (need_trans) 
     {
-        H2P_dense_mat_t y0_root_tmp = thread_buf[0]->mat0;
+        H2P_dense_mat_p y0_root_tmp = thread_buf[0]->mat0;
         H2P_dense_mat_resize(y0_root_tmp, root_J_npt, krnl_dim);
         H2P_transpose_dmat(1, krnl_dim, root_J_npt, y0_root->data, root_J_npt, y0_root_tmp->data, krnl_dim);
         memcpy(y0_root->data, y0_root_tmp->data, sizeof(DTYPE) * per_blk_size);

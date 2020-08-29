@@ -14,7 +14,7 @@
 #include "utils.h"
 
 // Build periodic block for root node
-void H2P_build_periodic_block(H2Pack_t h2pack)
+void H2P_build_periodic_block(H2Pack_p h2pack)
 {
     int pt_dim    = h2pack->pt_dim;
     int xpt_dim   = h2pack->xpt_dim;
@@ -25,9 +25,9 @@ void H2P_build_periodic_block(H2Pack_t h2pack)
     void  *pkrnl_param  = h2pack->pkrnl_param;
     DTYPE *enbox0_width = h2pack->enbox + (root_idx * (2 * pt_dim) + pt_dim);
     DTYPE *per_lattices = h2pack->per_lattices;
-    H2P_dense_mat_t  root_J_coord   = h2pack->J_coord[root_idx];
-    H2P_dense_mat_t  root_J_coord_s = h2pack->tb[0]->mat0;
-    H2P_dense_mat_t  krnl_mat_blk   = h2pack->tb[0]->mat1;
+    H2P_dense_mat_p  root_J_coord   = h2pack->J_coord[root_idx];
+    H2P_dense_mat_p  root_J_coord_s = h2pack->tb[0]->mat0;
+    H2P_dense_mat_p  krnl_mat_blk   = h2pack->tb[0]->mat1;
     kernel_eval_fptr krnl_eval  = h2pack->krnl_eval;
     kernel_eval_fptr pkrnl_eval = h2pack->pkrnl_eval;
 
@@ -76,7 +76,7 @@ void H2P_build_periodic_block(H2Pack_t h2pack)
 // Build H2 representation with a regular kernel function and
 // a periodic system kernel (Ewald summation) function
 void H2P_build_periodic(
-    H2Pack_t h2pack, H2P_dense_mat_t *pp, const int BD_JIT, 
+    H2Pack_p h2pack, H2P_dense_mat_p *pp, const int BD_JIT, 
     void *krnl_param,  kernel_eval_fptr krnl_eval, 
     void *pkrnl_param, kernel_eval_fptr pkrnl_eval, 
     kernel_mv_fptr krnl_mv, const int krnl_mv_flops

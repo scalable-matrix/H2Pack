@@ -174,25 +174,25 @@ struct H2Pack
     DTYPE  *yT;                     // Size krnl_mat_size, for transposing matvec output "matrix" when krnl_dim > 1
     DTYPE  *pmt_x;                  // Size krnl_mat_size * max_n_vec, storing the permuted input vector/matrix (the input need to be permuted)
     DTYPE  *pmt_y;                  // Size krnl_mat_size * max_n_vec, storing the permuted output vector/matrix (the final output need to be revered)
-    H2P_int_vec_t     B_blk;        // Size BD_NTASK_THREAD * n_thread, B matrices task partitioning
-    H2P_int_vec_t     D_blk0;       // Size BD_NTASK_THREAD * n_thread, diagonal blocks in D matrices task partitioning
-    H2P_int_vec_t     D_blk1;       // Size BD_NTASK_THREAD * n_thread, inadmissible blocks in D matrices task partitioning
-    H2P_int_vec_t     *J;           // Size n_node, skeleton row sets
-    H2P_int_vec_t     *ULV_idx;     // Size n_node, indices of the sub-matrix which ULV_Q and ULV_L performs on for each node in global sense
-    H2P_int_vec_t     *ULV_p;       // Size n_node, HSS ULV LU pivot indices of each node
-    H2P_dense_mat_t   *J_coord;     // Size n_node, coordinate of J points
-    H2P_dense_mat_t   *pp;          // Size max_level+1, proxy points on each level for generating U and J
-    H2P_dense_mat_t   *U;           // Size n_node, Projection matrices
-    H2P_dense_mat_t   *y0;          // Size n_node, temporary arrays used in matvec
-    H2P_dense_mat_t   *y1;          // Size n_node, temporary arrays used in matvec
-    H2P_dense_mat_t   *ULV_Q;       // Size n_node, HSS ULV factorization orthogonal matrix w.r.t. each node's basis
-    H2P_dense_mat_t   *ULV_L;       // Size n_node, HSS ULV factorization Cholesky / LU factor w.r.t. each node's diagonal block
-    H2P_thread_buf_t  *tb;          // Size n_thread, thread-local buffer
+    H2P_int_vec_p     B_blk;        // Size BD_NTASK_THREAD * n_thread, B matrices task partitioning
+    H2P_int_vec_p     D_blk0;       // Size BD_NTASK_THREAD * n_thread, diagonal blocks in D matrices task partitioning
+    H2P_int_vec_p     D_blk1;       // Size BD_NTASK_THREAD * n_thread, inadmissible blocks in D matrices task partitioning
+    H2P_int_vec_p     *J;           // Size n_node, skeleton row sets
+    H2P_int_vec_p     *ULV_idx;     // Size n_node, indices of the sub-matrix which ULV_Q and ULV_L performs on for each node in global sense
+    H2P_int_vec_p     *ULV_p;       // Size n_node, HSS ULV LU pivot indices of each node
+    H2P_dense_mat_p   *J_coord;     // Size n_node, coordinate of J points
+    H2P_dense_mat_p   *pp;          // Size max_level+1, proxy points on each level for generating U and J
+    H2P_dense_mat_p   *U;           // Size n_node, Projection matrices
+    H2P_dense_mat_p   *y0;          // Size n_node, temporary arrays used in matvec
+    H2P_dense_mat_p   *y1;          // Size n_node, temporary arrays used in matvec
+    H2P_dense_mat_p   *ULV_Q;       // Size n_node, HSS ULV factorization orthogonal matrix w.r.t. each node's basis
+    H2P_dense_mat_p   *ULV_L;       // Size n_node, HSS ULV factorization Cholesky / LU factor w.r.t. each node's diagonal block
+    H2P_thread_buf_p  *tb;          // Size n_thread, thread-local buffer
     kernel_eval_fptr  krnl_eval;    // Pointer to kernel matrix evaluation function
     kernel_eval_fptr  pkrnl_eval;   // Pointer to periodic system kernel matrix evaluation function
     kernel_mv_fptr    krnl_mv;      // Pointer to kernel matrix matvec function, only used in periodic system
     kernel_bimv_fptr  krnl_bimv;    // Pointer to kernel matrix bi-matvec function
-    DAG_task_queue_t  upward_tq;    // Upward sweep DAG task queue
+    DAG_task_queue_p  upward_tq;    // Upward sweep DAG task queue
 
     // Statistic data
     int    n_matvec;                // Number of performed matvec
@@ -201,7 +201,8 @@ struct H2Pack
     double timers[11];              // See below macros
     double JIT_flops[2];            // See below macros
 };
-typedef struct H2Pack* H2Pack_t;
+typedef struct H2Pack  H2Pack_s;
+typedef struct H2Pack* H2Pack_p;
 
 // For H2Pack_t->mat_size
 #define _U_SIZE_IDX         0   // Total size of U matrices
@@ -233,7 +234,7 @@ typedef struct H2Pack* H2Pack_t;
 #define _JIT_B_FLOPS_IDX    0   // JIT H2 matvec intermediate multiplication FLOPS
 #define _JIT_D_FLOPS_IDX    1   // JIT H2 matvec dense multiplication FLOPS
 
-// Initialize a H2Pack structure
+// Initialize an H2Pack structure
 // Input parameters:
 //   pt_dim        : Dimension of point coordinate
 //   krnl_dim      : Dimension of tensor kernel's return
@@ -242,7 +243,7 @@ typedef struct H2Pack* H2Pack_t;
 // Output parameter:
 //   h2pack_ : Initialized H2Pack structure
 void H2P_init(
-    H2Pack_t *h2pack_, const int pt_dim, const int krnl_dim, 
+    H2Pack_p *h2pack_, const int pt_dim, const int krnl_dim, 
     const int QR_stop_type, void *QR_stop_param
 );
 
@@ -251,30 +252,35 @@ void H2P_init(
 // H2P_partition_points().
 // Input & output parameter:
 //   h2pack  : H2Pack structure to be configured (h2pack->is_HSS = 1)
-void H2P_run_HSS(H2Pack_t h2pack);
+void H2P_run_HSS(H2Pack_p h2pack);
 
 // Run the RPY kernel in H2Pack, conflict with H2P_run_RPY_Ewald(). This function 
 // should be called after H2P_init() and before H2P_partition_points().
 // Input & output parameter:
 //   h2pack  : H2Pack structure to be configured (h2pack->is_RPY = 1)
-void H2P_run_RPY(H2Pack_t h2pack);
+void H2P_run_RPY(H2Pack_p h2pack);
 
 // Run the RPY Ewald summation kernel in H2Pack, conflict with H2P_run_HSS()
 // and H2P_run_RPY(). This function should be called after H2P_init() and before 
 // H2P_partition_points().
 // Input & output parameter:
 //   h2pack  : H2Pack structure to be configured (h2pack->is_RPY_Ewald = 1)
-void H2P_run_RPY_Ewald(H2Pack_t h2pack);
+void H2P_run_RPY_Ewald(H2Pack_p h2pack);
 
-// Destroy a H2Pack structure
+// Destroy an H2Pack structure
 // Input parameter:
 //   h2pack : H2Pack structure to be destroyed
-void H2P_destroy(H2Pack_t h2pack);
+void H2P_destroy(H2Pack_p h2pack);
 
-// Print statistic info of a H2Pack structure
+// Print statistical info of an H2Pack structure
 // Input parameter:
-//   h2pack : H2Pack structure whose statistic info to be printed
-void H2P_print_statistic(H2Pack_t h2pack);
+//   h2pack : H2Pack structure whose statistical info to be printed
+void H2P_print_statistic(H2Pack_p h2pack);
+
+// Reset timing statistical info of an H2Pack structure
+// Input parameter:
+//   h2pack : H2Pack structure whose timing statistical info to be reset
+void H2P_reset_timers(H2Pack_p h2pack);
 
 #ifdef __cplusplus
 }

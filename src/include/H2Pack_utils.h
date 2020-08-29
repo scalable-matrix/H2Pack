@@ -49,7 +49,7 @@ void H2P_gather_matrix_columns(
 //   kernel_mat : Obtained kernel matrix, nx-by-ny
 void H2P_eval_kernel_matrix_OMP(
     const void *krnl_param, kernel_eval_fptr krnl_eval, const int krnl_dim, 
-    H2P_dense_mat_t x_coord, H2P_dense_mat_t y_coord, H2P_dense_mat_t kernel_mat
+    H2P_dense_mat_p x_coord, H2P_dense_mat_p y_coord, H2P_dense_mat_p kernel_mat
 );
 
 // Check if a coordinate is in box [-L/2, L/2]^pt_dim
@@ -87,7 +87,7 @@ void H2P_gen_coord_in_ring(const int npt, const int pt_dim, const DTYPE L0, cons
 //              stores col_idx.
 void H2P_gen_rand_sparse_mat_trans(
     const int max_nnz_col, const int k, const int n, 
-    H2P_dense_mat_t A_valbuf, H2P_int_vec_t A_idxbuf
+    H2P_dense_mat_p A_valbuf, H2P_int_vec_p A_idxbuf
 );
 
 // Calculate y^T := A^T * x^T, where A is a sparse matrix, 
@@ -106,7 +106,7 @@ void H2P_gen_rand_sparse_mat_trans(
 //   y : m-by-n row-major dense matrix, leading dimension ldy
 void H2P_calc_sparse_mm_trans(
     const int m, const int n, const int k,
-    H2P_dense_mat_t A_valbuf, H2P_int_vec_t A_idxbuf,
+    H2P_dense_mat_p A_valbuf, H2P_int_vec_p A_idxbuf,
     DTYPE *x, const int ldx, DTYPE *y, const int ldy
 );
 
@@ -166,7 +166,7 @@ void H2P_set_int_CSR_elem(
 //   node{0, 1} : Target node pair
 // Output parameter:
 //   Bij : Target B{node0, node1} block
-void H2P_get_Bij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_dense_mat_t Bij);
+void H2P_get_Bij_block(H2Pack_p h2pack, const int node0, const int node1, H2P_dense_mat_p Bij);
 
 
 // Get D{node0, node1} from a H2Pack structure
@@ -175,7 +175,7 @@ void H2P_get_Bij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_de
 //   node{0, 1} : Target node pair
 // Output parameter:
 //   Dij : Target D{node0, node1} block
-void H2P_get_Dij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_dense_mat_t Dij);
+void H2P_get_Dij_block(H2Pack_p h2pack, const int node0, const int node1, H2P_dense_mat_p Dij);
 
 // Partition work units into multiple blocks s.t. each block has 
 // approximately the same amount of work
@@ -192,7 +192,7 @@ void H2P_get_Dij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_de
 //                blk_displs->data[blk_displs->length-1] == total_size. 
 void H2P_partition_workload(
     const int n_work,  const size_t *work_sizes, const size_t total_size, 
-    const int n_block, H2P_int_vec_t blk_displs
+    const int n_block, H2P_int_vec_p blk_displs
 );
 
 // Transpose a matrix
@@ -217,22 +217,22 @@ void H2P_transpose_dmat(
 //   scale : Scaling factor of shift
 // Output paramater:
 //   coord : Shifted coordinates
-void H2P_shift_coord(H2P_dense_mat_t coord, const DTYPE *shift, const DTYPE scale);
+void H2P_shift_coord(H2P_dense_mat_p coord, const DTYPE *shift, const DTYPE scale);
 
 // ================================================================================
 // The following 2 functions are implemented in H2Pack_partition.c and used by 
 // both H2Pack_partition.c and H2Pack_partition_periodic.c
 
 // Hierarchical partitioning of the given points
-H2P_tree_node_t H2P_bisection_partition_points(
+H2P_tree_node_p H2P_bisection_partition_points(
     int level, int coord_s, int coord_e, const int pt_dim, const int xpt_dim, const int n_point, 
     const DTYPE max_leaf_size, const int max_leaf_points, DTYPE *enbox, 
     DTYPE *coord, DTYPE *coord_tmp, int *coord_idx, int *coord_idx_tmp, 
-    H2P_partition_vars_t part_vars
+    H2P_partition_vars_p part_vars
 );
 
 // Convert a linked list H2 tree to arrays
-void H2P_tree_to_array(H2P_tree_node_t node, H2Pack_t h2pack);
+void H2P_tree_to_array(H2P_tree_node_p node, H2Pack_p h2pack);
 // ================================================================================
 
 
@@ -241,13 +241,13 @@ void H2P_tree_to_array(H2P_tree_node_t node, H2Pack_t h2pack);
 // both H2Pack_build.c and H2Pack_build_periodic.c
 
 // Build H2 projection matrices using proxy points, in H2Pack_build.c
-void H2P_build_H2_UJ_proxy(H2Pack_t h2pack);
+void H2P_build_H2_UJ_proxy(H2Pack_p h2pack);
 
 // Generate H2 generator matrices metadata
-void H2P_generate_B_metadata(H2Pack_t h2pack);
+void H2P_generate_B_metadata(H2Pack_p h2pack);
 
 // Generate H2 dense blocks metadata
-void H2P_generate_D_metadata(H2Pack_t h2pack);
+void H2P_generate_D_metadata(H2Pack_p h2pack);
 // ================================================================================
 
 
@@ -256,24 +256,24 @@ void H2P_generate_D_metadata(H2Pack_t h2pack);
 // both H2Pack_matvec.c and H2Pack_matvec_periodic.c
 
 // Initialize auxiliary array y0 used in H2 matvec forward transformation
-void H2P_matvec_init_y0(H2Pack_t h2pack);
+void H2P_matvec_init_y0(H2Pack_p h2pack);
 
 // Initialize auxiliary array y1 used in H2 matvec intermediate multiplication
-void H2P_matvec_init_y1(H2Pack_t h2pack);
+void H2P_matvec_init_y1(H2Pack_p h2pack);
 
 // H2 matvec forward transformation, calculate U_j^T * x_j
-void H2P_matvec_fwd_transform(H2Pack_t h2pack, const DTYPE *x);
+void H2P_matvec_fwd_transform(H2Pack_p h2pack, const DTYPE *x);
 
 // Transpose y0[i] from a npt*krnl_dim-by-1 vector (npt-by-krnl_dim 
 // matrix) to a krnl_dim-by-npt matrix
-void H2P_transpose_y0_from_krnldim(H2Pack_t h2pack);
+void H2P_transpose_y0_from_krnldim(H2Pack_p h2pack);
 
 // Transpose y1[i] from a krnl_dim-by-npt matrix to 
 // a npt*krnl_dim-by-1 vector (npt-by-krnl_dim matrix)
-void H2P_transpose_y1_to_krnldim(H2Pack_t h2pack);
+void H2P_transpose_y1_to_krnldim(H2Pack_p h2pack);
 
 // H2 matvec backward transformation, calculate U_i * (B_{ij} * (U_j^T * x_j))
-void H2P_matvec_bwd_transform(H2Pack_t h2pack, const DTYPE *x, DTYPE *y);
+void H2P_matvec_bwd_transform(H2Pack_p h2pack, const DTYPE *x, DTYPE *y);
 // ================================================================================
 
 
@@ -282,20 +282,20 @@ void H2P_matvec_bwd_transform(H2Pack_t h2pack, const DTYPE *x, DTYPE *y);
 // both H2Pack_matmul.c and H2Pack_matmul_periodic.c
 
 // Initialize auxiliary array y0 used in H2 matmul forward transformation
-void H2P_matmul_init_y0(H2Pack_t h2pack, const int n_vec);
+void H2P_matmul_init_y0(H2Pack_p h2pack, const int n_vec);
 
 // Initialize auxiliary array y1 used in H2 matmul intermediate multiplication
-void H2P_matmul_init_y1(H2Pack_t h2pack, const int n_vec);
+void H2P_matmul_init_y1(H2Pack_p h2pack, const int n_vec);
 
 // H2 matmul forward transformation, calculate U_j^T * x_j
 void H2P_matmul_fwd_transform(
-    H2Pack_t h2pack, const int n_vec, 
+    H2Pack_p h2pack, const int n_vec, 
     const DTYPE *mat_x, const int ldx, const int x_row_stride, const CBLAS_TRANSPOSE x_trans
 );
 
 // H2 matmul backward transformation, calculate U_i * (B_{ij} * (U_j^T * x_j))
 void H2P_matmul_bwd_transform(
-    H2Pack_t h2pack, const int n_vec, 
+    H2Pack_p h2pack, const int n_vec, 
     DTYPE *mat_y, const int ldy, const int y_row_stride, const CBLAS_TRANSPOSE y_trans
 );
 // ================================================================================

@@ -14,7 +14,7 @@ extern "C" {
 //   shift  : Shift coefficient k to make (A + k * I) non-singular
 // Output parameter:
 //   h2pack : H2Pack structure with ULV LU factorization
-void H2P_HSS_ULV_LU_factorize(H2Pack_t h2pack, const DTYPE shift);
+void H2P_HSS_ULV_LU_factorize(H2Pack_p h2pack, const DTYPE shift);
 
 // Solve the linear system A_{HSS} * x = b using the HSS ULV LU factorization,
 // where A_{HSS} = L_{HSS} * U_{HSS}.
@@ -27,7 +27,7 @@ void H2P_HSS_ULV_LU_factorize(H2Pack_t h2pack, const DTYPE shift);
 //       If op == 1, x satisfies L_{HSS} * x = b.
 //       If op == 2, x satisfies U_{HSS} * x = b.
 //       If op == 3, x satisfies A_{HSS} * x = b.
-void H2P_HSS_ULV_LU_solve(H2Pack_t h2pack, const int op, const DTYPE *b, DTYPE *x);
+void H2P_HSS_ULV_LU_solve(H2Pack_p h2pack, const int op, const DTYPE *b, DTYPE *x);
 
 // Construct the ULV Cholesky factorization for a HSS matrix
 // Input parameters:
@@ -35,7 +35,7 @@ void H2P_HSS_ULV_LU_solve(H2Pack_t h2pack, const int op, const DTYPE *b, DTYPE *
 //   shift  : Shift coefficient k to make (A + k * I) S.P.D.
 // Output parameter:
 //   h2pack : H2Pack structure with ULV Cholesky factorization
-void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift);
+void H2P_HSS_ULV_Cholesky_factorize(H2Pack_p h2pack, const DTYPE shift);
 
 // Solve the linear system A_{HSS} * x = b using the HSS ULV Cholesky factorization,
 // where A_{HSS} = L_{HSS} * L_{HSS}^T.
@@ -48,7 +48,7 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_t h2pack, const DTYPE shift);
 //       If op == 1, x satisfies L_{HSS}^T * x = b.
 //       If op == 2, x satisfies L_{HSS}   * x = b.
 //       If op == 3, x satisfies A_{HSS}   * x = b.
-void H2P_HSS_ULV_Cholesky_solve(H2Pack_t h2pack, const int op, const DTYPE *b, DTYPE *x);
+void H2P_HSS_ULV_Cholesky_solve(H2Pack_p h2pack, const int op, const DTYPE *b, DTYPE *x);
 
 #ifdef __cplusplus
 }

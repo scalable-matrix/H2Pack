@@ -19,7 +19,7 @@ extern "C" {
 // Output parameter:
 //   h2pack : H2Pack structure with H2 representation matrices
 void H2P_build(
-    H2Pack_t h2pack, H2P_dense_mat_t *pp, const int BD_JIT, void *krnl_param, 
+    H2Pack_p h2pack, H2P_dense_mat_p *pp, const int BD_JIT, void *krnl_param, 
     kernel_eval_fptr krnl_eval, kernel_bimv_fptr krnl_bimv, const int krnl_bimv_flops
 );
 

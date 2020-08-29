@@ -17,7 +17,7 @@ extern "C" {
 //   *hssmat_ : The constructed SPD HSS matrix, A_{HSS} ~= A_{H2} + shift * I
 void H2P_SPDHSS_H2_build(
     const int max_rank, const DTYPE reltol, const DTYPE shift, 
-    H2Pack_t h2mat, H2Pack_t *hssmat_
+    H2Pack_p h2mat, H2Pack_p *hssmat_
 );
 
 #ifdef __cplusplus

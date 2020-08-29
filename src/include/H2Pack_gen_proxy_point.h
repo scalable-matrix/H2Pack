@@ -24,7 +24,7 @@ extern "C" {
 //   pp_  : Array of proxy points for each level
 void H2P_generate_proxy_point_ID(
     const int pt_dim, const int krnl_dim, const DTYPE reltol, const int max_level, const int min_level,
-    DTYPE max_L, const void *krnl_param, kernel_eval_fptr krnl_eval, H2P_dense_mat_t **pp_
+    DTYPE max_L, const void *krnl_param, kernel_eval_fptr krnl_eval, H2P_dense_mat_p **pp_
 );
 
 // Calculate the enclosing box of a given set of points and adjust it if the proxy point file is provided
@@ -51,7 +51,7 @@ void H2P_calc_enclosing_box(const int pt_dim, const int n_point, const DTYPE *co
 //   pp        : Proxy point sets. Radius of pp[i] should == 2 * radius of pp[i-1]
 void H2P_write_proxy_point_file(
     const char *fname, const int pt_dim, const DTYPE reltol, const int L3_nlayer, 
-    const DTYPE minL, const int num_pp, H2P_dense_mat_t *pp
+    const DTYPE minL, const int num_pp, H2P_dense_mat_p *pp
 );
 
 // Generate proxy points for constructing H2 projection and skeleton matrices using 
@@ -64,8 +64,8 @@ void H2P_write_proxy_point_file(
 // Output parameter:
 //   pp_  : Array of proxy points for each level
 void H2P_generate_proxy_point_ID_file(
-    H2Pack_t h2pack, const void *krnl_param, kernel_eval_fptr krnl_eval, 
-    const char *fname, H2P_dense_mat_t **pp_
+    H2Pack_p h2pack, const void *krnl_param, kernel_eval_fptr krnl_eval, 
+    const char *fname, H2P_dense_mat_p **pp_
 );
 
 // Generate uniformly distributed proxy points on a box surface for constructing
@@ -83,7 +83,7 @@ void H2P_generate_proxy_point_ID_file(
 //   pp_  : Array of proxy points for each level
 void H2P_generate_proxy_point_surface(
     const int pt_dim, const int xpt_dim, const int min_npt, const int max_level, 
-    const int min_level, DTYPE max_L, H2P_dense_mat_t **pp_
+    const int min_level, DTYPE max_L, H2P_dense_mat_p **pp_
 );
 
 #ifdef __cplusplus

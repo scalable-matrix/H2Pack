@@ -16,7 +16,7 @@
 
 // H2 matmul intermediate multiplication, calculate B_{ij} * (U_j^T * x_j)
 void H2P_matmul_periodic_intmd_mult(
-    H2Pack_t h2pack, const int n_vec, 
+    H2Pack_p h2pack, const int n_vec, 
     const DTYPE *mat_x, const int ldx, const int x_row_stride, const CBLAS_TRANSPOSE x_trans,
           DTYPE *mat_y, const int ldy, const int y_row_stride, const CBLAS_TRANSPOSE y_trans
 )
@@ -37,21 +37,21 @@ void H2P_matmul_periodic_intmd_mult(
     DTYPE *coord          = h2pack->coord;
     DTYPE *per_adm_shifts = h2pack->per_adm_shifts;
     void  *krnl_param     = h2pack->krnl_param;
-    H2P_dense_mat_t  *y0 = h2pack->y0;
-    H2P_dense_mat_t  *J_coord = h2pack->J_coord;
+    H2P_dense_mat_p  *y0 = h2pack->y0;
+    H2P_dense_mat_p  *J_coord = h2pack->J_coord;
     kernel_eval_fptr krnl_eval   = h2pack->krnl_eval;
-    H2P_thread_buf_t *thread_buf = h2pack->tb;
+    H2P_thread_buf_p *thread_buf = h2pack->tb;
 
     // 1. Initialize y1 on the first run or reset the size of each y1
     H2P_matmul_init_y1(h2pack, n_vec);
-    H2P_dense_mat_t *y1 = h2pack->y1;
+    H2P_dense_mat_p *y1 = h2pack->y1;
 
     // 2. Intermediate sweep
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
-        H2P_dense_mat_t Bij      = thread_buf[tid]->mat0;
-        H2P_dense_mat_t coord1_s = thread_buf[tid]->mat1;
+        H2P_dense_mat_p Bij      = thread_buf[tid]->mat0;
+        H2P_dense_mat_p coord1_s = thread_buf[tid]->mat1;
         DTYPE shift[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
         #pragma omp for schedule(dynamic)
@@ -59,7 +59,7 @@ void H2P_matmul_periodic_intmd_mult(
         {
             int level0 = node_level[node0];
             
-            H2P_dense_mat_t y1_0 = y1[node0];
+            H2P_dense_mat_p y1_0 = y1[node0];
             memset(y1_0->data, 0, sizeof(DTYPE) * y1_0->nrow * y1_0->ncol);
 
             for (int i = B_p2i_rowptr[node0]; i < B_p2i_rowptr[node0 + 1]; i++)
@@ -68,7 +68,7 @@ void H2P_matmul_periodic_intmd_mult(
                 int pair_idx = B_p2i_val[i] - 1;
                 int level1   = node_level[node1];
 
-                H2P_dense_mat_t y0_1 = y0[node1];
+                H2P_dense_mat_p y0_1 = y0[node1];
 
                 DTYPE *per_adm_shift_i = per_adm_shifts + pair_idx * pt_dim;
                 for (int k = 0; k < pt_dim; k++) shift[k] = per_adm_shift_i[k];
@@ -154,7 +154,7 @@ void H2P_matmul_periodic_intmd_mult(
 
 // H2 matmul dense multiplication, calculate D_{ij} * x_j
 void H2P_matmul_periodic_dense_mult(
-    H2Pack_t h2pack, const int n_vec, 
+    H2Pack_p h2pack, const int n_vec, 
     const DTYPE *mat_x, const int ldx, const int x_row_stride, const CBLAS_TRANSPOSE x_trans,
           DTYPE *mat_y, const int ldy, const int y_row_stride, const CBLAS_TRANSPOSE y_trans
 )
@@ -176,13 +176,13 @@ void H2P_matmul_periodic_dense_mult(
     DTYPE *per_inadm_shifts = h2pack->per_inadm_shifts;
     void  *krnl_param       = h2pack->krnl_param;
     kernel_eval_fptr krnl_eval   = h2pack->krnl_eval;
-    H2P_thread_buf_t *thread_buf = h2pack->tb;
+    H2P_thread_buf_p *thread_buf = h2pack->tb;
 
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
-        H2P_dense_mat_t Dij      = thread_buf[tid]->mat0;
-        H2P_dense_mat_t coord1_s = thread_buf[tid]->mat1;
+        H2P_dense_mat_p Dij      = thread_buf[tid]->mat0;
+        H2P_dense_mat_p coord1_s = thread_buf[tid]->mat1;
 
         DTYPE shift[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
@@ -245,7 +245,7 @@ void H2P_matmul_periodic_dense_mult(
 
 // H2 representation multiplies a dense general matrix
 void H2P_matmul_periodic(
-    H2Pack_t h2pack, const CBLAS_LAYOUT layout, const int n_vec, 
+    H2Pack_p h2pack, const CBLAS_LAYOUT layout, const int n_vec, 
     const DTYPE *mat_x, const int ldx, DTYPE *mat_y, const int ldy
 )
 {
@@ -343,8 +343,8 @@ void H2P_matmul_periodic(
         int root_idx     = h2pack->root_idx;
         int root_J_npt   = h2pack->J[root_idx]->length;
         int per_blk_size = root_J_npt * h2pack->krnl_dim;
-        H2P_dense_mat_t y0_root = h2pack->y0[root_idx];
-        H2P_dense_mat_t y1_root = h2pack->y1[root_idx];
+        H2P_dense_mat_p y0_root = h2pack->y0[root_idx];
+        H2P_dense_mat_p y1_root = h2pack->y1[root_idx];
         H2P_dense_mat_resize(y1_root, per_blk_size, curr_n_vec);
         CBLAS_GEMM(
             CblasRowMajor, CblasNoTrans, CblasNoTrans, per_blk_size, curr_n_vec, per_blk_size, 

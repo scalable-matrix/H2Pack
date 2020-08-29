@@ -35,11 +35,11 @@
 // Output parameters:
 //   coord           : Sorted coordinates
 //   <return>        : Information of current node
-H2P_tree_node_t H2P_bisection_partition_points(
+H2P_tree_node_p H2P_bisection_partition_points(
     int level, int coord_s, int coord_e, const int pt_dim, const int xpt_dim, const int n_point, 
     const DTYPE max_leaf_size, const int max_leaf_points, DTYPE *enbox, 
     DTYPE *coord, DTYPE *coord_tmp, int *coord_idx, int *coord_idx_tmp, 
-    H2P_partition_vars_t part_vars
+    H2P_partition_vars_p part_vars
 )
 {
     int node_npts = coord_e - coord_s + 1;
@@ -111,7 +111,7 @@ H2P_tree_node_t H2P_bisection_partition_points(
     //    is smaller than the threshold, set current box as a leaf node
     if ((node_npts <= max_leaf_points) || (box_size <= max_leaf_size))
     {
-        H2P_tree_node_t node;
+        H2P_tree_node_p node;
         H2P_tree_node_init(&node, pt_dim);
         node->pt_cluster[0] = coord_s;
         node->pt_cluster[1] = coord_e;
@@ -224,7 +224,7 @@ H2P_tree_node_t H2P_bisection_partition_points(
     }
     
     // 6. Recursively partition each sub-box
-    H2P_tree_node_t node;
+    H2P_tree_node_p node;
     H2P_tree_node_init(&node, pt_dim);
     int n_node = 1, max_child_height = 0;
     for (int i = 0; i < n_child; i++)
@@ -237,7 +237,7 @@ H2P_tree_node_t H2P_bisection_partition_points(
             max_leaf_size, max_leaf_points, sub_box_i, 
             coord, coord_tmp, coord_idx, coord_idx_tmp, part_vars
         );
-        H2P_tree_node_t child_node_i = (H2P_tree_node_t) node->children[i];
+        H2P_tree_node_p child_node_i = (H2P_tree_node_p) node->children[i];
         n_node += child_node_i->n_node;
         max_child_height = MAX(max_child_height, child_node_i->height);
     }
@@ -271,7 +271,7 @@ H2P_tree_node_t H2P_bisection_partition_points(
 //   node   : Current node of linked list H2 tree
 // Output parameter:
 //   h2pack : H2Pack structure with H2 tree partitioning in arrays
-void H2P_tree_to_array(H2P_tree_node_t node, H2Pack_t h2pack)
+void H2P_tree_to_array(H2P_tree_node_p node, H2Pack_p h2pack)
 {
     int pt_dim    = h2pack->pt_dim;
     int pt_dim2   = pt_dim * 2;
@@ -284,7 +284,7 @@ void H2P_tree_to_array(H2P_tree_node_t node, H2Pack_t h2pack)
     // 1. Recursively convert sub-trees to arrays
     for (int i = 0; i < node->n_child; i++)
     {
-        H2P_tree_node_t child_i = (H2P_tree_node_t) node->children[i];
+        H2P_tree_node_p child_i = (H2P_tree_node_p) node->children[i];
         H2P_tree_to_array(child_i, h2pack);
     }
     
@@ -292,7 +292,7 @@ void H2P_tree_to_array(H2P_tree_node_t node, H2Pack_t h2pack)
     int *node_children = h2pack->children + node_idx * max_child;
     for (int i = 0; i < n_child; i++)
     {
-        H2P_tree_node_t child_i = (H2P_tree_node_t) node->children[i];
+        H2P_tree_node_p child_i = (H2P_tree_node_p) node->children[i];
         int child_idx = child_i->po_idx;
         node_children[i] = child_idx;
         h2pack->parent[child_idx] = node_idx;
@@ -320,7 +320,7 @@ void H2P_tree_to_array(H2P_tree_node_t node, H2Pack_t h2pack)
 //   part_vars : Structure for storing working variables and arrays in point partitioning
 // Output parameter:
 //   h2pack : H2Pack structure reduced (in)admissible pairs
-void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0, const int n1, H2P_partition_vars_t part_vars)
+void H2P_calc_reduced_adm_pairs(H2Pack_p h2pack, const DTYPE alpha, const int n0, const int n1, H2P_partition_vars_p part_vars)
 {
     int   pt_dim        = h2pack->pt_dim;
     int   max_child     = h2pack->max_child;
@@ -432,7 +432,7 @@ void H2P_calc_reduced_adm_pairs(H2Pack_t h2pack, const DTYPE alpha, const int n0
 //   h2pack : H2Pack structure with H2 tree partitioning in arrays
 // Output parameter:
 //   h2pack : H2Pack structure with calculated node inadmissible lists
-void H2P_calc_node_inadm_lists(H2Pack_t h2pack)
+void H2P_calc_node_inadm_lists(H2Pack_p h2pack)
 {
     int   pt_dim        = h2pack->pt_dim;
     int   max_neighbor  = h2pack->max_neighbor;
@@ -446,7 +446,7 @@ void H2P_calc_node_inadm_lists(H2Pack_t h2pack)
     int   *level_nodes  = h2pack->level_nodes;
     DTYPE *enbox        = h2pack->enbox;
 
-    H2P_int_vec_t target_list;
+    H2P_int_vec_p target_list;
     H2P_int_vec_init(&target_list, 2 * n_leaf_node);
     int *node_inadm_lists = (int*) malloc(sizeof(int) * n_node * max_neighbor);
     int *node_n_r_inadm   = (int*) malloc(sizeof(int) * n_node);
@@ -501,9 +501,9 @@ void H2P_calc_node_inadm_lists(H2Pack_t h2pack)
 }
 
 // Calculate reduced (in)admissible pairs for HSS
-void H2P_HSS_calc_adm_inadm_pairs(H2Pack_t h2pack)
+void H2P_HSS_calc_adm_inadm_pairs(H2Pack_p h2pack)
 {
-    H2P_partition_vars_t part_vars;
+    H2P_partition_vars_p part_vars;
     H2P_partition_vars_init(&part_vars);
 
     // Calculate reduced HSS (in)admissible pairs
@@ -538,7 +538,7 @@ void H2P_HSS_calc_adm_inadm_pairs(H2Pack_t h2pack)
 
 // Partition points for a H2 tree
 void H2P_partition_points(
-    H2Pack_t h2pack, const int n_point, const DTYPE *coord, 
+    H2Pack_p h2pack, const int n_point, const DTYPE *coord, 
     int max_leaf_points, DTYPE max_leaf_size
 )
 {
@@ -548,7 +548,7 @@ void H2P_partition_points(
     
     st = get_wtime_sec();
 
-    H2P_partition_vars_t part_vars;
+    H2P_partition_vars_p part_vars;
     H2P_partition_vars_init(&part_vars);
     
     // 1. Copy input point coordinates
@@ -578,7 +578,7 @@ void H2P_partition_points(
         "Failed to allocate matrix of size %d * %d for temporarily storing point coordinates\n", 
         pt_dim, n_point
     );
-    H2P_tree_node_t root = H2P_bisection_partition_points(
+    H2P_tree_node_p root = H2P_bisection_partition_points(
         0, 0, n_point-1, pt_dim, xpt_dim, n_point, 
         max_leaf_size, max_leaf_points, h2pack->root_enbox, 
         h2pack->coord, coord_tmp, h2pack->coord_idx, coord_idx_tmp, part_vars
@@ -673,7 +673,7 @@ void H2P_partition_points(
     memcpy(h2pack->r_adm_pairs,   part_vars->r_adm_pairs->data,   r_adm_pairs_msize);
 
     // 6. Initialize thread-local buffer
-    h2pack->tb = (H2P_thread_buf_t*) malloc(sizeof(H2P_thread_buf_t) * h2pack->n_thread);
+    h2pack->tb = (H2P_thread_buf_p*) malloc(sizeof(H2P_thread_buf_p) * h2pack->n_thread);
     ASSERT_PRINTF(h2pack->tb != NULL, "Failed to allocate %d thread buffers\n", h2pack->n_thread);
     for (int i = 0; i < h2pack->n_thread; i++)
         H2P_thread_buf_init(&h2pack->tb[i], h2pack->krnl_mat_size);

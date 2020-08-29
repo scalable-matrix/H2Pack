@@ -14,7 +14,7 @@ extern "C" {
 //   x      : Input dense vector
 // Output parameter:
 //   y : Output dense vector
-void H2P_matvec_periodic(H2Pack_t h2pack, const DTYPE *x, DTYPE *y);
+void H2P_matvec_periodic(H2Pack_p h2pack, const DTYPE *x, DTYPE *y);
 
 #ifdef __cplusplus
 }

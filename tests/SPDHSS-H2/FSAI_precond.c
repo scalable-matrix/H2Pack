@@ -89,7 +89,7 @@ static void qsort_DTYPE_int_pair(DTYPE *key, int *val, int l, int r)
 }
 
 // Search k nearest neighbors for each point using the hierarchical partition in H2Pack
-static void H2P_search_knn(H2Pack_t h2pack, const int k, int *knn)
+static void H2P_search_knn(H2Pack_p h2pack, const int k, int *knn)
 {
     int pt_dim       = h2pack->pt_dim;
     int n_point      = h2pack->n_point;
@@ -101,9 +101,9 @@ static void H2P_search_knn(H2Pack_t h2pack, const int k, int *knn)
     DTYPE *enbox = h2pack->enbox;
     DTYPE *coord = h2pack->coord;
 
-    H2P_dense_mat_t dist;
-    H2P_dense_mat_t neighbor_pt_coord;
-    H2P_int_vec_t   pt_idx;
+    H2P_dense_mat_p dist;
+    H2P_dense_mat_p neighbor_pt_coord;
+    H2P_int_vec_p   pt_idx;
     int max_candidate = max_leaf_pts * max_neighbor;
     H2P_dense_mat_init(&dist, max_leaf_pts, max_candidate);
     H2P_dense_mat_init(&neighbor_pt_coord, pt_dim, max_candidate);
@@ -200,9 +200,9 @@ static void H2P_search_knn(H2Pack_t h2pack, const int k, int *knn)
 }
 
 // Construct a FSAI_precond from a H2Pack structure
-void H2P_build_FSAI_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, FSAI_precond_t *precond_)
+void H2P_build_FSAI_precond(H2Pack_p h2pack, const int rank, const DTYPE shift, FSAI_precond_p *precond_)
 {
-    FSAI_precond_t precond = (FSAI_precond_t) malloc(sizeof(FSAI_precond_s));
+    FSAI_precond_p precond = (FSAI_precond_p) malloc(sizeof(FSAI_precond_s));
     assert(precond != NULL);
 
     if (h2pack->pt_dim != 2 && h2pack->pt_dim != 3)
@@ -255,12 +255,12 @@ void H2P_build_FSAI_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, 
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
-        H2P_thread_buf_t tb = h2pack->tb[tid];
-        H2P_int_vec_t   nn_idx   = tb->idx0;
-        H2P_int_vec_t   col_idx  = tb->idx1;
-        H2P_dense_mat_t nn_coord = tb->mat0;
-        H2P_dense_mat_t tmpAU    = tb->mat1;
-        H2P_dense_mat_t tmpYDL   = tb->mat2;
+        H2P_thread_buf_p tb = h2pack->tb[tid];
+        H2P_int_vec_p   nn_idx   = tb->idx0;
+        H2P_int_vec_p   col_idx  = tb->idx1;
+        H2P_dense_mat_p nn_coord = tb->mat0;
+        H2P_dense_mat_p tmpAU    = tb->mat1;
+        H2P_dense_mat_p tmpYDL   = tb->mat2;
 
         #pragma omp for schedule(guided)
         for (int i = 0; i < n_point; i++)
@@ -371,7 +371,7 @@ void H2P_build_FSAI_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, 
         }  // End of i loop
     }  // End of "#pragma omp parallel"
 
-    CSRP_mat_t G = NULL, Gt = NULL;
+    CSRP_mat_p G = NULL, Gt = NULL;
     CSRP_init_with_COO_mat(mat_size, mat_size, nnz, row, col, val, &G);
     CSRP_init_with_COO_mat(mat_size, mat_size, nnz, col, row, val, &Gt);
     CSRP_partition_multithread(G,  n_thread, n_thread);
@@ -401,7 +401,7 @@ void H2P_build_FSAI_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, 
 }
 
 // Apply FSAI preconditioner, x := M_{FSAI}^{-1} * b
-void FSAI_precond_apply(FSAI_precond_t precond, const DTYPE *b, DTYPE *x)
+void FSAI_precond_apply(FSAI_precond_p precond, const DTYPE *b, DTYPE *x)
 {
     if (precond == NULL) return;
     double st = get_wtime_sec();
@@ -415,7 +415,7 @@ void FSAI_precond_apply(FSAI_precond_t precond, const DTYPE *b, DTYPE *x)
 // Destroy a FSAI_precond structure
 // Input parameter:
 //   precond : A FSAI_precond structure to be destroyed
-void FSAI_precond_destroy(FSAI_precond_t precond)
+void FSAI_precond_destroy(FSAI_precond_p precond)
 {
     if (precond == NULL) return;
     CSRP_free(precond->G);
@@ -426,7 +426,7 @@ void FSAI_precond_destroy(FSAI_precond_t precond)
 }
 
 // Print statistic info of a FSAI_precond structure
-void FSAI_precond_print_stat(FSAI_precond_t precond)
+void FSAI_precond_print_stat(FSAI_precond_p precond)
 {
     if (precond == NULL) return;
     printf(

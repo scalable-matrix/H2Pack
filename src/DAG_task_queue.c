@@ -11,10 +11,10 @@
 // nonzero, task i will be skipped. 
 void DAG_task_queue_init(
     const int max_task_id, const int num_dep, const int *DAG_src_ptr, 
-    const int *DAG_dst_idx, DAG_task_queue_t *tq_
+    const int *DAG_dst_idx, DAG_task_queue_p *tq_
 )
 {
-    DAG_task_queue_t tq = (DAG_task_queue_t) malloc(sizeof(DAG_task_queue_s));
+    DAG_task_queue_p tq = (DAG_task_queue_p) malloc(sizeof(DAG_task_queue_s));
     assert(tq != NULL);
     
     // Allocate arrays in DAG_task_queue
@@ -56,7 +56,7 @@ void DAG_task_queue_init(
 }
 
 // Destroy a DAG_task_queue structure.
-void DAG_task_queue_free(DAG_task_queue_t tq)
+void DAG_task_queue_free(DAG_task_queue_p tq)
 {
     if (tq == NULL) return;
     free(tq->DAG_src_ptr);
@@ -69,7 +69,7 @@ void DAG_task_queue_free(DAG_task_queue_t tq)
 
 // Get a new task from a DAG_task_queue structure and update its task queue.  
 // This function can be called by multiple threads at the same time.
-int  DAG_task_queue_get_task(DAG_task_queue_t tq)
+int  DAG_task_queue_get_task(DAG_task_queue_p tq)
 {
     if (tq == NULL) return -1;
     
@@ -92,7 +92,7 @@ int  DAG_task_queue_get_task(DAG_task_queue_t tq)
 
 // Finish a task and push new available tasks to a DAG_task_queue task queue.
 // This function can be called by multiple threads at the same time.
-void DAG_task_queue_finish_task(DAG_task_queue_t tq, const int task_id)
+void DAG_task_queue_finish_task(DAG_task_queue_p tq, const int task_id)
 {
     if (tq == NULL) return;
     for (int j = tq->DAG_src_ptr[task_id]; j < tq->DAG_src_ptr[task_id + 1]; j++)
@@ -113,7 +113,7 @@ void DAG_task_queue_finish_task(DAG_task_queue_t tq, const int task_id)
 }
 
 // Reset the task queue in a DAG_task_queue structure. 
-void DAG_task_queue_reset(DAG_task_queue_t tq)
+void DAG_task_queue_reset(DAG_task_queue_p tq)
 {
     if (tq == NULL) return;
     tq->task_head = 0;

@@ -21,7 +21,7 @@ extern "C" {
 // Output parameter:
 //   mat_y  : Size is the same as mat_x, output dense matrix, mat_y := A_{H2} * mat_x
 void H2P_matmul_periodic(
-    H2Pack_t h2pack, const CBLAS_LAYOUT layout, const int n_vec, 
+    H2Pack_p h2pack, const CBLAS_LAYOUT layout, const int n_vec, 
     const DTYPE *mat_x, const int ldx, DTYPE *mat_y, const int ldy
 );
 

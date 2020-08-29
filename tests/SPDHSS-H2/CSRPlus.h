@@ -31,7 +31,7 @@ struct CSRP_mat
 };
 
 typedef struct CSRP_mat  CSRP_mat_s;
-typedef struct CSRP_mat* CSRP_mat_t;
+typedef struct CSRP_mat* CSRP_mat_p;
 
 #ifdef __cplusplus
 extern "C" {
@@ -46,13 +46,13 @@ extern "C" {
 //   *csrp_mat_  : Pointer to a initialized CSRP_mat structure
 void CSRP_init_with_COO_mat(
     const int nrow, const int ncol, const int nnz, const int *row,
-    const int *col, const double *val, CSRP_mat_t *csrp_mat_
+    const int *col, const double *val, CSRP_mat_p *csrp_mat_
 );
 
 // Free a CSRP_mat structure
 // Input parameter:
 //   csrp_mat : Pointer to a CSRP_mat structure
-void CSRP_free(CSRP_mat_t csrp_mat);
+void CSRP_free(CSRP_mat_p csrp_mat);
 
 // Partition a CSR matrix into multiple blocks with the same nnz
 // for multiple threads execution of SpMV
@@ -62,14 +62,14 @@ void CSRP_free(CSRP_mat_t csrp_mat);
 //   nthread  : Number of threads to be used in SpMV later
 // Output parameter:
 //   csrp_mat : Pointer to a CSRP_mat structure with partitioning information
-void CSRP_partition_multithread(CSRP_mat_t csrp_mat, const int nblk, const int nthread);
+void CSRP_partition_multithread(CSRP_mat_p csrp_mat, const int nblk, const int nthread);
 
 // Use first-touch policy to optimize the storage of CSR arrays in a CSRP_mat structure
 // Input:
 //   csrp_mat : Pointer to a CSRP_mat structure
 // Output:
 //   csrp_mat : Pointer to a CSRP_mat structure with NUMA optimized storage
-void CSRP_optimize_NUMA(CSRP_mat_t csrp_mat);
+void CSRP_optimize_NUMA(CSRP_mat_p csrp_mat);
 
 // Perform OpenMP parallelized CSR SpMV with a CSRP_mat structure
 // Input parameters:
@@ -77,7 +77,7 @@ void CSRP_optimize_NUMA(CSRP_mat_t csrp_mat);
 //   x        : Input vector
 // Output parameter:
 //   y : Output vector, will be overwritten by csrp_mat * x 
-void CSRP_SpMV(CSRP_mat_t csrp_mat, const double *x, double *y);
+void CSRP_SpMV(CSRP_mat_p csrp_mat, const double *x, double *y);
 
 #ifdef __cplusplus
 }

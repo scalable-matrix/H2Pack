@@ -25,7 +25,7 @@ int main(int argc, char **argv)
     
     double st, et;
 
-    H2Pack_t h2mat, hssmat;
+    H2Pack_p h2mat, hssmat;
     
     H2P_init(&h2mat, test_params.pt_dim, test_params.krnl_dim, QR_REL_NRM, &test_params.rel_tol);
     
@@ -36,7 +36,7 @@ int main(int argc, char **argv)
     H2P_partition_points(h2mat, test_params.n_point, test_params.coord, max_leaf_points, max_leaf_size);
     H2P_HSS_calc_adm_inadm_pairs(h2mat);
 
-    H2P_dense_mat_t *pp;
+    H2P_dense_mat_p *pp;
     st = get_wtime_sec();
     H2P_generate_proxy_point_ID_file(
         h2mat, test_params.krnl_param, test_params.krnl_eval,

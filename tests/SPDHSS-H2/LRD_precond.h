@@ -17,7 +17,7 @@ struct LRD_precond
     double mem_MB;
 };
 typedef struct LRD_precond  LRD_precond_s;
-typedef struct LRD_precond* LRD_precond_t;
+typedef struct LRD_precond* LRD_precond_p;
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,7 +30,7 @@ extern "C" {
 //   shift  : Diagonal shifting of the target matrix
 // Output parameter:
 //   *precond_ : Constructed LRD_precond structure
-void H2P_build_LRD_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, LRD_precond_t *precond_);
+void H2P_build_LRD_precond(H2Pack_p h2pack, const int rank, const DTYPE shift, LRD_precond_p *precond_);
 
 // Apply LRD preconditioner, x := M_{LRD}^{-1} * b
 // Input parameters:
@@ -38,17 +38,17 @@ void H2P_build_LRD_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, L
 //   b       : Size precond->mat_size, input vector
 // Output parameter:
 //   x : Size precond->mat_size, output vector
-void LRD_precond_apply(LRD_precond_t precond, const DTYPE *b, DTYPE *x);
+void LRD_precond_apply(LRD_precond_p precond, const DTYPE *b, DTYPE *x);
 
 // Destroy a LRD_precond structure
 // Input parameter:
 //   precond : A LRD_precond structure to be destroyed
-void LRD_precond_destroy(LRD_precond_t precond);
+void LRD_precond_destroy(LRD_precond_p precond);
 
 // Print statistic info of a LRD_precond structure
 // Input parameter:
 //   precond : LRD_precond structure whose statistic info to be printed
-void LRD_precond_print_stat(LRD_precond_t precond);
+void LRD_precond_print_stat(LRD_precond_p precond);
 
 #ifdef __cplusplus
 }

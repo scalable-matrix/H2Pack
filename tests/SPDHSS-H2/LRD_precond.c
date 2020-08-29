@@ -11,13 +11,13 @@
 // Evaluate a kernel matrix with OpenMP parallelization
 extern void H2P_eval_kernel_matrix_OMP(
     const void *krnl_param, kernel_eval_fptr krnl_eval, const int krnl_dim, 
-    H2P_dense_mat_t x_coord, H2P_dense_mat_t y_coord, H2P_dense_mat_t kernel_mat
+    H2P_dense_mat_p x_coord, H2P_dense_mat_p y_coord, H2P_dense_mat_p kernel_mat
 );
 
 // Construct a LRD_precond from a H2Pack structure using Nystrom method with random sampling
-void H2P_build_LRD_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, LRD_precond_t *precond_)
+void H2P_build_LRD_precond(H2Pack_p h2pack, const int rank, const DTYPE shift, LRD_precond_p *precond_)
 {
-    LRD_precond_t precond = (LRD_precond_t) malloc(sizeof(LRD_precond_s));
+    LRD_precond_p precond = (LRD_precond_p) malloc(sizeof(LRD_precond_s));
     assert(precond != NULL);
 
     int n_point  = h2pack->n_point;
@@ -32,8 +32,8 @@ void H2P_build_LRD_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, L
     int *flag = (int*) malloc(sizeof(int) * n_point);
     ASSERT_PRINTF(flag != NULL, "Failed to allocate work array of size %d for LRD preconditioner\n", n_point);
     memset(flag, 0, sizeof(int) * n_point);
-    H2P_int_vec_t   skel_idx;
-    H2P_dense_mat_t coord_all, coord_skel;
+    H2P_int_vec_p   skel_idx;
+    H2P_dense_mat_p coord_all, coord_skel;
     H2P_int_vec_init(&skel_idx, rank);
     H2P_dense_mat_init(&coord_all,  pt_dim, n_point);
     H2P_dense_mat_init(&coord_skel, pt_dim, n_point);
@@ -56,7 +56,7 @@ void H2P_build_LRD_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, L
     H2P_dense_mat_select_columns(coord_skel, skel_idx);
     
     int info;
-    H2P_dense_mat_t L, Ut, tmp;
+    H2P_dense_mat_p L, Ut, tmp;
     H2P_dense_mat_init(&L,   nrow, nrow);
     H2P_dense_mat_init(&Ut,  nrow, mat_size);
     H2P_dense_mat_init(&tmp, nrow, mat_size);
@@ -140,7 +140,7 @@ void H2P_build_LRD_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, L
 }
 
 // Apply LRD preconditioner, x := M_{LRD}^{-1} * b
-void LRD_precond_apply(LRD_precond_t precond, const DTYPE *b, DTYPE *x)
+void LRD_precond_apply(LRD_precond_p precond, const DTYPE *b, DTYPE *x)
 {
     if (precond == NULL) return;
     int   mat_size  = precond->mat_size;
@@ -163,7 +163,7 @@ void LRD_precond_apply(LRD_precond_t precond, const DTYPE *b, DTYPE *x)
 }
 
 // Destroy a LRD_precond structure
-void LRD_precond_destroy(LRD_precond_t precond)
+void LRD_precond_destroy(LRD_precond_p precond)
 {
     if (precond == NULL) return;
     free(precond->Ut);
@@ -172,7 +172,7 @@ void LRD_precond_destroy(LRD_precond_t precond)
 }
 
 // Print statistic info of a FSAI_precond structure
-void LRD_precond_print_stat(LRD_precond_t precond)
+void LRD_precond_print_stat(LRD_precond_p precond)
 {
     if (precond == NULL) return;
     printf(

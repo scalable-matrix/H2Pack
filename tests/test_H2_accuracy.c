@@ -20,14 +20,14 @@ int main(int argc, char **argv)
     
     double st, et;
 
-    H2Pack_t h2pack;
+    H2Pack_p h2pack;
 
     // Test parameters
-    const int n_rel_tol      = 3;
-    const int krnl_param_len = 1;
-    const int n_krnl_param   = 5;
-    const DTYPE rel_tols[n_rel_tol] = {1e-3, 1e-6, 1e-9};
-    const DTYPE krnl_params[n_krnl_param * krnl_param_len] = {1e-2, 1e-1, 1e0, 1e1, 1e2};
+    #define n_rel_tol      3
+    #define krnl_param_len 1
+    #define n_krnl_param   5
+    DTYPE rel_tols[n_rel_tol] = {1e-3, 1e-6, 1e-9};
+    DTYPE krnl_params[n_krnl_param * krnl_param_len] = {1e-2, 1e-1, 1e0, 1e1, 1e2};
 
     // Loop over rel_tol and krnl_param combinations
     for (int i_rel_tol = 0; i_rel_tol < n_rel_tol; i_rel_tol++)
@@ -51,7 +51,7 @@ int main(int argc, char **argv)
             H2P_partition_points(h2pack, test_params.n_point, test_params.coord, max_leaf_points, max_leaf_size);
 
             // Generate proxy points
-            H2P_dense_mat_t *pp = NULL;
+            H2P_dense_mat_p *pp = NULL;
             st = get_wtime_sec();
             H2P_generate_proxy_point_ID_file(
                 h2pack, test_params.krnl_param, test_params.krnl_eval,

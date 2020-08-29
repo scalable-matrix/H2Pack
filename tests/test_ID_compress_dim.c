@@ -77,8 +77,8 @@ int main()
     printf("norm_rel_tol: ");
     scanf("%lf", &tol_norm);
     
-    H2P_dense_mat_t A, A0, U;
-    H2P_int_vec_t J;
+    H2P_dense_mat_p A, A0, U;
+    H2P_int_vec_p J;
     H2P_dense_mat_init(&A, A_nrow, A_ncol);
     H2P_dense_mat_init(&A0, A_nrow, A_ncol);
     H2P_int_vec_init(&J, A_nrow);

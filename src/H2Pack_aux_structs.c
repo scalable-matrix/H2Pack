@@ -12,12 +12,12 @@
 // ========================== H2P_tree_node ========================== //
 
 // Initialize a H2P_tree_node structure
-void H2P_tree_node_init(H2P_tree_node_t *node_, const int dim)
+void H2P_tree_node_init(H2P_tree_node_p *node_, const int dim)
 {
     const int max_child = 1 << dim;
-    H2P_tree_node_t node = (H2P_tree_node_t) malloc(sizeof(struct H2P_tree_node));
+    H2P_tree_node_p node = (H2P_tree_node_p) malloc(sizeof(struct H2P_tree_node));
     ASSERT_PRINTF(node != NULL, "Failed to allocate H2P_tree_node structure\n");
-    node->children = (void**) malloc(sizeof(H2P_tree_node_t) * max_child);
+    node->children = (void**) malloc(sizeof(H2P_tree_node_p) * max_child);
     node->enbox    = (DTYPE*) malloc(sizeof(DTYPE) * dim * 2);
     ASSERT_PRINTF(
         node->children != NULL && node->enbox != NULL,
@@ -29,12 +29,12 @@ void H2P_tree_node_init(H2P_tree_node_t *node_, const int dim)
 }
 
 // Recursively destroy a H2P_tree_node node and its children nodes
-void H2P_tree_node_destroy(H2P_tree_node_t node)
+void H2P_tree_node_destroy(H2P_tree_node_p node)
 {
     if (node == NULL) return;
     for (int i = 0; i < node->n_child; i++)
     {
-        H2P_tree_node_t child_i = (H2P_tree_node_t) node->children[i];
+        H2P_tree_node_p child_i = (H2P_tree_node_p) node->children[i];
         if (child_i != NULL) H2P_tree_node_destroy(child_i);
         free(child_i);
     }
@@ -48,10 +48,10 @@ void H2P_tree_node_destroy(H2P_tree_node_t node)
 // =========================== H2P_int_vec =========================== //
 
 // Initialize a H2P_int_vec structure
-void H2P_int_vec_init(H2P_int_vec_t *int_vec_, int capacity)
+void H2P_int_vec_init(H2P_int_vec_p *int_vec_, int capacity)
 {
     if (capacity < 0) capacity = 128;
-    H2P_int_vec_t int_vec = (H2P_int_vec_t) malloc(sizeof(struct H2P_int_vec));
+    H2P_int_vec_p int_vec = (H2P_int_vec_p) malloc(sizeof(struct H2P_int_vec));
     ASSERT_PRINTF(int_vec != NULL, "Failed to allocate H2P_int_vec structure\n");
     int_vec->data = (int*) malloc(sizeof(int) * capacity);
     ASSERT_PRINTF(int_vec->data != NULL, "Failed to allocate integer vector of size %d\n", capacity);
@@ -61,7 +61,7 @@ void H2P_int_vec_init(H2P_int_vec_t *int_vec_, int capacity)
 }
 
 // Destroy a H2P_int_vec structure
-void H2P_int_vec_destroy(H2P_int_vec_t int_vec)
+void H2P_int_vec_destroy(H2P_int_vec_p int_vec)
 {
     if (int_vec == NULL) return;
     free(int_vec->data);
@@ -71,7 +71,7 @@ void H2P_int_vec_destroy(H2P_int_vec_t int_vec)
 }
 
 // Concatenate values in a H2P_int_vec to another H2P_int_vec
-void H2P_int_vec_concatenate(H2P_int_vec_t dst_vec, H2P_int_vec_t src_vec)
+void H2P_int_vec_concatenate(H2P_int_vec_p dst_vec, H2P_int_vec_p src_vec)
 {
     int s_len = src_vec->length;
     int d_len = dst_vec->length;
@@ -83,7 +83,7 @@ void H2P_int_vec_concatenate(H2P_int_vec_t dst_vec, H2P_int_vec_t src_vec)
 }
 
 // Gather elements in a H2P_int_vec to another H2P_int_vec
-void H2P_int_vec_gather(H2P_int_vec_t src_vec, H2P_int_vec_t idx, H2P_int_vec_t dst_vec)
+void H2P_int_vec_gather(H2P_int_vec_p src_vec, H2P_int_vec_p idx, H2P_int_vec_p dst_vec)
 {
     H2P_int_vec_set_capacity(dst_vec, idx->length);
     for (int i = 0; i < idx->length; i++)
@@ -97,9 +97,9 @@ void H2P_int_vec_gather(H2P_int_vec_t src_vec, H2P_int_vec_t idx, H2P_int_vec_t 
 // ======================= H2P_partition_vars ======================== //
 
 // Initialize a H2P_partition_vars structure
-void H2P_partition_vars_init(H2P_partition_vars_t *part_vars_)
+void H2P_partition_vars_init(H2P_partition_vars_p *part_vars_)
 {
-    H2P_partition_vars_t part_vars = (H2P_partition_vars_t) malloc(sizeof(struct H2P_partition_vars));
+    H2P_partition_vars_p part_vars = (H2P_partition_vars_p) malloc(sizeof(struct H2P_partition_vars));
     H2P_int_vec_init(&part_vars->r_adm_pairs,   10240);
     H2P_int_vec_init(&part_vars->r_inadm_pairs, 10240);
     part_vars->curr_po_idx = 0;
@@ -109,7 +109,7 @@ void H2P_partition_vars_init(H2P_partition_vars_t *part_vars_)
 }
 
 // Destroy a H2P_partition_vars structure
-void H2P_partition_vars_destroy(H2P_partition_vars_t part_vars)
+void H2P_partition_vars_destroy(H2P_partition_vars_p part_vars)
 {
     H2P_int_vec_destroy(part_vars->r_adm_pairs);
     H2P_int_vec_destroy(part_vars->r_inadm_pairs);
@@ -124,9 +124,9 @@ void H2P_partition_vars_destroy(H2P_partition_vars_t part_vars)
 // ========================== H2P_dense_mat ========================== //
 
 // Initialize a H2P_dense_mat structure
-void H2P_dense_mat_init(H2P_dense_mat_t *mat_, const int nrow, const int ncol)
+void H2P_dense_mat_init(H2P_dense_mat_p *mat_, const int nrow, const int ncol)
 {
-    H2P_dense_mat_t mat = (H2P_dense_mat_t) malloc(sizeof(struct H2P_dense_mat));
+    H2P_dense_mat_p mat = (H2P_dense_mat_p) malloc(sizeof(struct H2P_dense_mat));
     ASSERT_PRINTF(mat != NULL, "Failed to allocate H2P_dense_mat structure\n");
     
     mat->nrow = MAX(0, nrow);
@@ -145,7 +145,7 @@ void H2P_dense_mat_init(H2P_dense_mat_t *mat_, const int nrow, const int ncol)
 }
 
 // Destroy a H2P_dense_mat structure
-void H2P_dense_mat_destroy(H2P_dense_mat_t mat)
+void H2P_dense_mat_destroy(H2P_dense_mat_p mat)
 {
     if (mat == NULL) return;
     free_aligned(mat->data);
@@ -157,14 +157,14 @@ void H2P_dense_mat_destroy(H2P_dense_mat_t mat)
 }
 
 // Copy the data in a H2P_dense_mat structure to another H2P_dense_mat structure
-void H2P_dense_mat_copy(H2P_dense_mat_t src_mat, H2P_dense_mat_t dst_mat)
+void H2P_dense_mat_copy(H2P_dense_mat_p src_mat, H2P_dense_mat_p dst_mat)
 {
     H2P_dense_mat_resize(dst_mat, src_mat->nrow, src_mat->ncol);
     copy_matrix_block(sizeof(DTYPE), src_mat->nrow, src_mat->ncol, src_mat->data, src_mat->ld, dst_mat->data, dst_mat->ld);
 }
 
 // Permute rows in a H2P_dense_mat structure
-void H2P_dense_mat_permute_rows(H2P_dense_mat_t mat, const int *p)
+void H2P_dense_mat_permute_rows(H2P_dense_mat_p mat, const int *p)
 {
     DTYPE *mat_dst = (DTYPE*) malloc_aligned(sizeof(DTYPE) * mat->nrow * mat->ncol, 64);
     ASSERT_PRINTF(mat_dst != NULL, "Failed to allocate buffer of size %d * %d\n", mat->nrow, mat->ncol);
@@ -183,7 +183,7 @@ void H2P_dense_mat_permute_rows(H2P_dense_mat_t mat, const int *p)
 }
 
 // Select rows in a H2P_dense_mat structure
-void H2P_dense_mat_select_rows(H2P_dense_mat_t mat, H2P_int_vec_t row_idx)
+void H2P_dense_mat_select_rows(H2P_dense_mat_p mat, H2P_int_vec_p row_idx)
 {
     for (int irow = 0; irow < row_idx->length; irow++)
     {
@@ -195,7 +195,7 @@ void H2P_dense_mat_select_rows(H2P_dense_mat_t mat, H2P_int_vec_t row_idx)
 }
 
 // Select columns in a H2P_dense_mat structure
-void H2P_dense_mat_select_columns(H2P_dense_mat_t mat, H2P_int_vec_t col_idx)
+void H2P_dense_mat_select_columns(H2P_dense_mat_p mat, H2P_int_vec_p col_idx)
 {
     for (int irow = 0; irow < mat->nrow; irow++)
     {
@@ -214,7 +214,7 @@ void H2P_dense_mat_select_columns(H2P_dense_mat_t mat, H2P_int_vec_t col_idx)
 }
 
 // Normalize columns in a H2P_dense_mat structure
-void H2P_dense_mat_normalize_columns(H2P_dense_mat_t mat, H2P_dense_mat_t workbuf)
+void H2P_dense_mat_normalize_columns(H2P_dense_mat_p mat, H2P_dense_mat_p workbuf)
 {
     int nrow = mat->nrow, ncol = mat->ncol;
     H2P_dense_mat_resize(workbuf, 1, ncol);
@@ -252,7 +252,7 @@ void H2P_dense_mat_normalize_columns(H2P_dense_mat_t mat, H2P_dense_mat_t workbu
 // Perform GEMM C := alpha * op(A) * op(B) + beta * C
 void H2P_dense_mat_gemm(
     const DTYPE alpha, const DTYPE beta, const int transA, const int transB, 
-    H2P_dense_mat_t A, H2P_dense_mat_t B, H2P_dense_mat_t C
+    H2P_dense_mat_p A, H2P_dense_mat_p B, H2P_dense_mat_p C
 )
 {
     int M, N, KA, KB;
@@ -291,12 +291,12 @@ void H2P_dense_mat_gemm(
 }
 
 // Create a block diagonal matrix created by aligning the input matrices along the diagonal
-void H2P_dense_mat_blkdiag(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_mat_t new_mat)
+void H2P_dense_mat_blkdiag(H2P_dense_mat_p *mats, H2P_int_vec_p idx, H2P_dense_mat_p new_mat)
 {
     int nrow = 0, ncol = 0;
     for (int i = 0; i < idx->length; i++)
     {
-        H2P_dense_mat_t mat_i = mats[idx->data[i]];
+        H2P_dense_mat_p mat_i = mats[idx->data[i]];
         nrow += mat_i->nrow;
         ncol += mat_i->ncol;
     }
@@ -305,7 +305,7 @@ void H2P_dense_mat_blkdiag(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_m
     nrow = 0; ncol = 0;
     for (int i = 0; i < idx->length; i++)
     {
-        H2P_dense_mat_t mat_i = mats[idx->data[i]];
+        H2P_dense_mat_p mat_i = mats[idx->data[i]];
         int nrow_i = mat_i->nrow;
         int ncol_i = mat_i->ncol;
         DTYPE *dst = new_mat->data + nrow * new_mat->ld + ncol;
@@ -316,12 +316,12 @@ void H2P_dense_mat_blkdiag(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_m
 }
 
 // Vertically concatenates the input matrices
-void H2P_dense_mat_vertcat(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_mat_t new_mat)
+void H2P_dense_mat_vertcat(H2P_dense_mat_p *mats, H2P_int_vec_p idx, H2P_dense_mat_p new_mat)
 {
     int nrow = 0, ncol = mats[idx->data[0]]->ncol;
     for (int i = 0; i < idx->length; i++)
     {
-        H2P_dense_mat_t mat_i = mats[idx->data[i]];
+        H2P_dense_mat_p mat_i = mats[idx->data[i]];
         if (mat_i->ncol != ncol)
         {
             ERROR_PRINTF("%d-th matrix has %d columns, 1st matrix has %d columns\n", i+1, mat_i->ncol, ncol);
@@ -333,7 +333,7 @@ void H2P_dense_mat_vertcat(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_m
     nrow = 0; ncol = 0;
     for (int i = 0; i < idx->length; i++)
     {
-        H2P_dense_mat_t mat_i = mats[idx->data[i]];
+        H2P_dense_mat_p mat_i = mats[idx->data[i]];
         int nrow_i = mat_i->nrow;
         int ncol_i = mat_i->ncol;
         DTYPE *dst = new_mat->data + nrow * new_mat->ld;
@@ -343,12 +343,12 @@ void H2P_dense_mat_vertcat(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_m
 }
 
 // Horizontally concatenates the input matrices
-void H2P_dense_mat_horzcat(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_mat_t new_mat)
+void H2P_dense_mat_horzcat(H2P_dense_mat_p *mats, H2P_int_vec_p idx, H2P_dense_mat_p new_mat)
 {
     int nrow = mats[idx->data[0]]->nrow, ncol = 0;
     for (int i = 0; i < idx->length; i++)
     {
-        H2P_dense_mat_t mat_i = mats[idx->data[i]];
+        H2P_dense_mat_p mat_i = mats[idx->data[i]];
         if (mat_i->nrow != nrow)
         {
             ERROR_PRINTF("%d-th matrix has %d rows, 1st matrix has %d rows\n", i+1, mat_i->nrow, nrow);
@@ -361,7 +361,7 @@ void H2P_dense_mat_horzcat(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_m
     nrow = 0; ncol = 0;
     for (int i = 0; i < idx->length; i++)
     {
-        H2P_dense_mat_t mat_i = mats[idx->data[i]];
+        H2P_dense_mat_p mat_i = mats[idx->data[i]];
         int nrow_i = mat_i->nrow;
         int ncol_i = mat_i->ncol;
         DTYPE *dst = new_mat->data + ncol;
@@ -371,7 +371,7 @@ void H2P_dense_mat_horzcat(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_m
 }
 
 // Print a H2P_dense_mat structure, for debugging
-void H2P_dense_mat_print(H2P_dense_mat_t mat)
+void H2P_dense_mat_print(H2P_dense_mat_p mat)
 {
     for (int irow = 0; irow < mat->nrow; irow++)
     {
@@ -386,9 +386,9 @@ void H2P_dense_mat_print(H2P_dense_mat_t mat)
 
 // ========================== H2P_thread_buf ========================= //
 
-void H2P_thread_buf_init(H2P_thread_buf_t *thread_buf_, const int krnl_mat_size)
+void H2P_thread_buf_init(H2P_thread_buf_p *thread_buf_, const int krnl_mat_size)
 {
-    H2P_thread_buf_t thread_buf = (H2P_thread_buf_t) malloc(sizeof(struct H2P_thread_buf));
+    H2P_thread_buf_p thread_buf = (H2P_thread_buf_p) malloc(sizeof(struct H2P_thread_buf));
     ASSERT_PRINTF(thread_buf != NULL, "Failed to allocate H2P_thread_buf structure\n");
     H2P_int_vec_init(&thread_buf->idx0, 1024);
     H2P_int_vec_init(&thread_buf->idx1, 1024);
@@ -400,7 +400,7 @@ void H2P_thread_buf_init(H2P_thread_buf_t *thread_buf_, const int krnl_mat_size)
     *thread_buf_ = thread_buf;
 }
 
-void H2P_thread_buf_destroy(H2P_thread_buf_t thread_buf)
+void H2P_thread_buf_destroy(H2P_thread_buf_p thread_buf)
 {
     if (thread_buf == NULL) return;
     H2P_int_vec_destroy(thread_buf->idx0);
@@ -411,7 +411,7 @@ void H2P_thread_buf_destroy(H2P_thread_buf_t thread_buf)
     free_aligned(thread_buf->y);
 }
 
-void H2P_thread_buf_reset(H2P_thread_buf_t thread_buf)
+void H2P_thread_buf_reset(H2P_thread_buf_p thread_buf)
 {
     if (thread_buf == NULL) return;
     H2P_int_vec_destroy(thread_buf->idx0);

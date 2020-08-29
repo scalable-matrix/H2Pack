@@ -23,7 +23,7 @@ extern "C" {
 // Output parameter:
 //   mat_y  : Size is the same as mat_x, output dense matrix, mat_y := A_{H2} * mat_x
 void H2P_matmul(
-    H2Pack_t h2pack, const CBLAS_LAYOUT layout, const int n_vec, 
+    H2Pack_p h2pack, const CBLAS_LAYOUT layout, const int n_vec, 
     const DTYPE *mat_x, const int ldx, DTYPE *mat_y, const int ldy
 );
 
@@ -45,11 +45,11 @@ void H2P_matmul(
 // Output parameter:
 //   pmt_mat_x : Size is the same as mat_x, permuted dense matrix
 void H2P_permute_matrix_row_forward(
-    H2Pack_t h2pack, const CBLAS_LAYOUT layout, const int n_vec, 
+    H2Pack_p h2pack, const CBLAS_LAYOUT layout, const int n_vec, 
     const DTYPE *mat_x, const int ldx, DTYPE *pmt_mat_x, const int ldp
 );
 void H2P_permute_matrix_row_backward(
-    H2Pack_t h2pack, const CBLAS_LAYOUT layout, const int n_vec, 
+    H2Pack_p h2pack, const CBLAS_LAYOUT layout, const int n_vec, 
     const DTYPE *mat_x, const int ldx, DTYPE *pmt_mat_x, const int ldp
 );
 

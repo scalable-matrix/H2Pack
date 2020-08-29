@@ -19,7 +19,7 @@ extern "C" {
 //   method         : Method(s) to be tested: 1-5: no precond, block Jaboci, LRD, 
 //                    FSAI, HSS. 0: test all. 
 void pcg_tests(
-    const int krnl_mat_size, H2Pack_t h2mat, H2Pack_t hssmat, const DTYPE shift, 
+    const int krnl_mat_size, H2Pack_p h2mat, H2Pack_p hssmat, const DTYPE shift, 
     const int max_rank, const int max_iter, const DTYPE CG_tol, const int method
 );
 

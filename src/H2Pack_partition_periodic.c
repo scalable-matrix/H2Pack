@@ -23,8 +23,8 @@
 // Output parameter:
 //   per_partition_vars : H2Pack structure reduced (in)admissible pairs
 void H2P_calc_reduced_adm_pairs_per(
-    H2Pack_t h2pack, const DTYPE alpha, const int n0, const int n1, 
-    const DTYPE *shift, const int lattice_id, H2P_partition_vars_t part_vars
+    H2Pack_p h2pack, const DTYPE alpha, const int n0, const int n1, 
+    const DTYPE *shift, const int lattice_id, H2P_partition_vars_p part_vars
 )
 {
     int   pt_dim    = h2pack->pt_dim;
@@ -148,7 +148,7 @@ void H2P_calc_reduced_adm_pairs_per(
 
 // Partition points for a H2 tree
 void H2P_partition_points_periodic(
-    H2Pack_t h2pack, const int n_point, const DTYPE *coord, int max_leaf_points, 
+    H2Pack_p h2pack, const int n_point, const DTYPE *coord, int max_leaf_points, 
     DTYPE max_leaf_size, DTYPE *unit_cell
 )
 {
@@ -158,7 +158,7 @@ void H2P_partition_points_periodic(
     
     st = get_wtime_sec();
 
-    H2P_partition_vars_t part_vars;
+    H2P_partition_vars_p part_vars;
     H2P_partition_vars_init(&part_vars);
     
     // 1. Copy input point coordinates
@@ -188,7 +188,7 @@ void H2P_partition_points_periodic(
         "Failed to allocate matrix of size %d * %d for temporarily storing point coordinates\n", 
         pt_dim, n_point
     );
-    H2P_tree_node_t root = H2P_bisection_partition_points(
+    H2P_tree_node_p root = H2P_bisection_partition_points(
         0, 0, n_point-1, pt_dim, xpt_dim, n_point, 
         max_leaf_size, max_leaf_points, unit_cell, 
         h2pack->coord, coord_tmp, h2pack->coord_idx, coord_idx_tmp, part_vars
@@ -304,7 +304,7 @@ void H2P_partition_points_periodic(
     }
 
     // 6. Initialize thread-local buffer
-    h2pack->tb = (H2P_thread_buf_t*) malloc(sizeof(H2P_thread_buf_t) * h2pack->n_thread);
+    h2pack->tb = (H2P_thread_buf_p*) malloc(sizeof(H2P_thread_buf_p) * h2pack->n_thread);
     ASSERT_PRINTF(h2pack->tb != NULL, "Failed to allocate %d thread buffers\n", h2pack->n_thread);
     for (int i = 0; i < h2pack->n_thread; i++)
         H2P_thread_buf_init(&h2pack->tb[i], h2pack->krnl_mat_size);

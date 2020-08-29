@@ -1133,6 +1133,7 @@ void H2P_build(
 )
 {
     double st, et;
+    double *timers = h2pack->timers;
 
     if (pp == NULL)
     {
@@ -1160,20 +1161,37 @@ void H2P_build(
     if (h2pack->is_HSS) H2P_build_HSS_UJ_hybrid(h2pack);
     else H2P_build_H2_UJ_proxy(h2pack);
     et = get_wtime_sec();
-    h2pack->timers[_U_BUILD_TIMER_IDX] = et - st;
+    timers[_U_BUILD_TIMER_IDX] = et - st;
 
     // 2. Build generator matrices
     st = get_wtime_sec();
     H2P_generate_B_metadata(h2pack);
     if (BD_JIT == 0) H2P_build_B_AOT(h2pack);
     et = get_wtime_sec();
-    h2pack->timers[_B_BUILD_TIMER_IDX] = et - st;
+    timers[_B_BUILD_TIMER_IDX] = et - st;
     
     // 3. Build dense blocks
     st = get_wtime_sec();
     H2P_generate_D_metadata(h2pack);
     if (BD_JIT == 0) H2P_build_D_AOT(h2pack);
     et = get_wtime_sec();
-    h2pack->timers[_D_BUILD_TIMER_IDX] = et - st;
+    timers[_D_BUILD_TIMER_IDX] = et - st;
+
+    // 4. Set up forward and backward permutation indices
+    int n_point    = h2pack->n_point;
+    int krnl_dim   = h2pack->krnl_dim;
+    int *coord_idx = h2pack->coord_idx;
+    int *fwd_pmt_idx = (int*) malloc(sizeof(int) * n_point * krnl_dim);
+    int *bwd_pmt_idx = (int*) malloc(sizeof(int) * n_point * krnl_dim);
+    for (int i = 0; i < n_point; i++)
+    {
+        for (int j = 0; j < krnl_dim; j++)
+        {
+            fwd_pmt_idx[i * krnl_dim + j] = coord_idx[i] * krnl_dim + j;
+            bwd_pmt_idx[coord_idx[i] * krnl_dim + j] = i * krnl_dim + j;
+        }
+    }
+    h2pack->fwd_pmt_idx = fwd_pmt_idx;
+    h2pack->bwd_pmt_idx = bwd_pmt_idx;
 }
 

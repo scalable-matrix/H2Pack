@@ -38,20 +38,6 @@ int main(int argc, char **argv)
     }
 
     H2P_partition_points(h2pack, test_params.n_point, test_params.coord, max_leaf_points, max_leaf_size);
-    
-    // Check if point index permutation is correct in H2Pack
-    DTYPE coord_diff_sum = 0.0;
-    for (int i = 0; i < test_params.n_point; i++)
-    {
-        DTYPE *coord_s_i = h2pack->coord + i;
-        DTYPE *coord_i   = test_params.coord + h2pack->coord_idx[i];
-        for (int j = 0; j < test_params.pt_dim; j++)
-        {
-            int idx_j = j * test_params.n_point;
-            coord_diff_sum += DABS(coord_s_i[idx_j] - coord_i[idx_j]);
-        }
-    }
-    printf("Point index permutation results %s", coord_diff_sum < 1e-15 ? "are correct\n" : "are wrong\n");
 
     H2P_dense_mat_t *pp;
     DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * test_params.pt_dim + test_params.pt_dim];
@@ -95,8 +81,8 @@ int main(int argc, char **argv)
     // Get reference results
     direct_nbody(
         test_params.krnl_param, test_params.krnl_eval, test_params.pt_dim, test_params.krnl_dim, 
-        h2pack->coord,              test_params.n_point, test_params.n_point, x, 
-        h2pack->coord + check_pt_s, test_params.n_point, n_check_pt,          y0
+        test_params.coord,              test_params.n_point, test_params.n_point, x, 
+        test_params.coord + check_pt_s, test_params.n_point, n_check_pt,          y0
     );
     
     // Warm up, reset timers, and test the matvec performance

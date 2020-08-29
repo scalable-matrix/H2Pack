@@ -113,6 +113,7 @@ struct H2Pack
     int    n_UJ;                    // Number of projection matrices & skeleton row sets, == n_node
     int    n_B;                     // Number of generator matrices
     int    n_D;                     // Number of dense blocks
+    int    mm_max_n_vec;            // Maximum number of vectors that can be multiplied in matmul
     int    BD_JIT;                  // If B and D matrices are computed just-in-time in matvec
     int    is_H2ERI;                // If H2Pack is called from H2ERI
     int    is_HSS;                  // If H2Pack is running in HSS mode
@@ -140,7 +141,9 @@ struct H2Pack
     int    *node_inadm_lists;       // Size n_node * max_neighbor, lists of each node's inadmissible nodes
     int    *node_n_r_inadm;         // Size n_node, numbers of each node's reduced inadmissible nodes
     int    *node_n_r_adm;           // Size n_node, numbers of each node's reduced admissible nodes
-    int    *coord_idx;              // Size n_point, original index of each point
+    int    *coord_idx;              // Size n_point, original index of each sorted point
+    int    *fwd_pmt_idx;            // Size krnl_mat_size, multiplicand vector/matrix forward permutation indices 
+    int    *bwd_pmt_idx;            // Size krnl_mat_size, output       vector/matrix forward permutation indices
     int    *B_p2i_rowptr;           // Size n_node+1, row_ptr array of the CSR matrix for mapping B{i, j} to a B block index
     int    *B_p2i_colidx;           // Size n_B, col_idx array of the CSR matrix for mapping B{i, j} to a B block index
     int    *B_p2i_val;              // Size n_B, val array of the CSR matrix for mapping B{i, j} to a B block index
@@ -167,8 +170,10 @@ struct H2Pack
     DTYPE  *B_data;                 // Size unknown, data of generator matrices
     DTYPE  *D_data;                 // Size unknown, data of dense blocks in the original matrix
     DTYPE  *per_blk;                // Size unknown, periodic system matvec periodic block 
-    DTYPE  *xT;                     // Size krnl_mat_size, use for transpose matvec input  "matrix" when krnl_dim > 1
-    DTYPE  *yT;                     // Size krnl_mat_size, use for transpose matvec output "matrix" when krnl_dim > 1
+    DTYPE  *xT;                     // Size krnl_mat_size, for transposing matvec input  "matrix" when krnl_dim > 1
+    DTYPE  *yT;                     // Size krnl_mat_size, for transposing matvec output "matrix" when krnl_dim > 1
+    DTYPE  *pmt_x;                  // Size krnl_mat_size * max_n_vec, storing the permuted input vector/matrix (the input need to be permuted)
+    DTYPE  *pmt_y;                  // Size krnl_mat_size * max_n_vec, storing the permuted output vector/matrix (the final output need to be revered)
     H2P_int_vec_t     B_blk;        // Size BD_NTASK_THREAD * n_thread, B matrices task partitioning
     H2P_int_vec_t     D_blk0;       // Size BD_NTASK_THREAD * n_thread, diagonal blocks in D matrices task partitioning
     H2P_int_vec_t     D_blk1;       // Size BD_NTASK_THREAD * n_thread, inadmissible blocks in D matrices task partitioning

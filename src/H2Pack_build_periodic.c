@@ -83,6 +83,7 @@ void H2P_build_periodic(
 )
 {
     double st, et;
+    double *timers = h2pack->timers;
 
     if (pp == NULL)
     {
@@ -117,23 +118,40 @@ void H2P_build_periodic(
     st = get_wtime_sec();
     H2P_build_H2_UJ_proxy(h2pack);
     et = get_wtime_sec();
-    h2pack->timers[_U_BUILD_TIMER_IDX] = et - st;
+    timers[_U_BUILD_TIMER_IDX] = et - st;
 
     // 2. Generate H2 generator matrices metadata
     st = get_wtime_sec();
     H2P_generate_B_metadata(h2pack);
     et = get_wtime_sec();
-    h2pack->timers[_B_BUILD_TIMER_IDX] = et - st;
+    timers[_B_BUILD_TIMER_IDX] = et - st;
     
     // 3. Generate H2 dense blocks metadata
     st = get_wtime_sec();
     H2P_generate_D_metadata(h2pack);
     et = get_wtime_sec();
-    h2pack->timers[_D_BUILD_TIMER_IDX] = et - st;
+    timers[_D_BUILD_TIMER_IDX] = et - st;
 
     // 4. Build periodic block for root node, add its timing to B build timing
     st = get_wtime_sec();
     H2P_build_periodic_block(h2pack);
     et = get_wtime_sec();
-    h2pack->timers[_B_BUILD_TIMER_IDX] = et - st;
+    timers[_B_BUILD_TIMER_IDX] = et - st;
+
+    // 5. Set up forward and backward permutation indices
+    int n_point    = h2pack->n_point;
+    int krnl_dim   = h2pack->krnl_dim;
+    int *coord_idx = h2pack->coord_idx;
+    int *fwd_pmt_idx = (int*) malloc(sizeof(int) * n_point * krnl_dim);
+    int *bwd_pmt_idx = (int*) malloc(sizeof(int) * n_point * krnl_dim);
+    for (int i = 0; i < n_point; i++)
+    {
+        for (int j = 0; j < krnl_dim; j++)
+        {
+            fwd_pmt_idx[i * krnl_dim + j] = coord_idx[i] * krnl_dim + j;
+            bwd_pmt_idx[coord_idx[i] * krnl_dim + j] = i * krnl_dim + j;
+        }
+    }
+    h2pack->fwd_pmt_idx = fwd_pmt_idx;
+    h2pack->bwd_pmt_idx = bwd_pmt_idx;
 }

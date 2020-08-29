@@ -8,6 +8,7 @@
 #include "H2Pack_config.h"
 #include "H2Pack_typedef.h"
 #include "H2Pack_aux_structs.h"
+#include "H2Pack_matvec.h"
 #include "H2Pack_matvec_periodic.h"
 #include "H2Pack_utils.h"
 #include "x86_intrin_wrapper.h"
@@ -394,18 +395,22 @@ void H2P_matvec_periodic_dense_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
 void H2P_matvec_periodic(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
 {
     double st, et;
-    int   krnl_mat_size = h2pack->krnl_mat_size;
-    int   n_thread      = h2pack->n_thread;
-    int   BD_JIT        = h2pack->BD_JIT;
-    int   krnl_dim      = h2pack->krnl_dim;
-    int   n_point       = h2pack->n_point;
-    int   need_trans    = ((h2pack->krnl_mv != NULL) && (BD_JIT == 1) && (krnl_dim > 1));
-    DTYPE *xT           = h2pack->xT;
-    DTYPE *yT           = h2pack->yT;
+    int    krnl_mat_size = h2pack->krnl_mat_size;
+    int    n_thread      = h2pack->n_thread;
+    int    BD_JIT        = h2pack->BD_JIT;
+    int    krnl_dim      = h2pack->krnl_dim;
+    int    n_point       = h2pack->n_point;
+    int    need_trans    = ((h2pack->krnl_mv != NULL) && (BD_JIT == 1) && (krnl_dim > 1));
+    DTYPE  *xT           = h2pack->xT;
+    DTYPE  *yT           = h2pack->yT;
+    DTYPE  *pmt_x        = h2pack->pmt_x;
+    DTYPE  *pmt_y        = h2pack->pmt_y;
+    double *timers       = h2pack->timers;
+    size_t *mat_size     = h2pack->mat_size;
     H2P_thread_buf_t *thread_buf = h2pack->tb;
 
-    const DTYPE *x_ = need_trans ? xT : x;
-    DTYPE *y_ = need_trans ? yT : y;
+    DTYPE *x_ = need_trans ? xT : pmt_x;
+    DTYPE *y_ = need_trans ? yT : pmt_y;
 
     if (BD_JIT != 1)
     {
@@ -413,30 +418,36 @@ void H2P_matvec_periodic(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
         return;
     }
 
-    // 1. Reset y result to 0 and transpose x if necessary
+    // 1. Forward permute the input vector
+    st = get_wtime_sec();
+    H2P_permute_vector_forward(h2pack, x, pmt_x);
+    et = get_wtime_sec();
+    timers[_MV_RDC_TIMER_IDX] += et - st;
+
+    // 2. Reset y result to 0 and transpose x if necessary
     st = get_wtime_sec();
     #pragma omp parallel for simd
     for (int i = 0; i < krnl_mat_size; i++)
     {
-        y[i]  = 0.0;
+        pmt_y[i] = 0.0;
         yT[i] = 0.0;
     }
-    h2pack->mat_size[_MV_RDC_SIZE_IDX] += 2 * h2pack->krnl_mat_size;
+    mat_size[_MV_RDC_SIZE_IDX] += 2 * krnl_mat_size;
     if (need_trans) 
     {
-        H2P_transpose_dmat(n_thread, n_point, krnl_dim, x, krnl_dim, xT, n_point);
-        h2pack->mat_size[_MV_RDC_SIZE_IDX] += h2pack->krnl_mat_size;
+        H2P_transpose_dmat(n_thread, n_point, krnl_dim, pmt_x, krnl_dim, xT, n_point);
+        mat_size[_MV_RDC_SIZE_IDX] += krnl_mat_size;
     }
     et = get_wtime_sec();
-    h2pack->timers[_MV_RDC_TIMER_IDX] += et - st;
+    timers[_MV_RDC_TIMER_IDX] += et - st;
 
-    // 2. Forward transformation, calculate U_j^T * x_j
+    // 3. Forward transformation, calculate U_j^T * x_j
     st = get_wtime_sec();
-    H2P_matvec_fwd_transform(h2pack, x);
+    H2P_matvec_fwd_transform(h2pack, pmt_x);
     et = get_wtime_sec();
-    h2pack->timers[_MV_FW_TIMER_IDX] += et - st;
+    timers[_MV_FW_TIMER_IDX] += et - st;
     
-    // 3. Intermediate multiplication, calculate B_{ij} * (U_j^T * x_j)
+    // 4. Intermediate multiplication, calculate B_{ij} * (U_j^T * x_j)
     st = get_wtime_sec();
     if (BD_JIT == 1)
     {
@@ -445,6 +456,8 @@ void H2P_matvec_periodic(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
         if (need_trans) H2P_transpose_y1_to_krnldim(h2pack);
     } else {
         // "Lost butterfly"
+        ERROR_PRINTF("Only support BD_JIT=1 in this function for the moment.\n");
+        return;
     }
     // Multiply the periodic block for root node
     // y1{root} = y1{root} + O * y0{root};  % y1{root} should be empty
@@ -466,37 +479,46 @@ void H2P_matvec_periodic(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
         1.0, h2pack->per_blk, per_blk_size, y0_root->data, 1, 0.0, y1_root->data, 1
     );
     et = get_wtime_sec();
-    h2pack->timers[_MV_MID_TIMER_IDX] += et - st;
+    timers[_MV_MID_TIMER_IDX] += et - st;
 
-    // 4. Backward transformation, calculate U_i * (B_{ij} * (U_j^T * x_j))
+    // 5. Backward transformation, calculate U_i * (B_{ij} * (U_j^T * x_j))
     st = get_wtime_sec();
-    H2P_matvec_bwd_transform(h2pack, x, y);
+    H2P_matvec_bwd_transform(h2pack, pmt_x, pmt_y);
     et = get_wtime_sec();
-    h2pack->timers[_MV_BW_TIMER_IDX] += et - st;
+    timers[_MV_BW_TIMER_IDX] += et - st;
 
-    // 5. Dense multiplication, calculate D_i * x_i
+    // 6. Dense multiplication, calculate D_i * x_i
     st = get_wtime_sec();
     if (BD_JIT == 1)
     {
         H2P_matvec_periodic_dense_mult_JIT(h2pack, x_, y_);
     } else {
         // "Lost butterfly"
+        ERROR_PRINTF("Only support BD_JIT=1 in this function for the moment.\n");
+        return;
     }
     et = get_wtime_sec();
-    h2pack->timers[_MV_DEN_TIMER_IDX] += et - st;
+    timers[_MV_DEN_TIMER_IDX] += et - st;
     
-    // 6. Sum yT partial results into y if needed 
+    // 7. Sum yT partial results into y if needed 
     st = get_wtime_sec();
     // We use xT here to hold the transpose of yT
     if (need_trans)
     {
         H2P_transpose_dmat(n_thread, krnl_dim, n_point, yT, n_point, xT, krnl_dim);
         #pragma omp parallel for simd
-        for (int i = 0; i < krnl_mat_size; i++) y[i] += xT[i];
-        h2pack->mat_size[_MV_RDC_SIZE_IDX] += 2 * h2pack->krnl_mat_size;
+        for (int i = 0; i < krnl_mat_size; i++) pmt_y[i] += xT[i];
+        mat_size[_MV_RDC_SIZE_IDX] += 2 * krnl_mat_size;
     }
     et = get_wtime_sec();
-    h2pack->timers[_MV_RDC_TIMER_IDX] += et - st;
+    timers[_MV_RDC_TIMER_IDX] += et - st;
+
+    // 8. Backward permute the output vector
+    st = get_wtime_sec();
+    H2P_permute_vector_backward(h2pack, pmt_y, y);
+    et = get_wtime_sec();
+    timers[_MV_RDC_TIMER_IDX] += et - st;
+    mat_size[_MV_RDC_SIZE_IDX] += 4 * krnl_mat_size;
 
     h2pack->n_matvec++;
 }

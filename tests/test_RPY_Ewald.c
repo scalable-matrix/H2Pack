@@ -233,8 +233,8 @@ int main(int argc, char **argv)
     // Get reference results
     direct_nbody(
         RPY_Ewald_param, test_params.pkrnl_eval, test_params.pt_dim, test_params.krnl_dim, 
-        ph2mat->coord,              test_params.n_point, test_params.n_point, x, 
-        ph2mat->coord + check_pt_s, test_params.n_point, n_check_pt,          y0
+        test_params.coord,              test_params.n_point, test_params.n_point, x, 
+        test_params.coord + check_pt_s, test_params.n_point, n_check_pt,          y0
     );
 
     // Verify H2 matvec results

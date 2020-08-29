@@ -1,6 +1,6 @@
 // @brief    : Implementations of some helper functions I use here and there
 // @author   : Hua Huang <huangh223@gatech.edu>
-// @modified : 2020-07-06
+// @modified : 2020-08-28
 
 #ifndef __HUANGH223_UTILS_H__
 #define __HUANGH223_UTILS_H__
@@ -87,8 +87,7 @@ double get_wtime_sec();
 //   iblk : Index of the block whose start position we need.
 //          0 <= iblk <= nblk, iblk == 0/nblk return 0/len.
 // Output parameters:
-//   *blk_spos : The start position of the iblk-th block
-//               -1 means invalid parameters
+//   *blk_spos : The start position of the iblk-th block, -1 means invalid parameters
 //   *blk_len  : The length of the iblk-th block
 void calc_block_spos_len(
     const int len, const int nblk, const int iblk,
@@ -98,7 +97,7 @@ void calc_block_spos_len(
 // Allocate a piece of aligned memory 
 // Input parameters:
 //   size      : Size of the memory to be allocated, in bytes
-//   alignment : Size of the alignment, in bytes, should be a power of 8
+//   alignment : Size of the alignment, in bytes, must be a power of 8
 // Output parameter:
 //   <return>  : Pointer to the allocated aligned memory
 void *malloc_aligned(size_t size, size_t alignment);
@@ -140,12 +139,53 @@ void calc_err_2norm(
 //   lds     : Leading dimension of src, >= ncol
 //   ldd     : Leading dimension of dst, >= ncol
 // Output parameter:
-//   dst  : Size >= ldd * nrow, destination matrix
+//   dst : Size >= ldd * nrow, destination matrix
 void copy_matrix_block(
     const size_t dt_size, const int nrow, const int ncol,
     const void *src, const int lds, void *dst, const int ldd
 );
 
+// Gather elements from a vector to another vector
+// Input parameters:
+//   dt_size : Size of vector element data type, in bytes, now support 4, 8, 16
+//   nelem   : Number of elements to gather
+//   idx     : Indices of elements to gather
+//   src     : Size >= max(idx), source vector
+// Output parameter:
+//   dst : Size >= nelem, destination vector, dst[i] = src[idx[i]]
+void gather_vector_elements(const size_t dt_size, const int nelem, const int *idx, const void *src, void *dst);
+
+// Gather rows from a matrix to another matrix
+// Input parameters:
+//   dt_size : Size of matrix element data type, in bytes
+//   nrow    : Number of rows to gather
+//   ncol    : Number of columns the source matrix has
+//   idx     : Indices of rows to gather
+//   src     : Size >= max(idx) * lds, source matrix
+//   lds     : Leading dimension of source matrix, >= ncol
+//   ldd     : Leading dimension of destination matrix, >= ncol
+// Output parameter:
+//   dst : Size >= nrow * ldd, destination matrix
+void gather_matrix_rows(
+    const size_t dt_size, const int nrow, const int ncol, const int *idx, 
+    const void *src, const int lds, void *dst, const int ldd
+);
+
+// Gather columns from a matrix to another matrix
+// Input parameters:
+//   dt_size : Size of matrix element data type, in bytes, now support 4, 8, 16
+//   nrow    : Number of rows the source matrix has
+//   ncol    : Number of columns to gather
+//   idx     : Indices of rows to gather
+//   src     : Size >= nrow * lds, source matrix
+//   lds     : Leading dimension of source matrix, >= max(idx)
+//   ldd     : Leading dimension of destination matrix, >= ncol
+// Output parameter:
+//   dst : Size >= nrow * ldd, destination matrix
+void gather_matrix_cols(
+    const size_t dt_size, const int nrow, const int ncol, const int *idx, 
+    const void *src, const int lds, void *dst, const int ldd
+);
 
 // Print a row-major int matrix block to standard output
 // Input parameters:

@@ -62,6 +62,8 @@ void H2P_init(
     h2pack->node_n_r_inadm      = NULL;
     h2pack->node_n_r_adm        = NULL;
     h2pack->coord_idx           = NULL;
+    h2pack->fwd_pmt_idx         = NULL;
+    h2pack->bwd_pmt_idx         = NULL;
     h2pack->B_p2i_rowptr        = NULL;
     h2pack->B_p2i_colidx        = NULL;
     h2pack->B_p2i_val           = NULL;
@@ -87,6 +89,8 @@ void H2P_init(
     h2pack->per_blk             = NULL;
     h2pack->xT                  = NULL;
     h2pack->yT                  = NULL;
+    h2pack->pmt_x               = NULL;
+    h2pack->pmt_y               = NULL;
     h2pack->J                   = NULL;
     h2pack->ULV_idx             = NULL;
     h2pack->J_coord             = NULL;
@@ -99,8 +103,9 @@ void H2P_init(
     h2pack->tb                  = NULL;
     h2pack->upward_tq           = NULL;
 
-    GET_ENV_INT_VAR(h2pack->print_timers,  "H2P_PRINT_TIMERS",  "print_timers",  0, 0, 1);
-    GET_ENV_INT_VAR(h2pack->print_dbginfo, "H2P_PRINT_DBGINFO", "print_dbginfo", 0, 0, 1);
+    GET_ENV_INT_VAR(h2pack->mm_max_n_vec,  "H2P_MM_MAX_N_VEC",  "mm_max_n_vec",  128, 4, 1024);
+    GET_ENV_INT_VAR(h2pack->print_timers,  "H2P_PRINT_TIMERS",  "print_timers",    0, 0,    1);
+    GET_ENV_INT_VAR(h2pack->print_dbginfo, "H2P_PRINT_DBGINFO", "print_dbginfo",   0, 0,    1);
     if (h2pack->print_timers  == 1) INFO_PRINTF("H2Pack will print internal timers for performance analysis\n");
     if (h2pack->print_dbginfo == 1) INFO_PRINTF("H2Pack will print debug information\n");
     
@@ -223,6 +228,8 @@ void H2P_destroy(H2Pack_t h2pack)
     free(h2pack->node_n_r_inadm);
     free(h2pack->node_n_r_adm);
     free(h2pack->coord_idx);
+    free(h2pack->fwd_pmt_idx);
+    free(h2pack->bwd_pmt_idx);
     free(h2pack->B_p2i_rowptr);
     free(h2pack->B_p2i_colidx);
     free(h2pack->B_p2i_val);
@@ -247,6 +254,8 @@ void H2P_destroy(H2Pack_t h2pack)
     free_aligned(h2pack->per_blk);
     free(h2pack->xT);
     free(h2pack->yT);
+    free(h2pack->pmt_x);
+    free(h2pack->pmt_y);
     DAG_task_queue_free(h2pack->upward_tq);
     
     if (h2pack->B_blk  != NULL) H2P_int_vec_destroy(h2pack->B_blk);

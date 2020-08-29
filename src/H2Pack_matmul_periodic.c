@@ -8,6 +8,7 @@
 #include "H2Pack_config.h"
 #include "H2Pack_typedef.h"
 #include "H2Pack_aux_structs.h"
+#include "H2Pack_matmul.h"
 #include "H2Pack_matmul_periodic.h"
 #include "H2Pack_utils.h"
 #include "x86_intrin_wrapper.h"
@@ -249,37 +250,52 @@ void H2P_matmul_periodic(
 )
 {
     double st, et;
-    int krnl_mat_size = h2pack->krnl_mat_size;
-    int krnl_dim      = h2pack->krnl_dim;
-    int max_n_vec;
-    GET_ENV_INT_VAR(max_n_vec, "H2P_MATMUL_MAX_N_VEC", "max_n_vec", 128, 4, 512);
+    int    krnl_mat_size = h2pack->krnl_mat_size;
+    int    mm_max_n_vec  = h2pack->mm_max_n_vec;
+    DTYPE  *pmt_x        = h2pack->pmt_x;
+    DTYPE  *pmt_y        = h2pack->pmt_y;
+    double *timers       = h2pack->timers;
+    size_t *mat_size     = h2pack->mat_size;
 
     int x_row_stride, x_col_stride, y_row_stride, y_col_stride;
+    int pmt_row_stride, pmt_col_stride, ld_pmt;
     CBLAS_TRANSPOSE x_trans, y_trans;
     if (layout == CblasRowMajor)
     {
-        x_row_stride = ldx;
-        x_col_stride = 1;
-        y_row_stride = ldy;
-        y_col_stride = 1;
-        x_trans  = CblasNoTrans;
-        y_trans  = CblasNoTrans;
+        x_row_stride   = ldx;
+        x_col_stride   = 1;
+        y_row_stride   = ldy;
+        y_col_stride   = 1;
+        ld_pmt         = mm_max_n_vec;
+        pmt_row_stride = ld_pmt;
+        pmt_col_stride = 1;
+        x_trans = CblasNoTrans;
+        y_trans = CblasNoTrans;
     } else {
-        x_row_stride = 1;
-        x_col_stride = ldx;
-        y_row_stride = 1;
-        y_col_stride = ldy;
-        x_trans  = CblasTrans;
-        y_trans  = CblasTrans;
+        x_row_stride   = 1;
+        x_col_stride   = ldx;
+        y_row_stride   = 1;
+        y_col_stride   = ldy;
+        ld_pmt         = krnl_mat_size;
+        pmt_row_stride = 1;
+        pmt_col_stride = ld_pmt;
+        x_trans = CblasTrans;
+        y_trans = CblasTrans;
     }
 
-    for (int i_vec = 0; i_vec < n_vec; i_vec += max_n_vec)
+    for (int i_vec = 0; i_vec < n_vec; i_vec += mm_max_n_vec)
     {
-        int curr_n_vec = (i_vec + max_n_vec <= n_vec) ? max_n_vec : (n_vec - i_vec);
+        int curr_n_vec = (i_vec + mm_max_n_vec <= n_vec) ? mm_max_n_vec : (n_vec - i_vec);
         const DTYPE *curr_mat_x = mat_x + i_vec * x_col_stride;
         DTYPE *curr_mat_y = mat_y + i_vec * y_col_stride;
+
+        // 1. Forward permute input matrix block
+        st = get_wtime_sec();
+        H2P_permute_matrix_row_forward(h2pack, layout, curr_n_vec, curr_mat_x, ldx, pmt_x, ld_pmt);
+        et = get_wtime_sec();
+        timers[_MV_RDC_TIMER_IDX] += et - st;
     
-        // 1. Reset output matrix
+        // 2. Reset output matrix
         st = get_wtime_sec();
         if (layout == CblasRowMajor)
         {
@@ -287,7 +303,7 @@ void H2P_matmul_periodic(
             #pragma omp parallel for schedule(static)
             for (int i = 0; i < krnl_mat_size; i++)
             {
-                DTYPE *mat_y_i = curr_mat_y + i * ldy;
+                DTYPE *mat_y_i = pmt_y + i * ld_pmt;
                 memset(mat_y_i, 0, row_msize);
             }
         } else {
@@ -295,36 +311,36 @@ void H2P_matmul_periodic(
             {
                 for (int i = 0; i < curr_n_vec; i++)
                 {
-                    DTYPE *mat_y_i = curr_mat_y + i * ldy;
+                    DTYPE *mat_y_i = pmt_y + i * ld_pmt;
                     #pragma omp for schedule(static)
                     for (int j = 0; j < krnl_mat_size; j++) mat_y_i[j] = 0.0;
                 }
             }
         }  // End of "if (layout == CblasRowMajor)"
         et = get_wtime_sec();
-        h2pack->timers[_MV_RDC_TIMER_IDX] += et - st;
+        timers[_MV_RDC_TIMER_IDX] += et - st;
         
-        // 2. Forward transformation, calculate U_j^T * x_j
+        // 3. Forward transformation, calculate U_j^T * x_j
         st = get_wtime_sec();
         H2P_matmul_fwd_transform(
             h2pack, curr_n_vec, 
-            curr_mat_x, ldx, x_row_stride, x_trans
+            pmt_x, ld_pmt, pmt_row_stride, x_trans
         );
         et = get_wtime_sec();
-        h2pack->timers[_MV_FW_TIMER_IDX] += et - st;
+        timers[_MV_FW_TIMER_IDX] += et - st;
 
-        // 3. Intermediate multiplication, calculate B_{ij} * (U_j^T * x_j)
+        // 4. Intermediate multiplication, calculate B_{ij} * (U_j^T * x_j)
         st = get_wtime_sec();
         H2P_matmul_periodic_intmd_mult(
             h2pack, curr_n_vec, 
-            curr_mat_x, ldx, x_row_stride, x_trans, 
-            curr_mat_y, ldy, y_row_stride, y_trans
+            pmt_x, ld_pmt, pmt_row_stride, x_trans, 
+            pmt_y, ld_pmt, pmt_row_stride, y_trans
         );
         // Multiply the periodic block for root node
         // y1{root} = y1{root} + O * y0{root};  % y1{root} should be empty
         int root_idx     = h2pack->root_idx;
         int root_J_npt   = h2pack->J[root_idx]->length;
-        int per_blk_size = root_J_npt * krnl_dim;
+        int per_blk_size = root_J_npt * h2pack->krnl_dim;
         H2P_dense_mat_t y0_root = h2pack->y0[root_idx];
         H2P_dense_mat_t y1_root = h2pack->y1[root_idx];
         H2P_dense_mat_resize(y1_root, per_blk_size, curr_n_vec);
@@ -333,26 +349,33 @@ void H2P_matmul_periodic(
             1.0, h2pack->per_blk, per_blk_size, y0_root->data, curr_n_vec, 0.0, y1_root->data, curr_n_vec
         );
         et = get_wtime_sec();
-        h2pack->timers[_MV_MID_TIMER_IDX] += et - st;
+        timers[_MV_MID_TIMER_IDX] += et - st;
 
-        // 4. Backward transformation, calculate U_i * (B_{ij} * (U_j^T * x_j))
+        // 5. Backward transformation, calculate U_i * (B_{ij} * (U_j^T * x_j))
         st = get_wtime_sec();
         H2P_matmul_bwd_transform(
             h2pack, curr_n_vec, 
-            curr_mat_y, ldy, y_row_stride, y_trans
+            pmt_y, ld_pmt, pmt_row_stride, y_trans
         );
         et = get_wtime_sec();
-        h2pack->timers[_MV_BW_TIMER_IDX] += et - st;
+        timers[_MV_BW_TIMER_IDX] += et - st;
 
-        // 5. Dense multiplication, calculate D_{ij} * x_j
+        // 6. Dense multiplication, calculate D_{ij} * x_j
         st = get_wtime_sec();
         H2P_matmul_periodic_dense_mult(
             h2pack, curr_n_vec, 
-            curr_mat_x, ldx, x_row_stride, x_trans, 
-            curr_mat_y, ldy, y_row_stride, y_trans
+            pmt_x, ld_pmt, pmt_row_stride, x_trans, 
+            pmt_y, ld_pmt, pmt_row_stride, y_trans
         );
         et = get_wtime_sec();
-        h2pack->timers[_MV_DEN_TIMER_IDX] += et - st;
+        timers[_MV_DEN_TIMER_IDX] += et - st;
+
+        // 7. Backward permute the output matrix
+        st = get_wtime_sec();
+        H2P_permute_matrix_row_backward(h2pack, layout, curr_n_vec, pmt_y, ld_pmt, curr_mat_y, ldy);
+        et = get_wtime_sec();
+        timers[_MV_RDC_TIMER_IDX] += et - st;
+        mat_size[_MV_RDC_SIZE_IDX] += 4 * krnl_mat_size * curr_n_vec;
     }  // End of i_vec loop
 
     h2pack->n_matvec += n_vec;

@@ -94,8 +94,8 @@ int main(int argc, char **argv)
             printf("Calculating direct n-body reference result for points %d -> %d\n", check_pt_s, check_pt_s + n_check_pt - 1);
             direct_nbody(
                 test_params.krnl_param, test_params.krnl_eval, test_params.pt_dim, test_params.krnl_dim, 
-                h2pack->coord,              test_params.n_point, test_params.n_point, x, 
-                h2pack->coord + check_pt_s, test_params.n_point, n_check_pt,          y0
+                test_params.coord,              test_params.n_point, test_params.n_point, x, 
+                test_params.coord + check_pt_s, test_params.n_point, n_check_pt,          y0
             );
             
             // Check H2 matvec accuracy

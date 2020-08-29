@@ -560,12 +560,12 @@ void H2P_partition_points(
     }
     h2pack->max_leaf_points = max_leaf_points;
     h2pack->max_leaf_size   = max_leaf_size;
-    h2pack->coord_idx = (int*)   malloc(sizeof(int)   * n_point);
-    h2pack->coord     = (DTYPE*) malloc(sizeof(DTYPE) * n_point * xpt_dim);
+    h2pack->coord_idx       = (int*)   malloc(sizeof(int)   * n_point);
+    h2pack->coord           = (DTYPE*) malloc(sizeof(DTYPE) * n_point * xpt_dim);
     ASSERT_PRINTF(
         h2pack->coord != NULL && h2pack->coord_idx != NULL,
         "Failed to allocate matrix of size %d * %d for storing point coordinates\n", 
-        pt_dim, n_point
+        xpt_dim, n_point
     );
     memcpy(h2pack->coord, coord, sizeof(DTYPE) * n_point * xpt_dim);
     for (int i = 0; i < n_point; i++) h2pack->coord_idx[i] = i;
@@ -639,8 +639,14 @@ void H2P_partition_points(
             h2pack->mat_cluster[i21] = h2pack->krnl_dim * (h2pack->pt_cluster[i21] + 1) - 1;
         }
         h2pack->krnl_mat_size = h2pack->krnl_dim * h2pack->n_point;
-        h2pack->xT = (DTYPE*) malloc(sizeof(DTYPE) * h2pack->krnl_mat_size);
-        h2pack->yT = (DTYPE*) malloc(sizeof(DTYPE) * h2pack->krnl_mat_size);
+        h2pack->xT    = (DTYPE*) malloc(sizeof(DTYPE) * h2pack->krnl_mat_size);
+        h2pack->yT    = (DTYPE*) malloc(sizeof(DTYPE) * h2pack->krnl_mat_size);
+        h2pack->pmt_x = (DTYPE*) malloc(sizeof(DTYPE) * h2pack->krnl_mat_size * h2pack->mm_max_n_vec);
+        h2pack->pmt_y = (DTYPE*) malloc(sizeof(DTYPE) * h2pack->krnl_mat_size * h2pack->mm_max_n_vec);
+        ASSERT_PRINTF(
+            h2pack->xT != NULL && h2pack->yT != NULL && h2pack->pmt_x != NULL && h2pack->pmt_y != NULL,
+            "Failed to allocate working arrays of size %d for matvec & matmul\n", 2 * h2pack->krnl_mat_size * (h2pack->mm_max_n_vec+1)
+        );
     }
     
     // 4. Calculate reduced (in)admissible pairs

@@ -1592,6 +1592,29 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
         }  // End of i_blk0 loop
     }  // End of "#pragma omp parallel"
 
+    // 6. Copy environment variables & permutation indices
+    hssmat->mm_max_n_vec  = h2mat->mm_max_n_vec;
+    hssmat->print_timers  = h2mat->print_timers;
+    hssmat->print_dbginfo = h2mat->print_dbginfo;
+    size_t pmt_idx_msize = sizeof(int) * h2mat->krnl_mat_size;
+    int *fwd_pmt_idx = (int*) malloc(pmt_idx_msize);
+    int *bwd_pmt_idx = (int*) malloc(pmt_idx_msize);
+    memcpy(fwd_pmt_idx, h2mat->fwd_pmt_idx, pmt_idx_msize);
+    memcpy(bwd_pmt_idx, h2mat->bwd_pmt_idx, pmt_idx_msize);
+    hssmat->fwd_pmt_idx = fwd_pmt_idx;
+    hssmat->bwd_pmt_idx = bwd_pmt_idx;
+
+    size_t krnl_mat_msize = sizeof(DTYPE) * hssmat->krnl_mat_size;
+    hssmat->xT    = (DTYPE*) malloc(krnl_mat_msize);
+    hssmat->yT    = (DTYPE*) malloc(krnl_mat_msize);
+    hssmat->pmt_x = (DTYPE*) malloc(krnl_mat_msize * hssmat->mm_max_n_vec);
+    hssmat->pmt_y = (DTYPE*) malloc(krnl_mat_msize * hssmat->mm_max_n_vec);
+    ASSERT_PRINTF(
+        hssmat->xT != NULL && hssmat->yT != NULL && hssmat->pmt_x != NULL && hssmat->pmt_y != NULL,
+        "Failed to allocate working arrays of size %d for matvec & matmul\n", 2 * hssmat->krnl_mat_size * (hssmat->mm_max_n_vec+1)
+    );
+
+
     *hssmat_ = hssmat;
 }
 

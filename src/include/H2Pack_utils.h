@@ -38,20 +38,6 @@ void H2P_gather_matrix_columns(
     const int nrow, int *col_idx, const int ncol
 );
 
-// Copy a block from a matrix to another matrix
-// Input parameters:
-//   nrow    : Number of rows to be copied 
-//   ncol    : Number of columns to be copied
-//   src_mat : Source matrix 
-//   src_ld  : Leading dimension of the source matrix
-//   dst_ld  : Leading dimension of the destination matrix
-// Output parameter:
-//   dst_mat : Destination matrix
-void H2P_copy_matrix_block(
-    const int nrow, const int ncol, DTYPE *src_mat, const int src_ld, 
-    DTYPE *dst_mat, const int dst_ld
-);
-
 // Evaluate a kernel matrix with OpenMP parallelization
 // Input parameters:
 //   krnl_param : Pointer to kernel function parameter array

@@ -387,12 +387,12 @@ void H2P_print_statistic(H2Pack_t h2pack)
     double U_MB   = (double) mat_size[_U_SIZE_IDX]      * DTYPE_MB;
     double B_MB   = (double) mat_size[_B_SIZE_IDX]      * DTYPE_MB;
     double D_MB   = (double) mat_size[_D_SIZE_IDX]      * DTYPE_MB;
-    double fw_MB  = (double) mat_size[_MV_FW_SIZE_IDX]  * DTYPE_MB;
+    double fwd_MB = (double) mat_size[_MV_FWD_SIZE_IDX] * DTYPE_MB;
     double mid_MB = (double) mat_size[_MV_MID_SIZE_IDX] * DTYPE_MB;
-    double bw_MB  = (double) mat_size[_MV_BW_SIZE_IDX]  * DTYPE_MB;
+    double bwd_MB = (double) mat_size[_MV_BWD_SIZE_IDX] * DTYPE_MB;
     double den_MB = (double) mat_size[_MV_DEN_SIZE_IDX] * DTYPE_MB;
-    double rdc_MB = (double) mat_size[_MV_RDC_SIZE_IDX] * DTYPE_MB;
-    double mv_MB  = fw_MB + mid_MB + bw_MB + den_MB;
+    double vop_MB = (double) mat_size[_MV_VOP_SIZE_IDX] * DTYPE_MB;
+    double mv_MB  = fwd_MB + mid_MB + bwd_MB + den_MB;
     double UBD_k  = 0.0;
     UBD_k += (double) mat_size[_U_SIZE_IDX];
     UBD_k += (double) mat_size[_B_SIZE_IDX];
@@ -459,19 +459,19 @@ void H2P_print_statistic(H2Pack_t h2pack)
     {
         printf("H2Pack does not have matvec timings results yet.\n");
     } else {
-        double fw_t  = timers[_MV_FW_TIMER_IDX]  / d_n_matvec;
+        double fwd_t = timers[_MV_FWD_TIMER_IDX] / d_n_matvec;
         double mid_t = timers[_MV_MID_TIMER_IDX] / d_n_matvec;
-        double bw_t  = timers[_MV_BW_TIMER_IDX]  / d_n_matvec;
+        double bwd_t = timers[_MV_BWD_TIMER_IDX] / d_n_matvec;
         double den_t = timers[_MV_DEN_TIMER_IDX] / d_n_matvec;
-        double rdc_t = timers[_MV_RDC_TIMER_IDX] / d_n_matvec;
-        matvec_t = fw_t + mid_t + bw_t + den_t + rdc_t;
+        double vop_t = timers[_MV_VOP_TIMER_IDX] / d_n_matvec;
+        matvec_t = fwd_t + mid_t + bwd_t + den_t + vop_t;
         printf(
             "  * H2 matvec average time (sec) = %.3lf, %.2lf GB/s\n", 
             matvec_t, mv_MB / matvec_t / 1024.0
         );
         printf(
             "      |----> Forward transformation      = %.3lf, %.2lf GB/s\n", 
-            fw_t, fw_MB / fw_t / 1024.0
+            fwd_t, fwd_MB / fwd_t / 1024.0
         );
         if (h2pack->BD_JIT == 0)
         {
@@ -488,7 +488,7 @@ void H2P_print_statistic(H2Pack_t h2pack)
         }
         printf(
             "      |----> Backward transformation     = %.3lf, %.2lf GB/s\n", 
-            bw_t, bw_MB / bw_t / 1024.0
+            bwd_t, bwd_MB / bwd_t / 1024.0
         );
         if (h2pack->BD_JIT == 0)
         {
@@ -503,9 +503,10 @@ void H2P_print_statistic(H2Pack_t h2pack)
                 den_t, GFLOPS / den_t
             );
         }
+        vop_MB /= d_n_matvec;
         printf(
-            "      |----> OpenMP reduction            = %.3lf, %.2lf GB/s\n", 
-            rdc_t, rdc_MB / rdc_t / 1024.0
+            "      |----> OpenMP vector operations    = %.3lf, %.2lf GB/s\n", 
+            vop_t, vop_MB / vop_t / 1024.0
         );
     }
 

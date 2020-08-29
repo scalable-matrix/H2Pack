@@ -1188,7 +1188,8 @@ void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
     st = get_wtime_sec();
     H2P_permute_vector_forward(h2pack, x, pmt_x);
     et = get_wtime_sec();
-    timers[_MV_RDC_TIMER_IDX] += et - st;
+    timers[_MV_VOP_TIMER_IDX] += et - st;
+    mat_size[_MV_VOP_SIZE_IDX] += 2 * krnl_mat_size;
 
     // 2. Reset partial y result in each thread-local buffer to 0
     st = get_wtime_sec();
@@ -1199,24 +1200,26 @@ void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
         memset(tid_y, 0, sizeof(DTYPE) * krnl_mat_size);
         
         #pragma omp for
-        for (int i = 0; i < krnl_mat_size; i++) pmt_y[i] = 0;
-        
-        if (need_trans)
+        for (int i = 0; i < krnl_mat_size; i++) 
         {
-            #pragma omp for
-            for (int i = 0; i < krnl_mat_size; i++) yT[i] = 0;
-            
-            H2P_transpose_dmat(n_thread, n_point, krnl_dim, pmt_x, krnl_dim, xT, n_point);
+            pmt_y[i] = 0;
+            yT[i] = 0;
         }
     }
+    mat_size[_MV_VOP_SIZE_IDX] += (2 + n_thread) * krnl_mat_size;
+    if (need_trans) 
+    {
+        H2P_transpose_dmat(n_thread, n_point, krnl_dim, pmt_x, krnl_dim, xT, n_point);
+        mat_size[_MV_VOP_SIZE_IDX] += 2 * krnl_mat_size;
+    }
     et = get_wtime_sec();
-    timers[_MV_RDC_TIMER_IDX] += et - st;
+    timers[_MV_VOP_TIMER_IDX] += et - st;
 
     // 3. Forward transformation, calculate U_j^T * x_j
     st = get_wtime_sec();
     H2P_matvec_fwd_transform(h2pack, pmt_x);
     et = get_wtime_sec();
-    timers[_MV_FW_TIMER_IDX] += et - st;
+    timers[_MV_FWD_TIMER_IDX] += et - st;
     
     // 4. Intermediate multiplication, calculate B_{ij} * (U_j^T * x_j)
     st = get_wtime_sec();
@@ -1235,7 +1238,7 @@ void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
     st = get_wtime_sec();
     H2P_matvec_bwd_transform(h2pack, pmt_x, pmt_y);
     et = get_wtime_sec();
-    timers[_MV_BW_TIMER_IDX] += et - st;
+    timers[_MV_BWD_TIMER_IDX] += et - st;
     
     // 6. Dense multiplication, calculate D_i * x_i
     st = get_wtime_sec();
@@ -1263,23 +1266,24 @@ void H2P_matvec(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
             for (int i = blk_spos; i < blk_spos + blk_len; i++) y_[i] += y_src[i];
         }
     }
-    mat_size[_MV_RDC_SIZE_IDX] = (2 * n_thread + 1) * krnl_mat_size;
+    mat_size[_MV_VOP_SIZE_IDX] += (2 * n_thread + 1) * krnl_mat_size;
     // We use xT here to hold the transpose of yT
     if (need_trans)
     {
         H2P_transpose_dmat(n_thread, krnl_dim, n_point, yT, n_point, xT, krnl_dim);
         #pragma omp parallel for simd
         for (int i = 0; i < krnl_mat_size; i++) pmt_y[i] += xT[i];
+        mat_size[_MV_VOP_SIZE_IDX] += 4 * krnl_mat_size;
     }
     et = get_wtime_sec();
-    timers[_MV_RDC_TIMER_IDX] += et - st;
+    timers[_MV_VOP_TIMER_IDX] += et - st;
 
     // 8. Backward permute the output vector
     st = get_wtime_sec();
     H2P_permute_vector_backward(h2pack, pmt_y, y);
     et = get_wtime_sec();
-    timers[_MV_RDC_TIMER_IDX] += et - st;
-    mat_size[_MV_RDC_SIZE_IDX] += 4 * krnl_mat_size;
+    timers[_MV_VOP_TIMER_IDX] += et - st;
+    //mat_size[_MV_VOP_SIZE_IDX] += 2 * krnl_mat_size;
 
     h2pack->n_matvec++;
 }

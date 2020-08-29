@@ -178,7 +178,7 @@ void H2P_generate_proxy_point_nlayer(
         st = get_wtime_sec();
         H2P_dense_mat_select_columns(Y0_coord, skel_idx);
         H2P_dense_mat_resize(Yp_coord, pt_dim, Y0_coord->ncol);
-        H2P_copy_matrix_block(pt_dim, Y0_coord->ncol, Y0_coord->data, Y0_coord->ld, Yp_coord->data, Yp_coord->ld);
+        copy_matrix_block(sizeof(DTYPE), pt_dim, Y0_coord->ncol, Y0_coord->data, Y0_coord->ld, Yp_coord->data, Yp_coord->ld);
         et = get_wtime_sec();
         timers[_GEN_PP_MISC_T_IDX] += et - st;
     }  // End of "if (alg == 1)"
@@ -196,8 +196,8 @@ void H2P_generate_proxy_point_nlayer(
             DTYPE *Y0_layer_i_ptr   = Y0_coord->data + i * Y0_lsize;
             DTYPE *tmp_coord_Yp_ptr = tmp_coord->data;
             DTYPE *tmp_coord_li_ptr = tmp_coord->data + Yp_coord->ncol;
-            H2P_copy_matrix_block(pt_dim, Yp_coord->ncol, Yp_coord_ptr,   Yp_coord->ld, tmp_coord_Yp_ptr, tmp_coord->ld);
-            H2P_copy_matrix_block(pt_dim, Y0_lsize,       Y0_layer_i_ptr, Y0_coord->ld, tmp_coord_li_ptr, tmp_coord->ld);
+            copy_matrix_block(sizeof(DTYPE), pt_dim, Yp_coord->ncol, Yp_coord_ptr,   Yp_coord->ld, tmp_coord_Yp_ptr, tmp_coord->ld);
+            copy_matrix_block(sizeof(DTYPE), pt_dim, Y0_lsize,       Y0_layer_i_ptr, Y0_coord->ld, tmp_coord_li_ptr, tmp_coord->ld);
             et = get_wtime_sec();
             timers[_GEN_PP_MISC_T_IDX] += et - st;
 
@@ -232,7 +232,7 @@ void H2P_generate_proxy_point_nlayer(
             st = get_wtime_sec();
             H2P_dense_mat_select_columns(tmp_coord, skel_idx);
             H2P_dense_mat_resize(Yp_coord, pt_dim, tmp_coord->ncol);
-            H2P_copy_matrix_block(pt_dim, tmp_coord->ncol, tmp_coord->data, tmp_coord->ld, Yp_coord->data, Yp_coord->ld);
+            copy_matrix_block(sizeof(DTYPE), pt_dim, tmp_coord->ncol, tmp_coord->data, tmp_coord->ld, Yp_coord->data, Yp_coord->ld);
             et = get_wtime_sec();
             timers[_GEN_PP_MISC_T_IDX] += et - st;
         }  // End of i loop
@@ -243,7 +243,7 @@ void H2P_generate_proxy_point_nlayer(
     {
         // No need to increase the density, just copy it
         H2P_dense_mat_resize(pp, pt_dim, Yp_coord->ncol);
-        H2P_copy_matrix_block(pt_dim, Yp_coord->ncol, Yp_coord->data, Yp_coord->ld, pp->data, pp->ld);
+        copy_matrix_block(sizeof(DTYPE), pt_dim, Yp_coord->ncol, Yp_coord->data, Yp_coord->ld, pp->data, pp->ld);
     } else {
         int Yp_size = Yp_coord->ncol;
         H2P_dense_mat_resize(min_dist, Yp_size, 1);

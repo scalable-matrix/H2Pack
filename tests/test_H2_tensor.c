@@ -88,11 +88,12 @@ int main(int argc, char **argv)
     // Warm up, reset timers, and test the matvec performance
     H2P_matvec(h2pack, x, y1); 
     h2pack->n_matvec = 0;
-    h2pack->timers[_MV_FW_TIMER_IDX]  = 0.0;
-    h2pack->timers[_MV_MID_TIMER_IDX] = 0.0;
-    h2pack->timers[_MV_BW_TIMER_IDX]  = 0.0;
-    h2pack->timers[_MV_DEN_TIMER_IDX] = 0.0;
-    h2pack->timers[_MV_RDC_TIMER_IDX] = 0.0;
+    h2pack->mat_size[_MV_VOP_SIZE_IDX] = 0;
+    h2pack->timers[_MV_FWD_TIMER_IDX]  = 0.0;
+    h2pack->timers[_MV_MID_TIMER_IDX]  = 0.0;
+    h2pack->timers[_MV_BWD_TIMER_IDX]  = 0.0;
+    h2pack->timers[_MV_DEN_TIMER_IDX]  = 0.0;
+    h2pack->timers[_MV_VOP_TIMER_IDX]  = 0.0;
     for (int i = 0; i < 10; i++) 
         H2P_matvec(h2pack, x, y1);
 

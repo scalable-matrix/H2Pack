@@ -330,7 +330,7 @@ void H2P_matmul_bwd_transform(
                         if (y1[child_k]->ld == 0)
                         {
                             H2P_dense_mat_resize(y1[child_k], child_k_len, n_vec);
-                            H2P_copy_matrix_block(child_k_len, n_vec, y1_tmp_spos, y1_tmp->ld, y1[child_k]->data, y1[child_k]->ld);
+                            copy_matrix_block(sizeof(DTYPE), child_k_len, n_vec, y1_tmp_spos, y1_tmp->ld, y1[child_k]->data, y1[child_k]->ld);
                         } else {
                             for (int k0 = 0; k0 < child_k_len; k0++)
                             {
@@ -502,7 +502,8 @@ void H2P_matmul(
         st = get_wtime_sec();
         H2P_permute_matrix_row_forward(h2pack, layout, curr_n_vec, curr_mat_x, ldx, pmt_x, ld_pmt);
         et = get_wtime_sec();
-        timers[_MV_RDC_TIMER_IDX] += et - st;
+        timers[_MV_VOP_TIMER_IDX] += et - st;
+        mat_size[_MV_VOP_SIZE_IDX] += 2 * krnl_mat_size * curr_n_vec;
     
         // 2. Reset output matrix
         st = get_wtime_sec();
@@ -527,7 +528,8 @@ void H2P_matmul(
             }
         }  // End of "if (layout == CblasRowMajor)"
         et = get_wtime_sec();
-        timers[_MV_RDC_TIMER_IDX] += et - st;
+        timers[_MV_VOP_TIMER_IDX] += et - st;
+        mat_size[_MV_VOP_SIZE_IDX] += krnl_mat_size * curr_n_vec;
         
         // 3. Forward transformation, calculate U_j^T * x_j
         st = get_wtime_sec();
@@ -536,7 +538,7 @@ void H2P_matmul(
             pmt_x, ld_pmt, pmt_row_stride, x_trans
         );
         et = get_wtime_sec();
-        timers[_MV_FW_TIMER_IDX] += et - st;
+        timers[_MV_FWD_TIMER_IDX] += et - st;
 
         // 4. Intermediate multiplication, calculate B_{ij} * (U_j^T * x_j)
         st = get_wtime_sec();
@@ -555,7 +557,7 @@ void H2P_matmul(
             pmt_y, ld_pmt, pmt_row_stride, y_trans
         );
         et = get_wtime_sec();
-        timers[_MV_BW_TIMER_IDX] += et - st;
+        timers[_MV_BWD_TIMER_IDX] += et - st;
 
         // 6. Dense multiplication, calculate D_{ij} * x_j
         st = get_wtime_sec();
@@ -571,8 +573,8 @@ void H2P_matmul(
         st = get_wtime_sec();
         H2P_permute_matrix_row_backward(h2pack, layout, curr_n_vec, pmt_y, ld_pmt, curr_mat_y, ldy);
         et = get_wtime_sec();
-        timers[_MV_RDC_TIMER_IDX] += et - st;
-        mat_size[_MV_RDC_SIZE_IDX] += 4 * krnl_mat_size * curr_n_vec;
+        timers[_MV_VOP_TIMER_IDX] += et - st;
+        mat_size[_MV_VOP_SIZE_IDX] += 4 * krnl_mat_size * curr_n_vec;
     }  // End of i_vec loop
 
     h2pack->n_matvec += n_vec;

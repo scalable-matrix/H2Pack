@@ -127,8 +127,8 @@ static void H2P_search_knn(H2Pack_t h2pack, const int k, int *knn)
             int node_j_pt_s = pt_cluster[2 * node_j];
             int node_j_pt_e = pt_cluster[2 * node_j + 1];
             int node_j_npt  = node_j_pt_e - node_j_pt_s + 1;
-            H2P_copy_matrix_block(
-                pt_dim, node_j_npt, coord + node_j_pt_s, n_point, 
+            copy_matrix_block(
+                sizeof(DTYPE), pt_dim, node_j_npt, coord + node_j_pt_s, n_point, 
                 neighbor_pt_coord->data + neighbor_pt_cnt, max_candidate
             );
             for (int k = 0; k < node_j_npt; k++)
@@ -329,7 +329,7 @@ void H2P_build_FSAI_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, 
                 H2P_transpose_dmat(1, A_size, krnl_dim, tmpU, krnl_dim, tmpY, A_size);
                 // tmpD = tmpY(:, end-krnl_dim+1:end); 
                 DTYPE *tmpY_src = tmpY + (A_size - krnl_dim);
-                H2P_copy_matrix_block(krnl_dim, krnl_dim, tmpY_src, A_size, tmpD, krnl_dim);
+                copy_matrix_block(sizeof(DTYPE), krnl_dim, krnl_dim, tmpY_src, A_size, tmpD, krnl_dim);
                 // tmpL = 0.5 * (tmpL + tmpL');
                 for (int j = 0; j < krnl_dim; j++)
                 {

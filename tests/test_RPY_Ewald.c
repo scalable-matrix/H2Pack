@@ -253,11 +253,12 @@ int main(int argc, char **argv)
 
     // Test matvec performance
     ph2mat->n_matvec = 0;
-    ph2mat->timers[_MV_FW_TIMER_IDX]  = 0.0;
-    ph2mat->timers[_MV_MID_TIMER_IDX] = 0.0;
-    ph2mat->timers[_MV_BW_TIMER_IDX]  = 0.0;
-    ph2mat->timers[_MV_DEN_TIMER_IDX] = 0.0;
-    ph2mat->timers[_MV_RDC_TIMER_IDX] = 0.0;
+    ph2mat->mat_size[_MV_VOP_SIZE_IDX] = 0;
+    ph2mat->timers[_MV_FWD_TIMER_IDX]  = 0.0;
+    ph2mat->timers[_MV_MID_TIMER_IDX]  = 0.0;
+    ph2mat->timers[_MV_BWD_TIMER_IDX]  = 0.0;
+    ph2mat->timers[_MV_DEN_TIMER_IDX]  = 0.0;
+    ph2mat->timers[_MV_VOP_TIMER_IDX]  = 0.0;
     for (int i = 0; i < n_vec; i++) 
     {
         DTYPE *x_i  = x  + i * krnl_mat_size;

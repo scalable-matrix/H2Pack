@@ -43,21 +43,6 @@ void H2P_gather_matrix_columns(
     }
 }
 
-// Copy a block from a matrix to another matrix
-void H2P_copy_matrix_block(
-    const int nrow, const int ncol, DTYPE *src_mat, const int src_ld, 
-    DTYPE *dst_mat, const int dst_ld
-)
-{
-    size_t row_msize = sizeof(DTYPE) * ncol;
-    for (int irow = 0; irow < nrow; irow++)
-    {
-        DTYPE *src_row = src_mat + irow * src_ld;
-        DTYPE *dst_row = dst_mat + irow * dst_ld;
-        memcpy(dst_row, src_row, row_msize);
-    }
-}
-
 // Evaluate a kernel matrix with OpenMP parallelization
 void H2P_eval_kernel_matrix_OMP(
     const void *krnl_param, kernel_eval_fptr krnl_eval, const int krnl_dim, 
@@ -341,7 +326,7 @@ void H2P_get_Bij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_de
     H2P_dense_mat_resize(Bij, B_nrow, B_ncol);
     if (h2pack->BD_JIT == 0)
     {
-        H2P_copy_matrix_block(B_nrow, B_ncol, h2pack->B_data + h2pack->B_ptr[B_idx], B_ncol, Bij->data, B_ncol);
+        copy_matrix_block(sizeof(DTYPE), B_nrow, B_ncol, h2pack->B_data + h2pack->B_ptr[B_idx], B_ncol, Bij->data, B_ncol);
     } else {
         int   n_point     = h2pack->n_point;
         int   krnl_dim    = h2pack->krnl_dim;
@@ -418,7 +403,7 @@ void H2P_get_Dij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_de
     H2P_dense_mat_resize(Dij, D_nrow, D_ncol);
     if (h2pack->BD_JIT == 0)
     {
-        H2P_copy_matrix_block(D_nrow, D_ncol, h2pack->D_data + h2pack->D_ptr[D_idx], D_ncol, Dij->data, D_ncol);
+        copy_matrix_block(sizeof(DTYPE), D_nrow, D_ncol, h2pack->D_data + h2pack->D_ptr[D_idx], D_ncol, Dij->data, D_ncol);
     } else {
         int   n_point     = h2pack->n_point;
         int   krnl_dim    = h2pack->krnl_dim;

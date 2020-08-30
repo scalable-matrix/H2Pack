@@ -192,7 +192,7 @@ static inline void H2P_dense_mat_resize(H2P_dense_mat_p mat, const int nrow, con
     if (new_size > mat->size)
     {
         free_aligned(mat->data);
-        mat->data = malloc_aligned(sizeof(DTYPE) * new_size, 64);
+        mat->data = (DTYPE*) malloc_aligned(sizeof(DTYPE) * new_size, 64);
         ASSERT_PRINTF(mat->data != NULL, "Failed to reallocate %d * %d dense matrix\n", nrow, ncol);
         mat->size = new_size;
     }

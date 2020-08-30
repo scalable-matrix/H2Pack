@@ -1,6 +1,6 @@
 // @brief    : Implementations of some helper functions I use here and there
 // @author   : Hua Huang <huangh223@gatech.edu>
-// @modified : 2020-08-28
+// @modified : 2020-08-30
 
 #ifndef __HUANGH223_UTILS_H__
 #define __HUANGH223_UTILS_H__
@@ -18,7 +18,7 @@ extern "C" {
 #define INFO_PRINTF(fmt, ...)                       \
     do                                              \
     {                                               \
-        fprintf(stdout, "[INFO] %s, %d: "fmt,       \
+        fprintf(stdout, "[INFO] %s, %d: " fmt,      \
                 __FILE__, __LINE__, ##__VA_ARGS__); \
         fflush(stdout);                             \
     } while (0)
@@ -26,7 +26,7 @@ extern "C" {
 #define DEBUG_PRINTF(fmt, ...)                      \
     do                                              \
     {                                               \
-        fprintf(stderr, "[DEBUG] %s, %d: "fmt,      \
+        fprintf(stderr, "[DEBUG] %s, %d: " fmt,     \
                 __FILE__, __LINE__, ##__VA_ARGS__); \
         fflush(stderr);                             \
     } while (0)
@@ -34,7 +34,7 @@ extern "C" {
 #define WARNING_PRINTF(fmt, ...)                    \
     do                                              \
     {                                               \
-        fprintf(stderr, "[WARNING] %s, %d: "fmt,    \
+        fprintf(stderr, "[WARNING] %s, %d: " fmt,   \
                 __FILE__, __LINE__, ##__VA_ARGS__); \
         fflush(stderr);                             \
     } while (0)
@@ -42,7 +42,7 @@ extern "C" {
 #define ERROR_PRINTF(fmt, ...)                      \
     do                                              \
     {                                               \
-        fprintf(stderr, "[ERROR] %s, %d: "fmt,      \
+        fprintf(stderr, "[ERROR] %s, %d: " fmt,     \
                 __FILE__, __LINE__, ##__VA_ARGS__); \
         fflush(stderr);                             \
     } while (0)
@@ -52,7 +52,7 @@ extern "C" {
     {                                                   \
         if (!(expr))                                    \
         {                                               \
-            fprintf(stderr, "[FATAL] %s, %d: "fmt,      \
+            fprintf(stderr, "[FATAL] %s, %d: " fmt,     \
                     __FILE__, __LINE__, ##__VA_ARGS__); \
             fflush(stderr);                             \
             assert(expr);                               \

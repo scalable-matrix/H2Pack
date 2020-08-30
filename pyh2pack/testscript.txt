@@ -22,12 +22,13 @@ import numpy as np
 
 N = 80000
 krnl_dim = 1
-coord = np.random.normal(0, 5, size=(3, N))
+coord = np.random.uniform(0, 5, size=(3, N))
+krnl_param = np.array([1., -2.])
 
-A = pyh2pack.H2Mat(kernel="Coulomb_3D", kernel_dimension=krnl_dim, point_coord=coord, point_dimension=3, JIT_mode=1, rel_tol=1e-3)
+A = pyh2pack.H2Mat(kernel="Quadratic_3D", kernel_dimension=krnl_dim, point_coord=coord, point_dimension=3, JIT_mode=1, rel_tol=1e-3, kernel_param=krnl_param)
 x = np.random.normal(size=(krnl_dim*N))
 y = A.h2matvec(x)
 z = A.direct_matvec(x)
-np.linalg.norm(y - z) / np.linalg.norm(z)
+print(np.linalg.norm(y - z) / np.linalg.norm(z))
 A.print_statistic()
 A.clean()

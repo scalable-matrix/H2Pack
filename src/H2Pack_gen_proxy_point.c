@@ -512,13 +512,12 @@ void H2P_generate_proxy_point_ID_file(
     const char *fname, H2P_dense_mat_p **pp_
 )
 {
-    int   pt_dim      = h2pack->pt_dim;
-    int   krnl_dim    = h2pack->krnl_dim;
-    int   n_level     = h2pack->max_level + 1;
-    DTYPE reltol      = h2pack->QR_stop_tol;
-    DTYPE *root_enbox = h2pack->root_enbox;
-    DTYPE pt_maxL     = h2pack->root_enbox[pt_dim] * 0.5;
-    DTYPE pt_minL     = pt_maxL * DPOW(0.5, (DTYPE) h2pack->max_level);
+    int   pt_dim   = h2pack->pt_dim;
+    int   krnl_dim = h2pack->krnl_dim;
+    int   n_level  = h2pack->max_level + 1;
+    DTYPE reltol   = h2pack->QR_stop_tol;
+    DTYPE pt_maxL  = h2pack->root_enbox[pt_dim] * 0.5;
+    DTYPE pt_minL  = pt_maxL * DPOW(0.5, (DTYPE) h2pack->max_level);
     
     // Root box and level 1 box do not have admissible pairs --> don't need proxy points
     pt_maxL *= 0.25;

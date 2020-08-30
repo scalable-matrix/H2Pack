@@ -257,28 +257,21 @@ void H2P_matmul_periodic(
     double *timers       = h2pack->timers;
     size_t *mat_size     = h2pack->mat_size;
 
-    int x_row_stride, x_col_stride, y_row_stride, y_col_stride;
-    int pmt_row_stride, pmt_col_stride, ld_pmt;
+    int x_col_stride, y_col_stride, pmt_row_stride, ld_pmt;
     CBLAS_TRANSPOSE x_trans, y_trans;
     if (layout == CblasRowMajor)
     {
-        x_row_stride   = ldx;
         x_col_stride   = 1;
-        y_row_stride   = ldy;
         y_col_stride   = 1;
         ld_pmt         = mm_max_n_vec;
         pmt_row_stride = ld_pmt;
-        pmt_col_stride = 1;
         x_trans = CblasNoTrans;
         y_trans = CblasNoTrans;
     } else {
-        x_row_stride   = 1;
         x_col_stride   = ldx;
-        y_row_stride   = 1;
         y_col_stride   = ldy;
         ld_pmt         = krnl_mat_size;
         pmt_row_stride = 1;
-        pmt_col_stride = ld_pmt;
         x_trans = CblasTrans;
         y_trans = CblasTrans;
     }

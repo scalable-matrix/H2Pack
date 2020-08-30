@@ -49,7 +49,7 @@ void direct_nbody(
             }
         }
     }
-    printf("Calculate direct n-body reference results for %d points done\n", n_dst_pt);
+    //printf("Calculate direct n-body reference results for %d points done\n", n_dst_pt);
     free(krnl_mat_buffs);
 }
 

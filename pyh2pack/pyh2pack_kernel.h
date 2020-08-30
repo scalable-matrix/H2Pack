@@ -40,9 +40,48 @@ const H2P_kernel kernel_list[] =
         .krnl_bimv = Gaussian_3D_krnl_bimv_intrin_d,
         .krnl_bimv_flops = Gaussian_3D_krnl_bimv_flop,
         .flag_proxysurface = 0,
-        .param_descr = "one parameters: exponent factor"
+        .param_descr = "one parameter l: K(x,y) = exp(-l|x-y|^2) "
     }, 
-    // 3D Matern kernel
+    // 2D Gaussian kernel
+    {
+        .krnl_name = "Gaussian_2D",
+        .krnl_dim = 1,
+        .pts_dim = 2,
+        .krnl_param_len = 1,
+        .krnl_param = (DTYPE []){1.0},
+        .krnl_eval = Gaussian_2D_eval_intrin_d, 
+        .krnl_bimv = Gaussian_2D_krnl_bimv_intrin_d,
+        .krnl_bimv_flops = Gaussian_2D_krnl_bimv_flop,
+        .flag_proxysurface = 0,
+        .param_descr = "one parameter l: K(x,y) = exp(-l|x-y|^2) "
+    }, 
+    // 3D Exponential kernel
+    {
+        .krnl_name = "Exponential_3D",
+        .krnl_dim = 1,
+        .pts_dim = 3,
+        .krnl_param_len = 1,
+        .krnl_param = (DTYPE []){1.0},
+        .krnl_eval = Expon_3D_eval_intrin_d, 
+        .krnl_bimv = Expon_3D_krnl_bimv_intrin_d,
+        .krnl_bimv_flops = Expon_3D_krnl_bimv_flop,
+        .flag_proxysurface = 0,
+        .param_descr = "one parameter l: K(x,y) = exp(-l|x-y|) "
+    },
+    // 2D Exponential kernel
+    {
+        .krnl_name = "Exponential_2D",
+        .krnl_dim = 1,
+        .pts_dim = 2,
+        .krnl_param_len = 1,
+        .krnl_param = (DTYPE []){1.0},
+        .krnl_eval = Expon_2D_eval_intrin_d, 
+        .krnl_bimv = Expon_2D_krnl_bimv_intrin_d,
+        .krnl_bimv_flops = Expon_2D_krnl_bimv_flop,
+        .flag_proxysurface = 0,
+        .param_descr = "one parameter l: K(x,y) = exp(-l|x-y|) "
+    },
+    // 3D Matern 3/2 kernel
     {
         .krnl_name = "Matern32_3D",
         .krnl_dim = 1,
@@ -53,9 +92,22 @@ const H2P_kernel kernel_list[] =
         .krnl_bimv = Matern32_3D_krnl_bimv_intrin_d,
         .krnl_bimv_flops = Matern32_3D_krnl_bimv_flop,
         .flag_proxysurface = 0,
-        .param_descr = "one parameters: l"
+        .param_descr = "one parameter l: K(x,y) = (1+sqrt(3)*l) exp(-sqrt(3)*l|x-y|) "
     },
-    // 3D Matern kernel
+    // 2D Matern 3/2 kernel
+    {
+        .krnl_name = "Matern32_2D",
+        .krnl_dim = 1,
+        .pts_dim = 2,
+        .krnl_param_len = 1,
+        .krnl_param = (DTYPE[]){1.0},
+        .krnl_eval = Matern32_2D_eval_intrin_d, 
+        .krnl_bimv = Matern32_2D_krnl_bimv_intrin_d,
+        .krnl_bimv_flops = Matern32_2D_krnl_bimv_flop,
+        .flag_proxysurface = 0,
+        .param_descr = "one parameter l: K(x,y) = (1+sqrt(3)*l) exp(-sqrt(3)*l|x-y|) "
+    },
+    // 3D Matern 5/2 kernel
     {
         .krnl_name = "Matern52_3D",
         .krnl_dim = 1,
@@ -66,9 +118,47 @@ const H2P_kernel kernel_list[] =
         .krnl_bimv = Matern52_3D_krnl_bimv_intrin_d,
         .krnl_bimv_flops = Matern52_3D_krnl_bimv_flop,
         .flag_proxysurface = 0,
-        .param_descr = "one parameters: l"
+        .param_descr = "one parameter l: K(x,y) = (1+sqrt(5)*l+5/3*l) exp(-sqrt(5)*l|x-y|) "
     },
-
+    // 2D Matern 5/2 kernel
+    {
+        .krnl_name = "Matern52_2D",
+        .krnl_dim = 1,
+        .pts_dim = 2,
+        .krnl_param_len = 1,
+        .krnl_param = (DTYPE[]){1.0},  // (nu, sigma, rho)
+        .krnl_eval = Matern52_2D_eval_intrin_d, 
+        .krnl_bimv = Matern52_2D_krnl_bimv_intrin_d,
+        .krnl_bimv_flops = Matern52_2D_krnl_bimv_flop,
+        .flag_proxysurface = 0,
+        .param_descr = "one parameter l: K(x,y) = (1+sqrt(5)*l+5/3*l) exp(-sqrt(5)*l|x-y|) "
+    },
+    // 3D Quadratic kernel
+    {
+        .krnl_name = "Quadratic_3D",
+        .krnl_dim = 1,
+        .pts_dim = 3,
+        .krnl_param_len = 2,
+        .krnl_param = (DTYPE[]){1.0, -0.5},
+        .krnl_eval = Quadratic_3D_eval_intrin_d, 
+        .krnl_bimv = Quadratic_3D_krnl_bimv_intrin_d,
+        .krnl_bimv_flops = Quadratic_3D_krnl_bimv_flop,
+        .flag_proxysurface = 0,
+        .param_descr = "two parameters c,a: K(x,y) = (1+c*|x-y|^2)^a"
+    },
+    // 2D Quadratic kernel
+    {
+        .krnl_name = "Quadratic_2D",
+        .krnl_dim = 1,
+        .pts_dim = 2,
+        .krnl_param_len = 2,
+        .krnl_param = (DTYPE[]){1.0, -0.5},
+        .krnl_eval = Quadratic_2D_eval_intrin_d, 
+        .krnl_bimv = Quadratic_2D_krnl_bimv_intrin_d,
+        .krnl_bimv_flops = Quadratic_2D_krnl_bimv_flop,
+        .flag_proxysurface = 0,
+        .param_descr = "two parameters c,a: K(x,y) = (1+c*|x-y|^2)^a"
+    },
     // 3D Coulomb kernel
     {
         .krnl_name = "Coulomb_3D",
@@ -82,13 +172,26 @@ const H2P_kernel kernel_list[] =
         .flag_proxysurface = 1,
         .param_descr = "no parameters"
     },
+    // 2D Laplace kernel
+    {
+        .krnl_name = "Laplace_2D",
+        .krnl_dim = 1,
+        .pts_dim = 2,
+        .krnl_param_len = 0,
+        .krnl_param = NULL, 
+        .krnl_eval = Laplace_2D_eval_intrin_d, 
+        .krnl_bimv = Laplace_2D_krnl_bimv_intrin_d,
+        .krnl_bimv_flops = Laplace_2D_krnl_bimv_flop,
+        .flag_proxysurface = 1,
+        .param_descr = "no parameters"
+    },
     // 3D Stokes kernel
     {
         .krnl_name = "Stokes_3D",
         .krnl_dim = 3,
         .pts_dim = 3,
         .krnl_param_len = 2,
-        .krnl_param = (DTYPE []){1.0, 0.1},  // (scaling factor)
+        .krnl_param = (DTYPE []){1.0, 0.1}, 
         .krnl_eval = Stokes_eval_std, 
         .krnl_bimv = Stokes_krnl_bimv_intrin_d,
         .krnl_bimv_flops = Stokes_krnl_bimv_flop,
@@ -100,13 +203,13 @@ const H2P_kernel kernel_list[] =
         .krnl_name = "RPY",
         .krnl_dim = 3,
         .pts_dim = 3,
-        .krnl_param_len = 2,
-        .krnl_param = (DTYPE []){1.0, 1.0},  // (scaling factor)
+        .krnl_param_len = 1,
+        .krnl_param = (DTYPE []){1.0},  
         .krnl_eval = RPY_eval_std,
         .krnl_bimv = RPY_krnl_bimv_intrin_d,
         .krnl_bimv_flops = RPY_krnl_bimv_flop,
         .flag_proxysurface = 1,
-        .param_descr = "two parameters: (eta,  a)"
+        .param_descr = "two parameters: eta"
     }
 };
 

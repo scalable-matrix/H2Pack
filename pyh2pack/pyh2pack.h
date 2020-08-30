@@ -62,6 +62,13 @@ const char description_h2matvec[] =
             ";
 static PyObject *h2matvec(H2Mat *self, PyObject *args);
 
+const char description_h2matmul[] = 
+            "H2Pack function matvec(x) efficiently multiplies the kernel matrix with ONE vector\n\
+             Input description (no need for keywords): \n\
+                x: 1d numpy array, the multiplied vector. should be of the same dimension as the matrix.\
+            ";
+static PyObject *h2matmul(H2Mat *self, PyObject *args);
+
 
 const char description_directmatvec[] = 
             "H2Pack function direct_matvec(x) calculates the kernel matrix-vector multiplication directly by evaluating kernel matrix entries dynamically.\n\

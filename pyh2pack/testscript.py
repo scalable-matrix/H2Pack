@@ -44,3 +44,18 @@ print(np.linalg.norm(y[(start_pt-1)*krnl_dim:end_pt*krnl_dim] - z) / np.linalg.n
 #   statistic info of pyh2pack performance
 A.print_statistic()
 A.clean()
+
+'''
+   Test with matmul
+'''
+nvec = 10
+xs = np.random.normal(size=(krnl_dim*N, nvec))
+ys = A.h2matmul(xs)
+#  partial direct sum
+zs = []
+start_pt = 1
+end_pt = 1000
+for i in range(nvec):
+   zs.append(A.direct_matvec(xs[:,i], start_pt, end_pt))
+zs = np.hstack([z[:,np.newaxis] for z in zs])
+print(np.linalg.norm(ys[(start_pt-1)*krnl_dim:end_pt*krnl_dim, :] - zs, ord='fro') / np.linalg.norm(zs,  ord='fro'))

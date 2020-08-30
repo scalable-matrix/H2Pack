@@ -33,6 +33,7 @@ static int H2Mat_init(H2Mat *self, PyObject *args, PyObject *kwds)
 static PyMethodDef H2Mat_methods[] = {
     {"setup", (PyCFunction) setup, METH_VARARGS|METH_KEYWORDS, description_setup},
     {"h2matvec", h2matvec, METH_VARARGS, description_h2matvec},
+    {"h2matmul", h2matmul, METH_VARARGS, description_h2matmul},
     {"direct_matvec", direct_matvec, METH_VARARGS, description_directmatvec},
     {"print_statistic", print_statistic, METH_VARARGS, description_printstat},
     {"print_setting", print_setting, METH_VARARGS, description_printset},
@@ -338,6 +339,63 @@ static PyObject *h2matvec(H2Mat *self, PyObject *args) {
     y_out = (PyArrayObject *)PyArray_SimpleNew(1, dim, PyArray_DOUBLE);
     for (int i = 0; i < self->params.krnl_mat_size; i++)
         *(double*)PyArray_GETPTR1(y_out, i) = y[i];
+
+    free_aligned(x);
+    free_aligned(y);
+    return PyArray_Return(y_out);
+}
+
+
+static PyObject *h2matmul(H2Mat *self, PyObject *args) {
+    if (self->flag_setup == 0)
+    {
+        PyErr_SetString(PyExc_ValueError, "H2 matrix is not set up yet. Run .setup()");
+        return NULL;
+    }
+
+    PyArrayObject *x_in, *y_out;
+    DTYPE *x, *y;
+    if (!PyArg_ParseTuple(args, "O!", &PyArray_Type, &x_in))
+    {
+        PyErr_SetString(PyExc_ValueError, "Error in the input argument!");
+        return NULL;
+    }
+
+    //  Check Input
+    if (x_in->descr->type_num != PyArray_DOUBLE || x_in->nd != 2) 
+    {
+        PyErr_SetString(PyExc_ValueError, "Input of h2matmul should be a two-dimensional float numpy array");
+        return NULL; 
+    }
+    if (x_in->dimensions[0] != self->params.krnl_mat_size)
+    {
+        PyErr_Format(PyExc_ValueError, "Vector dimension %ld doesn't match kernel matrix dimension %d\n", x_in->dimensions[0], self->params.krnl_mat_size);
+        return NULL; 
+    }
+
+    int n_vec = x_in->dimensions[1];
+    //  Copy to the local vector x
+    x = (DTYPE*) malloc_aligned(sizeof(DTYPE) * self->params.krnl_mat_size * n_vec, 64);
+    y = (DTYPE*) malloc_aligned(sizeof(DTYPE) * self->params.krnl_mat_size * n_vec, 64);
+    if (x == NULL || y == NULL)
+    {
+        PyErr_SetString(PyExc_ValueError, "Allocate vector storage failed!\n");
+        return NULL;
+    } 
+    for (int i = 0; i < n_vec; i++)
+        for (int j = 0; j < self->params.krnl_mat_size; j++)
+            x[i * self->params.krnl_mat_size + j] = *((double*)PyArray_GETPTR2(x_in, j, i));
+
+
+    //  MatMul
+    H2P_matmul(self->h2mat, CblasColMajor, n_vec, x, self->params.krnl_mat_size, y, self->params.krnl_mat_size);
+
+    //  Return the result
+    npy_intp dim[] = {self->params.krnl_mat_size, n_vec};
+    y_out = (PyArrayObject *)PyArray_SimpleNew(2, dim, PyArray_DOUBLE);
+    for (int i = 0; i < n_vec; i++)
+        for (int j = 0; j < self->params.krnl_mat_size; j++)
+            *(double*)PyArray_GETPTR2(y_out, j, i) = y[i * self->params.krnl_mat_size + j];
 
     free_aligned(x);
     free_aligned(y);

@@ -155,7 +155,7 @@ int main(int argc, char **argv)
 
     parse_RPY_Ewald_params(argc, argv);
 
-    H2Pack_t ph2mat;
+    H2Pack_p ph2mat;
     
     H2P_init(&ph2mat, test_params.pt_dim, test_params.krnl_dim, QR_REL_NRM, &test_params.rel_tol);
 
@@ -176,7 +176,7 @@ int main(int argc, char **argv)
     );
 
     // Generate surface proxy points
-    H2P_dense_mat_t *pp;
+    H2P_dense_mat_p *pp;
     DTYPE max_L = ph2mat->enbox[ph2mat->root_idx * 2 * test_params.pt_dim + test_params.pt_dim];
     int min_level = ph2mat->min_adm_level;
     int max_level = ph2mat->max_level;
@@ -233,8 +233,8 @@ int main(int argc, char **argv)
     // Get reference results
     direct_nbody(
         RPY_Ewald_param, test_params.pkrnl_eval, test_params.pt_dim, test_params.krnl_dim, 
-        ph2mat->coord,              test_params.n_point, test_params.n_point, x, 
-        ph2mat->coord + check_pt_s, test_params.n_point, n_check_pt,          y0
+        test_params.coord,              test_params.n_point, test_params.n_point, x, 
+        test_params.coord + check_pt_s, test_params.n_point, n_check_pt,          y0
     );
 
     // Verify H2 matvec results
@@ -252,12 +252,7 @@ int main(int argc, char **argv)
     printf("For %d validation points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / ref_norm);
 
     // Test matvec performance
-    ph2mat->n_matvec = 0;
-    ph2mat->timers[_MV_FW_TIMER_IDX]  = 0.0;
-    ph2mat->timers[_MV_MID_TIMER_IDX] = 0.0;
-    ph2mat->timers[_MV_BW_TIMER_IDX]  = 0.0;
-    ph2mat->timers[_MV_DEN_TIMER_IDX] = 0.0;
-    ph2mat->timers[_MV_RDC_TIMER_IDX] = 0.0;
+    H2P_reset_timers(ph2mat);
     for (int i = 0; i < n_vec; i++) 
     {
         DTYPE *x_i  = x  + i * krnl_mat_size;
@@ -294,5 +289,7 @@ int main(int argc, char **argv)
     free(y1);
     free(y2);
     free(ewald_workbuf);
-    H2P_destroy(ph2mat);
+    H2P_destroy(&ph2mat);
+
+    return 0;
 }

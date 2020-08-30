@@ -27,7 +27,7 @@ typedef struct{
 typedef struct{
     PyObject_HEAD
     //  H2 matrix pointer
-    H2Pack_t h2mat;
+    H2Pack_p h2mat;
     //  H2 matrix parameters
     H2Pack_Params params;
     //  Indicate whether h2mat has been built

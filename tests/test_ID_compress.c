@@ -15,7 +15,7 @@ int main()
     int nrow, ncol;
     printf("matrix size: ");
     scanf("%d %d", &nrow, &ncol);
-    H2P_dense_mat_t A, A0, U;
+    H2P_dense_mat_p A, A0, U;
     H2P_dense_mat_init(&A, nrow, ncol);
     H2P_dense_mat_init(&A0, nrow, ncol);
     
@@ -68,7 +68,7 @@ int main()
     fclose(ouf);
     */
 
-    H2P_int_vec_t J;
+    H2P_int_vec_p J;
     H2P_int_vec_init(&J, nrow);
     DTYPE tol_norm;
     printf("norm_rel_tol: ");
@@ -132,9 +132,9 @@ int main()
     free(y1);
     free(x2);
     free(y2);
-    H2P_int_vec_destroy(J);
-    H2P_dense_mat_destroy(U);
-    H2P_dense_mat_destroy(A);
-    H2P_dense_mat_destroy(A0);
+    H2P_int_vec_destroy(&J);
+    H2P_dense_mat_destroy(&U);
+    H2P_dense_mat_destroy(&A);
+    H2P_dense_mat_destroy(&A0);
     return 0;
 }

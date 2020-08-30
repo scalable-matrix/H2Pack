@@ -14,7 +14,7 @@
 #include "utils.h"
 
 // Build periodic block for root node
-void H2P_build_periodic_block(H2Pack_t h2pack)
+void H2P_build_periodic_block(H2Pack_p h2pack)
 {
     int pt_dim    = h2pack->pt_dim;
     int xpt_dim   = h2pack->xpt_dim;
@@ -25,9 +25,9 @@ void H2P_build_periodic_block(H2Pack_t h2pack)
     void  *pkrnl_param  = h2pack->pkrnl_param;
     DTYPE *enbox0_width = h2pack->enbox + (root_idx * (2 * pt_dim) + pt_dim);
     DTYPE *per_lattices = h2pack->per_lattices;
-    H2P_dense_mat_t  root_J_coord   = h2pack->J_coord[root_idx];
-    H2P_dense_mat_t  root_J_coord_s = h2pack->tb[0]->mat0;
-    H2P_dense_mat_t  krnl_mat_blk   = h2pack->tb[0]->mat1;
+    H2P_dense_mat_p  root_J_coord   = h2pack->J_coord[root_idx];
+    H2P_dense_mat_p  root_J_coord_s = h2pack->tb[0]->mat0;
+    H2P_dense_mat_p  krnl_mat_blk   = h2pack->tb[0]->mat1;
     kernel_eval_fptr krnl_eval  = h2pack->krnl_eval;
     kernel_eval_fptr pkrnl_eval = h2pack->pkrnl_eval;
 
@@ -45,8 +45,8 @@ void H2P_build_periodic_block(H2Pack_t h2pack)
     DTYPE shift[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     H2P_dense_mat_resize(krnl_mat_blk, per_blk_size, per_blk_size);
     H2P_dense_mat_resize(root_J_coord_s, xpt_dim, n_point_root);
-    H2P_copy_matrix_block(
-        xpt_dim, n_point_root, root_J_coord->data, root_J_coord->ld, 
+    copy_matrix_block(
+        sizeof(DTYPE), xpt_dim, n_point_root, root_J_coord->data, root_J_coord->ld, 
         root_J_coord_s->data, root_J_coord_s->ld
     );
     for (int l = 0; l < n_lattice; l++)
@@ -76,13 +76,14 @@ void H2P_build_periodic_block(H2Pack_t h2pack)
 // Build H2 representation with a regular kernel function and
 // a periodic system kernel (Ewald summation) function
 void H2P_build_periodic(
-    H2Pack_t h2pack, H2P_dense_mat_t *pp, const int BD_JIT, 
+    H2Pack_p h2pack, H2P_dense_mat_p *pp, const int BD_JIT, 
     void *krnl_param,  kernel_eval_fptr krnl_eval, 
     void *pkrnl_param, kernel_eval_fptr pkrnl_eval, 
     kernel_mv_fptr krnl_mv, const int krnl_mv_flops
 )
 {
     double st, et;
+    double *timers = h2pack->timers;
 
     if (pp == NULL)
     {
@@ -117,23 +118,40 @@ void H2P_build_periodic(
     st = get_wtime_sec();
     H2P_build_H2_UJ_proxy(h2pack);
     et = get_wtime_sec();
-    h2pack->timers[_U_BUILD_TIMER_IDX] = et - st;
+    timers[_U_BUILD_TIMER_IDX] = et - st;
 
     // 2. Generate H2 generator matrices metadata
     st = get_wtime_sec();
     H2P_generate_B_metadata(h2pack);
     et = get_wtime_sec();
-    h2pack->timers[_B_BUILD_TIMER_IDX] = et - st;
+    timers[_B_BUILD_TIMER_IDX] = et - st;
     
     // 3. Generate H2 dense blocks metadata
     st = get_wtime_sec();
     H2P_generate_D_metadata(h2pack);
     et = get_wtime_sec();
-    h2pack->timers[_D_BUILD_TIMER_IDX] = et - st;
+    timers[_D_BUILD_TIMER_IDX] = et - st;
 
     // 4. Build periodic block for root node, add its timing to B build timing
     st = get_wtime_sec();
     H2P_build_periodic_block(h2pack);
     et = get_wtime_sec();
-    h2pack->timers[_B_BUILD_TIMER_IDX] = et - st;
+    timers[_B_BUILD_TIMER_IDX] = et - st;
+
+    // 5. Set up forward and backward permutation indices
+    int n_point    = h2pack->n_point;
+    int krnl_dim   = h2pack->krnl_dim;
+    int *coord_idx = h2pack->coord_idx;
+    int *fwd_pmt_idx = (int*) malloc(sizeof(int) * n_point * krnl_dim);
+    int *bwd_pmt_idx = (int*) malloc(sizeof(int) * n_point * krnl_dim);
+    for (int i = 0; i < n_point; i++)
+    {
+        for (int j = 0; j < krnl_dim; j++)
+        {
+            fwd_pmt_idx[i * krnl_dim + j] = coord_idx[i] * krnl_dim + j;
+            bwd_pmt_idx[coord_idx[i] * krnl_dim + j] = i * krnl_dim + j;
+        }
+    }
+    h2pack->fwd_pmt_idx = fwd_pmt_idx;
+    h2pack->bwd_pmt_idx = bwd_pmt_idx;
 }

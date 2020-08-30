@@ -9,9 +9,9 @@
 #include "block_jacobi_precond.h"
 
 // Construct a block_jacobi_precond from a H2Pack structure
-void H2P_build_block_jacobi_precond(H2Pack_t h2pack, const DTYPE shift, block_jacobi_precond_t *precond_)
+void H2P_build_block_jacobi_precond(H2Pack_p h2pack, const DTYPE shift, block_jacobi_precond_p *precond_)
 {
-    block_jacobi_precond_t precond = (block_jacobi_precond_t) malloc(sizeof(block_jacobi_precond_s));
+    block_jacobi_precond_p precond = (block_jacobi_precond_p) malloc(sizeof(block_jacobi_precond_s));
     assert(precond != NULL);
 
     int   n_point     = h2pack->n_point;
@@ -91,7 +91,7 @@ void H2P_build_block_jacobi_precond(H2Pack_t h2pack, const DTYPE shift, block_ja
 }
 
 // Apply block Jacobi preconditioner, x := M_{BJP}^{-1} * b
-void block_jacobi_precond_apply(block_jacobi_precond_t precond, const DTYPE *b, DTYPE *x)
+void block_jacobi_precond_apply(block_jacobi_precond_p precond, const DTYPE *b, DTYPE *x)
 {
     if (precond == NULL) return;
     
@@ -121,18 +121,20 @@ void block_jacobi_precond_apply(block_jacobi_precond_t precond, const DTYPE *b, 
 }
 
 // Destroy a block_jacobi_precond structure
-void block_jacobi_precond_destroy(block_jacobi_precond_t precond)
+void block_jacobi_precond_destroy(block_jacobi_precond_p *precond_)
 {
+    block_jacobi_precond_p precond = *precond_;
     if (precond == NULL) return;
     free(precond->blk_sizes);
     free(precond->blk_displs);
     free(precond->blk_inv);
     free(precond->blk_inv_ptr);
     free(precond);
+    *precond_ = NULL;
 }
 
 // Print statistic info of a FSAI_precond structure
-void block_jacobi_precond_print_stat(block_jacobi_precond_t precond)
+void block_jacobi_precond_print_stat(block_jacobi_precond_p precond)
 {
     if (precond == NULL) return;
     printf(

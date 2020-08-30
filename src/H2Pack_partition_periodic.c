@@ -23,8 +23,8 @@
 // Output parameter:
 //   per_partition_vars : H2Pack structure reduced (in)admissible pairs
 void H2P_calc_reduced_adm_pairs_per(
-    H2Pack_t h2pack, const DTYPE alpha, const int n0, const int n1, 
-    const DTYPE *shift, const int lattice_id, H2P_partition_vars_t part_vars
+    H2Pack_p h2pack, const DTYPE alpha, const int n0, const int n1, 
+    const DTYPE *shift, const int lattice_id, H2P_partition_vars_p part_vars
 )
 {
     int   pt_dim    = h2pack->pt_dim;
@@ -148,7 +148,7 @@ void H2P_calc_reduced_adm_pairs_per(
 
 // Partition points for a H2 tree
 void H2P_partition_points_periodic(
-    H2Pack_t h2pack, const int n_point, const DTYPE *coord, int max_leaf_points, 
+    H2Pack_p h2pack, const int n_point, const DTYPE *coord, int max_leaf_points, 
     DTYPE max_leaf_size, DTYPE *unit_cell
 )
 {
@@ -158,7 +158,7 @@ void H2P_partition_points_periodic(
     
     st = get_wtime_sec();
 
-    H2P_partition_vars_t part_vars;
+    H2P_partition_vars_p part_vars;
     H2P_partition_vars_init(&part_vars);
     
     // 1. Copy input point coordinates
@@ -170,8 +170,8 @@ void H2P_partition_points_periodic(
     }
     h2pack->max_leaf_points = max_leaf_points;
     h2pack->max_leaf_size   = max_leaf_size;
-    h2pack->coord_idx = (int*)   malloc(sizeof(int)   * n_point);
-    h2pack->coord     = (DTYPE*) malloc(sizeof(DTYPE) * n_point * xpt_dim);
+    h2pack->coord_idx       = (int*)   malloc(sizeof(int)   * n_point);
+    h2pack->coord           = (DTYPE*) malloc(sizeof(DTYPE) * n_point * xpt_dim);
     ASSERT_PRINTF(
         h2pack->coord != NULL && h2pack->coord_idx != NULL,
         "Failed to allocate matrix of size %d * %d for storing point coordinates\n", 
@@ -188,7 +188,7 @@ void H2P_partition_points_periodic(
         "Failed to allocate matrix of size %d * %d for temporarily storing point coordinates\n", 
         pt_dim, n_point
     );
-    H2P_tree_node_t root = H2P_bisection_partition_points(
+    H2P_tree_node_p root = H2P_bisection_partition_points(
         0, 0, n_point-1, pt_dim, xpt_dim, n_point, 
         max_leaf_size, max_leaf_points, unit_cell, 
         h2pack->coord, coord_tmp, h2pack->coord_idx, coord_idx_tmp, part_vars
@@ -237,7 +237,7 @@ void H2P_partition_points_periodic(
     memset(h2pack->height_n_node, 0, int_max_level_msize);
     H2P_tree_to_array(root, h2pack);
     h2pack->parent[h2pack->root_idx] = -1;  // Root node doesn't have parent
-    H2P_tree_node_destroy(root);  // We don't need the linked list H2 tree anymore
+    H2P_tree_node_destroy(&root);  // We don't need the linked list H2 tree anymore
     
     // In H2ERI, mat_cluster and krnl_mat_size will be set outside and we don't need xT, yT
     if (h2pack->is_H2ERI == 0)
@@ -250,8 +250,14 @@ void H2P_partition_points_periodic(
             h2pack->mat_cluster[i21] = h2pack->krnl_dim * (h2pack->pt_cluster[i21] + 1) - 1;
         }
         h2pack->krnl_mat_size = h2pack->krnl_dim * h2pack->n_point;
-        h2pack->xT = (DTYPE*) malloc(sizeof(DTYPE) * h2pack->krnl_mat_size);
-        h2pack->yT = (DTYPE*) malloc(sizeof(DTYPE) * h2pack->krnl_mat_size);
+        h2pack->xT    = (DTYPE*) malloc(sizeof(DTYPE) * h2pack->krnl_mat_size);
+        h2pack->yT    = (DTYPE*) malloc(sizeof(DTYPE) * h2pack->krnl_mat_size);
+        h2pack->pmt_x = (DTYPE*) malloc(sizeof(DTYPE) * h2pack->krnl_mat_size * h2pack->mm_max_n_vec);
+        h2pack->pmt_y = (DTYPE*) malloc(sizeof(DTYPE) * h2pack->krnl_mat_size * h2pack->mm_max_n_vec);
+        ASSERT_PRINTF(
+            h2pack->xT != NULL && h2pack->yT != NULL && h2pack->pmt_x != NULL && h2pack->pmt_y != NULL,
+            "Failed to allocate working arrays of size %d for matvec & matmul\n", 2 * h2pack->krnl_mat_size * (h2pack->mm_max_n_vec+1)
+        );
     }
     
     // 4. Calculate reduced (in)admissible pairs
@@ -298,7 +304,7 @@ void H2P_partition_points_periodic(
     }
 
     // 6. Initialize thread-local buffer
-    h2pack->tb = (H2P_thread_buf_t*) malloc(sizeof(H2P_thread_buf_t) * h2pack->n_thread);
+    h2pack->tb = (H2P_thread_buf_p*) malloc(sizeof(H2P_thread_buf_p) * h2pack->n_thread);
     ASSERT_PRINTF(h2pack->tb != NULL, "Failed to allocate %d thread buffers\n", h2pack->n_thread);
     for (int i = 0; i < h2pack->n_thread; i++)
         H2P_thread_buf_init(&h2pack->tb[i], h2pack->krnl_mat_size);
@@ -326,7 +332,7 @@ void H2P_partition_points_periodic(
     free(DAG_src_ptr);
     free(DAG_dst_idx);
 
-    H2P_partition_vars_destroy(part_vars);
+    H2P_partition_vars_destroy(&part_vars);
 
     et = get_wtime_sec();
     h2pack->timers[_PT_TIMER_IDX] = et - st;

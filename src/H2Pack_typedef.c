@@ -10,13 +10,13 @@
 #include "H2Pack_aux_structs.h"
 #include "DAG_task_queue.h"
 
-// Initialize a H2Pack structure
+// Initialize an H2Pack structure
 void H2P_init(
-    H2Pack_t *h2pack_, const int pt_dim, const int krnl_dim, 
+    H2Pack_p *h2pack_, const int pt_dim, const int krnl_dim, 
     const int QR_stop_type, void *QR_stop_param
 )
 {
-    H2Pack_t h2pack = (H2Pack_t) malloc(sizeof(struct H2Pack));
+    H2Pack_p h2pack = (H2Pack_p) malloc(sizeof(struct H2Pack));
     ASSERT_PRINTF(h2pack != NULL, "Failed to allocate H2Pack structure\n");
     memset(h2pack, 0, sizeof(struct H2Pack));
     
@@ -62,6 +62,8 @@ void H2P_init(
     h2pack->node_n_r_inadm      = NULL;
     h2pack->node_n_r_adm        = NULL;
     h2pack->coord_idx           = NULL;
+    h2pack->fwd_pmt_idx         = NULL;
+    h2pack->bwd_pmt_idx         = NULL;
     h2pack->B_p2i_rowptr        = NULL;
     h2pack->B_p2i_colidx        = NULL;
     h2pack->B_p2i_val           = NULL;
@@ -78,6 +80,7 @@ void H2P_init(
     h2pack->D_ptr               = NULL;
     h2pack->coord               = NULL;
     h2pack->enbox               = NULL;
+    h2pack->root_enbox          = NULL;
     h2pack->per_lattices        = NULL;
     h2pack->per_adm_shifts      = NULL;
     h2pack->per_inadm_shifts    = NULL;
@@ -86,6 +89,8 @@ void H2P_init(
     h2pack->per_blk             = NULL;
     h2pack->xT                  = NULL;
     h2pack->yT                  = NULL;
+    h2pack->pmt_x               = NULL;
+    h2pack->pmt_y               = NULL;
     h2pack->J                   = NULL;
     h2pack->ULV_idx             = NULL;
     h2pack->J_coord             = NULL;
@@ -98,14 +103,11 @@ void H2P_init(
     h2pack->tb                  = NULL;
     h2pack->upward_tq           = NULL;
 
-    h2pack->print_timers = 0;
-    char *print_timers_p = getenv("H2P_PRINT_TIMERS");
-    if (print_timers_p != NULL)
-    {
-        h2pack->print_timers = atoi(print_timers_p);
-        if (h2pack->print_timers != 0) h2pack->print_timers = 1;
-        if (h2pack->print_timers == 1) INFO_PRINTF("H2Pack will print internal timers for performance analysis\n");
-    }
+    GET_ENV_INT_VAR(h2pack->mm_max_n_vec,  "H2P_MM_MAX_N_VEC",  "mm_max_n_vec",  128, 4, 1024);
+    GET_ENV_INT_VAR(h2pack->print_timers,  "H2P_PRINT_TIMERS",  "print_timers",    0, 0,    1);
+    GET_ENV_INT_VAR(h2pack->print_dbginfo, "H2P_PRINT_DBGINFO", "print_dbginfo",   0, 0,    1);
+    if (h2pack->print_timers  == 1) INFO_PRINTF("H2Pack will print internal timers for performance analysis\n");
+    if (h2pack->print_dbginfo == 1) INFO_PRINTF("H2Pack will print debug information\n");
     
     H2P_int_vec_init(&h2pack->B_blk,  h2pack->n_thread * BD_NTASK_THREAD + 5);
     H2P_int_vec_init(&h2pack->D_blk0, h2pack->n_thread * BD_NTASK_THREAD + 5);
@@ -115,7 +117,7 @@ void H2P_init(
 }
 
 // Run H2Pack in HSS mode (by default, H2Pack runs in H2 mode)
-void H2P_run_HSS(H2Pack_t h2pack) 
+void H2P_run_HSS(H2Pack_p h2pack) 
 {
     if (h2pack == NULL) return;
     h2pack->is_HSS = 1;
@@ -123,7 +125,7 @@ void H2P_run_HSS(H2Pack_t h2pack)
 }
 
 // Run the RPY kernel in H2Pack
-void H2P_run_RPY(H2Pack_t h2pack) 
+void H2P_run_RPY(H2Pack_p h2pack) 
 {
     if (h2pack == NULL) return;
     //if (h2pack->is_HSS == 1) WARNING_PRINTF("Running RPY kernel in HSS mode will be very slow, please consider using H2 mode\n");
@@ -175,7 +177,7 @@ const DTYPE per_lattices_3d[27 * 3] = {
 };
 
 // Run the RPY Ewald summation kernel in H2Pack
-void H2P_run_RPY_Ewald(H2Pack_t h2pack)
+void H2P_run_RPY_Ewald(H2Pack_p h2pack)
 {
     if (h2pack == NULL) return;
     if (h2pack->is_HSS == 1 || h2pack->is_RPY == 1)
@@ -202,9 +204,11 @@ void H2P_run_RPY_Ewald(H2Pack_t h2pack)
     }
 }
 
-// Destroy a H2Pack structure
-void H2P_destroy(H2Pack_t h2pack)
+// Destroy an H2Pack structure
+void H2P_destroy(H2Pack_p *h2pack_)
 {
+    H2Pack_p h2pack = *h2pack_;
+
     if (h2pack == NULL) return;
     
     free(h2pack->parent);
@@ -226,6 +230,8 @@ void H2P_destroy(H2Pack_t h2pack)
     free(h2pack->node_n_r_inadm);
     free(h2pack->node_n_r_adm);
     free(h2pack->coord_idx);
+    free(h2pack->fwd_pmt_idx);
+    free(h2pack->bwd_pmt_idx);
     free(h2pack->B_p2i_rowptr);
     free(h2pack->B_p2i_colidx);
     free(h2pack->B_p2i_val);
@@ -241,6 +247,7 @@ void H2P_destroy(H2Pack_t h2pack)
     free(h2pack->D_ptr);
     free(h2pack->coord);
     free(h2pack->enbox);
+    free(h2pack->root_enbox);
     free(h2pack->per_lattices);
     free(h2pack->per_adm_shifts);
     free(h2pack->per_inadm_shifts);
@@ -249,46 +256,48 @@ void H2P_destroy(H2Pack_t h2pack)
     free_aligned(h2pack->per_blk);
     free(h2pack->xT);
     free(h2pack->yT);
-    DAG_task_queue_free(h2pack->upward_tq);
+    free(h2pack->pmt_x);
+    free(h2pack->pmt_y);
+    DAG_task_queue_destroy(&h2pack->upward_tq);
     
-    if (h2pack->B_blk  != NULL) H2P_int_vec_destroy(h2pack->B_blk);
-    if (h2pack->D_blk0 != NULL) H2P_int_vec_destroy(h2pack->D_blk0);
-    if (h2pack->D_blk1 != NULL) H2P_int_vec_destroy(h2pack->D_blk1);
+    if (h2pack->B_blk  != NULL) H2P_int_vec_destroy(&h2pack->B_blk);
+    if (h2pack->D_blk0 != NULL) H2P_int_vec_destroy(&h2pack->D_blk0);
+    if (h2pack->D_blk1 != NULL) H2P_int_vec_destroy(&h2pack->D_blk1);
     
     // If H2Pack is called from H2P-ERI, pp == J == J_coord == NULL
     
     if (h2pack->pp != NULL)
     {
         for (int i = 0; i <= h2pack->max_level; i++)
-            H2P_dense_mat_destroy(h2pack->pp[i]);
+            H2P_dense_mat_destroy(&h2pack->pp[i]);
         free(h2pack->pp);
     }
     
     if (h2pack->J != NULL)
     {
         for (int i = 0; i < h2pack->n_UJ; i++)
-            H2P_int_vec_destroy(h2pack->J[i]);
+            H2P_int_vec_destroy(&h2pack->J[i]);
         free(h2pack->J);
     }
     
     if (h2pack->ULV_idx != NULL)
     {
         for (int i = 0; i < h2pack->n_node; i++)
-            H2P_int_vec_destroy(h2pack->ULV_idx[i]);
+            H2P_int_vec_destroy(&h2pack->ULV_idx[i]);
         free(h2pack->ULV_idx);
     }
 
     if (h2pack->ULV_p != NULL)
     {
         for (int i = 0; i < h2pack->n_node; i++)
-            H2P_int_vec_destroy(h2pack->ULV_p[i]);
+            H2P_int_vec_destroy(&h2pack->ULV_p[i]);
         free(h2pack->ULV_p);
     }
 
     if (h2pack->J_coord != NULL)
     {
         for (int i = 0; i < h2pack->n_UJ; i++)
-            H2P_dense_mat_destroy(h2pack->J_coord[i]);
+            H2P_dense_mat_destroy(&h2pack->J_coord[i]);
         free(h2pack->J_coord);
     }
     
@@ -296,7 +305,7 @@ void H2P_destroy(H2Pack_t h2pack)
     if (h2pack->U != NULL)
     {
         for (int i = 0; i < h2pack->n_UJ; i++)
-            H2P_dense_mat_destroy(h2pack->U[i]);
+            H2P_dense_mat_destroy(&h2pack->U[i]);
         free(h2pack->U);
     }
 
@@ -304,8 +313,8 @@ void H2P_destroy(H2Pack_t h2pack)
     {
         for (int i = 0; i < h2pack->n_node; i++)
         {
-            H2P_dense_mat_destroy(h2pack->ULV_Q[i]);
-            H2P_dense_mat_destroy(h2pack->ULV_L[i]);
+            H2P_dense_mat_destroy(&h2pack->ULV_Q[i]);
+            H2P_dense_mat_destroy(&h2pack->ULV_L[i]);
         }
         free(h2pack->ULV_Q);
         free(h2pack->ULV_L);
@@ -316,8 +325,8 @@ void H2P_destroy(H2Pack_t h2pack)
     {
         for (int i = 0; i < h2pack->n_node; i++)
         {
-            H2P_dense_mat_destroy(h2pack->y0[i]);
-            H2P_dense_mat_destroy(h2pack->y1[i]);
+            H2P_dense_mat_destroy(&h2pack->y0[i]);
+            H2P_dense_mat_destroy(&h2pack->y1[i]);
         }
         free(h2pack->y0);
         free(h2pack->y1);
@@ -326,13 +335,16 @@ void H2P_destroy(H2Pack_t h2pack)
     if (h2pack->tb != NULL)
     {
         for (int i = 0; i < h2pack->n_thread; i++)
-            H2P_thread_buf_destroy(h2pack->tb[i]);
+            H2P_thread_buf_destroy(&h2pack->tb[i]);
         free(h2pack->tb);
     }
+
+    free(h2pack);
+    *h2pack_ = NULL;
 }
 
-// Print statistic info of a H2Pack structure
-void H2P_print_statistic(H2Pack_t h2pack)
+// Print statistic info of an H2Pack structure
+void H2P_print_statistic(H2Pack_p h2pack)
 {
     if (h2pack == NULL) return;
     if (h2pack->n_node == 0)
@@ -380,12 +392,12 @@ void H2P_print_statistic(H2Pack_t h2pack)
     double U_MB   = (double) mat_size[_U_SIZE_IDX]      * DTYPE_MB;
     double B_MB   = (double) mat_size[_B_SIZE_IDX]      * DTYPE_MB;
     double D_MB   = (double) mat_size[_D_SIZE_IDX]      * DTYPE_MB;
-    double fw_MB  = (double) mat_size[_MV_FW_SIZE_IDX]  * DTYPE_MB;
+    double fwd_MB = (double) mat_size[_MV_FWD_SIZE_IDX] * DTYPE_MB;
     double mid_MB = (double) mat_size[_MV_MID_SIZE_IDX] * DTYPE_MB;
-    double bw_MB  = (double) mat_size[_MV_BW_SIZE_IDX]  * DTYPE_MB;
+    double bwd_MB = (double) mat_size[_MV_BWD_SIZE_IDX] * DTYPE_MB;
     double den_MB = (double) mat_size[_MV_DEN_SIZE_IDX] * DTYPE_MB;
-    double rdc_MB = (double) mat_size[_MV_RDC_SIZE_IDX] * DTYPE_MB;
-    double mv_MB  = fw_MB + mid_MB + bw_MB + den_MB;
+    double vop_MB = (double) mat_size[_MV_VOP_SIZE_IDX] * DTYPE_MB;
+    double mv_MB  = fwd_MB + mid_MB + bwd_MB + den_MB;
     double UBD_k  = 0.0;
     UBD_k += (double) mat_size[_U_SIZE_IDX];
     UBD_k += (double) mat_size[_B_SIZE_IDX];
@@ -394,7 +406,7 @@ void H2P_print_statistic(H2Pack_t h2pack)
     double matvec_MB = 0.0;
     for (int i = 0; i < h2pack->n_thread; i++)
     {
-        H2P_thread_buf_t tbi = h2pack->tb[i];
+        H2P_thread_buf_p tbi = h2pack->tb[i];
         double msize0 = (double) tbi->mat0->size     + (double) tbi->mat1->size;
         double msize1 = (double) tbi->idx0->capacity + (double) tbi->idx1->capacity;
         matvec_MB += DTYPE_MB * msize0 + int_MB * msize1;
@@ -404,8 +416,8 @@ void H2P_print_statistic(H2Pack_t h2pack)
     {
         for (int i = 0; i < h2pack->n_node; i++)
         {
-            H2P_dense_mat_t y0i = h2pack->y0[i];
-            H2P_dense_mat_t y1i = h2pack->y1[i];
+            H2P_dense_mat_p y0i = h2pack->y0[i];
+            H2P_dense_mat_p y1i = h2pack->y1[i];
             matvec_MB += DTYPE_MB * (y0i->size + y1i->size);
         }
     }
@@ -452,19 +464,19 @@ void H2P_print_statistic(H2Pack_t h2pack)
     {
         printf("H2Pack does not have matvec timings results yet.\n");
     } else {
-        double fw_t  = timers[_MV_FW_TIMER_IDX]  / d_n_matvec;
+        double fwd_t = timers[_MV_FWD_TIMER_IDX] / d_n_matvec;
         double mid_t = timers[_MV_MID_TIMER_IDX] / d_n_matvec;
-        double bw_t  = timers[_MV_BW_TIMER_IDX]  / d_n_matvec;
+        double bwd_t = timers[_MV_BWD_TIMER_IDX] / d_n_matvec;
         double den_t = timers[_MV_DEN_TIMER_IDX] / d_n_matvec;
-        double rdc_t = timers[_MV_RDC_TIMER_IDX] / d_n_matvec;
-        matvec_t = fw_t + mid_t + bw_t + den_t + rdc_t;
+        double vop_t = timers[_MV_VOP_TIMER_IDX] / d_n_matvec;
+        matvec_t = fwd_t + mid_t + bwd_t + den_t + vop_t;
         printf(
             "  * H2 matvec average time (sec) = %.3lf, %.2lf GB/s\n", 
             matvec_t, mv_MB / matvec_t / 1024.0
         );
         printf(
             "      |----> Forward transformation      = %.3lf, %.2lf GB/s\n", 
-            fw_t, fw_MB / fw_t / 1024.0
+            fwd_t, fwd_MB / fwd_t / 1024.0
         );
         if (h2pack->BD_JIT == 0)
         {
@@ -481,7 +493,7 @@ void H2P_print_statistic(H2Pack_t h2pack)
         }
         printf(
             "      |----> Backward transformation     = %.3lf, %.2lf GB/s\n", 
-            bw_t, bw_MB / bw_t / 1024.0
+            bwd_t, bwd_MB / bwd_t / 1024.0
         );
         if (h2pack->BD_JIT == 0)
         {
@@ -496,9 +508,10 @@ void H2P_print_statistic(H2Pack_t h2pack)
                 den_t, GFLOPS / den_t
             );
         }
+        vop_MB /= d_n_matvec;
         printf(
-            "      |----> OpenMP reduction            = %.3lf, %.2lf GB/s\n", 
-            rdc_t, rdc_MB / rdc_t / 1024.0
+            "      |----> OpenMP vector operations    = %.3lf, %.2lf GB/s\n", 
+            vop_t, vop_MB / vop_t / 1024.0
         );
     }
 
@@ -512,3 +525,14 @@ void H2P_print_statistic(H2Pack_t h2pack)
     printf("=============================================================\n");
 }
 
+// Reset timing statistical info of an H2Pack structure
+void H2P_reset_timers(H2Pack_p h2pack)
+{
+    h2pack->n_matvec = 0;
+    h2pack->mat_size[_MV_VOP_SIZE_IDX] = 0;
+    h2pack->timers[_MV_FWD_TIMER_IDX]  = 0.0;
+    h2pack->timers[_MV_MID_TIMER_IDX]  = 0.0;
+    h2pack->timers[_MV_BWD_TIMER_IDX]  = 0.0;
+    h2pack->timers[_MV_DEN_TIMER_IDX]  = 0.0;
+    h2pack->timers[_MV_VOP_TIMER_IDX]  = 0.0;
+}

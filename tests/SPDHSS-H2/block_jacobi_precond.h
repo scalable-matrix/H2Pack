@@ -18,7 +18,7 @@ struct block_jacobi_precond
     double mem_MB;
 };
 typedef struct block_jacobi_precond  block_jacobi_precond_s;
-typedef struct block_jacobi_precond* block_jacobi_precond_t;
+typedef struct block_jacobi_precond* block_jacobi_precond_p;
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,7 +30,7 @@ extern "C" {
 //   shift  : Diagonal shifting of the target matrix
 // Output parameter:
 //   *precond_ : Constructed block_jacobi_precond structure
-void H2P_build_block_jacobi_precond(H2Pack_t h2pack, const DTYPE shift, block_jacobi_precond_t *precond_);
+void H2P_build_block_jacobi_precond(H2Pack_p h2pack, const DTYPE shift, block_jacobi_precond_p *precond_);
 
 // Apply block Jacobi preconditioner, x := M_{BJP}^{-1} * b
 // Input parameters:
@@ -38,17 +38,17 @@ void H2P_build_block_jacobi_precond(H2Pack_t h2pack, const DTYPE shift, block_ja
 //   b       : Size precond->mat_size, input vector
 // Output parameter:
 //   x : Size precond->mat_size, output vector
-void block_jacobi_precond_apply(block_jacobi_precond_t precond, const DTYPE *b, DTYPE *x);
+void block_jacobi_precond_apply(block_jacobi_precond_p precond, const DTYPE *b, DTYPE *x);
 
 // Destroy a block_jacobi_precond structure
 // Input parameter:
 //   precond : A block_jacobi_precond structure to be destroyed
-void block_jacobi_precond_destroy(block_jacobi_precond_t precond);
+void block_jacobi_precond_destroy(block_jacobi_precond_p *precond_);
 
 // Print statistic info of a block_jacobi_precond structure
 // Input parameter:
 //   precond : block_jacobi_precond structure whose statistic info to be printed
-void block_jacobi_precond_print_stat(block_jacobi_precond_t precond);
+void block_jacobi_precond_print_stat(block_jacobi_precond_p precond);
 
 #ifdef __cplusplus
 }

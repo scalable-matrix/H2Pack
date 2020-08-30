@@ -19,6 +19,20 @@
 #define _GEN_PP_ID_T_IDX    2
 #define _GEN_PP_MISC_T_IDX  3
 
+struct H2P_gen_pp_param_
+{
+    int alg;            // Algorithm for selecting Yp proxy points
+                        // 0 : Uniform candidate point distribution, one QR
+                        // 1 : Nonuniform candidate point distribution, one QR
+                        // 2 : Nonuniform candidate point distribution, multiple QR
+    int X0_size;        // Number of candidate points in X
+    int Y0_lsize;       // Number of candidate points in Y per layer
+    int L3_nlayer;      // Y box exterior boundary size factor
+    int max_layer;      // Maximum number of layers in domain Y
+    int print_timers;   // If we need to print internal timings
+};
+static struct H2P_gen_pp_param_ gen_pp_param;
+
 // Generate proxy points with two domains specified as 
 // X = [-L1/2, L1/2]^pt_dim, Y = [-L3/2, L3/2]^pt_dim \ [-L2/2, L2/2]^pt_dim
 // generated proxy points are in domain Y
@@ -28,13 +42,10 @@
 //   reltol     : Proxy point selection relative error tolerance
 //   krnl_param : Pointer to kernel function parameter array
 //   krnl_eval  : Pointer to kernel matrix evaluation function
+//   L1, L2, L3 : Box sizes of X and Y
+//   alg        : Algorithm for selecting Yp proxy points
 //   X0_size    : Number of candidate points in X
 //   Y0_lsize   : Number of candidate points in Y per layer
-//   L1, L2, L3 : Box sizes of X and Y
-//   alg        : Algorithm for selecting Yp proxy points. 
-//                0 : Uniform candidate point distribution, one QR
-//                1 : Nonuniform candidate point distribution, one QR
-//                2 : Nonuniform candidate point distribution, multiple QR
 //   max_layer  : Maximum number of layers in domain Y
 // Output parameters:
 //   pp     : Generated proxy points, pp should have been initialized 
@@ -42,8 +53,9 @@
 void H2P_generate_proxy_point_nlayer(
     const int pt_dim, const int krnl_dim, const DTYPE reltol, 
     const void *krnl_param, kernel_eval_fptr krnl_eval, 
-    const int X0_size, const int Y0_lsize, const DTYPE L1, const DTYPE L2, const DTYPE L3, 
-    const int alg, const int max_layer, H2P_dense_mat_t pp, DTYPE *timers
+    const DTYPE L1, const DTYPE L2, const DTYPE L3, 
+    const int alg, const int X0_size, const int Y0_lsize, const int max_layer, 
+    H2P_dense_mat_p pp, DTYPE *timers
 )
 {
     // 1. Initialize working arrays and parameters
@@ -52,9 +64,9 @@ void H2P_generate_proxy_point_nlayer(
     int n_layer  = (alg == 0) ? 1 : DROUND((L3 - L2) / L1);
     if (n_layer > max_layer) n_layer = max_layer;
     int Y0_size  = n_layer * Y0_lsize;
-    H2P_dense_mat_t X0_coord, Y0_coord, tmp_coord, Yp_coord;
-    H2P_dense_mat_t tmpA, min_dist, QR_buff;
-    H2P_int_vec_t   skel_idx, ID_buff;
+    H2P_dense_mat_p X0_coord, Y0_coord, tmp_coord, Yp_coord;
+    H2P_dense_mat_p tmpA, min_dist, QR_buff;
+    H2P_int_vec_p   skel_idx, ID_buff;
     st = get_wtime_sec();
     H2P_dense_mat_init(&X0_coord,  pt_dim,  X0_size);
     H2P_dense_mat_init(&Y0_coord,  pt_dim,  Y0_size);
@@ -91,9 +103,9 @@ void H2P_generate_proxy_point_nlayer(
     et = get_wtime_sec();
     timers[_GEN_PP_KRNL_T_IDX] += et - st;
     // (2) Generate sparse random matrix and multiply with the kernel matrix to get a reduced matrix
-    H2P_int_vec_t   rndmat_idx = ID_buff;
-    H2P_dense_mat_t rndmat_val = QR_buff;
-    H2P_dense_mat_t tmpA1      = min_dist;
+    H2P_int_vec_p   rndmat_idx = ID_buff;
+    H2P_dense_mat_p rndmat_val = QR_buff;
+    H2P_dense_mat_p tmpA1      = min_dist;
     st = get_wtime_sec();
     int max_nnz_col = 32;
     H2P_gen_rand_sparse_mat_trans(max_nnz_col, tmpA->ncol, tmpA->nrow, rndmat_val, rndmat_idx);
@@ -128,7 +140,7 @@ void H2P_generate_proxy_point_nlayer(
 
     st = get_wtime_sec();
     H2P_dense_mat_select_columns(X0_coord, skel_idx);
-    H2P_dense_mat_t Xp_coord = X0_coord;
+    H2P_dense_mat_p Xp_coord = X0_coord;
     et = get_wtime_sec();
     timers[_GEN_PP_MISC_T_IDX] += et - st;
 
@@ -166,7 +178,7 @@ void H2P_generate_proxy_point_nlayer(
         st = get_wtime_sec();
         H2P_dense_mat_select_columns(Y0_coord, skel_idx);
         H2P_dense_mat_resize(Yp_coord, pt_dim, Y0_coord->ncol);
-        H2P_copy_matrix_block(pt_dim, Y0_coord->ncol, Y0_coord->data, Y0_coord->ld, Yp_coord->data, Yp_coord->ld);
+        copy_matrix_block(sizeof(DTYPE), pt_dim, Y0_coord->ncol, Y0_coord->data, Y0_coord->ld, Yp_coord->data, Yp_coord->ld);
         et = get_wtime_sec();
         timers[_GEN_PP_MISC_T_IDX] += et - st;
     }  // End of "if (alg == 1)"
@@ -184,8 +196,8 @@ void H2P_generate_proxy_point_nlayer(
             DTYPE *Y0_layer_i_ptr   = Y0_coord->data + i * Y0_lsize;
             DTYPE *tmp_coord_Yp_ptr = tmp_coord->data;
             DTYPE *tmp_coord_li_ptr = tmp_coord->data + Yp_coord->ncol;
-            H2P_copy_matrix_block(pt_dim, Yp_coord->ncol, Yp_coord_ptr,   Yp_coord->ld, tmp_coord_Yp_ptr, tmp_coord->ld);
-            H2P_copy_matrix_block(pt_dim, Y0_lsize,       Y0_layer_i_ptr, Y0_coord->ld, tmp_coord_li_ptr, tmp_coord->ld);
+            copy_matrix_block(sizeof(DTYPE), pt_dim, Yp_coord->ncol, Yp_coord_ptr,   Yp_coord->ld, tmp_coord_Yp_ptr, tmp_coord->ld);
+            copy_matrix_block(sizeof(DTYPE), pt_dim, Y0_lsize,       Y0_layer_i_ptr, Y0_coord->ld, tmp_coord_li_ptr, tmp_coord->ld);
             et = get_wtime_sec();
             timers[_GEN_PP_MISC_T_IDX] += et - st;
 
@@ -220,7 +232,7 @@ void H2P_generate_proxy_point_nlayer(
             st = get_wtime_sec();
             H2P_dense_mat_select_columns(tmp_coord, skel_idx);
             H2P_dense_mat_resize(Yp_coord, pt_dim, tmp_coord->ncol);
-            H2P_copy_matrix_block(pt_dim, tmp_coord->ncol, tmp_coord->data, tmp_coord->ld, Yp_coord->data, Yp_coord->ld);
+            copy_matrix_block(sizeof(DTYPE), pt_dim, tmp_coord->ncol, tmp_coord->data, tmp_coord->ld, Yp_coord->data, Yp_coord->ld);
             et = get_wtime_sec();
             timers[_GEN_PP_MISC_T_IDX] += et - st;
         }  // End of i loop
@@ -231,7 +243,7 @@ void H2P_generate_proxy_point_nlayer(
     {
         // No need to increase the density, just copy it
         H2P_dense_mat_resize(pp, pt_dim, Yp_coord->ncol);
-        H2P_copy_matrix_block(pt_dim, Yp_coord->ncol, Yp_coord->data, Yp_coord->ld, pp->data, pp->ld);
+        copy_matrix_block(sizeof(DTYPE), pt_dim, Yp_coord->ncol, Yp_coord->data, Yp_coord->ld, pp->data, pp->ld);
     } else {
         int Yp_size = Yp_coord->ncol;
         H2P_dense_mat_resize(min_dist, Yp_size, 1);
@@ -297,15 +309,15 @@ void H2P_generate_proxy_point_nlayer(
     }  // End of "if (reltol >= 1e-12)"
 
     // 6. Free working arrays
-    H2P_dense_mat_destroy(X0_coord);
-    H2P_dense_mat_destroy(Y0_coord);
-    H2P_dense_mat_destroy(tmp_coord);
-    H2P_dense_mat_destroy(Yp_coord);
-    H2P_dense_mat_destroy(tmpA);
-    H2P_dense_mat_destroy(min_dist);
-    H2P_dense_mat_destroy(QR_buff);
-    H2P_int_vec_destroy(skel_idx);
-    H2P_int_vec_destroy(ID_buff);
+    H2P_dense_mat_destroy(&X0_coord);
+    H2P_dense_mat_destroy(&Y0_coord);
+    H2P_dense_mat_destroy(&tmp_coord);
+    H2P_dense_mat_destroy(&Yp_coord);
+    H2P_dense_mat_destroy(&tmpA);
+    H2P_dense_mat_destroy(&min_dist);
+    H2P_dense_mat_destroy(&QR_buff);
+    H2P_int_vec_destroy(&skel_idx);
+    H2P_int_vec_destroy(&ID_buff);
     free(X0_coord);
     free(Y0_coord);
     free(tmp_coord);
@@ -321,12 +333,12 @@ void H2P_generate_proxy_point_nlayer(
 // using ID compress for any kernel function
 void H2P_generate_proxy_point_ID(
     const int pt_dim, const int krnl_dim, const DTYPE reltol, const int max_level, const int min_level,
-    DTYPE max_L, const void *krnl_param, kernel_eval_fptr krnl_eval, H2P_dense_mat_t **pp_
+    DTYPE max_L, const void *krnl_param, kernel_eval_fptr krnl_eval, H2P_dense_mat_p **pp_
 )
 {
     // 1. Initialize proxy point arrays and parameters
     int n_level = max_level + 1;
-    H2P_dense_mat_t *pp = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_level);
+    H2P_dense_mat_p *pp = (H2P_dense_mat_p*) malloc(sizeof(H2P_dense_mat_p) * n_level);
     ASSERT_PRINTF(pp != NULL, "Failed to allocate %d arrays for storing proxy points", n_level);
     for (int i = 0; i <= max_level; i++) 
     {
@@ -334,16 +346,15 @@ void H2P_generate_proxy_point_ID(
         pp[i]->ncol = 0;
     }
     
-    int gen_pp_alg, X0_size, Y0_lsize, L3_factor, max_layer, print_timers;
-    GET_ENV_INT_VAR(gen_pp_alg,   "H2P_GEN_PP_ALG",       "gen_pp_alg",   2,    0,    2);
-    GET_ENV_INT_VAR(X0_size,      "H2P_GEN_PP_X0_SIZE",   "X0_size",      2000, 500,  5000);
-    GET_ENV_INT_VAR(Y0_lsize,     "H2P_GEN_PP_Y0_LSIZE",  "Y0_lsize",     4000, 1000, 20000);
-    GET_ENV_INT_VAR(L3_factor,    "H2P_GEN_PP_L3_FACTOR", "L3_factor",    8,    8,    32);
-    GET_ENV_INT_VAR(max_layer,    "H2P_GEN_PP_MAX_LAYER", "max_layer",    8,    4,    32);
-    GET_ENV_INT_VAR(print_timers, "H2P_PRINT_TIMERS",     "print_timers", 0,    0,    1);
+    GET_ENV_INT_VAR(gen_pp_param.alg,          "H2P_GEN_PP_ALG",       "alg",          2,    0,    2);
+    GET_ENV_INT_VAR(gen_pp_param.X0_size,      "H2P_GEN_PP_X0_SIZE",   "X0_size",      2000, 500,  5000);
+    GET_ENV_INT_VAR(gen_pp_param.Y0_lsize,     "H2P_GEN_PP_Y0_LSIZE",  "Y0_lsize",     4000, 1000, 20000);
+    GET_ENV_INT_VAR(gen_pp_param.L3_nlayer,    "H2P_GEN_PP_L3_NLAYER", "L3_nlayer",    8,    8,    32);
+    GET_ENV_INT_VAR(gen_pp_param.max_layer,    "H2P_GEN_PP_MAX_LAYER", "max_layer",    8,    4,    32);
+    GET_ENV_INT_VAR(gen_pp_param.print_timers, "H2P_PRINT_TIMERS",     "print_timers", 0,    0,    1);
 
     double timers[4];
-    DTYPE L3_factor_ = (DTYPE) L3_factor;
+    DTYPE L3_nlayer_ = (DTYPE) gen_pp_param.L3_nlayer;
 
     // 2. Construct proxy points on each level
     DTYPE pow_2_level = 0.5;
@@ -362,15 +373,15 @@ void H2P_generate_proxy_point_ID(
         pow_2_level *= 2.0;
         DTYPE L1   = max_L / pow_2_level;
         DTYPE L2   = (1.0 + 2.0 * ALPHA_H2) * L1;
-        DTYPE L3_0 = (1.0 + L3_factor_ * ALPHA_H2) * L1;
+        DTYPE L3_0 = (1.0 + L3_nlayer_ * ALPHA_H2) * L1;
         DTYPE L3_1 = 2.0 * max_L - L1;
         DTYPE L3   = MIN(L3_0, L3_1);
 
-        int Y0_lsize_ = Y0_lsize;
-        if (gen_pp_alg == 0)  // Only one ring, multiple Y0_lsize_ by the number of rings
+        int Y0_lsize_ = gen_pp_param.Y0_lsize;
+        if (gen_pp_param.alg == 0)  // Only one ring, multiple Y0_lsize_ by the number of rings
         {
             int n_layer = DROUND((L3 - L2) / L1);
-            if (n_layer > max_layer) n_layer = max_layer;
+            if (n_layer > gen_pp_param.max_layer) n_layer = gen_pp_param.max_layer;
             Y0_lsize_ *= n_layer;
         }
         
@@ -384,11 +395,12 @@ void H2P_generate_proxy_point_ID(
         H2P_generate_proxy_point_nlayer(
             pt_dim, krnl_dim, reltol, 
             krnl_param, krnl_eval, 
-            X0_size, Y0_lsize_, L1, L2, L3, 
-            gen_pp_alg, max_layer, pp[level], &timers[0]
+            L1, L2, L3, 
+            gen_pp_param.alg, gen_pp_param.X0_size, Y0_lsize_, gen_pp_param.max_layer, 
+            pp[level], &timers[0]
         );
         
-        if (print_timers == 1)
+        if (gen_pp_param.print_timers == 1)
         {
             INFO_PRINTF("Level %d: %d proxy points generated\n", level, pp[level]->ncol);
             INFO_PRINTF(
@@ -402,11 +414,273 @@ void H2P_generate_proxy_point_ID(
     *pp_ = pp;
 }
 
+// ----- Note: "radius" in this file == 0.5 * length of a cubic box ----- //
+
+// Calculate the enclosing box of a given set of points and adjust it if the proxy point file is provided
+void H2P_calc_enclosing_box(const int pt_dim, const int n_point, const DTYPE *coord, const char *fname, DTYPE **enbox_)
+{
+    // Calculate the center of points in this box
+    DTYPE *center = (DTYPE*) malloc(sizeof(DTYPE) * pt_dim);
+    memset(center, 0, sizeof(DTYPE) * pt_dim);
+    for (int j = 0; j < pt_dim; j++)
+    {
+        const DTYPE *coord_dim_j = coord + j * n_point;
+        for (int i = 0; i < n_point; i++)
+            center[j] += coord_dim_j[i];
+    }
+    for (int j = 0; j < pt_dim; j++) center[j] /= (DTYPE) n_point;
+
+    // Calculate enclosing box radius
+    DTYPE radius = 0.0;
+    for (int j = 0; j < pt_dim; j++)
+    {
+        const DTYPE *coord_dim_j = coord + j * n_point;
+        DTYPE center_j = center[j];
+        for (int i = 0; i < n_point; i++)
+        {
+            DTYPE tmp = DABS(coord_dim_j[i] - center_j);
+            radius = MAX(radius, tmp);
+        }
+    }
+
+    // Adjust enclosing box radius if proxy point file is available
+    FILE *inf = NULL;
+    if (fname != NULL) inf = fopen(fname, "r");
+    if (inf != NULL)
+    {
+        int pt_dim_, L3_nlayer, num_pp;
+        DTYPE reltol, minL;
+        const char *fmt_str = (DTYPE_SIZE == 8) ? "%d %lf %d %lf %d" : "%d %f %d %lf %d";
+        fscanf(inf, fmt_str, &pt_dim_, &reltol, &L3_nlayer, &minL, &num_pp);
+        if (pt_dim == pt_dim_)
+        {
+            DTYPE k = DCEIL(DLOG2(radius / minL));
+            radius = minL * DPOW(2.0, k);
+        } else {
+            ERROR_PRINTF("File %s point dimension (%d) != current point dimension (%d)\n", fname, pt_dim_, pt_dim);
+        }
+    }
+    if (inf != NULL) fclose(inf);
+
+    // Generate the enclosing box
+    DTYPE *enbox = (DTYPE*) malloc(sizeof(DTYPE) * 2 * pt_dim);
+    for (int j = 0; j < pt_dim; j++)
+    {
+        enbox[j] = center[j] - radius;
+        enbox[pt_dim + j] = 2 * radius;
+    }
+    *enbox_ = enbox;
+    free(center);
+}
+
+// Write a set of proxy points to a text file
+void H2P_write_proxy_point_file(
+    const char *fname, const int pt_dim, const DTYPE reltol, const int L3_nlayer, 
+    const DTYPE minL, const int num_pp, H2P_dense_mat_p *pp
+)
+{
+    FILE *ouf = fopen(fname, "w");
+
+    // Line 1: parameters
+    fprintf(ouf, "%d %.3e %d %16.12lf %d\n", pt_dim, reltol, L3_nlayer, minL, num_pp);
+
+    // Line 2: number of proxy points in each proxy point set
+    for (int i = 0; i < num_pp; i++) fprintf(ouf, "%d ", pp[i]->ncol);
+    fprintf(ouf, "\n");
+
+    // Rest part: proxy point coordinates
+    for (int i_pp = 0; i_pp < num_pp; i_pp++)
+    {
+        DTYPE *pp_i_coord = pp[i_pp]->data;
+        const int pp_i_npt = pp[i_pp]->ncol; 
+        const int pp_i_ld  = pp[i_pp]->ld;
+        for (int i = 0; i < pp_i_npt; i++)
+        {
+            for (int j = 0; j < pt_dim; j++) fprintf(ouf, "% 16.12f  ", pp_i_coord[j * pp_i_ld + i]);
+            fprintf(ouf, "\n");
+        }
+    }
+
+    fclose(ouf);
+}
+
+
+// Generate proxy points for constructing H2 projection and skeleton matrices using 
+// ID compress, also try to load proxy points from a file and update this file
+void H2P_generate_proxy_point_ID_file(
+    H2Pack_p h2pack, const void *krnl_param, kernel_eval_fptr krnl_eval, 
+    const char *fname, H2P_dense_mat_p **pp_
+)
+{
+    int   pt_dim      = h2pack->pt_dim;
+    int   krnl_dim    = h2pack->krnl_dim;
+    int   n_level     = h2pack->max_level + 1;
+    DTYPE reltol      = h2pack->QR_stop_tol;
+    DTYPE *root_enbox = h2pack->root_enbox;
+    DTYPE pt_maxL     = h2pack->root_enbox[pt_dim] * 0.5;
+    DTYPE pt_minL     = pt_maxL * DPOW(0.5, (DTYPE) h2pack->max_level);
+    
+    // Root box and level 1 box do not have admissible pairs --> don't need proxy points
+    pt_maxL *= 0.25;
+    
+    // These are from proxy point file
+    int pt_dim0, L3_nlayer0, num_pp0;
+    DTYPE reltol0, minL0, maxL0;
+
+    GET_ENV_INT_VAR(gen_pp_param.alg,          "H2P_GEN_PP_ALG",       "alg",          2,    0,    2);
+    GET_ENV_INT_VAR(gen_pp_param.X0_size,      "H2P_GEN_PP_X0_SIZE",   "X0_size",      2000, 500,  5000);
+    GET_ENV_INT_VAR(gen_pp_param.Y0_lsize,     "H2P_GEN_PP_Y0_LSIZE",  "Y0_lsize",     4000, 1000, 20000);
+    GET_ENV_INT_VAR(gen_pp_param.L3_nlayer,    "H2P_GEN_PP_L3_NLAYER", "L3_nlayer",    8,    8,    32);
+    GET_ENV_INT_VAR(gen_pp_param.max_layer,    "H2P_GEN_PP_MAX_LAYER", "max_layer",    8,    4,    32);
+    GET_ENV_INT_VAR(gen_pp_param.print_timers, "H2P_PRINT_TIMERS",     "print_timers", 0,    0,    1);
+
+    // Determine min & max box radius in the file & for current points
+    FILE *inf = NULL;
+    if (fname != NULL) inf = fopen(fname, "r");
+    if (inf != NULL)
+    {
+        const char *fmt_str = (DTYPE_SIZE == 8) ? "%d %lf %d %lf %d" : "%d %f %d %lf %d";
+        fscanf(inf, fmt_str, &pt_dim0, &reltol0, &L3_nlayer0, &minL0, &num_pp0);
+        maxL0 = minL0 * DPOW(2.0, (DTYPE) (num_pp0 - 1));
+        DTYPE k  = DLOG2(pt_maxL / minL0);
+        DTYPE rk = (DTYPE) DROUND(k);
+        int aligned_L = (DABS(rk - k) > 1e-10) ? 0 : 1;
+        if (pt_dim0 != pt_dim || reltol0 > reltol || L3_nlayer0 != gen_pp_param.L3_nlayer || aligned_L == 0)
+        {
+            WARNING_PRINTF("Proxy point file parameters are inconsistent with current point set parameters, calculate all proxy points\n");
+            pt_dim0    = pt_dim;
+            L3_nlayer0 = gen_pp_param.L3_nlayer;
+            num_pp0    = 0;
+            reltol0    = reltol;
+            minL0      = pt_minL;
+            maxL0      = pt_minL * 0.5;  // Make maxL0 invalid
+        }
+    } else {
+        pt_dim0    = pt_dim;
+        L3_nlayer0 = gen_pp_param.L3_nlayer;
+        num_pp0    = 0;
+        reltol0    = reltol;
+        minL0      = pt_minL;
+        maxL0      = pt_minL * 0.5;  // Make maxL0 invalid
+    }  // End of "if (inf != NULL)"
+    DTYPE curr_minL   = MIN(pt_minL, minL0);
+    DTYPE curr_maxL   = MAX(pt_maxL, maxL0);
+    int   curr_num_pp = DROUND(DLOG2(curr_maxL / curr_minL)) + 1;
+    int   file_idx_s  = DROUND(DLOG2(minL0     / curr_minL));
+    int   file_idx_e  = DROUND(DLOG2(maxL0     / curr_minL));
+    int   pt_idx_s    = DROUND(DLOG2(pt_minL   / curr_minL));
+    int   pt_idx_e    = DROUND(DLOG2(pt_maxL   / curr_minL));
+
+    if (h2pack->print_dbginfo)
+    {
+        DEBUG_PRINTF(
+            "pt_minL, pt_maxL, minL0, maxL0, curr_minL, curr_maxL = %.3lf  %.3lf  %.3lf  %.3lf  %.3lf  %.3lf\n", 
+            pt_minL, pt_maxL, minL0, maxL0, curr_minL, curr_maxL
+        );
+        DEBUG_PRINTF(
+            "curr_num_pp, file_idx_s, file_idx_e, pt_idx_s, pt_idx_e = %d  %d  %d  %d  %d\n", 
+            curr_num_pp, file_idx_s, file_idx_e, pt_idx_s, pt_idx_e
+        );
+    }
+
+    // Note: radius of pp0[i] == 0.5 * radius of pp0[i+1], need to reverse it for pp_
+    H2P_dense_mat_p *pp0 = (H2P_dense_mat_p*) malloc(sizeof(H2P_dense_mat_p) * curr_num_pp);
+    ASSERT_PRINTF(pp0 != NULL, "Failed to allocate %d arrays for storing proxy points", curr_num_pp);
+    for (int i = 0; i < curr_num_pp; i++) 
+    {
+        H2P_dense_mat_init(&pp0[i], pt_dim, 0);
+        pp0[i]->ncol = 0;
+    }
+
+    // Read proxy points from file
+    if (inf != NULL)
+    {
+        int *pp_sizes = (int*) malloc(sizeof(int) * num_pp0);
+        for (int i = 0; i < num_pp0; i++) fscanf(inf, "%d", pp_sizes + i);
+        const char *fmt_str = (DTYPE_SIZE == 8) ? "%lf" : "%f";
+        for (int pp_i = file_idx_s; pp_i <= file_idx_e; pp_i++)
+        {
+            H2P_dense_mat_p pp0_i = pp0[pp_i];
+            int pp0_i_npt = pp_sizes[pp_i - file_idx_s];
+            H2P_dense_mat_resize(pp0_i, pt_dim, pp0_i_npt);
+            DTYPE *pp0_i_coord = pp0_i->data;
+            for (int j = 0; j < pp0_i_npt; j++)
+            {
+                for (int i = 0; i < pt_dim; i++) 
+                    fscanf(inf, fmt_str, &pp0_i_coord[i * pp0_i_npt + j]);
+            }
+        }
+        free(pp_sizes);
+        fclose(inf);
+    }  // End of if (inf != NULL)
+
+    // Calculate other proxy points
+    double timers[4];
+    DTYPE L3_nlayer_ = (DTYPE) gen_pp_param.L3_nlayer;
+    timers[_GEN_PP_KRNL_T_IDX] = 0.0;
+    timers[_GEN_PP_KRNL_T_IDX] = 0.0;
+    timers[_GEN_PP_ID_T_IDX]   = 0.0;
+    timers[_GEN_PP_MISC_T_IDX] = 0.0;
+    for (int pp_i = 0; pp_i < curr_num_pp; pp_i++)
+    {
+        // Note: curr_minL is the radius, L1 is the edge length, need to * 2
+        DTYPE L1 = 2.0 * curr_minL * DPOW(2.0, (DTYPE) pp_i);
+        DTYPE L2 = (1.0 + 2.0 * ALPHA_H2) * L1;
+        DTYPE L3 = (1.0 + L3_nlayer_ * ALPHA_H2) * L1;
+        int Y0_lsize_ = gen_pp_param.Y0_lsize;
+        if (gen_pp_param.alg == 0)  // Only one ring, multiple Y0_lsize_ by the number of rings
+        {
+            int n_layer = DROUND((L3 - L2) / L1);
+            if (n_layer > gen_pp_param.max_layer) n_layer = gen_pp_param.max_layer;
+            Y0_lsize_ *= n_layer;
+        }
+
+        if (pp_i >= file_idx_s && pp_i <= file_idx_e) continue;
+
+        H2P_generate_proxy_point_nlayer(
+            pt_dim, krnl_dim, reltol, 
+            krnl_param, krnl_eval, 
+            L1, L2, L3, 
+            gen_pp_param.alg, gen_pp_param.X0_size, Y0_lsize_, gen_pp_param.max_layer, 
+            pp0[pp_i], &timers[0]
+        );
+    }  // End of pp_i loop
+    if (gen_pp_param.print_timers == 1)
+    {
+        INFO_PRINTF(
+            "Proxy point generation: kernel, SpMM, ID, other time = %.3lf, %.3lf, %.3lf, %.3lf sec\n", 
+            timers[_GEN_PP_KRNL_T_IDX], timers[_GEN_PP_KRNL_T_IDX], 
+            timers[_GEN_PP_ID_T_IDX],   timers[_GEN_PP_MISC_T_IDX]
+        );
+    }
+
+    // Write current proxy points to file
+    if (fname != NULL) H2P_write_proxy_point_file(fname, pt_dim, reltol0, L3_nlayer0, curr_minL, curr_num_pp, pp0);
+
+    // Copy pp0 to output pp_ and free pp0
+    H2P_dense_mat_p *pp = (H2P_dense_mat_p*) malloc(sizeof(H2P_dense_mat_p) * n_level);
+    ASSERT_PRINTF(pp != NULL, "Failed to allocate %d arrays for storing proxy points", n_level);
+    for (int i = 0; i < n_level; i++) 
+    {
+        H2P_dense_mat_init(&pp[i], pt_dim, 0);
+        pp[i]->ncol = 0;
+    }
+    for (int i = pt_idx_s; i <= pt_idx_e; i++)
+    {
+        int level = (n_level - 1) - (i - pt_idx_s);
+        H2P_dense_mat_resize(pp[level], pp0[i]->nrow, pp0[i]->ncol);
+        copy_matrix_block(sizeof(DTYPE), pp0[i]->nrow, pp0[i]->ncol, pp0[i]->data, pp0[i]->ld, pp[level]->data, pp[level]->ld);
+    }
+    for (int i = 0; i < curr_num_pp; i++) H2P_dense_mat_destroy(&pp0[i]);
+    free(pp0);
+    *pp_ = pp;
+}
+
 // Generate uniformly distributed proxy points on a box surface for constructing
 // H2 projection and skeleton matrices for SOME kernel function
 void H2P_generate_proxy_point_surface(
     const int pt_dim, const int xpt_dim, const int min_npt, const int max_level, 
-    const int min_level, DTYPE max_L, H2P_dense_mat_t **pp_
+    const int min_level, DTYPE max_L, H2P_dense_mat_p **pp_
 )
 {
     if (pt_dim < 2 || pt_dim > 3)
@@ -415,7 +689,7 @@ void H2P_generate_proxy_point_surface(
         return;
     }
     
-    H2P_dense_mat_t *pp = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * (max_level + 1));
+    H2P_dense_mat_p *pp = (H2P_dense_mat_p*) malloc(sizeof(H2P_dense_mat_p) * (max_level + 1));
     ASSERT_PRINTF(pp != NULL, "Failed to allocate %d H2P_dense_mat structues for storing proxy points", max_level + 1);
     for (int i = 0; i <= max_level; i++) pp[i] = NULL;
     
@@ -432,7 +706,7 @@ void H2P_generate_proxy_point_surface(
     DTYPE h = 2.0 / (DTYPE) (npt_axis + 1);
     
     // Generate proxy points on the surface of [-1,1]^pt_dim box
-    H2P_dense_mat_t unit_pp;
+    H2P_dense_mat_p unit_pp;
     H2P_dense_mat_init(&unit_pp, xpt_dim, npt);
     int index = 0;
     if (pt_dim == 3)
@@ -524,7 +798,7 @@ void H2P_generate_proxy_point_surface(
             pp_level[i] = adm_width * unit_pp->data[i];
     }
     
-    H2P_dense_mat_destroy(unit_pp);
+    H2P_dense_mat_destroy(&unit_pp);
     *pp_ = pp;
 }
 

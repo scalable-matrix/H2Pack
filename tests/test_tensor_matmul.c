@@ -20,7 +20,7 @@ int main(int argc, char **argv)
     
     parse_tensor_params(argc, argv);
     
-    H2Pack_t h2pack;
+    H2Pack_p h2pack;
     
     H2P_init(&h2pack, test_params.pt_dim, test_params.krnl_dim, QR_REL_NRM, &test_params.rel_tol);
     
@@ -40,7 +40,7 @@ int main(int argc, char **argv)
     }
     H2P_partition_points(h2pack, test_params.n_point, test_params.coord, max_leaf_points, max_leaf_size);
 
-    H2P_dense_mat_t *pp;
+    H2P_dense_mat_p *pp;
     DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * test_params.pt_dim + test_params.pt_dim];
     int start_level = 2;
     int num_pp = ceil(-log10(test_params.rel_tol));
@@ -57,13 +57,15 @@ int main(int argc, char **argv)
         test_params.krnl_eval, test_params.krnl_bimv, test_params.krnl_bimv_flops
     );
     
-    const int n_vecs[13] = {2, 4, 8, 12, 16, 20, 24, 28, 32, 40, 48, 56, 64};
-    for (int i = 0; i < 13; i++)
+    int n_vecs[10] = {2, 2, 4, 8, 12, 16, 20, 24, 28, 32};
+    for (int i = 0; i < 10; i++)
         test_H2_matmul(h2pack, n_vecs[i]);
 
     h2pack->n_matvec = 0;  // Skip printing matvec timings
     H2P_print_statistic(h2pack);
 
     free_aligned(test_params.coord);
-    H2P_destroy(h2pack);
+    H2P_destroy(&h2pack);
+
+    return 0;
 }

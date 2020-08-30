@@ -8,6 +8,7 @@ struct H2P_test_params
     int   BD_JIT;
     int   kernel_id;
     int   krnl_bimv_flops;
+    char  pp_fname[128];
     void  *krnl_param;
     DTYPE rel_tol;
     DTYPE *coord;
@@ -77,6 +78,15 @@ void parse_scalar_params(int argc, char **argv)
         test_params.kernel_id = atoi(argv[5]);
         printf("Kernel function ID = %d\n", test_params.kernel_id);
     }
+
+    if (argc < 7)
+    {
+        printf("Proxy point file   = ");
+        scanf("%s", test_params.pp_fname);
+    } else {
+        strcpy(test_params.pp_fname, argv[6]);
+    }
+    
     switch (test_params.kernel_id)
     {
         case 0: 
@@ -119,17 +129,17 @@ void parse_scalar_params(int argc, char **argv)
     
     test_params.coord = (DTYPE*) malloc_aligned(sizeof(DTYPE) * test_params.n_point * test_params.pt_dim, 64);
     assert(test_params.coord != NULL);
-    
+
     // Note: coordinates need to be stored in column-major style, i.e. test_params.coord 
     // is row-major and each column stores the coordinate of a point. 
     int need_gen = 1;
-    if (argc >= 7)
+    if (argc >= 8)
     {
         DTYPE *tmp = (DTYPE*) malloc(sizeof(DTYPE) * test_params.n_point * test_params.pt_dim);
-        if (strstr(argv[6], ".csv") != NULL)
+        if (strstr(argv[7], ".csv") != NULL)
         {
             printf("Reading coordinates from CSV file...");
-            FILE *inf = fopen(argv[6], "r");
+            FILE *inf = fopen(argv[7], "r");
             for (int i = 0; i < test_params.n_point; i++)
             {
                 for (int j = 0; j < test_params.pt_dim-1; j++) 
@@ -140,10 +150,10 @@ void parse_scalar_params(int argc, char **argv)
             printf(" done.\n");
             need_gen = 0;
         }
-        if (strstr(argv[6], ".bin") != NULL)
+        if (strstr(argv[7], ".bin") != NULL)
         {
             printf("Reading coordinates from binary file...");
-            FILE *inf = fopen(argv[6], "rb");
+            FILE *inf = fopen(argv[7], "rb");
             fread(tmp, sizeof(DTYPE), test_params.n_point * test_params.pt_dim, inf);
             fclose(inf);
             printf(" done.\n");

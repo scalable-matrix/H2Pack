@@ -22,7 +22,7 @@ extern "C" {
 // Output parameter:
 //   h2pack : H2Pack structure with H2 representation matrices
 void H2P_build_periodic(
-    H2Pack_t h2pack, H2P_dense_mat_t *pp, const int BD_JIT, 
+    H2Pack_p h2pack, H2P_dense_mat_p *pp, const int BD_JIT, 
     void *krnl_param,  kernel_eval_fptr krnl_eval, 
     void *pkrnl_param, kernel_eval_fptr pkrnl_eval, 
     kernel_mv_fptr krnl_mv, const int krnl_mv_flops

@@ -8,7 +8,7 @@ struct FSAI_precond
 {
     int        mat_size;    // Size of the matrix to be preconditioned
     DTYPE      *x0;         // Size mat_size, storing G * b in apply_FSAI_precond()
-    CSRP_mat_t G, Gt;       // FSAI constructed matrix and its transpose
+    CSRP_mat_p G, Gt;       // FSAI constructed matrix and its transpose
 
     // Statistic info
     int    n_apply;
@@ -16,7 +16,7 @@ struct FSAI_precond
     double mem_MB;
 };
 typedef struct FSAI_precond  FSAI_precond_s;
-typedef struct FSAI_precond* FSAI_precond_t;
+typedef struct FSAI_precond* FSAI_precond_p;
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,7 +29,7 @@ extern "C" {
 //   shift  : Diagonal shifting of the target matrix
 // Output parameter:
 //   *precond_ : Constructed FSAI_precond structure
-void H2P_build_FSAI_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, FSAI_precond_t *precond_);
+void H2P_build_FSAI_precond(H2Pack_p h2pack, const int rank, const DTYPE shift, FSAI_precond_p *precond_);
 
 // Apply FSAI preconditioner, x := M_{FSAI}^{-1} * b
 // Input parameters:
@@ -37,17 +37,17 @@ void H2P_build_FSAI_precond(H2Pack_t h2pack, const int rank, const DTYPE shift, 
 //   b       : Size precond->mat_size, input vector
 // Output parameter:
 //   x : Size precond->mat_size, output vector
-void FSAI_precond_apply(FSAI_precond_t precond, const DTYPE *b, DTYPE *x);
+void FSAI_precond_apply(FSAI_precond_p precond, const DTYPE *b, DTYPE *x);
 
 // Destroy a FSAI_precond structure
 // Input parameter:
 //   precond : FSAI_precond structure to be destroyed
-void FSAI_precond_destroy(FSAI_precond_t precond);
+void FSAI_precond_destroy(FSAI_precond_p *precond_);
 
 // Print statistic info of a FSAI_precond structure
 // Input parameter:
 //   precond : FSAI_precond structure whose statistic info to be printed
-void FSAI_precond_print_stat(FSAI_precond_t precond);
+void FSAI_precond_print_stat(FSAI_precond_p precond);
 
 #ifdef __cplusplus
 }

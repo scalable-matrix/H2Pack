@@ -8,6 +8,7 @@
 #include "H2Pack_config.h"
 #include "H2Pack_typedef.h"
 #include "H2Pack_aux_structs.h"
+#include "H2Pack_matvec.h"
 #include "H2Pack_matvec_periodic.h"
 #include "H2Pack_utils.h"
 #include "x86_intrin_wrapper.h"
@@ -38,7 +39,7 @@ void H2P_ext_krnl_mv(
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
     const DTYPE *x_in, const int ldi, DTYPE * restrict x_out, const int ldo, 
-    const int xpt_dim, const int krnl_dim, H2P_dense_mat_t workbuf, 
+    const int xpt_dim, const int krnl_dim, H2P_dense_mat_p workbuf, 
     const void *krnl_param, kernel_mv_fptr krnl_mv
 )
 {
@@ -98,7 +99,7 @@ void H2P_ext_krnl_mv(
 
 // H2 matvec intermediate multiplication, calculate B_{ij} * (U_j^T * x_j)
 // Need to calculate all B_{ij} matrices before using it
-void H2P_matvec_periodic_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
+void H2P_matvec_periodic_intmd_mult_JIT(H2Pack_p h2pack, const DTYPE *x, DTYPE *y)
 {
     int   pt_dim          = h2pack->pt_dim;
     int   xpt_dim         = h2pack->xpt_dim;
@@ -117,21 +118,21 @@ void H2P_matvec_periodic_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
     DTYPE *coord          = h2pack->coord;
     DTYPE *per_adm_shifts = h2pack->per_adm_shifts;
     void  *krnl_param     = h2pack->krnl_param;
-    H2P_dense_mat_t  *y0 = h2pack->y0;
-    H2P_dense_mat_t  *J_coord = h2pack->J_coord;
+    H2P_dense_mat_p  *y0 = h2pack->y0;
+    H2P_dense_mat_p  *J_coord = h2pack->J_coord;
     kernel_eval_fptr krnl_eval   = h2pack->krnl_eval;
     kernel_mv_fptr   krnl_mv     = h2pack->krnl_mv;
-    H2P_thread_buf_t *thread_buf = h2pack->tb;
+    H2P_thread_buf_p *thread_buf = h2pack->tb;
 
     H2P_matvec_init_y1(h2pack);
-    H2P_dense_mat_t *y1 = h2pack->y1;
+    H2P_dense_mat_p *y1 = h2pack->y1;
 
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
-        H2P_dense_mat_t Bij      = thread_buf[tid]->mat0;
-        H2P_dense_mat_t workbuf  = thread_buf[tid]->mat0;
-        H2P_dense_mat_t coord1_s = thread_buf[tid]->mat1;
+        H2P_dense_mat_p Bij      = thread_buf[tid]->mat0;
+        H2P_dense_mat_p workbuf  = thread_buf[tid]->mat0;
+        H2P_dense_mat_p coord1_s = thread_buf[tid]->mat1;
         DTYPE shift[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
         thread_buf[tid]->timer = -get_wtime_sec();
@@ -148,7 +149,7 @@ void H2P_matvec_periodic_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
         {
             int level0 = node_level[node0];
             
-            H2P_dense_mat_t y1_0 = y1[node0];
+            H2P_dense_mat_p y1_0 = y1[node0];
             memset(y1_0->data, 0, sizeof(DTYPE) * y1_0->nrow * y1_0->ncol);
 
             for (int i = B_p2i_rowptr[node0]; i < B_p2i_rowptr[node0 + 1]; i++)
@@ -202,7 +203,7 @@ void H2P_matvec_periodic_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
                     int vec_s1    = mat_cluster[node1 * 2];
                     
                     H2P_dense_mat_resize(coord1_s, xpt_dim, node1_npt);
-                    H2P_copy_matrix_block(xpt_dim, node1_npt, coord + pt_s1, n_point, coord1_s->data, coord1_s->ld);
+                    copy_matrix_block(sizeof(DTYPE), xpt_dim, node1_npt, coord + pt_s1, n_point, coord1_s->data, coord1_s->ld);
                     H2P_shift_coord(coord1_s, shift, 1.0);
                     if (krnl_mv != NULL)
                     {
@@ -282,7 +283,7 @@ void H2P_matvec_periodic_intmd_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
 
 // H2 matvec dense multiplication, calculate D_{ij} * x_j
 // Need to calculate all D_{ij} matrices before using it
-void H2P_matvec_periodic_dense_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
+void H2P_matvec_periodic_dense_mult_JIT(H2Pack_p h2pack, const DTYPE *x, DTYPE *y)
 {
     int   pt_dim            = h2pack->pt_dim;
     int   xpt_dim           = h2pack->xpt_dim;
@@ -303,14 +304,14 @@ void H2P_matvec_periodic_dense_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
     void  *krnl_param       = h2pack->krnl_param;
     kernel_eval_fptr krnl_eval   = h2pack->krnl_eval;
     kernel_mv_fptr   krnl_mv     = h2pack->krnl_mv;
-    H2P_thread_buf_t *thread_buf = h2pack->tb;
+    H2P_thread_buf_p *thread_buf = h2pack->tb;
 
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
-        H2P_dense_mat_t Dij      = thread_buf[tid]->mat0;
-        H2P_dense_mat_t workbuf  = thread_buf[tid]->mat0;
-        H2P_dense_mat_t coord1_s = thread_buf[tid]->mat1;
+        H2P_dense_mat_p Dij      = thread_buf[tid]->mat0;
+        H2P_dense_mat_p workbuf  = thread_buf[tid]->mat0;
+        H2P_dense_mat_p coord1_s = thread_buf[tid]->mat1;
 
         DTYPE shift[8] = {0, 0, 0, 0, 0, 0, 0, 0};
         
@@ -348,7 +349,7 @@ void H2P_matvec_periodic_dense_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
                 }
 
                 H2P_dense_mat_resize(coord1_s, xpt_dim, node1_npt);
-                H2P_copy_matrix_block(xpt_dim, node1_npt, coord + pt_s1, n_point, coord1_s->data, coord1_s->ld);
+                copy_matrix_block(sizeof(DTYPE), xpt_dim, node1_npt, coord + pt_s1, n_point, coord1_s->data, coord1_s->ld);
                 H2P_shift_coord(coord1_s, shift, 1.0);
                 
                 if (krnl_mv != NULL)
@@ -391,21 +392,25 @@ void H2P_matvec_periodic_dense_mult_JIT(H2Pack_t h2pack, const DTYPE *x, DTYPE *
 }
 
 // H2 representation multiplies a column vector
-void H2P_matvec_periodic(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
+void H2P_matvec_periodic(H2Pack_p h2pack, const DTYPE *x, DTYPE *y)
 {
     double st, et;
-    int   krnl_mat_size = h2pack->krnl_mat_size;
-    int   n_thread      = h2pack->n_thread;
-    int   BD_JIT        = h2pack->BD_JIT;
-    int   krnl_dim      = h2pack->krnl_dim;
-    int   n_point       = h2pack->n_point;
-    int   need_trans    = ((h2pack->krnl_mv != NULL) && (BD_JIT == 1) && (krnl_dim > 1));
-    DTYPE *xT           = h2pack->xT;
-    DTYPE *yT           = h2pack->yT;
-    H2P_thread_buf_t *thread_buf = h2pack->tb;
+    int    krnl_mat_size = h2pack->krnl_mat_size;
+    int    n_thread      = h2pack->n_thread;
+    int    BD_JIT        = h2pack->BD_JIT;
+    int    krnl_dim      = h2pack->krnl_dim;
+    int    n_point       = h2pack->n_point;
+    int    need_trans    = ((h2pack->krnl_mv != NULL) && (BD_JIT == 1) && (krnl_dim > 1));
+    DTYPE  *xT           = h2pack->xT;
+    DTYPE  *yT           = h2pack->yT;
+    DTYPE  *pmt_x        = h2pack->pmt_x;
+    DTYPE  *pmt_y        = h2pack->pmt_y;
+    double *timers       = h2pack->timers;
+    size_t *mat_size     = h2pack->mat_size;
+    H2P_thread_buf_p *thread_buf = h2pack->tb;
 
-    const DTYPE *x_ = need_trans ? xT : x;
-    DTYPE *y_ = need_trans ? yT : y;
+    DTYPE *x_ = need_trans ? xT : pmt_x;
+    DTYPE *y_ = need_trans ? yT : pmt_y;
 
     if (BD_JIT != 1)
     {
@@ -413,30 +418,37 @@ void H2P_matvec_periodic(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
         return;
     }
 
-    // 1. Reset y result to 0 and transpose x if necessary
+    // 1. Forward permute the input vector
+    st = get_wtime_sec();
+    H2P_permute_vector_forward(h2pack, x, pmt_x);
+    et = get_wtime_sec();
+    timers[_MV_VOP_TIMER_IDX] += et - st;
+    mat_size[_MV_VOP_SIZE_IDX] += 2 * krnl_mat_size;
+
+    // 2. Reset y result to 0 and transpose x if necessary
     st = get_wtime_sec();
     #pragma omp parallel for simd
     for (int i = 0; i < krnl_mat_size; i++)
     {
-        y[i]  = 0.0;
+        pmt_y[i] = 0.0;
         yT[i] = 0.0;
     }
-    h2pack->mat_size[_MV_RDC_SIZE_IDX] += 2 * h2pack->krnl_mat_size;
+    mat_size[_MV_VOP_SIZE_IDX] += 2 * krnl_mat_size;
     if (need_trans) 
     {
-        H2P_transpose_dmat(n_thread, n_point, krnl_dim, x, krnl_dim, xT, n_point);
-        h2pack->mat_size[_MV_RDC_SIZE_IDX] += h2pack->krnl_mat_size;
+        H2P_transpose_dmat(n_thread, n_point, krnl_dim, pmt_x, krnl_dim, xT, n_point);
+        mat_size[_MV_VOP_SIZE_IDX] += 2 * krnl_mat_size;
     }
     et = get_wtime_sec();
-    h2pack->timers[_MV_RDC_TIMER_IDX] += et - st;
+    timers[_MV_VOP_TIMER_IDX] += et - st;
 
-    // 2. Forward transformation, calculate U_j^T * x_j
+    // 3. Forward transformation, calculate U_j^T * x_j
     st = get_wtime_sec();
-    H2P_matvec_fwd_transform(h2pack, x);
+    H2P_matvec_fwd_transform(h2pack, pmt_x);
     et = get_wtime_sec();
-    h2pack->timers[_MV_FW_TIMER_IDX] += et - st;
+    timers[_MV_FWD_TIMER_IDX] += et - st;
     
-    // 3. Intermediate multiplication, calculate B_{ij} * (U_j^T * x_j)
+    // 4. Intermediate multiplication, calculate B_{ij} * (U_j^T * x_j)
     st = get_wtime_sec();
     if (BD_JIT == 1)
     {
@@ -445,18 +457,20 @@ void H2P_matvec_periodic(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
         if (need_trans) H2P_transpose_y1_to_krnldim(h2pack);
     } else {
         // "Lost butterfly"
+        ERROR_PRINTF("Only support BD_JIT=1 in this function for the moment.\n");
+        return;
     }
     // Multiply the periodic block for root node
     // y1{root} = y1{root} + O * y0{root};  % y1{root} should be empty
     int root_idx     = h2pack->root_idx;
     int root_J_npt   = h2pack->J[root_idx]->length;
     int per_blk_size = root_J_npt * krnl_dim;
-    H2P_dense_mat_t y0_root = h2pack->y0[root_idx];
-    H2P_dense_mat_t y1_root = h2pack->y1[root_idx];
+    H2P_dense_mat_p y0_root = h2pack->y0[root_idx];
+    H2P_dense_mat_p y1_root = h2pack->y1[root_idx];
     H2P_dense_mat_resize(y1_root, 1, per_blk_size);
     if (need_trans) 
     {
-        H2P_dense_mat_t y0_root_tmp = thread_buf[0]->mat0;
+        H2P_dense_mat_p y0_root_tmp = thread_buf[0]->mat0;
         H2P_dense_mat_resize(y0_root_tmp, root_J_npt, krnl_dim);
         H2P_transpose_dmat(1, krnl_dim, root_J_npt, y0_root->data, root_J_npt, y0_root_tmp->data, krnl_dim);
         memcpy(y0_root->data, y0_root_tmp->data, sizeof(DTYPE) * per_blk_size);
@@ -466,37 +480,46 @@ void H2P_matvec_periodic(H2Pack_t h2pack, const DTYPE *x, DTYPE *y)
         1.0, h2pack->per_blk, per_blk_size, y0_root->data, 1, 0.0, y1_root->data, 1
     );
     et = get_wtime_sec();
-    h2pack->timers[_MV_MID_TIMER_IDX] += et - st;
+    timers[_MV_MID_TIMER_IDX] += et - st;
 
-    // 4. Backward transformation, calculate U_i * (B_{ij} * (U_j^T * x_j))
+    // 5. Backward transformation, calculate U_i * (B_{ij} * (U_j^T * x_j))
     st = get_wtime_sec();
-    H2P_matvec_bwd_transform(h2pack, x, y);
+    H2P_matvec_bwd_transform(h2pack, pmt_x, pmt_y);
     et = get_wtime_sec();
-    h2pack->timers[_MV_BW_TIMER_IDX] += et - st;
+    timers[_MV_BWD_TIMER_IDX] += et - st;
 
-    // 5. Dense multiplication, calculate D_i * x_i
+    // 6. Dense multiplication, calculate D_i * x_i
     st = get_wtime_sec();
     if (BD_JIT == 1)
     {
         H2P_matvec_periodic_dense_mult_JIT(h2pack, x_, y_);
     } else {
         // "Lost butterfly"
+        ERROR_PRINTF("Only support BD_JIT=1 in this function for the moment.\n");
+        return;
     }
     et = get_wtime_sec();
-    h2pack->timers[_MV_DEN_TIMER_IDX] += et - st;
+    timers[_MV_DEN_TIMER_IDX] += et - st;
     
-    // 6. Sum yT partial results into y if needed 
+    // 7. Sum yT partial results into y if needed 
     st = get_wtime_sec();
     // We use xT here to hold the transpose of yT
     if (need_trans)
     {
         H2P_transpose_dmat(n_thread, krnl_dim, n_point, yT, n_point, xT, krnl_dim);
         #pragma omp parallel for simd
-        for (int i = 0; i < krnl_mat_size; i++) y[i] += xT[i];
-        h2pack->mat_size[_MV_RDC_SIZE_IDX] += 2 * h2pack->krnl_mat_size;
+        for (int i = 0; i < krnl_mat_size; i++) pmt_y[i] += xT[i];
+        mat_size[_MV_VOP_SIZE_IDX] += 4 * krnl_mat_size;
     }
     et = get_wtime_sec();
-    h2pack->timers[_MV_RDC_TIMER_IDX] += et - st;
+    timers[_MV_VOP_TIMER_IDX] += et - st;
+
+    // 8. Backward permute the output vector
+    st = get_wtime_sec();
+    H2P_permute_vector_backward(h2pack, pmt_y, y);
+    et = get_wtime_sec();
+    timers[_MV_VOP_TIMER_IDX] += et - st;
+    mat_size[_MV_VOP_SIZE_IDX] += 2 * krnl_mat_size;
 
     h2pack->n_matvec++;
 }

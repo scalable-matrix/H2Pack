@@ -48,7 +48,7 @@ static inline void swap_DTYPE(DTYPE *x, DTYPE *y, int len)
 //   p : Matrix A column permutation array, A(:, p) = A * P
 //   r : Dimension of upper-triangular matrix R11
 void H2P_partial_pivot_QR(
-    H2P_dense_mat_t A, const int tol_rank, const DTYPE tol_norm, 
+    H2P_dense_mat_p A, const int tol_rank, const DTYPE tol_norm, 
     const int rel_norm, int *p, int *r, const int n_thread, DTYPE *QR_buff
 )
 {
@@ -178,7 +178,7 @@ void H2P_partial_pivot_QR(
 // Size of QR_buff: (2*kdim+2)*A->nrow + (kdim+1)*A->ncol
 // BLAS-3 approach, ref: https://doi.org/10.1145/1513895.1513904
 void H2P_partial_pivot_QR_kdim(
-    H2P_dense_mat_t A, const int kdim, const int tol_rank, const DTYPE tol_norm, 
+    H2P_dense_mat_p A, const int kdim, const int tol_rank, const DTYPE tol_norm, 
     const int rel_norm, int *p, int *r, const int n_thread, DTYPE *QR_buff
 )
 {
@@ -410,7 +410,7 @@ void H2P_partial_pivot_QR_kdim(
 //   A : Matrix R: [R11, R12]
 //   p : Matrix A column permutation array, A(:, p) = A * P
 void H2P_ID_QR(
-    H2P_dense_mat_t A, const int stop_type, void *stop_param, int *p, 
+    H2P_dense_mat_p A, const int stop_type, void *stop_param, int *p, 
     const int n_thread, DTYPE *QR_buff, const int kdim
 )
 {
@@ -495,8 +495,8 @@ static void H2P_qsort_key_value(int *key, int *val, const int l, const int r)
 // Interpolative Decomposition (ID) using partial QR over rows of a target 
 // matrix. Partial pivoting QR may need to be upgraded to SRRQR later. 
 void H2P_ID_compress(
-    H2P_dense_mat_t A, const int stop_type, void *stop_param, H2P_dense_mat_t *U_, 
-    H2P_int_vec_t J, const int n_thread, DTYPE *QR_buff, int *ID_buff, const int kdim
+    H2P_dense_mat_p A, const int stop_type, void *stop_param, H2P_dense_mat_p *U_, 
+    H2P_int_vec_p J, const int n_thread, DTYPE *QR_buff, int *ID_buff, const int kdim
 )
 {
     // 1. Partial pivoting QR for A^T
@@ -508,7 +508,7 @@ void H2P_ID_compress(
     A->ncol = nrow;
     H2P_int_vec_set_capacity(J, nrow);
     H2P_ID_QR(A, stop_type, stop_param, J->data, n_thread, QR_buff, kdim);
-    H2P_dense_mat_t R = A; // Note: the output R stored in A is still stored in column major style
+    H2P_dense_mat_p R = A; // Note: the output R stored in A is still stored in column major style
     int r = A->nrow;  // Obtained rank
     J->length = r;
     
@@ -527,7 +527,7 @@ void H2P_ID_compress(
     for (int i = 0; i < nrow; i++) p1[i] = i1[p0[i]];
     
     // 3. Form the output U
-    H2P_dense_mat_t U;
+    H2P_dense_mat_p U;
     if (r == 0)
     {
         // Special case: rank = 0, set U and J as empty

@@ -26,7 +26,7 @@
 //   h2pack : H2Pack structure with point partitioning info
 // Output parameter:
 //   h2pack : H2Pack structure with H2 projection matrices
-void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
+void H2P_build_H2_UJ_proxy(H2Pack_p h2pack)
 {
     int    pt_dim         = h2pack->pt_dim;
     int    xpt_dim        = h2pack->xpt_dim;
@@ -45,10 +45,10 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
     DTYPE  *enbox         = h2pack->enbox;
     size_t *mat_size      = h2pack->mat_size;
     void   *krnl_param    = h2pack->krnl_param;
-    H2P_dense_mat_t  *pp  = h2pack->pp;
-    H2P_thread_buf_t *thread_buf = h2pack->tb;
+    H2P_dense_mat_p  *pp  = h2pack->pp;
+    H2P_thread_buf_p *thread_buf = h2pack->tb;
     kernel_eval_fptr krnl_eval   = h2pack->krnl_eval;
-    DAG_task_queue_t upward_tq   = h2pack->upward_tq;
+    DAG_task_queue_p upward_tq   = h2pack->upward_tq;
     void *stop_param = NULL;
     if (stop_type == QR_RANK) 
         stop_param = &h2pack->QR_stop_rank;
@@ -57,9 +57,9 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
     
     // 1. Allocate U and J
     h2pack->n_UJ = n_node;
-    h2pack->U       = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
-    h2pack->J       = (H2P_int_vec_t*)   malloc(sizeof(H2P_int_vec_t)   * n_node);
-    h2pack->J_coord = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
+    h2pack->U       = (H2P_dense_mat_p*) malloc(sizeof(H2P_dense_mat_p) * n_node);
+    h2pack->J       = (H2P_int_vec_p*)   malloc(sizeof(H2P_int_vec_p)   * n_node);
+    h2pack->J_coord = (H2P_dense_mat_p*) malloc(sizeof(H2P_dense_mat_p) * n_node);
     ASSERT_PRINTF(h2pack->U       != NULL, "Failed to allocate %d U matrices\n", n_node);
     ASSERT_PRINTF(h2pack->J       != NULL, "Failed to allocate %d J matrices\n", n_node);
     ASSERT_PRINTF(h2pack->J_coord != NULL, "Failed to allocate %d J_coord auxiliary matrices\n", n_node);
@@ -69,20 +69,20 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
         h2pack->J[i]       = NULL;
         h2pack->J_coord[i] = NULL;
     }
-    H2P_dense_mat_t *U       = h2pack->U;
-    H2P_int_vec_t   *J       = h2pack->J;
-    H2P_dense_mat_t *J_coord = h2pack->J_coord;
+    H2P_dense_mat_p *U       = h2pack->U;
+    H2P_int_vec_p   *J       = h2pack->J;
+    H2P_dense_mat_p *J_coord = h2pack->J_coord;
     
     // 2. Construct U for nodes whose level is not smaller than min_adm_level.
     //    min_adm_level is the highest level that still has admissible blocks.
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
-        H2P_dense_mat_t A_block         = thread_buf[tid]->mat0;
-        H2P_dense_mat_t node_skel_coord = thread_buf[tid]->mat1;
-        H2P_dense_mat_t QR_buff         = thread_buf[tid]->mat2;
-        H2P_int_vec_t   sub_idx         = thread_buf[tid]->idx0;
-        H2P_int_vec_t   ID_buff         = thread_buf[tid]->idx1;
+        H2P_dense_mat_p A_block         = thread_buf[tid]->mat0;
+        H2P_dense_mat_p node_skel_coord = thread_buf[tid]->mat1;
+        H2P_dense_mat_p QR_buff         = thread_buf[tid]->mat2;
+        H2P_int_vec_p   sub_idx         = thread_buf[tid]->idx0;
+        H2P_int_vec_p   ID_buff         = thread_buf[tid]->idx1;
 
         thread_buf[tid]->timer = -get_wtime_sec();
         int node = DAG_task_queue_get_task(upward_tq);
@@ -103,7 +103,7 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
                     J[node]->data[k] = pt_s + k;
                 J[node]->length = node_npt;
                 H2P_dense_mat_init(&J_coord[node], xpt_dim, node_npt);
-                H2P_copy_matrix_block(xpt_dim, node_npt, coord + pt_s, n_point, J_coord[node]->data, node_npt);
+                copy_matrix_block(sizeof(DTYPE), xpt_dim, node_npt, coord + pt_s, n_point, J_coord[node]->data, node_npt);
             } else {
                 // Non-leaf nodes, gather row indices from children nodes
                 int n_child_node = n_child[node];
@@ -138,7 +138,7 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
                     int dst_ld = node_skel_coord->ncol;
                     DTYPE *src_mat = J_coord[i_child_node]->data;
                     DTYPE *dst_mat = node_skel_coord->data + J_child_size; 
-                    H2P_copy_matrix_block(xpt_dim, src_ld, src_mat, src_ld, dst_mat, dst_ld);
+                    copy_matrix_block(sizeof(DTYPE), xpt_dim, src_ld, src_mat, src_ld, dst_mat, dst_ld);
                     J_child_size += J[i_child_node]->length;
                 }
             }  // End of "if (level == 0)"
@@ -167,8 +167,8 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
             // It seems that this part makes the calculation slower instead of faster
             if (A_blk_ncol > 2 * A_blk_nrow && krnl_dim >= 3)
             {
-                H2P_dense_mat_t A_block1 = node_skel_coord;
-                H2P_dense_mat_t rand_mat = QR_buff;
+                H2P_dense_mat_p A_block1 = node_skel_coord;
+                H2P_dense_mat_p rand_mat = QR_buff;
                 H2P_dense_mat_resize(A_block1, A_blk_nrow, A_blk_nrow);
                 H2P_dense_mat_resize(rand_mat, A_blk_ncol, A_blk_nrow);
                 H2P_gen_normal_distribution(0.0, 1.0, A_blk_ncol * A_blk_nrow, rand_mat->data);
@@ -178,7 +178,7 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
                     0.0, A_block1->data,  A_block1->ld
                 );
                 H2P_dense_mat_resize(A_block, A_blk_nrow, A_blk_nrow);
-                H2P_copy_matrix_block(A_blk_nrow, A_blk_nrow, A_block1->data, A_block1->ld, A_block->data, A_block->ld);
+                copy_matrix_block(sizeof(DTYPE), A_blk_nrow, A_blk_nrow, A_block1->data, A_block1->ld, A_block->data, A_block->ld);
                 H2P_dense_mat_normalize_columns(A_block, A_block1);
             }
             #endif
@@ -239,11 +239,11 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
             U[i]->ncol = 0;
             U[i]->ld   = 0;
         } else {
-            mat_size[_U_SIZE_IDX]     += U[i]->nrow * U[i]->ncol;
-            mat_size[_MV_FW_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
-            mat_size[_MV_FW_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
-            mat_size[_MV_BW_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
-            mat_size[_MV_BW_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
+            mat_size[_U_SIZE_IDX]      += U[i]->nrow * U[i]->ncol;
+            mat_size[_MV_FWD_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
+            mat_size[_MV_FWD_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
+            mat_size[_MV_BWD_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
+            mat_size[_MV_BWD_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
         }
         if (J[i] == NULL) H2P_int_vec_init(&J[i], 1);
         if (J_coord[i] == NULL)
@@ -265,7 +265,7 @@ void H2P_build_H2_UJ_proxy(H2Pack_t h2pack)
 //   h2pack : H2Pack structure with point partitioning info
 // Output parameter:
 //   h2pack : H2Pack structure with HSS projection matrices
-void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
+void H2P_build_HSS_UJ_hybrid(H2Pack_p h2pack)
 {
     int    pt_dim            = h2pack->pt_dim;
     int    xpt_dim           = h2pack->xpt_dim;
@@ -293,8 +293,8 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
     DTYPE  *enbox            = h2pack->enbox;
     size_t *mat_size         = h2pack->mat_size;
     void   *krnl_param       = h2pack->krnl_param;
-    H2P_dense_mat_t  *pp         = h2pack->pp;
-    H2P_thread_buf_t *thread_buf = h2pack->tb;
+    H2P_dense_mat_p  *pp         = h2pack->pp;
+    H2P_thread_buf_p *thread_buf = h2pack->tb;
     kernel_eval_fptr krnl_eval   = h2pack->krnl_eval;
     void *stop_param = NULL;
     if (stop_type == QR_RANK) 
@@ -304,9 +304,9 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
     
     // 1. Allocate U and J
     h2pack->n_UJ = n_node;
-    h2pack->U       = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
-    h2pack->J       = (H2P_int_vec_t*)   malloc(sizeof(H2P_int_vec_t)   * n_node);
-    h2pack->J_coord = (H2P_dense_mat_t*) malloc(sizeof(H2P_dense_mat_t) * n_node);
+    h2pack->U       = (H2P_dense_mat_p*) malloc(sizeof(H2P_dense_mat_p) * n_node);
+    h2pack->J       = (H2P_int_vec_p*)   malloc(sizeof(H2P_int_vec_p)   * n_node);
+    h2pack->J_coord = (H2P_dense_mat_p*) malloc(sizeof(H2P_dense_mat_p) * n_node);
     ASSERT_PRINTF(h2pack->U       != NULL, "Failed to allocate %d U matrices\n", n_node);
     ASSERT_PRINTF(h2pack->J       != NULL, "Failed to allocate %d J matrices\n", n_node);
     ASSERT_PRINTF(h2pack->J_coord != NULL, "Failed to allocate %d J_coord auxiliary matrices\n", n_node);
@@ -316,9 +316,9 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
         h2pack->J[i]       = NULL;
         h2pack->J_coord[i] = NULL;
     }
-    H2P_dense_mat_t *U       = h2pack->U;
-    H2P_int_vec_t   *J       = h2pack->J;
-    H2P_dense_mat_t *J_coord = h2pack->J_coord;
+    H2P_dense_mat_p *U       = h2pack->U;
+    H2P_int_vec_p   *J       = h2pack->J;
+    H2P_dense_mat_p *J_coord = h2pack->J_coord;
 
     double *U_timers = (double*) malloc(sizeof(double) * n_thread * 8);
     
@@ -334,7 +334,7 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
             J[node]->data[k] = pt_s + k;
         J[node]->length = node_npt;
         H2P_dense_mat_init(&J_coord[node], xpt_dim, node_npt);
-        H2P_copy_matrix_block(xpt_dim, node_npt, coord + pt_s, n_point, J_coord[node]->data, node_npt);
+        copy_matrix_block(sizeof(DTYPE), xpt_dim, node_npt, coord + pt_s, n_point, J_coord[node]->data, node_npt);
     }
 
     // 3. Hierarchical construction level by level. min_adm_level is the 
@@ -377,13 +377,13 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
         #pragma omp parallel num_threads(n_thread_i)
         {
             int tid = omp_get_thread_num();
-            H2P_int_vec_t   inadm_skel_idx   = thread_buf[tid]->idx0;
-            H2P_int_vec_t   sub_idx          = thread_buf[tid]->idx0;
-            H2P_int_vec_t   ID_buff          = thread_buf[tid]->idx1;
-            H2P_dense_mat_t node_skel_coord  = thread_buf[tid]->mat0;
-            H2P_dense_mat_t inadm_skel_coord = thread_buf[tid]->mat1;
-            H2P_dense_mat_t A_block          = thread_buf[tid]->mat2;
-            H2P_dense_mat_t QR_buff          = thread_buf[tid]->mat1;
+            H2P_int_vec_p   inadm_skel_idx   = thread_buf[tid]->idx0;
+            H2P_int_vec_p   sub_idx          = thread_buf[tid]->idx0;
+            H2P_int_vec_p   ID_buff          = thread_buf[tid]->idx1;
+            H2P_dense_mat_p node_skel_coord  = thread_buf[tid]->mat0;
+            H2P_dense_mat_p inadm_skel_coord = thread_buf[tid]->mat1;
+            H2P_dense_mat_p A_block          = thread_buf[tid]->mat2;
+            H2P_dense_mat_p QR_buff          = thread_buf[tid]->mat1;
 
             double st, et, krnl_t = 0.0, randn_t = 0.0, gemm_t = 0.0, QR_t = 0.0, other_t = 0.0;
             
@@ -434,7 +434,7 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                         int dst_ld = node_skel_coord->ncol;
                         DTYPE *src_mat = J_coord[i_child_node]->data;
                         DTYPE *dst_mat = node_skel_coord->data + J_child_size; 
-                        H2P_copy_matrix_block(xpt_dim, src_ld, src_mat, src_ld, dst_mat, dst_ld);
+                        copy_matrix_block(sizeof(DTYPE), xpt_dim, src_ld, src_mat, src_ld, dst_mat, dst_ld);
                         J_child_size += J[i_child_node]->length;
                     }
                 }
@@ -486,8 +486,8 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                 }
                 if (node_pp_npt > 0)
                 {
-                    H2P_copy_matrix_block(
-                        xpt_dim, node_pp_npt, pp[level]->data, pp[level]->ld, 
+                    copy_matrix_block( 
+                        sizeof(DTYPE), xpt_dim, node_pp_npt, pp[level]->data, pp[level]->ld, 
                         inadm_skel_coord->data + inadm_skel_npt, inadm_skel_coord->ld
                     );
                 }
@@ -510,8 +510,8 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                 if (A_blk_ncol > 2 * A_blk_nrow)
                 {
                     st = get_wtime_sec();
-                    H2P_dense_mat_t A_block1 = node_skel_coord;
-                    H2P_dense_mat_t rand_mat = inadm_skel_coord;
+                    H2P_dense_mat_p A_block1 = node_skel_coord;
+                    H2P_dense_mat_p rand_mat = inadm_skel_coord;
                     H2P_dense_mat_resize(A_block1, A_blk_nrow, A_blk_nrow);
                     H2P_dense_mat_resize(rand_mat, A_blk_ncol, A_blk_nrow);
                     H2P_gen_normal_distribution(0.0, 1.0, A_blk_ncol * A_blk_nrow, rand_mat->data);
@@ -525,7 +525,7 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
                         0.0, A_block1->data,  A_block1->ld
                     );
                     H2P_dense_mat_resize(A_block, A_blk_nrow, A_blk_nrow);
-                    H2P_copy_matrix_block(A_blk_nrow, A_blk_nrow, A_block1->data, A_block1->ld, A_block->data, A_block->ld);
+                    copy_matrix_block(sizeof(DTYPE), A_blk_nrow, A_blk_nrow, A_block1->data, A_block1->ld, A_block->data, A_block->ld);
                     et = get_wtime_sec();
                     gemm_t += et - st;
                 }
@@ -607,11 +607,11 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
             U[i]->ncol = 0;
             U[i]->ld   = 0;
         } else {
-            mat_size[_U_SIZE_IDX]     += U[i]->nrow * U[i]->ncol;
-            mat_size[_MV_FW_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
-            mat_size[_MV_FW_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
-            mat_size[_MV_BW_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
-            mat_size[_MV_BW_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
+            mat_size[_U_SIZE_IDX]      += U[i]->nrow * U[i]->ncol;
+            mat_size[_MV_FWD_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
+            mat_size[_MV_FWD_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
+            mat_size[_MV_BWD_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
+            mat_size[_MV_BWD_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
         }
         if (J[i] == NULL) H2P_int_vec_init(&J[i], 1);
         if (J_coord[i] == NULL)
@@ -636,7 +636,7 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_t h2pack)
 //   h2pack : H2Pack structure with H2 projection matrices
 // Output parameter:
 //   h2pack : H2Pack structure with H2 generator matrices metadata
-void H2P_generate_B_metadata(H2Pack_t h2pack)
+void H2P_generate_B_metadata(H2Pack_p h2pack)
 {
     int    BD_JIT          = h2pack->BD_JIT;
     int    krnl_dim        = h2pack->krnl_dim;
@@ -648,7 +648,7 @@ void H2P_generate_B_metadata(H2Pack_t h2pack)
     int    *pt_cluster     = h2pack->pt_cluster;
     size_t *mat_size       = h2pack->mat_size;
     double *JIT_flops      = h2pack->JIT_flops;
-    H2P_int_vec_t B_blk    = h2pack->B_blk;
+    H2P_int_vec_p B_blk    = h2pack->B_blk;
 
     int n_r_adm_pair, *r_adm_pairs; 
     if (h2pack->is_HSS)
@@ -685,7 +685,7 @@ void H2P_generate_B_metadata(H2Pack_t h2pack)
     // 2. Generate size, pair, and statistic information of each B matrix
     B_ptr[0] = 0;
     size_t B_total_size = 0;
-    H2P_int_vec_t *J = h2pack->J;
+    H2P_int_vec_p *J = h2pack->J;
     h2pack->node_n_r_adm = (int*) malloc(sizeof(int) * n_node);
     ASSERT_PRINTF(
         h2pack->node_n_r_adm != NULL, 
@@ -773,7 +773,7 @@ void H2P_generate_B_metadata(H2Pack_t h2pack)
 //   h2pack : H2Pack structure with H2 generator matrices metadata
 // Output parameter:
 //   h2pack : H2Pack structure with H2 generator matrices
-void H2P_build_B_AOT(H2Pack_t h2pack)
+void H2P_build_B_AOT(H2Pack_p h2pack)
 {
     int    krnl_dim     = h2pack->krnl_dim;
     int    n_point      = h2pack->n_point;
@@ -785,9 +785,9 @@ void H2P_build_B_AOT(H2Pack_t h2pack)
     DTYPE  *coord       = h2pack->coord;
     void   *krnl_param  = h2pack->krnl_param;
     kernel_eval_fptr krnl_eval   = h2pack->krnl_eval;
-    H2P_int_vec_t    B_blk       = h2pack->B_blk;
-    H2P_dense_mat_t  *J_coord    = h2pack->J_coord;
-    H2P_thread_buf_t *thread_buf = h2pack->tb;
+    H2P_int_vec_p    B_blk       = h2pack->B_blk;
+    H2P_dense_mat_p  *J_coord    = h2pack->J_coord;
+    H2P_thread_buf_p *thread_buf = h2pack->tb;
 
     size_t B_total_size = h2pack->mat_size[_B_SIZE_IDX];
     h2pack->B_data = (DTYPE*) malloc_aligned(sizeof(DTYPE) * B_total_size, 64);
@@ -880,7 +880,7 @@ void H2P_build_B_AOT(H2Pack_t h2pack)
 //   h2pack : H2Pack structure with H2 projection matrices
 // Output parameter:
 //   h2pack : H2Pack structure with H2 dense blocks metadata
-void H2P_generate_D_metadata(H2Pack_t h2pack)
+void H2P_generate_D_metadata(H2Pack_p h2pack)
 {
     int    BD_JIT          = h2pack->BD_JIT;
     int    krnl_dim        = h2pack->krnl_dim;
@@ -893,8 +893,8 @@ void H2P_generate_D_metadata(H2Pack_t h2pack)
     int    *pt_cluster     = h2pack->pt_cluster;
     size_t *mat_size       = h2pack->mat_size;
     double *JIT_flops      = h2pack->JIT_flops;
-    H2P_int_vec_t    D_blk0    = h2pack->D_blk0;
-    H2P_int_vec_t    D_blk1    = h2pack->D_blk1;
+    H2P_int_vec_p    D_blk0    = h2pack->D_blk0;
+    H2P_int_vec_p    D_blk1    = h2pack->D_blk1;
     
     int n_r_inadm_pair, *r_inadm_pairs;
     if (h2pack->is_HSS)
@@ -1018,7 +1018,7 @@ void H2P_generate_D_metadata(H2Pack_t h2pack)
 //   h2pack : H2Pack structure with H2 dense blocks metadata
 // Output parameter:
 //   h2pack : H2Pack structure with H2 dense blocks
-void H2P_build_D_AOT(H2Pack_t h2pack)
+void H2P_build_D_AOT(H2Pack_p h2pack)
 {
     int    krnl_dim       = h2pack->krnl_dim;
     int    n_thread       = h2pack->n_thread;
@@ -1031,9 +1031,9 @@ void H2P_build_D_AOT(H2Pack_t h2pack)
     DTYPE  *coord         = h2pack->coord;
     void   *krnl_param    = h2pack->krnl_param;
     kernel_eval_fptr krnl_eval   = h2pack->krnl_eval;
-    H2P_int_vec_t    D_blk0      = h2pack->D_blk0;
-    H2P_int_vec_t    D_blk1      = h2pack->D_blk1;
-    H2P_thread_buf_t *thread_buf = h2pack->tb;
+    H2P_int_vec_p    D_blk0      = h2pack->D_blk0;
+    H2P_int_vec_p    D_blk1      = h2pack->D_blk1;
+    H2P_thread_buf_p *thread_buf = h2pack->tb;
 
     size_t D_total_size = h2pack->mat_size[_D_SIZE_IDX];
     h2pack->D_data = (DTYPE*) malloc_aligned(sizeof(DTYPE) * D_total_size, 64);
@@ -1128,11 +1128,12 @@ void H2P_build_D_AOT(H2Pack_t h2pack)
 
 // Build H2 representation with a kernel function
 void H2P_build(
-    H2Pack_t h2pack, H2P_dense_mat_t *pp, const int BD_JIT, void *krnl_param, 
+    H2Pack_p h2pack, H2P_dense_mat_p *pp, const int BD_JIT, void *krnl_param, 
     kernel_eval_fptr krnl_eval, kernel_bimv_fptr krnl_bimv, const int krnl_bimv_flops
 )
 {
     double st, et;
+    double *timers = h2pack->timers;
 
     if (pp == NULL)
     {
@@ -1160,20 +1161,37 @@ void H2P_build(
     if (h2pack->is_HSS) H2P_build_HSS_UJ_hybrid(h2pack);
     else H2P_build_H2_UJ_proxy(h2pack);
     et = get_wtime_sec();
-    h2pack->timers[_U_BUILD_TIMER_IDX] = et - st;
+    timers[_U_BUILD_TIMER_IDX] = et - st;
 
     // 2. Build generator matrices
     st = get_wtime_sec();
     H2P_generate_B_metadata(h2pack);
     if (BD_JIT == 0) H2P_build_B_AOT(h2pack);
     et = get_wtime_sec();
-    h2pack->timers[_B_BUILD_TIMER_IDX] = et - st;
+    timers[_B_BUILD_TIMER_IDX] = et - st;
     
     // 3. Build dense blocks
     st = get_wtime_sec();
     H2P_generate_D_metadata(h2pack);
     if (BD_JIT == 0) H2P_build_D_AOT(h2pack);
     et = get_wtime_sec();
-    h2pack->timers[_D_BUILD_TIMER_IDX] = et - st;
+    timers[_D_BUILD_TIMER_IDX] = et - st;
+
+    // 4. Set up forward and backward permutation indices
+    int n_point    = h2pack->n_point;
+    int krnl_dim   = h2pack->krnl_dim;
+    int *coord_idx = h2pack->coord_idx;
+    int *fwd_pmt_idx = (int*) malloc(sizeof(int) * n_point * krnl_dim);
+    int *bwd_pmt_idx = (int*) malloc(sizeof(int) * n_point * krnl_dim);
+    for (int i = 0; i < n_point; i++)
+    {
+        for (int j = 0; j < krnl_dim; j++)
+        {
+            fwd_pmt_idx[i * krnl_dim + j] = coord_idx[i] * krnl_dim + j;
+            bwd_pmt_idx[coord_idx[i] * krnl_dim + j] = i * krnl_dim + j;
+        }
+    }
+    h2pack->fwd_pmt_idx = fwd_pmt_idx;
+    h2pack->bwd_pmt_idx = bwd_pmt_idx;
 }
 

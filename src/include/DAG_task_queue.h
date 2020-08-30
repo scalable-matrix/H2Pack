@@ -14,7 +14,7 @@ struct DAG_task_queue
     int *task_queue;    // Size max_task_id, task queue
 };
 typedef struct DAG_task_queue  DAG_task_queue_s;
-typedef struct DAG_task_queue* DAG_task_queue_t;
+typedef struct DAG_task_queue* DAG_task_queue_p;
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,13 +32,13 @@ extern "C" {
 //   *tq_ : Pointer to an initialized DAG_task_queue structure
 void DAG_task_queue_init(
     const int max_task_id, const int num_dep, const int *DAG_src_ptr, 
-    const int *DAG_dst_idx, DAG_task_queue_t *tq_
+    const int *DAG_dst_idx, DAG_task_queue_p *tq_
 );
 
 // Destroy a DAG_task_queue structure.
 // Input parameter:
 //   tq : A DAG_task_queue structure to be destroyed
-void DAG_task_queue_free(DAG_task_queue_t tq);
+void DAG_task_queue_destroy(DAG_task_queue_p *tq_);
 
 // Get a new task from a DAG_task_queue structure and update its task queue.  
 // This function can be called by multiple threads at the same time.
@@ -47,7 +47,7 @@ void DAG_task_queue_free(DAG_task_queue_t tq);
 // Output parameters:
 //   tq       : Target DAG_task_queue structure with updated task queue info
 //   <return> : Index of the new task. -1 means all tasks are finished.
-int  DAG_task_queue_get_task(DAG_task_queue_t tq);
+int  DAG_task_queue_get_task(DAG_task_queue_p tq);
 
 // Finish a task and push new available tasks to a DAG_task_queue task queue.
 // This function can be called by multiple threads at the same time.
@@ -56,14 +56,14 @@ int  DAG_task_queue_get_task(DAG_task_queue_t tq);
 //   task_id : Index of the finished task
 // Output parameter:
 //   tq : Target DAG_task_queue structure with updated task queue info
-void DAG_task_queue_finish_task(DAG_task_queue_t tq, const int task_id);
+void DAG_task_queue_finish_task(DAG_task_queue_p tq, const int task_id);
 
 // Reset the task queue in a DAG_task_queue structure. 
 // Input parameter:
 //   tq : Target DAG_task_queue structure
 // Output parameter:
 //   tq : Target DAG_task_queue structure with updated task queue info
-void DAG_task_queue_reset(DAG_task_queue_t tq);
+void DAG_task_queue_reset(DAG_task_queue_p tq);
 
 #ifdef __cplusplus
 }

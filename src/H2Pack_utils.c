@@ -43,25 +43,10 @@ void H2P_gather_matrix_columns(
     }
 }
 
-// Copy a block from a matrix to another matrix
-void H2P_copy_matrix_block(
-    const int nrow, const int ncol, DTYPE *src_mat, const int src_ld, 
-    DTYPE *dst_mat, const int dst_ld
-)
-{
-    size_t row_msize = sizeof(DTYPE) * ncol;
-    for (int irow = 0; irow < nrow; irow++)
-    {
-        DTYPE *src_row = src_mat + irow * src_ld;
-        DTYPE *dst_row = dst_mat + irow * dst_ld;
-        memcpy(dst_row, src_row, row_msize);
-    }
-}
-
 // Evaluate a kernel matrix with OpenMP parallelization
 void H2P_eval_kernel_matrix_OMP(
     const void *krnl_param, kernel_eval_fptr krnl_eval, const int krnl_dim, 
-    H2P_dense_mat_t x_coord, H2P_dense_mat_t y_coord, H2P_dense_mat_t kernel_mat
+    H2P_dense_mat_p x_coord, H2P_dense_mat_p y_coord, H2P_dense_mat_p kernel_mat
 )
 {
     const int nx = x_coord->ncol;
@@ -129,7 +114,7 @@ void H2P_gen_coord_in_ring(const int npt, const int pt_dim, const DTYPE L0, cons
 // Generate a random sparse matrix A for calculating y^T := A^T * x^T
 void H2P_gen_rand_sparse_mat_trans(
     const int max_nnz_col, const int k, const int n, 
-    H2P_dense_mat_t A_valbuf, H2P_int_vec_t A_idxbuf
+    H2P_dense_mat_p A_valbuf, H2P_int_vec_p A_idxbuf
 )
 {
     // Note: we calculate y^T := A^T * x^T. Since x/y is row-major, 
@@ -172,7 +157,7 @@ void H2P_gen_rand_sparse_mat_trans(
 // Calculate y^T := A^T * x^T, where A is a sparse matrix, x and y are row-major matrices
 void H2P_calc_sparse_mm_trans(
     const int m, const int n, const int k,
-    H2P_dense_mat_t A_valbuf, H2P_int_vec_t A_idxbuf,
+    H2P_dense_mat_p A_valbuf, H2P_int_vec_p A_idxbuf,
     DTYPE *x, const int ldx, DTYPE *y, const int ldy
 )
 {
@@ -316,7 +301,7 @@ void H2P_set_int_CSR_elem(
 }
 
 // Get B{node0, node1} from a H2Pack structure
-void H2P_get_Bij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_dense_mat_t Bij)
+void H2P_get_Bij_block(H2Pack_p h2pack, const int node0, const int node1, H2P_dense_mat_p Bij)
 {
     int *B_p2i_rowptr = h2pack->B_p2i_rowptr;
     int *B_p2i_colidx = h2pack->B_p2i_colidx;
@@ -341,7 +326,7 @@ void H2P_get_Bij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_de
     H2P_dense_mat_resize(Bij, B_nrow, B_ncol);
     if (h2pack->BD_JIT == 0)
     {
-        H2P_copy_matrix_block(B_nrow, B_ncol, h2pack->B_data + h2pack->B_ptr[B_idx], B_ncol, Bij->data, B_ncol);
+        copy_matrix_block(sizeof(DTYPE), B_nrow, B_ncol, h2pack->B_data + h2pack->B_ptr[B_idx], B_ncol, Bij->data, B_ncol);
     } else {
         int   n_point     = h2pack->n_point;
         int   krnl_dim    = h2pack->krnl_dim;
@@ -352,7 +337,7 @@ void H2P_get_Bij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_de
         DTYPE *coord      = h2pack->coord;
         void  *krnl_param = h2pack->krnl_param;
         kernel_eval_fptr krnl_eval = h2pack->krnl_eval;
-        H2P_dense_mat_t  *J_coord  = h2pack->J_coord;
+        H2P_dense_mat_p  *J_coord  = h2pack->J_coord;
         // (1) Two nodes are of the same level, compress on both sides
         if (level0 == level1)
         {
@@ -393,7 +378,7 @@ void H2P_get_Bij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_de
 }
 
 // Get D{node0, node1} from a H2Pack structure
-void H2P_get_Dij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_dense_mat_t Dij)
+void H2P_get_Dij_block(H2Pack_p h2pack, const int node0, const int node1, H2P_dense_mat_p Dij)
 {
     int *D_p2i_rowptr = h2pack->D_p2i_rowptr;
     int *D_p2i_colidx = h2pack->D_p2i_colidx;
@@ -418,7 +403,7 @@ void H2P_get_Dij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_de
     H2P_dense_mat_resize(Dij, D_nrow, D_ncol);
     if (h2pack->BD_JIT == 0)
     {
-        H2P_copy_matrix_block(D_nrow, D_ncol, h2pack->D_data + h2pack->D_ptr[D_idx], D_ncol, Dij->data, D_ncol);
+        copy_matrix_block(sizeof(DTYPE), D_nrow, D_ncol, h2pack->D_data + h2pack->D_ptr[D_idx], D_ncol, Dij->data, D_ncol);
     } else {
         int   n_point     = h2pack->n_point;
         int   krnl_dim    = h2pack->krnl_dim;
@@ -443,7 +428,7 @@ void H2P_get_Dij_block(H2Pack_t h2pack, const int node0, const int node1, H2P_de
 // approximately the same amount of work
 void H2P_partition_workload(
     const int n_work,  const size_t *work_sizes, const size_t total_size, 
-    const int n_block, H2P_int_vec_t blk_displs
+    const int n_block, H2P_int_vec_p blk_displs
 )
 {
     H2P_int_vec_set_capacity(blk_displs, n_block + 1);
@@ -513,7 +498,7 @@ void H2P_transpose_dmat(
 }
 
 // Shift the coordinates
-void H2P_shift_coord(H2P_dense_mat_t coord, const DTYPE *shift, const DTYPE scale)
+void H2P_shift_coord(H2P_dense_mat_p coord, const DTYPE *shift, const DTYPE scale)
 {
     for (int i = 0; i < coord->nrow; i++)
     {

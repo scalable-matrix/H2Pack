@@ -1,5 +1,5 @@
 
-void test_H2_matmul(H2Pack_t h2pack, const int n_vec)
+void test_H2_matmul(H2Pack_p h2pack, const int n_vec)
 {
     double st, et;
     int n_thread = omp_get_num_threads();

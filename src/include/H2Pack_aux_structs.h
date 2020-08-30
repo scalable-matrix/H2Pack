@@ -22,19 +22,19 @@ struct H2P_tree_node
                           // enbox[0 : dim-1] are the smallest corner coordinate,
                           // enbox[dim : 2*dim-1] are the size of this box.
 };
-typedef struct H2P_tree_node* H2P_tree_node_t;
+typedef struct H2P_tree_node* H2P_tree_node_p;
 
-// Initialize a H2P_tree_node structure
+// Initialize an H2P_tree_node structure
 // Input parameter:
 //   dim : Dimension of point coordinate
 // Output parameter:
 //   node_ : Initialized H2P_tree_node structure
-void H2P_tree_node_init(H2P_tree_node_t *node_, const int dim);
+void H2P_tree_node_init(H2P_tree_node_p *node_, const int dim);
 
-// Recursively destroy a H2P_tree_node node and its children nodes
+// Recursively destroy an H2P_tree_node node and its children nodes
 // Input parameter:
 //   node : H2P_tree_node structure to be destroyed
-void H2P_tree_node_destroy(H2P_tree_node_t node);
+void H2P_tree_node_destroy(H2P_tree_node_p *node_);
 
 // ------------------------------------------------------------------------------ // 
 
@@ -47,20 +47,25 @@ struct H2P_int_vec
     int length;      // Current length of this vector
     int *data;       // Data in this vector
 };
-typedef struct H2P_int_vec* H2P_int_vec_t;
+typedef struct H2P_int_vec* H2P_int_vec_p;
 
-// Initialize a H2P_int_vec structure
+// Initialize an H2P_int_vec structure
 // Input parameter:
 //   capacity : Initial capacity of the vector. If (capacity <= 0 || capacity >= 65536),
 //              capacity will be set as 128.
 // Output parameter:
 //   int_vec_ : Initialized H2P_int_vec structure
-void H2P_int_vec_init(H2P_int_vec_t *int_vec_, int capacity);
+void H2P_int_vec_init(H2P_int_vec_p *int_vec_, int capacity);
 
-// Destroy a H2P_int_vec structure
+// Destroy an H2P_int_vec structure
 // Input parameter:
 //   int_vec : H2P_int_vec structure to be destroyed
-void H2P_int_vec_destroy(H2P_int_vec_t int_vec);
+void H2P_int_vec_destroy(H2P_int_vec_p *int_vec_);
+
+// Reset an H2P_int_vec structure to its default capacity and release the memory
+// Input parameter:
+//   int_vec : H2P_int_vec structure to be reset
+void H2P_int_vec_reset(H2P_int_vec_p int_vec);
 
 // Set the capacity of an initialized H2P_int_vec structure. If new 
 // capacity > original capacity, allocate a new data buffer and copy 
@@ -71,7 +76,7 @@ void H2P_int_vec_destroy(H2P_int_vec_t int_vec);
 //   capacity : New capacity
 // Output parameter:
 //   int_vec  : H2P_int_vec structure with adjusted capacity
-static inline void H2P_int_vec_set_capacity(H2P_int_vec_t int_vec, const int capacity)
+static inline void H2P_int_vec_set_capacity(H2P_int_vec_p int_vec, const int capacity)
 {
     if (capacity > int_vec->capacity)
     {
@@ -84,14 +89,13 @@ static inline void H2P_int_vec_set_capacity(H2P_int_vec_t int_vec, const int cap
     }
 }
 
-// Push an integer to the tail of a H2P_int_vec.
-// Frequently used, inline it.
+// Push an integer to the tail of an H2P_int_vec, inline it for frequently use
 // Input parameters:
 //   int_vec : H2P_int_vec structure
 //   value   : Value to be pushed 
 // Output parameter:
 //   int_vec : H2P_int_vec structure with the pushed value
-static inline void H2P_int_vec_push_back(H2P_int_vec_t int_vec, int value)
+static inline void H2P_int_vec_push_back(H2P_int_vec_p int_vec, int value)
 {
     if (int_vec->capacity == int_vec->length)
         H2P_int_vec_set_capacity(int_vec, int_vec->capacity * 2);
@@ -99,21 +103,21 @@ static inline void H2P_int_vec_push_back(H2P_int_vec_t int_vec, int value)
     int_vec->length++;
 }
 
-// Concatenate values in a H2P_int_vec to another H2P_int_vec
+// Concatenate values in an H2P_int_vec to another H2P_int_vec
 // Input parameters:
 //   dst_vec : Destination H2P_int_vec structure
 //   src_vec : Source H2P_int_vec structure
 // Output parameter:
 //   dst_vec : Destination H2P_int_vec structure
-void H2P_int_vec_concatenate(H2P_int_vec_t dst_vec, H2P_int_vec_t src_vec);
+void H2P_int_vec_concatenate(H2P_int_vec_p dst_vec, H2P_int_vec_p src_vec);
 
-// Gather elements in a H2P_int_vec to another H2P_int_vec
+// Gather elements in an H2P_int_vec to another H2P_int_vec
 // Input parameters:
 //   src_vec : Source H2P_int_vec structure
 //   idx     : Indices of elements to be gathered
 // Output parameter:
 //   dst_vec : Destination H2P_int_vec structure
-void H2P_int_vec_gather(H2P_int_vec_t src_vec, H2P_int_vec_t idx, H2P_int_vec_t dst_vec);
+void H2P_int_vec_gather(H2P_int_vec_p src_vec, H2P_int_vec_p idx, H2P_int_vec_p dst_vec);
 
 // ------------------------------------------------------------------------------ // 
 
@@ -127,16 +131,16 @@ struct H2P_partition_vars
     int n_leaf_node;                // Number of leaf nodes
     int curr_leaf_idx;              // Index of this leaf node
     int min_adm_level;              // Minimum level of reduced admissible pair
-    H2P_int_vec_t r_inadm_pairs;    // Reduced inadmissible pairs
-    H2P_int_vec_t r_adm_pairs;      // Reduced admissible pairs
+    H2P_int_vec_p r_inadm_pairs;    // Reduced inadmissible pairs
+    H2P_int_vec_p r_adm_pairs;      // Reduced admissible pairs
 };
-typedef struct H2P_partition_vars*  H2P_partition_vars_t;
+typedef struct H2P_partition_vars* H2P_partition_vars_p;
 
-// Initialize a H2P_partition_vars structure
-void H2P_partition_vars_init(H2P_partition_vars_t *vars_);
+// Initialize an H2P_partition_vars structure
+void H2P_partition_vars_init(H2P_partition_vars_p *vars_);
 
-// Destroy a H2P_partition_vars structure
-void H2P_partition_vars_destroy(H2P_partition_vars_t vars);
+// Destroy an H2P_partition_vars structure
+void H2P_partition_vars_destroy(H2P_partition_vars_p *vars_);
 
 // ------------------------------------------------------------------------------ // 
 
@@ -151,20 +155,25 @@ struct H2P_dense_mat
     int   size;   // Size of data, >= nrow * ncol
     DTYPE *data;  // Matrix data
 };
-typedef struct H2P_dense_mat* H2P_dense_mat_t;
+typedef struct H2P_dense_mat* H2P_dense_mat_p;
 
-// Initialize a H2P_dense_mat structure
+// Initialize an H2P_dense_mat structure
 // Input parameters:
 //   nrow : Number of rows of the new dense matrix
 //   ncol : Number of columns of the new dense matrix
 // Output parameter:
 //   mat_ : Initialized H2P_dense_mat structure
-void H2P_dense_mat_init(H2P_dense_mat_t *mat_, const int nrow, const int ncol);
+void H2P_dense_mat_init(H2P_dense_mat_p *mat_, const int nrow, const int ncol);
 
-// Destroy a H2P_dense_mat structure
+// Destroy an H2P_dense_mat structure
 // Input parameter:
 //   mat : H2P_dense_mat structure to be destroyed 
-void H2P_dense_mat_destroy(H2P_dense_mat_t mat);
+void H2P_dense_mat_destroy(H2P_dense_mat_p *mat_);
+
+// Reset an H2P_dense_mat structure to its default size (0-by-0) and release the memory
+// Input parameter:
+//   mat : H2P_dense_mat structure to be reset 
+void H2P_dense_mat_reset(H2P_dense_mat_p mat);
 
 // Resize an initialized H2P_dense_mat structure, original data in 
 // the dense matrix will be unavailable after this operation.
@@ -174,7 +183,7 @@ void H2P_dense_mat_destroy(H2P_dense_mat_t mat);
 //   ncol : Number of columns of the new dense matrix
 // Output parameter:
 //   mat  : Resized H2P_dense_mat structure
-static inline void H2P_dense_mat_resize(H2P_dense_mat_t mat, const int nrow, const int ncol)
+static inline void H2P_dense_mat_resize(H2P_dense_mat_p mat, const int nrow, const int ncol)
 {
     int new_size = nrow * ncol;
     mat->nrow = nrow;
@@ -189,14 +198,14 @@ static inline void H2P_dense_mat_resize(H2P_dense_mat_t mat, const int nrow, con
     }
 }
 
-// Copy the data in a H2P_dense_mat structure to another H2P_dense_mat structure
+// Copy the data in an H2P_dense_mat structure to another H2P_dense_mat structure
 // Input parameter:
 //   src_mat : Source H2P_dense_mat
 // Output parameter:
 //   dst_mat : Destination H2P_dense_mat
-void H2P_dense_mat_copy(H2P_dense_mat_t src_mat, H2P_dense_mat_t dst_mat);
+void H2P_dense_mat_copy(H2P_dense_mat_p src_mat, H2P_dense_mat_p dst_mat);
 
-// Permute rows in a H2P_dense_mat structure
+// Permute rows in an H2P_dense_mat structure
 // WARNING: This function DOES NOT perform sanity check!
 // Input parameters:
 //   mat : H2P_dense_mat structure to be permuted
@@ -204,9 +213,9 @@ void H2P_dense_mat_copy(H2P_dense_mat_t src_mat, H2P_dense_mat_t dst_mat);
 //         in the original matrix
 // Output parameter:
 //   mat : H2P_dense_mat structure with permuted row
-void H2P_dense_mat_permute_rows(H2P_dense_mat_t mat, const int *p);
+void H2P_dense_mat_permute_rows(H2P_dense_mat_p mat, const int *p);
 
-// Select rows in a H2P_dense_mat structure
+// Select rows in an H2P_dense_mat structure
 // WARNING: This function DOES NOT perform sanity check!
 // Input parameters:
 //   mat     : H2P_dense_mat structure to be selected
@@ -214,9 +223,9 @@ void H2P_dense_mat_permute_rows(H2P_dense_mat_t mat, const int *p);
 //             new matrix is the row_idx->data[i]-th row in the original matrix
 // Output parameter:
 //   mat : H2P_dense_mat structure with selected rows
-void H2P_dense_mat_select_rows(H2P_dense_mat_t mat, H2P_int_vec_t row_idx);
+void H2P_dense_mat_select_rows(H2P_dense_mat_p mat, H2P_int_vec_p row_idx);
 
-// Select columns in a H2P_dense_mat structure
+// Select columns in an H2P_dense_mat structure
 // WARNING: This function DOES NOT perform sanity check!
 // Input parameters:
 //   mat     : H2P_dense_mat structure to be selected
@@ -224,15 +233,15 @@ void H2P_dense_mat_select_rows(H2P_dense_mat_t mat, H2P_int_vec_t row_idx);
 //             new matrix is the col_idx->data[i]-th column in the original matrix
 // Output parameter:
 //   mat : H2P_dense_mat structure with selected columns
-void H2P_dense_mat_select_columns(H2P_dense_mat_t mat, H2P_int_vec_t col_idx);
+void H2P_dense_mat_select_columns(H2P_dense_mat_p mat, H2P_int_vec_p col_idx);
 
-// Normalize columns in a H2P_dense_mat structure
+// Normalize columns in an H2P_dense_mat structure
 // Input parameters:
 //   mat     : H2P_dense_mat structure to be normalized columns
 //   workbuf : H2P_dense_mat structure as working buffer
 // Output parameter:
 //   mat     : H2P_dense_mat structure with normalized columns
-void H2P_dense_mat_normalize_columns(H2P_dense_mat_t mat, H2P_dense_mat_t workbuf);
+void H2P_dense_mat_normalize_columns(H2P_dense_mat_p mat, H2P_dense_mat_p workbuf);
 
 // Perform GEMM C := alpha * op(A) * op(B) + beta * C
 // Input parameters:
@@ -243,7 +252,7 @@ void H2P_dense_mat_normalize_columns(H2P_dense_mat_t mat, H2P_dense_mat_t workbu
 //   C : Result matrix, need to be properly resized before entering if beta != 0
 void H2P_dense_mat_gemm(
     const DTYPE alpha, const DTYPE beta, const int transA, const int transB, 
-    H2P_dense_mat_t A, H2P_dense_mat_t B, H2P_dense_mat_t C
+    H2P_dense_mat_p A, H2P_dense_mat_p B, H2P_dense_mat_p C
 );
 
 // Create a block diagonal matrix created by aligning the input matrices along the diagonal
@@ -252,20 +261,20 @@ void H2P_dense_mat_gemm(
 //   idx  : Size unknown, indices of the input matrices in the candidate set
 // Output parameter:
 //   new_mat : The result matrix
-void H2P_dense_mat_blkdiag(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_mat_t new_mat);
+void H2P_dense_mat_blkdiag(H2P_dense_mat_p *mats, H2P_int_vec_p idx, H2P_dense_mat_p new_mat);
 
 // Vertically concatenates the input matrices
 // Input / output parameters are the same as H2P_dense_mat_blkdiag()
-void H2P_dense_mat_vertcat(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_mat_t new_mat);
+void H2P_dense_mat_vertcat(H2P_dense_mat_p *mats, H2P_int_vec_p idx, H2P_dense_mat_p new_mat);
 
 // Horizontally concatenates the input matrices
 // Input / output parameters are the same as H2P_dense_mat_blkdiag()
-void H2P_dense_mat_horzcat(H2P_dense_mat_t *mats, H2P_int_vec_t idx, H2P_dense_mat_t new_mat);
+void H2P_dense_mat_horzcat(H2P_dense_mat_p *mats, H2P_int_vec_p idx, H2P_dense_mat_p new_mat);
 
-// Print a H2P_dense_mat structure, for debugging
+// Print an H2P_dense_mat structure, for debugging
 // Input parameter:
 //   mat : H2P_dense_mat structure to be printed
-void H2P_dense_mat_print(H2P_dense_mat_t mat);
+void H2P_dense_mat_print(H2P_dense_mat_p mat);
 
 // ------------------------------------------------------------------------------ // 
 
@@ -274,32 +283,32 @@ void H2P_dense_mat_print(H2P_dense_mat_t mat);
 
 struct H2P_thread_buf
 {
-    H2P_int_vec_t   idx0;   // H2P_build_H2_UJ_proxy, H2P_build_HSS_UJ_hybrid
-    H2P_int_vec_t   idx1;   // H2P_build_H2_UJ_proxy, H2P_build_HSS_UJ_hybrid
-    H2P_dense_mat_t mat0;   // H2P_build_H2_UJ_proxy, H2P_build_HSS_UJ_hybrid
-    H2P_dense_mat_t mat1;   // H2P_build_H2_UJ_proxy, H2P_build_HSS_UJ_hybrid, H2P_matvec
-    H2P_dense_mat_t mat2;   // H2P_build_HSS_UJ_hybrid
+    H2P_int_vec_p   idx0;   // H2P_build_H2_UJ_proxy, H2P_build_HSS_UJ_hybrid
+    H2P_int_vec_p   idx1;   // H2P_build_H2_UJ_proxy, H2P_build_HSS_UJ_hybrid
+    H2P_dense_mat_p mat0;   // H2P_build_H2_UJ_proxy, H2P_build_HSS_UJ_hybrid
+    H2P_dense_mat_p mat1;   // H2P_build_H2_UJ_proxy, H2P_build_HSS_UJ_hybrid, H2P_matvec
+    H2P_dense_mat_p mat2;   // H2P_build_HSS_UJ_hybrid
     DTYPE  *y;              // Used in H2P_matvec
     double timer;           // Used for profiling
 };
-typedef struct H2P_thread_buf* H2P_thread_buf_t;
+typedef struct H2P_thread_buf* H2P_thread_buf_p;
 
-// Initialize a H2P_thread_buf structure
+// Initialize an H2P_thread_buf structure
 // Input parameter:
 //   krnl_mat_size : Size of the kernel matrix
 // Output parameter:
 //   thread_buf_ : Initialized H2P_thread_buf structure
-void H2P_thread_buf_init(H2P_thread_buf_t *thread_buf_, const int krnl_mat_size);
+void H2P_thread_buf_init(H2P_thread_buf_p *thread_buf_, const int krnl_mat_size);
 
-// Destroy a H2P_thread_buf structure
+// Destroy an H2P_thread_buf structure
 // Input parameter:
 //   thread_buf : H2P_thread_buf structure to be destroyed 
-void H2P_thread_buf_destroy(H2P_thread_buf_t thread_buf);
+void H2P_thread_buf_destroy(H2P_thread_buf_p *thread_buf_);
 
-// Reset a H2P_thread_buf structure (release memory)
+// Reset an H2P_thread_buf structure (release memory)
 // Input parameter:
 //   thread_buf : H2P_thread_buf structure to be reset 
-void H2P_thread_buf_reset(H2P_thread_buf_t thread_buf);
+void H2P_thread_buf_reset(H2P_thread_buf_p thread_buf);
 
 // ------------------------------------------------------------------------------ // 
 

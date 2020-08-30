@@ -92,40 +92,28 @@ int main(int argc, char **argv)
     
     parse_scalar_params(argc, argv);
     test_params.krnl_eval = Gaussian_3D_eval_std_d;
-    test_params.krnl_bimv = NULL; //Gaussian_3D_bimv_std_d;
+    test_params.krnl_bimv = Gaussian_3D_bimv_std_d;
 
     double st, et;
 
-    H2Pack_t h2pack;
+    H2Pack_p h2pack;
     
     H2P_init(&h2pack, test_params.pt_dim, test_params.krnl_dim, QR_REL_NRM, &test_params.rel_tol);
     
-    
-    H2P_partition_points(h2pack, test_params.n_point, test_params.coord, 0, 0);
-    
-    // Check if point index permutation is correct in H2Pack
-    DTYPE coord_diff_sum = 0.0;
-    for (int i = 0; i < test_params.n_point; i++)
-    {
-        DTYPE *coord_s_i = h2pack->coord + i;
-        DTYPE *coord_i   = test_params.coord + h2pack->coord_idx[i];
-        for (int j = 0; j < test_params.pt_dim; j++)
-        {
-            int idx_j = j * test_params.n_point;
-            coord_diff_sum += DABS(coord_s_i[idx_j] - coord_i[idx_j]);
-        }
-    }
-    printf("Point index permutation results %s", coord_diff_sum < 1e-15 ? "are correct\n" : "are wrong\n");
+    H2P_calc_enclosing_box(test_params.pt_dim, test_params.n_point, test_params.coord, test_params.pp_fname, &h2pack->root_enbox);
 
-    H2P_dense_mat_t *pp;
-    DTYPE max_L = h2pack->enbox[h2pack->root_idx * 2 * test_params.pt_dim + test_params.pt_dim];
+    int max_leaf_points = 0;
+    DTYPE max_leaf_size = 0.0;    
+    H2P_partition_points(h2pack, test_params.n_point, test_params.coord, max_leaf_points, max_leaf_size);
+
+    H2P_dense_mat_p *pp;
     st = get_wtime_sec();
-    H2P_generate_proxy_point_ID(
-        test_params.pt_dim, test_params.krnl_dim, test_params.rel_tol, h2pack->max_level, 
-        h2pack->min_adm_level, max_L, test_params.krnl_param, test_params.krnl_eval, &pp
+    H2P_generate_proxy_point_ID_file(
+        h2pack, test_params.krnl_param, test_params.krnl_eval,
+        test_params.pp_fname, &pp
     );
     et = get_wtime_sec();
-    printf("H2Pack generate proxy points used %.3lf (s)\n", et - st);
+    printf("H2Pack load/generate proxy points used %.3lf (s)\n", et - st);
     
     H2P_build(
         h2pack, pp, test_params.BD_JIT, test_params.krnl_param, 
@@ -157,18 +145,13 @@ int main(int argc, char **argv)
     // Get reference results
     direct_nbody(
         test_params.krnl_param, test_params.krnl_eval, test_params.pt_dim, test_params.krnl_dim, 
-        h2pack->coord,              test_params.n_point, test_params.n_point, x, 
-        h2pack->coord + check_pt_s, test_params.n_point, n_check_pt,          y0
+        test_params.coord,              test_params.n_point, test_params.n_point, x, 
+        test_params.coord + check_pt_s, test_params.n_point, n_check_pt,          y0
     );
     
     // Warm up, reset timers, and test the matvec performance
     H2P_matvec(h2pack, x, y1);
-    h2pack->n_matvec = 0;
-    h2pack->timers[_MV_FW_TIMER_IDX]  = 0.0;
-    h2pack->timers[_MV_MID_TIMER_IDX] = 0.0;
-    h2pack->timers[_MV_BW_TIMER_IDX]  = 0.0;
-    h2pack->timers[_MV_DEN_TIMER_IDX] = 0.0;
-    h2pack->timers[_MV_RDC_TIMER_IDX] = 0.0;
+    H2P_reset_timers(h2pack);
     //__itt_resume();
     for (int i = 0; i < 10; i++) 
         H2P_matvec(h2pack, x, y1);
@@ -192,5 +175,7 @@ int main(int argc, char **argv)
     free(y0);
     free(y1);
     free_aligned(test_params.coord);
-    H2P_destroy(h2pack);
+    H2P_destroy(&h2pack);
+
+    return 0;
 }

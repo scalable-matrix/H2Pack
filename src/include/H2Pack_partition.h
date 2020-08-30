@@ -20,7 +20,7 @@ extern "C" {
 // Output parameter:
 //   h2pack : H2Pack structure with point partitioning info
 void H2P_partition_points(
-    H2Pack_t h2pack, const int n_point, const DTYPE *coord, 
+    H2Pack_p h2pack, const int n_point, const DTYPE *coord, 
     int max_leaf_points, DTYPE max_leaf_size
 );
 
@@ -29,7 +29,7 @@ void H2P_partition_points(
 //   h2pack : H2Pack structure after calling H2P_partition_points()
 // Output parameter:
 //   h2pack : H2Pack structure with reduced (in)admissible pairs for HSS
-void H2P_HSS_calc_adm_inadm_pairs(H2Pack_t h2pack);
+void H2P_HSS_calc_adm_inadm_pairs(H2Pack_p h2pack);
 
 #ifdef __cplusplus
 }

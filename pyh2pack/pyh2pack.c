@@ -112,7 +112,7 @@ static PyObject *setup(H2Mat *self, PyObject *args, PyObject *keywds) {
     {
         free_aligned(self->params.pts_coord);
         free(self->params.krnl_param);
-        H2P_destroy(self->h2mat);
+        H2P_destroy(&self->h2mat);
         self->flag_setup = 0;
     }
         
@@ -234,7 +234,7 @@ static PyObject *setup(H2Mat *self, PyObject *args, PyObject *keywds) {
     H2P_partition_points(self->h2mat, self->params.pts_num, self->params.pts_coord, max_leaf_points, 0);
 
     //  Main Step 3: construction of the proxy points
-    H2P_dense_mat_t *pp;
+    H2P_dense_mat_p *pp;
     if (self->params.flag_proxysurface == 0)   
     {
         //  Numerical selection of the proxy points
@@ -396,7 +396,7 @@ static PyObject *clean(H2Mat *self) {
     {
         free_aligned(self->params.pts_coord);
         free(self->params.krnl_param);
-        H2P_destroy(self->h2mat);
+        H2P_destroy(&self->h2mat);
         self->flag_setup = 0;
     }
     Py_RETURN_NONE;

@@ -1,10 +1,11 @@
 // @brief    : Implementations of some helper functions I use here and there
 // @author   : Hua Huang <huangh223@gatech.edu>
-// @modified : 2020-07-06
+// @modified : 2020-08-28
 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <complex.h>
 #include <sys/time.h>
 #include <math.h>
 
@@ -109,6 +110,75 @@ void copy_matrix_block(
         size_t src_offset = (size_t) irow * lds_;
         size_t dst_offset = (size_t) irow * ldd_;
         memcpy(dst_ + dst_offset, src_ + src_offset, row_msize);
+    }
+}
+
+// Gather elements from a vector to another vector
+void gather_vector_elements(const size_t dt_size, const int nelem, const int *idx, const void *src, void *dst)
+{
+    if (dt_size == 4)
+    {
+        const float *src_ = (float*) src;
+        float *dst_ = (float*) dst;
+        #pragma omp simd
+        for (int i = 0; i < nelem; i++) dst_[i] = src_[idx[i]];
+    }
+    if (dt_size == 8)
+    {
+        const double *src_ = (double*) src;
+        double *dst_ = (double*) dst;
+        #pragma omp simd
+        for (int i = 0; i < nelem; i++) dst_[i] = src_[idx[i]];
+    }
+    if (dt_size == 16)
+    {
+        const double _Complex *src_ = (double _Complex*) src;
+        double _Complex *dst_ = (double _Complex*) dst;
+        #pragma omp simd
+        for (int i = 0; i < nelem; i++) dst_[i] = src_[idx[i]];
+    }
+}
+
+// Gather rows from a matrix to another matrix
+void gather_matrix_rows(
+    const size_t dt_size, const int nrow, const int ncol, const int *idx, 
+    const void *src, const int lds, void *dst, const int ldd
+)
+{
+    const char *src_ = (char*) src;
+    char *dst_ = (char*) dst;
+    const size_t lds_ = dt_size * (size_t) lds;
+    const size_t ldd_ = dt_size * (size_t) ldd;
+    const size_t row_msize = dt_size * (size_t) ncol;
+    #if defined(_OPENMP)
+    #pragma omp parallel for schedule(static)
+    #endif
+    for (int irow = 0; irow < nrow; irow++)
+    {
+        size_t src_offset = (size_t) idx[irow] * lds_;
+        size_t dst_offset = (size_t) irow * ldd_;
+        memcpy(dst_ + dst_offset, src_ + src_offset, row_msize);
+    }
+}
+
+// Gather columns from a matrix to another matrix
+void gather_matrix_cols(
+    const size_t dt_size, const int nrow, const int ncol, const int *idx, 
+    const void *src, const int lds, void *dst, const int ldd
+)
+{
+    const char *src_ = (char*) src;
+    char *dst_ = (char*) dst;
+    const size_t lds_ = dt_size * (size_t) lds;
+    const size_t ldd_ = dt_size * (size_t) ldd;
+    #if defined(_OPENMP)
+    #pragma omp parallel for schedule(static)
+    #endif
+    for (int irow = 0; irow < nrow; irow++)
+    {
+        size_t src_offset = (size_t) irow * lds_;
+        size_t dst_offset = (size_t) irow * ldd_;
+        gather_vector_elements(dt_size, ncol, idx, src_ + src_offset, dst_ + dst_offset);
     }
 }
 

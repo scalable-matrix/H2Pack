@@ -6,6 +6,12 @@
 #define __HUANGH223_UTILS_H__
 
 #ifdef __cplusplus
+#include <cassert>
+#else
+#include <assert.h>
+#endif
+
+#ifdef __cplusplus
 extern "C" {
 #endif
 

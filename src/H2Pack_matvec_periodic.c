@@ -38,7 +38,7 @@
 void H2P_ext_krnl_mv(
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
-    const DTYPE *x_in, const int ldi, DTYPE * restrict x_out, const int ldo, 
+    const DTYPE *x_in, const int ldi, DTYPE * __restrict x_out, const int ldo, 
     const int xpt_dim, const int krnl_dim, H2P_dense_mat_p workbuf, 
     const void *krnl_param, kernel_mv_fptr krnl_mv
 )

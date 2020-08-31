@@ -266,12 +266,7 @@ void H2P_destroy(H2Pack_p *h2pack_)
     
     // If H2Pack is called from H2P-ERI, pp == J == J_coord == NULL
     
-    if (h2pack->pp != NULL)
-    {
-        for (int i = 0; i <= h2pack->max_level; i++)
-            H2P_dense_mat_destroy(&h2pack->pp[i]);
-        free(h2pack->pp);
-    }
+    // Do not delete pp here since the same pp may be used by multiple H2Pack structures
     
     if (h2pack->J != NULL)
     {

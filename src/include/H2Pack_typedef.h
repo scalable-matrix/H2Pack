@@ -25,7 +25,7 @@ extern "C" {
 typedef void (*kernel_eval_fptr) (
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
-    const void *krnl_param, DTYPE *restrict mat, const int ldm
+    const void *krnl_param, DTYPE * __restrict mat, const int ldm
 );
 
 // Pointer to function that performs kernel matrix matvec using a given set
@@ -50,7 +50,7 @@ typedef void (*kernel_eval_fptr) (
 typedef void (*kernel_mv_fptr) (
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
-    const void *krnl_param, const DTYPE *x_in, DTYPE *restrict x_out
+    const void *krnl_param, const DTYPE *x_in, DTYPE * __restrict x_out
 );
 
 // Pointer to function that performs kernel matrix bi-matvec using given sets
@@ -81,7 +81,7 @@ typedef void (*kernel_bimv_fptr) (
     const DTYPE *coord0, const int ld0, const int n0,
     const DTYPE *coord1, const int ld1, const int n1,
     const void *krnl_param, const DTYPE *x_in_0, const DTYPE *x_in_1, 
-    DTYPE *restrict x_out_0, DTYPE *restrict x_out_1
+    DTYPE * __restrict x_out_0, DTYPE * __restrict x_out_1
 );
 
 // Structure of H2 matrix tree flatten representation

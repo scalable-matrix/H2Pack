@@ -155,6 +155,8 @@ void H2P_build_H2_UJ_proxy(H2Pack_p h2pack)
                 for (int l = 0; l < node_skel_npt; l++)
                     node_skel_coord_k[l] -= box_center_k;
             }
+
+            // (4) Build the kernel matrix block
             int A_blk_nrow = node_skel_npt * krnl_dim;
             int A_blk_ncol = node_pp_npt   * krnl_dim;
             H2P_dense_mat_resize(A_block, A_blk_nrow, A_blk_ncol);
@@ -183,7 +185,7 @@ void H2P_build_H2_UJ_proxy(H2Pack_p h2pack)
             }
             #endif
 
-            // (4) ID compress 
+            // (5) ID compress 
             // Note: A is transposed in ID compress, be careful when calculating the buffer size
             if (krnl_dim == 1)
             {
@@ -198,7 +200,7 @@ void H2P_build_H2_UJ_proxy(H2Pack_p h2pack)
                 1, QR_buff->data, ID_buff->data, krnl_dim
             );
             
-            // (5) Choose the skeleton points of this node
+            // (6) Choose the skeleton points of this node
             for (int k = 0; k < sub_idx->length; k++)
                 J[node]->data[k] = J[node]->data[sub_idx->data[k]];
             J[node]->length = sub_idx->length;
@@ -208,7 +210,7 @@ void H2P_build_H2_UJ_proxy(H2Pack_p h2pack)
                 xpt_dim, J[node]->data, J[node]->length
             );
 
-            // (6) Tell DAG_task_queue that this node is finished, and get next available node
+            // (7) Tell DAG_task_queue that this node is finished, and get next available node
             DAG_task_queue_finish_task(upward_tq, node);
             node = DAG_task_queue_get_task(upward_tq);
         }  // End of "while (node != -1)"
@@ -259,6 +261,8 @@ void H2P_build_H2_UJ_proxy(H2Pack_p h2pack)
         H2P_thread_buf_reset(thread_buf[i]);
     BLAS_SET_NUM_THREADS(n_thread);
 }
+
+
 
 // Build HSS projection matrices using proxy points and skeleton points from H2 inadmissible nodes
 // Input parameter:

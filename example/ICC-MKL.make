@@ -1,21 +1,22 @@
-LIB     = ../src/libH2Pack.a #$(VTUNE_AMPLIFIER_2018_DIR)/lib64/libittnotify.a
-INC     = -I../src/include   #-I$(VTUNE_AMPLIFIER_2018_DIR)/include
+LIB     = ../src/libH2Pack.a 
+INC     = -I../src/include   
 
-USE_MKL      = 0
-USE_OPENBLAS = 1
-OPENBLAS_INSTALL_DIR = /usr/local/opt/openblas
+USE_MKL      = 1
+USE_OPENBLAS = 0
+OPENBLAS_INSTALL_DIR = /home/mkurisu/Workspace/OpenBLAS-0.3.10/install
 
-CC      = gcc
+CC      = icc
 DEF     = 
 CFLAGS  = $(INC) -Wall -g -std=gnu99 -O3 $(DEF)
-LDFLAGS = -g -O3 -lgfortran
+LDFLAGS = -g -O3
 
-ifeq ($(strip $(CC)), icc)
+ifeq ($(shell $(CC) --version 2>&1 | grep -c "icc"), 1)
 CFLAGS  += -qopenmp -xHost
 endif
 
-ifeq ($(strip $(CC)), gcc)
+ifeq ($(shell $(CC) --version 2>&1 | grep -c "gcc"), 1)
 CFLAGS  += -fopenmp -lm -march=native -Wno-unused-result -Wno-unused-function
+LDFLAGS += -lgfortran
 endif
 
 ifeq ($(strip $(USE_MKL)), 1)
@@ -28,7 +29,6 @@ ifeq ($(strip $(USE_OPENBLAS)), 1)
 DEF     += -DUSE_OPENBLAS
 LIB     += $(OPENBLAS_INSTALL_DIR)/lib/libopenblas.a
 INC     += -I$(OPENBLAS_INSTALL_DIR)/include
-INC     += -I/usr/local/include
 LDFLAGS += -fopenmp -lm
 endif
 

@@ -6,8 +6,6 @@
 #include <time.h>
 #include <omp.h>
 
-//#include <ittnotify.h>
-
 #include "H2Pack.h"
 #include "H2Pack_kernels.h"
 
@@ -25,6 +23,7 @@ static void Gaussian_3D_eval_std_d(KRNL_EVAL_PARAM)
         const DTYPE x0_i = x0[i];
         const DTYPE y0_i = y0[i];
         const DTYPE z0_i = z0[i];
+        //#pragma novector
         #pragma omp simd
         for (int j = 0; j < n1; j++)
         {
@@ -53,6 +52,7 @@ static void Gaussian_3D_bimv_std_d(KRNL_BIMV_PARAM)
         const DTYPE xin1_i0 = x_in_1[i];
         const DTYPE xin1_i1 = x_in_1[i + 1];
         DTYPE sum_i0 = 0.0, sum_i1 = 0.0;
+        //#pragma novector
         #pragma omp simd
         for (int j = 0; j < n1; j++)
         {
@@ -152,10 +152,8 @@ int main(int argc, char **argv)
     // Warm up, reset timers, and test the matvec performance
     H2P_matvec(h2pack, x, y1);
     H2P_reset_timers(h2pack);
-    //__itt_resume();
     for (int i = 0; i < 10; i++) 
         H2P_matvec(h2pack, x, y1);
-    //__itt_pause();
     
     H2P_print_statistic(h2pack);
     

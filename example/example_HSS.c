@@ -13,12 +13,12 @@
 
 int main(int argc, char **argv)
 {
-    //  Timing variable
+    // Timing variable
     double st, et;
 
-    //  Point configuration, random generation
-    int pt_dim = 2;
-    int n_point = 80000;
+    // Point configuration, random generation
+    int pt_dim  = 2;
+    int n_point = 20000;
     DTYPE* coord = (DTYPE*) malloc_aligned(sizeof(DTYPE) * n_point * pt_dim, 64);
     assert(coord != NULL);
 
@@ -29,44 +29,43 @@ int main(int argc, char **argv)
         coord[i] = (DTYPE) drand48();
         coord[i] *= prefac;
     }
+    printf(" done.\n");
  
-    //  Kernel configuration
+    // Kernel configuration
     int krnl_dim = 1;
     DTYPE krnl_param[1] = {0.1}; 
     kernel_eval_fptr krnl_eval = Gaussian_2D_eval_intrin_d;
     kernel_bimv_fptr krnl_bimv = Gaussian_2D_krnl_bimv_intrin_d;
     int krnl_bimv_flop = Gaussian_2D_krnl_bimv_flop;
 
-    //  HSS/H2 construction configuration
+    // HSS/H2 construction configuration
     int krnl_mat_size = krnl_dim * n_point;
     DTYPE rel_tol = 1e-6;
     const int BD_JIT = 1;
 
-
-    //  Initialization
+    // Initialization of H2Pack
     H2Pack_p h2pack;
     H2P_init(&h2pack, pt_dim, krnl_dim, QR_REL_NRM, &rel_tol);
     H2P_run_HSS(h2pack);
     
-    //  Hierarchical partitioning
-    H2P_partition_points(h2pack, n_point, coord, 0, 0);
+    // Hierarchical partitioning
+    int max_leaf_points = 0;    // use the default in h2pack for maximum number of points in the leaf node
+    DTYPE max_leaf_size = 0.0;  // use the default in h2pack for maximum edge length of leaf box
+    char *pp_fname = "./PP_Gaussian2D_1e-6.dat";
+    H2P_calc_enclosing_box(pt_dim, n_point, coord, pp_fname, &h2pack->root_enbox);
+    H2P_partition_points(h2pack, n_point, coord, max_leaf_points, max_leaf_size);
     
-    //  Select proxy points
+    // Select proxy points
     H2P_dense_mat_p *pp;
-    char *pp_fname = NULL;
     st = get_wtime_sec();
-    H2P_generate_proxy_point_ID_file(
-        h2pack, krnl_param, krnl_eval, pp_fname, &pp
-    );
+    H2P_generate_proxy_point_ID_file(h2pack, krnl_param, krnl_eval, pp_fname, &pp);
     et = get_wtime_sec();
     printf("H2Pack generate proxy points used %.3lf (s)\n", et - st);
     
-    //  Construct HSS matrix representation
-    H2P_build(
-        h2pack, pp, BD_JIT, krnl_param, krnl_eval, krnl_bimv, krnl_bimv_flop
-    );
+    // Construct HSS matrix representation
+    H2P_build(h2pack, pp, BD_JIT, krnl_param, krnl_eval, krnl_bimv, krnl_bimv_flop);
     
-    //  Check multiplication errors
+    // Check multiplication errors
     int n_check_pt = 20000, check_pt_s;
     if (n_check_pt >= n_point)
     {
@@ -110,15 +109,15 @@ int main(int argc, char **argv)
     printf("For %d validation points: ||y_{HSS} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / ref_norm);
     
     #if 0
-    //  Construct Cholesky-based ULV decompsition 
+    // Construct Cholesky-based ULV decomposition 
     const DTYPE shift = 0;
     H2P_HSS_ULV_Cholesky_factorize(h2pack, shift);
 
-    //  Direct Solve of the HSS matrix via ULV decompsition 
+    // Direct Solve of the HSS matrix via ULV decomposition 
     for (int i = 0; i < krnl_mat_size; i++) y1[i] += shift * x0[i];
     H2P_HSS_ULV_Cholesky_solve(h2pack, 3, y1, x1);
 
-    //  Check errors
+    // Check errors
     ref_norm = 0.0; 
     err_norm = 0.0;
     for (int i = 0; i < krnl_mat_size; i++)
@@ -132,16 +131,16 @@ int main(int argc, char **argv)
     printf("H2P_HSS_ULV_Cholesky_solve relerr = %e\n",  err_norm / ref_norm);
     #endif
 
-    //  Construct LU-based ULV decompsition 
+    // Construct LU-based ULV decomposition 
     const DTYPE shift = 1e-4;
     H2P_HSS_ULV_LU_factorize(h2pack, shift);
 
-    //  Direct Solve of the HSS matrix via ULV decompsition 
+    // Direct Solve of the HSS matrix via ULV decomposition 
     H2P_matvec(h2pack, x0, y1);
     for (int i = 0; i < krnl_mat_size; i++) y1[i] += shift * x0[i];
     H2P_HSS_ULV_LU_solve(h2pack, 3, y1, x1);
 
-    //  Check errors
+    // Check errors
     ref_norm = 0.0; 
     err_norm = 0.0;
     for (int i = 0; i < krnl_mat_size; i++)
@@ -153,9 +152,8 @@ int main(int argc, char **argv)
     ref_norm = DSQRT(ref_norm);
     err_norm = DSQRT(err_norm);
     printf("H2P_HSS_ULV_LU_solve relerr = %e\n",  err_norm / ref_norm);
-    printf("%e %e\n",  err_norm, ref_norm);
 
-    //  Print out statistis about the H2Pack
+    // Print out details of the H2 matrix
     H2P_print_statistic(h2pack);
 
     free(x0);

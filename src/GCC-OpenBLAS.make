@@ -9,19 +9,19 @@ OBJS  = H2Pack_typedef.o utils.o H2Pack_aux_structs.o H2Pack_ID_compress.o      
 
 USE_MKL      = 0
 USE_OPENBLAS = 1
-OPENBLAS_INSTALL_DIR = /usr/local/opt/openblas
+OPENBLAS_INSTALL_DIR = /home/mkurisu/Workspace/OpenBLAS-0.3.10/install
 
 CC      = gcc
 DEF     = 
 INC     = ./include
 CFLAGS  = -I$(INC) -Wall -g -std=gnu99 -O3 -fPIC $(DEF)
 
-ifeq ($(strip $(CC)), icc)
+ifeq ($(shell $(CC) --version 2>&1 | grep -c "icc"), 1)
 AR      = xiar rcs
 CFLAGS += -qopenmp -xHost
 endif
 
-ifeq ($(strip $(CC)), gcc)
+ifeq ($(shell $(CC) --version 2>&1 | grep -c "gcc"), 1)
 AR      = ar rcs
 CFLAGS += -fopenmp -lm -march=native -Wno-unused-result -Wno-unused-function
 endif
@@ -42,7 +42,7 @@ $(LIBA): $(OBJS)
 	${AR} $@ $^
 
 $(LIBSO): $(OBJS) 
-	${CC} -shared -o $@ $^ -lgfortran
+	${CC} -shared -o $@ $^
 
 H2Pack_typedef.o: ./include/*.h H2Pack_typedef.c
 	$(CC) $(CFLAGS) H2Pack_typedef.c -c 

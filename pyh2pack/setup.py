@@ -4,10 +4,11 @@ import numpy
 
 H2PACK_DIR = "../src"
 OPENBLAS_INSTALL_DIR = "/usr/local/opt/openblas"
+#C_DIR = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include"
 
 extra_cflags = ["-I"+H2PACK_DIR+"/include"]
 extra_cflags += ["-I"+OPENBLAS_INSTALL_DIR+"/include"]
-extra_cflags += ["-Wall", "-g", "-std=gnu99", "-O3", "-DUSE_AVX"]
+extra_cflags += ["-g", "-std=gnu99", "-O3", "-DUSE_AVX"]
 extra_cflags += ["-DUSE_OPENBLAS", "-fopenmp", "-march=native"]
 extra_cflags += ["-Wno-unused-result", "-Wno-unused-function"]
 
@@ -23,7 +24,7 @@ def main():
         ext_modules=[Extension(
             name = "pyh2pack",
             sources = ["pyh2pack.c"],
-            include_dirs=["/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include", "../src/include", numpy.get_include()],
+            include_dirs=["../src/include", numpy.get_include()],
             extra_compile_args = extra_cflags,
             extra_link_args= extra_lflags,
             )

@@ -239,26 +239,12 @@ static PyObject *setup(H2Mat *self, PyObject *args, PyObject *keywds) {
     if (self->params.flag_proxysurface == 0)   
     {
         //  Numerical selection of the proxy points
-        if (pp_fname == NULL)
-        {
-            DTYPE max_L = self->h2mat->root_enbox[self->params.pts_dim];
-            st = get_wtime_sec();
-            H2P_generate_proxy_point_ID(
-                self->params.pts_dim, self->params.krnl_dim, self->params.rel_tol, self->h2mat->max_level, 
-                self->h2mat->min_adm_level, max_L, self->params.krnl_param, self->params.krnl_eval, &pp
-            );
-            et = get_wtime_sec();
-            PySys_WriteStdout("Step 1: H2Pack generate NUMERICAL proxy points used %.3lf (s)\n", et - st);
-        }
-        else
-        {
-            st = get_wtime_sec();
-            H2P_generate_proxy_point_ID_file(
-                self->h2mat, self->params.krnl_param, self->params.krnl_eval, pp_fname, &pp
-            );
-            et = get_wtime_sec();
-            PySys_WriteStdout("Step 1: H2Pack generate/load NUMERICAL proxy points used %.3lf (s)\n", et - st);
-        }
+        st = get_wtime_sec();
+        H2P_generate_proxy_point_ID_file(
+            self->h2mat, self->params.krnl_param, self->params.krnl_eval, pp_fname, &pp
+        );
+        et = get_wtime_sec();
+        PySys_WriteStdout("Step 1: H2Pack generate/load NUMERICAL proxy points used %.3lf (s)\n", et - st);
     }
     else    
     {

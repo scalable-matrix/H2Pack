@@ -32,12 +32,12 @@ static int H2Mat_init(H2Mat *self, PyObject *args, PyObject *kwds)
 //  MODULE CLASS methods
 static PyMethodDef H2Mat_methods[] = {
     {"setup", (PyCFunction) setup, METH_VARARGS|METH_KEYWORDS, description_setup},
-    {"h2matvec", h2matvec, METH_VARARGS, description_h2matvec},
-    {"h2matmul", h2matmul, METH_VARARGS, description_h2matmul},
-    {"direct_matvec", direct_matvec, METH_VARARGS, description_directmatvec},
-    {"print_statistic", print_statistic, METH_VARARGS, description_printstat},
-    {"print_setting", print_setting, METH_VARARGS, description_printset},
-    {"clean", clean, METH_VARARGS, "Reset pyh2pack and free allocated memories."},
+    {"h2matvec", (PyCFunction) h2matvec, METH_VARARGS, description_h2matvec},
+    {"h2matmul", (PyCFunction) h2matmul, METH_VARARGS, description_h2matmul},
+    {"direct_matvec", (PyCFunction) direct_matvec, METH_VARARGS, description_directmatvec},
+    {"print_statistic", (PyCFunction) print_statistic, METH_VARARGS, description_printstat},
+    {"print_setting", (PyCFunction) print_setting, METH_VARARGS, description_printset},
+    {"clean", (PyCFunction) clean, METH_VARARGS, "Reset pyh2pack and free allocated memories."},
     {NULL, NULL, 0, NULL}
 };
 

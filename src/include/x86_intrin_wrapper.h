@@ -675,7 +675,7 @@ static inline __m512d vec_cos_d(__m512d a)
 static inline __m512  vec_erf_s(__m512  a)
 {
     int i;
-    union vec16f ua = {a}, ub = {b}, res;
+    union vec16f ua = {a}, res;
     for (i = 0; i < SIMD_LEN_S; i++) res.f[i] = erff(ua.f[i]);
     return res.v;
 }

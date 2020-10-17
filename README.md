@@ -1,7 +1,7 @@
 H2Pack is a high-performance, shared-memory library for **linear-scaling matrix-vector multiplication of kernel matrices** based on their ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix representations. 
 The key feature of H2Pack is the efficient ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix construction for kernel matrices using a hybrid compression method called the proxy point method. 
 
-In the current release, H2Pack supports kernel matrices of form ![](https://latex.codecogs.com/svg.latex?K(X,%20X)) defined by a translationally-invariant, symmetric kernel function ![](https://latex.codecogs.com/svg.latex?K(x,%20y)) (e.g., Gaussian, Matern, Laplace, and Stokes kernels) and a point set ![](https://latex.codecogs.com/svg.latex?X) in low-dimensional space (i.e., 1D, 2D, and 3D).
+In the current release, H2Pack supports kernel matrices of form _K(X,X)_ defined by a translationally-invariant, symmetric kernel function _K(x,y)_ (e.g., Gaussian, Matern, Laplace, and Stokes kernels) and a point set _X_ in low-dimensional space (i.e., 1D, 2D, and 3D).
 H2Pack, written in C99, provides a C/C++ interface and an experimental Python interface. The Matlab prototype of H2Pack can be found in the [repo]().
 
 **Main Functions:**
@@ -13,8 +13,8 @@ H2Pack, written in C99, provides a C/C++ interface and an experimental Python in
 
 **References**:
 
-* _X. Xing and E. Chow, Interpolative decomposition via proxy points for kernel matrices, SIAM Journal on Matrix Analysis and Applications, 41(1), 221–243 (2020)_
-* _H. Huang, X. Xing, and E. Chow, H2Pack: High-performance H2 matrix package for kernel matrices using the proxy point method, ACM Transactions on Mathematical Software, accepted (2020)_
+* X. Xing and E. Chow, Interpolative decomposition via proxy points for kernel matrices, _SIAM Journal on Matrix Analysis and Applications_, 41(1), 221–243 (2020)
+* H. Huang, X. Xing, and E. Chow, H2Pack: High-performance H2 matrix package for kernel matrices using the proxy point method, _ACM Transactions on Mathematical Software_, to appear (2020)
 
 **Additional Features:** 
 
@@ -49,6 +49,7 @@ H2Pack also provides functions for constructing and applying HSS matrix represen
 * [Parallel Efficiency Tests](https://github.com/huanghua1994/H2Pack/wiki/Parallel-Efficiency-Tests)
 * [Comparative Tests on H2-matvec and H2-matmul](https://github.com/huanghua1994/H2Pack/wiki/Comparative-Tests-on-H2-matvec-and-H2-matmul)
 * [Comparative Tests on KME, BKM, and VWF](https://github.com/huanghua1994/H2Pack/wiki/Comparative-Tests-on-KME-BKM-and-VWF)
+
 ## Last But Not Least
 
 * [Can I ...](https://github.com/huanghua1994/H2Pack/wiki/Can-I)

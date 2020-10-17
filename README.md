@@ -1,8 +1,10 @@
 H2Pack is a high-performance, shared-memory library for **linear-scaling matrix-vector multiplication of kernel matrices** based on their ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix representations. 
 The key feature of H2Pack is the efficient ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix construction for kernel matrices using a hybrid compression method called the proxy point method. 
 
-In the current release, H2Pack supports kernel matrices of form _K(X,X)_ defined by a translationally-invariant, symmetric kernel function _K(x,y)_ (e.g., Gaussian, Matern, Laplace, and Stokes kernels) and a point set _X_ in low-dimensional space (i.e., 1D, 2D, and 3D).
-H2Pack, written in C99, provides a C/C++ interface and an experimental Python interface. The Matlab prototype of H2Pack can be found in the [repo]().
+H2Pack supports kernel matrices of the form _K(X,X)_ defined by a translationally-invariant, symmetric kernel function _K(x,y)_ (e.g., Gaussian, Matern, Laplace, and Stokes kernels) and a point set _X_ in low-dimensional space (i.e., 1D, 2D, and 3D). You can provide a function that defines the kernel or use
+kernels that are already built into H2Pack.
+H2Pack, written in C99, provides a C/C++ interface and an experimental Python interface.
+<!-- The Matlab prototype of H2Pack can be found in the [repo](). -->
 
 **Main Functions:**
 

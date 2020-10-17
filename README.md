@@ -6,9 +6,9 @@ H2Pack, written in C99, provides a C/C++ interface and an experimental Python in
 
 **Main Functions:**
 
-* ![](https://latex.codecogs.com/svg.latex?O(N)) complexity ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)  matrix representation construction for a kernel matrix (![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)-construction)
-* ![](https://latex.codecogs.com/svg.latex?O(N)) complexity ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)  matrix-vector multiplication (![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)-matvec)
-* ![](https://latex.codecogs.com/svg.latex?O(N)) complexity ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)  matrix-matrix  multiplication (![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)-matmul)
+* _O(N)_ complexity ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)  matrix representation construction for a kernel matrix (![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)-construction)
+* _O(N)_ complexity ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)  matrix-vector multiplication (![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)-matvec)
+* _O(N)_ complexity ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)  matrix-matrix  multiplication (![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)-matmul)
 
 
 **References**:
@@ -24,7 +24,7 @@ H2Pack also provides functions for constructing and applying HSS matrix represen
 * HSS matrix-vector multiplication
 * HSS matrix-matrix multiplication
 * ULV decomposition of HSS matrix representation
-* Direct solve of HSS matrix representation based on ULV decomposition
+* Direct solves involving the HSS matrix representation using its ULV decomposition
 
 
 ## Getting Started

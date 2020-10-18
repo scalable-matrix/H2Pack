@@ -31,29 +31,29 @@ H2Pack also provides functions for constructing and applying HSS matrix represen
 
 ## Getting Started
 
-* [Installing H2Pack](https://github.com/huanghua1994/H2Pack/wiki/Installing-H2Pack)
-* [Basic Usage](https://github.com/huanghua1994/H2Pack/wiki/Basic-Usage)
-* [Using and Writing Kernel Functions](https://github.com/huanghua1994/H2Pack/wiki/Using-and-Writing-Kernel-Functions) 
-* [Two Running Modes for H2Pack](https://github.com/huanghua1994/H2Pack/wiki/Two-Running-Modes-for-H2Pack)
-* [HSS-Related Computations](https://github.com/huanghua1994/H2Pack/wiki/HSS-Related-Computations)
+* [Installing H2Pack](https://github.com/scalable-matrix/H2Pack/wiki/Installing-H2Pack)
+* [Basic Usage](https://github.com/scalable-matrix/H2Pack/wiki/Basic-Usage)
+* [Using and Writing Kernel Functions](https://github.com/scalable-matrix/H2Pack/wiki/Using-and-Writing-Kernel-Functions) 
+* [Two Running Modes for H2Pack](https://github.com/scalable-matrix/H2Pack/wiki/Two-Running-Modes-for-H2Pack)
+* [HSS-Related Computations](https://github.com/scalable-matrix/H2Pack/wiki/HSS-Related-Computations)
 
 ## Advanced Configurations and Tools
 
-* [Bi-Kernel Matvec (BKM) Functions](https://github.com/huanghua1994/H2Pack/wiki/Bi-Kernel-Matvec-Functions)
-* [Vector Wrapper Functions for Kernel Evaluations](https://github.com/huanghua1994/H2Pack/wiki/Vector-Wrapper-Functions-For-Kernel-Evaluations)
+* [Bi-Kernel Matvec (BKM) Functions](https://github.com/scalable-matrix/H2Pack/wiki/Bi-Kernel-Matvec-Functions)
+* [Vector Wrapper Functions for Kernel Evaluations](https://github.com/scalable-matrix/H2Pack/wiki/Vector-Wrapper-Functions-For-Kernel-Evaluations)
 * [Proxy Points and their Reuse](https://github.com/scalable-matrix/H2Pack/wiki/Proxy-Points-and-their-Reuse)
-* [Python Interface](https://github.com/huanghua1994/H2Pack/wiki/Using-H2Pack-in-Python)
+* [Python Interface](https://github.com/scalable-matrix/H2Pack/wiki/Using-H2Pack-in-Python)
 
 
 ## Numerical Tests
 
-* [Accuracy Tests on Various Kernels](https://github.com/huanghua1994/H2Pack/wiki/Accuracy-Tests-on-Various-Kernels)
-* [Linear Scaling Tests](https://github.com/huanghua1994/H2Pack/wiki/Linear-Scaling-Tests)
-* [Parallel Efficiency Tests](https://github.com/huanghua1994/H2Pack/wiki/Parallel-Efficiency-Tests)
-* [Comparative Tests on H2-matvec and H2-matmul](https://github.com/huanghua1994/H2Pack/wiki/Comparative-Tests-on-H2-matvec-and-H2-matmul)
-* [Comparative Tests on KME, BKM, and VWF](https://github.com/huanghua1994/H2Pack/wiki/Comparative-Tests-on-KME-BKM-and-VWF)
+* [Accuracy Tests on Various Kernels](https://github.com/scalable-matrix/H2Pack/wiki/Accuracy-Tests-on-Various-Kernels)
+* [Linear Scaling Tests](https://github.com/scalable-matrix/H2Pack/wiki/Linear-Scaling-Tests)
+* [Parallel Efficiency Tests](https://github.com/scalable-matrix/H2Pack/wiki/Parallel-Efficiency-Tests)
+* [Comparative Tests on H2-matvec and H2-matmul](https://github.com/scalable-matrix/H2Pack/wiki/Comparative-Tests-on-H2-matvec-and-H2-matmul)
+* [Comparative Tests on KME, BKM, and VWF](https://github.com/scalable-matrix/H2Pack/wiki/Comparative-Tests-on-KME-BKM-and-VWF)
 
 ## Last But Not Least
 
-* [Can I ...](https://github.com/huanghua1994/H2Pack/wiki/Can-I)
+* [Can I ...](https://github.com/scalable-matrix/H2Pack/wiki/Can-I)
 

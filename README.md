@@ -41,6 +41,7 @@ H2Pack also provides functions for constructing and applying HSS matrix represen
 
 * [Bi-Kernel Matvec (BKM) Functions](https://github.com/huanghua1994/H2Pack/wiki/Bi-Kernel-Matvec-Functions)
 * [Vector Wrapper Functions for Kernel Evaluations](https://github.com/huanghua1994/H2Pack/wiki/Vector-Wrapper-Functions-For-Kernel-Evaluations)
+* [Proxy Points and their Reuse](https://github.com/scalable-matrix/H2Pack/wiki/Proxy-Points-and-their-Reuse)
 * [Python Interface](https://github.com/huanghua1994/H2Pack/wiki/Using-H2Pack-in-Python)
 
 

@@ -4,7 +4,7 @@ The key feature of H2Pack is the efficient ![](https://latex.codecogs.com/svg.la
 H2Pack supports kernel matrices of the form _K(X,X)_ defined by a translationally-invariant, symmetric kernel function _K(x,y)_ (e.g., Gaussian, Matern, Laplace, and Stokes kernels) and a point set _X_ in low-dimensional space (i.e., 1D, 2D, and 3D). You can provide a function that defines the kernel or use
 kernels that are already built into H2Pack.
 H2Pack, written in C99, provides a C/C++ interface and an experimental Python interface.
-<!-- The Matlab prototype of H2Pack can be found in the [repo](). -->
+The Matlab version of H2Pack can be found at [https://github.com/xinxing02/H2Pack-Matlab](https://github.com/xinxing02/H2Pack-Matlab).
 
 **Main Functions:**
 
@@ -15,8 +15,9 @@ H2Pack, written in C99, provides a C/C++ interface and an experimental Python in
 
 **References**:
 
-* X. Xing and E. Chow, Interpolative decomposition via proxy points for kernel matrices, _SIAM Journal on Matrix Analysis and Applications_, 41(1), 221–243 (2020)
-* H. Huang, X. Xing, and E. Chow, H2Pack: High-performance H2 matrix package for kernel matrices using the proxy point method, _ACM Transactions on Mathematical Software_, to appear (2020)
+* H. Huang, X. Xing, and E. Chow, [H2Pack: High-performance H2 matrix package for kernel matrices using the proxy point method](https://www.cc.gatech.edu/~echow/pubs/h2pack.pdf), _ACM Transactions on Mathematical Software_, to appear (2020)
+* X. Xing and E. Chow, [Interpolative decomposition via proxy points for kernel matrices](https://www.cc.gatech.edu/~echow/pubs/xing-chow-simax-2019.pdf), _SIAM Journal on Matrix Analysis and Applications_, 41(1), 221–243 (2020)
+
 
 **Additional Features:** 
 

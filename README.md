@@ -41,9 +41,9 @@ a single set of points (i.e., square, symmetric matrices)
 
 **Main Functions**
 
-* _O(N)_ complexity ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)  matrix representation construction for a kernel matrix (![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)-construction)
-* _O(N)_ complexity ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)  matrix-vector multiplication (![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)-matvec)
-* _O(N)_ complexity ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)  matrix-matrix  multiplication (![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)-matmul)
+* ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix representation construction for a kernel matrix (![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)-construction) with _O(N)_ complexity
+* ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix-vector multiplication (![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)-matvec) with _O(N)_ complexity
+* ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix-matrix  multiplication (![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)-matmul) with _O(N)_ complexity
 * HSS matrix representation construction for a kernel matrix using the proxy point method 
 * HSS matrix-vector multiplication
 * HSS matrix-matrix multiplication
@@ -59,7 +59,7 @@ a single set of points (i.e., square, symmetric matrices)
 ## Getting Started
 
 * [Installing H2Pack](https://github.com/scalable-matrix/H2Pack/wiki/Installing-H2Pack)
-* [Basic Usage](https://github.com/scalable-matrix/H2Pack/wiki/Basic-Usage)
+* [Basic Application Interface](https://github.com/scalable-matrix/H2Pack/wiki/Basic-Usage)
 * [Using and Writing Kernel Functions](https://github.com/scalable-matrix/H2Pack/wiki/Using-and-Writing-Kernel-Functions) 
 * [Two Running Modes for H2Pack](https://github.com/scalable-matrix/H2Pack/wiki/Two-Running-Modes-for-H2Pack)
 * [HSS-Related Computations](https://github.com/scalable-matrix/H2Pack/wiki/HSS-Related-Computations)

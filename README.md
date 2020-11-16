@@ -1,33 +1,59 @@
-H2Pack is a high-performance, shared-memory library for **linear-scaling matrix-vector multiplication of kernel matrices** based on their ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix representations. 
-The key feature of H2Pack is the efficient ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix construction for kernel matrices using a hybrid compression method called the proxy point method. 
+H2Pack is a library that provides linear-scaling storage and
+linear-scaling matrix-vector multiplication for dense kernel matrices.
+This is accomplished by storing the kernel matrices in the
+![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) or HSS
+hierarchical block low-rank representations.  Applications include
+integral equations, Gaussian processes, Brownian dynamics, and others.
 
-H2Pack supports kernel matrices of the form _K(X,X)_ defined by a translationally-invariant, symmetric kernel function _K(x,y)_ (e.g., Gaussian, Matern, Laplace, and Stokes kernels) and a point set _X_ in low-dimensional space (i.e., 1D, 2D, and 3D). You can provide a function that defines the kernel or use
-kernels that are already built into H2Pack.
-H2Pack, written in C99, provides a C/C++ interface and an experimental Python interface.
-The Matlab version of H2Pack can be found at [https://github.com/xinxing02/H2Pack-Matlab](https://github.com/xinxing02/H2Pack-Matlab).
+**Features**
 
-**Main Functions:**
+* H2Pack is designed for general kernel functions, including the Gaussian,
+Matern, and other kernels used in statistics and machine learning. This is
+due to the use of a new proxy point method used to construct the matrix
+representations.  The common proxy surface method is also provided to
+efficiently construct matrix representations for kernels from potential
+theory, i.e., Coulomb, Stokes, etc.
+
+* H2Pack requires less storage (for the same accuracy) than *analytic*
+methods such as the fast multipole method (FMM).  H2Pack is faster
+than *algebraic* methods such as those that rely on rank-revealing matrix
+decompositions.  This is due to the hybrid analytic-algebraic approach
+of the proxy point method.
+
+* H2Pack achieves high-performance on shared-memory multicore
+architectures by using multithreading, vectorization, and careful load
+balancing.  Users can provide a function that defines the kernel function
+or use kernels that are already built into H2Pack.
+Vector wrapper functions are provided to help users optimize
+the evaluation of their own kernel functions.
+
+* H2Pack provides both C/C++ and Python interfaces.
+A Matlab version of H2Pack is also available in this repo.
+
+**Limitations**
+
+* Kernel functions up to 3-dimensions
+* Non-oscillatory kernel functions
+* Translationally-invariant kernel functions
+* Symmetric kernel functions
+* H2Pack currently only supports kernel matrices defined by
+a single set of points (i.e., square, symmetric matrices)
+
+**Main Functions**
 
 * _O(N)_ complexity ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)  matrix representation construction for a kernel matrix (![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)-construction)
 * _O(N)_ complexity ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)  matrix-vector multiplication (![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)-matvec)
 * _O(N)_ complexity ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)  matrix-matrix  multiplication (![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)-matmul)
-
-
-**References**:
-
-* H. Huang, X. Xing, and E. Chow, [H2Pack: High-performance H2 matrix package for kernel matrices using the proxy point method](https://www.cc.gatech.edu/~echow/pubs/h2pack.pdf), _ACM Transactions on Mathematical Software_, to appear (2020)
-* X. Xing and E. Chow, [Interpolative decomposition via proxy points for kernel matrices](https://www.cc.gatech.edu/~echow/pubs/xing-chow-simax-2019.pdf), _SIAM Journal on Matrix Analysis and Applications_, 41(1), 221–243 (2020)
-
-
-**Additional Features:** 
-
-H2Pack also provides functions for constructing and applying HSS matrix representations: 
-
 * HSS matrix representation construction for a kernel matrix using the proxy point method 
 * HSS matrix-vector multiplication
 * HSS matrix-matrix multiplication
 * ULV decomposition of HSS matrix representation
 * Direct solves involving the HSS matrix representation using its ULV decomposition
+
+**References**
+
+* H. Huang, X. Xing, and E. Chow, [H2Pack: High-performance H2 matrix package for kernel matrices using the proxy point method](https://www.cc.gatech.edu/~echow/pubs/h2pack.pdf), _ACM Transactions on Mathematical Software_, to appear (2020).
+* X. Xing and E. Chow, [Interpolative decomposition via proxy points for kernel matrices](https://www.cc.gatech.edu/~echow/pubs/xing-chow-simax-2019.pdf), _SIAM Journal on Matrix Analysis and Applications_, 41(1), 221–243 (2020).
 
 
 ## Getting Started

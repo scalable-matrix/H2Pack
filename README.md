@@ -1,8 +1,8 @@
 H2Pack is a library that provides linear-scaling storage and
 linear-scaling matrix-vector multiplication for dense kernel matrices.
 This is accomplished by storing the kernel matrices in the
-![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) or HSS
-hierarchical block low-rank representations.  Applications include
+![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)
+hierarchical block low-rank representation.  Applications include
 integral equations, Gaussian processes, Brownian dynamics, and others.
 
 **Features**
@@ -27,6 +27,10 @@ or use kernels that are already built into H2Pack.
 Vector wrapper functions are provided to help users optimize
 the evaluation of their own kernel functions.
 
+* HSS hierarchical block low-rank representations are also available
+in H2Pack. HSS operations include matrix-matrix and matrix-vector
+multiplication, and ULV decomposition and solve.
+
 * H2Pack provides both C/C++ and Python interfaces.
 A Matlab version of H2Pack is also available in this repo.
 
@@ -41,9 +45,9 @@ a single set of points (i.e., square, symmetric matrices)
 
 **Main Functions**
 
-* ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix representation construction for a kernel matrix (![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)-construction) with _O(N)_ complexity
-* ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix-vector multiplication (![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)-matvec) with _O(N)_ complexity
-* ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix-matrix  multiplication (![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)-matmul) with _O(N)_ complexity
+* ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix representation construction for a kernel matrix with _O(N)_ complexity
+* ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix-vector multiplication with _O(N)_ complexity
+* ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix-matrix  multiplication with _O(N)_ complexity
 * HSS matrix representation construction for a kernel matrix using the proxy point method 
 * HSS matrix-vector multiplication
 * HSS matrix-matrix multiplication

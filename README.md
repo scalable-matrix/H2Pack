@@ -46,7 +46,7 @@ a single set of points (i.e., square, symmetric matrices)
 
 **Main Functions**
 
-* ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix representation construction for a kernel matrix with _O(N)_ complexity
+* ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix representation construction for a kernel matrix with _O(N)_ complexity for an _N_-by-_N_ matrix
 * ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix-vector multiplication with _O(N)_ complexity
 * ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix-matrix  multiplication with _O(N)_ complexity
 * HSS matrix representation construction for a kernel matrix using the proxy point method 

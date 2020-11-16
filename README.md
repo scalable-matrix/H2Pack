@@ -14,10 +14,11 @@ representations.  The common *proxy surface* method is also provided to
 efficiently construct matrix representations for kernels from potential
 theory, i.e., Coulomb, Stokes, etc.
 
-* H2Pack requires less storage (for the same accuracy) than *analytic*
-methods such as the fast multipole method (FMM).  H2Pack is faster
-than *algebraic* methods such as those that rely on rank-revealing matrix
-decompositions.  This is due to the hybrid analytic-algebraic approach
+* H2Pack has faster matrix-vector multiplication than *analytic*
+approaches such as the fast multipole method (FMM).  H2Pack also
+computes the hierarchical representation faster than *algebraic*
+approaches that rely on rank-revealing matrix decompositions.
+These improvements are due to the hybrid analytic-algebraic approach
 of the proxy point method.
 
 * H2Pack achieves high-performance on shared-memory multicore

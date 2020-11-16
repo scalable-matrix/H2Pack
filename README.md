@@ -9,8 +9,8 @@ integral equations, Gaussian processes, Brownian dynamics, and others.
 
 * H2Pack is designed for general kernel functions, including the Gaussian,
 Matern, and other kernels used in statistics and machine learning. This is
-due to the use of a new proxy point method used to construct the matrix
-representations.  The common proxy surface method is also provided to
+due to the use of a new *proxy point* method used to construct the matrix
+representations.  The common *proxy surface* method is also provided to
 efficiently construct matrix representations for kernels from potential
 theory, i.e., Coulomb, Stokes, etc.
 
@@ -33,7 +33,7 @@ decomposition and solve. HSS representations are also constructed
 using the proxy point method.
 
 * H2Pack provides both C/C++ and Python interfaces.
-A Matlab version of H2Pack is also available in this repo.
+A Matlab version of H2Pack is also available in [this repo](https://github.com/xinxing02/H2Pack-Matlab).
 
 **Limitations**
 

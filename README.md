@@ -28,8 +28,8 @@ Vector wrapper functions are provided to help users optimize
 the evaluation of their own kernel functions.
 
 * HSS hierarchical block low-rank representations are also available
-in H2Pack. HSS operations include matrix-matrix and matrix-vector
-multiplication, and ULV decomposition and solve.
+in H2Pack. HSS operations include matrix-vector multiplication, and ULV 
+decomposition and solve.
 
 * H2Pack provides both C/C++ and Python interfaces.
 A Matlab version of H2Pack is also available in this repo.

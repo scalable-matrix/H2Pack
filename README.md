@@ -2,46 +2,58 @@ H2Pack is a library that provides linear-scaling storage and
 linear-scaling matrix-vector multiplication for dense kernel matrices.
 This is accomplished by storing the kernel matrices in the
 ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)
-hierarchical block low-rank representation.  Applications include
-integral equations, Gaussian processes, Brownian dynamics, and others.
+hierarchical block low-rank representation.  It can be used for
+Gaussian processes, solving integral equations, Brownian dynamics,
+and other applications.
 
-**Features**
+The main strength of H2Pack is its ability to efficiently construct
+![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrices 
+in linear time for kernel functions used in Gaussian processes (up
+to 3-D data) by using a new proxy point method.  Kernel functions from
+computational physics, e.g., Coulomb, Stokes, can also be used.  H2Pack is
+optimized for shared-memory multicore architectures, including the use
+of vectorization for evaluating kernel functions.  H2Pack provides C/C++
+and Python interfaces.
+
+**Notes**
 
 * H2Pack is designed for general kernel functions, including the Gaussian,
-Matern, and other kernels used in statistics and machine learning. This is
-due to the use of a new *proxy point* method used to construct the matrix
-representations.  The common *proxy surface* method is also provided to
-efficiently construct matrix representations for kernels from potential
-theory, i.e., Coulomb, Stokes, etc.
+Matern, and other kernels used in statistics and machine learning. 
+For these kernels, H2Pack computes the
+![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) representation
+much faster, and with linear complexity, compared to algebraic approaches
+that rely on rank-revealing matrix decompositions.
 
-* H2Pack has faster matrix-vector multiplication than *analytic*
-approaches such as the fast multipole method (FMM).  H2Pack also
-computes the hierarchical representation faster than *algebraic*
-approaches that rely on rank-revealing matrix decompositions.
-These improvements are due to the hybrid analytic-algebraic approach
-of the proxy point method.
+* For standard kernel functions from potential theory, e.g., Coulomb, Stokes,
+H2Pack using the proxy point method constructs a more efficient representation
+than approaches based on analytic expansions, like the fast multipole method (FMM),
+and thus has faster matrix-vector multiplication than FMM. However, H2Pack requires
+a preprocessing step to construct the
+![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)
+representation, while FMM does not need a preprocessing step.
 
-* H2Pack achieves high-performance on shared-memory multicore
-architectures by using multithreading, vectorization, and careful load
-balancing.  Users can provide a function that defines the kernel function
+* The proxy points only need to be computed once for a kernel function, domain,
+and requested accuracy. These proxy points can be reused for different sets
+of points or data.
+Constructing the ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix
+with these proxy points only requires linear time.
+Alternatively, the proxy points could be selected on a surface, which
+corresponds to the proxy surface method that can be useful
+for kernel functions from potential theory.
+
+**Other Features**
+* Users can provide a function that defines the kernel function
 or use kernels that are already built into H2Pack.
 Vector wrapper functions are provided to help users optimize
 the evaluation of their own kernel functions.
-
-* HSS hierarchical block low-rank representations are also available
-in H2Pack. HSS operations include matrix-vector multiplication, and ULV 
-decomposition and solve. HSS representations are also constructed
-using the proxy point method.
-
-* H2Pack provides both C/C++ and Python interfaces.
-A Matlab version of H2Pack is also available in [this repo](https://github.com/xinxing02/H2Pack-Matlab).
+* HSS hierarchical block low-rank representations are also available,
+including ULV decomposition and solve.
+* A Matlab version of H2Pack is available in [this repo](https://github.com/xinxing02/H2Pack-Matlab).
 
 **Limitations**
 
 * Kernel functions up to 3-dimensions
-* Non-oscillatory kernel functions
-* Translationally-invariant kernel functions
-* Symmetric kernel functions
+* Symmetric, translationally-invariant, non-oscillatory kernel functions
 * H2Pack currently only supports kernel matrices defined by
 a single set of points (i.e., square, symmetric matrices)
 
@@ -50,11 +62,6 @@ a single set of points (i.e., square, symmetric matrices)
 * ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix representation construction for a kernel matrix with _O(N)_ complexity for an _N_-by-_N_ matrix
 * ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix-vector multiplication with _O(N)_ complexity
 * ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix-matrix  multiplication with _O(N)_ complexity
-* HSS matrix representation construction for a kernel matrix using the proxy point method 
-* HSS matrix-vector multiplication
-* HSS matrix-matrix multiplication
-* ULV decomposition of HSS matrix representation
-* Direct solves involving the HSS matrix representation using its ULV decomposition
 
 **References**
 

@@ -27,12 +27,13 @@ that rely on rank-revealing matrix decompositions.
 * For standard kernel functions from potential theory, e.g., Coulomb, Stokes,
 H2Pack using the proxy point method constructs a more efficient representation
 than approaches based on analytic expansions, like the fast multipole method (FMM),
-and thus has faster matrix-vector multiplication than FMM. However, H2Pack requires
+and thus has faster matrix-vector multiplication than FMM. Note that H2Pack requires
 a preprocessing step to construct the
 ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)
 representation, while FMM does not need a preprocessing step.
+However, FMM cannot handle general kernel functions.
 
-* The proxy points only need to be computed once for a kernel function, domain,
+* The proxy points only need to be computed once for a given kernel function, domain,
 and requested accuracy. These proxy points can be reused for different sets
 of points or data.
 Constructing the ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix

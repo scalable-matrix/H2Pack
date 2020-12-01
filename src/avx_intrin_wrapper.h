@@ -1,5 +1,5 @@
 /* ================================================================================
-x86 intrinsic function wrapper for AVX, AVX-2, AVX-512 instruction sets
+AVX intrinsic function wrapper for AVX, AVX-2, AVX-512 instruction sets
 Authors: Hua Huang   <huangh223@gatech.edu>
          Xin Xing    <xxing02@gmail.com>
          Edmond Chow <echow@cc.gatech.edu>
@@ -63,8 +63,8 @@ Reference:
 6. GCC SIMD math functions  : https://stackoverflow.com/questions/40475140/mathematical-functions-for-simd-registers
 ================================================================================ */ 
 
-#ifndef __X86_INTRIN_WRAPPER_H__
-#define __X86_INTRIN_WRAPPER_H__
+#ifndef __AVX_INTRIN_WRAPPER_H__
+#define __AVX_INTRIN_WRAPPER_H__
 
 #include <math.h>
 #include <x86intrin.h>
@@ -78,7 +78,7 @@ extern "C" {
 #endif
 
 #if !defined(__AVX__)
-#error Your processor or compiler does not support AVX instruction set, cannot use this x86_intrin_wrapper.h
+#error Your processor or compiler does not support AVX instruction set, cannot use this avx_intrin_wrapper.h
 #endif
 
 #if !defined(USE_AVX) && !defined(USE_AVX512)
@@ -301,7 +301,7 @@ static inline __m256d vec_cos_d  (const __m256d a) { return _ZGVdN4v_cos (a);   
 
 #else   // Else of "#if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 22"
 
-#warning Your compiler or GLIBC does not support vectorized log(), pow(), and exp(), x86_intrin_wrapper.h will use simulated implementations. 
+#warning Your compiler or GLIBC does not support vectorized log(), pow(), and exp(), avx_intrin_wrapper.h will use emulated implementations. 
 static inline __m256  vec_log_s(__m256  x)
 {
     int i;
@@ -595,7 +595,7 @@ static inline __m512d vec_cos_d  (const __m512d a) { return _ZGVdN8v_cos (a);   
 
 #else   // Else of "#if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 22"
 
-#warning Your compiler or GLIBC does not support vectorized log(), pow(), and exp(), x86_intrin_wrapper.h will use simulated implementations. 
+#warning Your compiler or GLIBC does not support vectorized log(), pow(), and exp(), avx_intrin_wrapper.h will use emulated implementations. 
 static inline __m512  vec_log_s(__m512  x)
 {
     int i;

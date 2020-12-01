@@ -7,7 +7,7 @@
 #include "H2Pack_3D_kernels.h"
 
 #include "H2Pack_config.h"
-#include "x86_intrin_wrapper.h" 
+#include "vec_wrapper_func.h"
 
 
 struct H2P_kernel

@@ -11,7 +11,7 @@
 #include "H2Pack_matvec.h"
 #include "H2Pack_matvec_periodic.h"
 #include "H2Pack_utils.h"
-#include "x86_intrin_wrapper.h"
+#include "vec_wrapper_func.h"
 #include "utils.h"
 
 // Extend the number of points to a multiple of SIMD_LEN and perform an n-body matvec

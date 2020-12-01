@@ -52,8 +52,8 @@
 // Linear algebra library (BLAS, LAPACK) wrapper header
 #include "linalg_lib_wrapper.h"
 
-// x86 intrinsic function wrapper
-#include "x86_intrin_wrapper.h"
+// Vector wrapper function wrapper
+#include "vec_wrapper_func.h"
 
 // Helper functions
 #include "utils.h"

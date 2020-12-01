@@ -4,7 +4,7 @@
 #include <math.h>
 
 #include "H2Pack_config.h"
-#include "x86_intrin_wrapper.h" 
+#include "vec_wrapper_func.h"
 
 #ifndef KRNL_EVAL_PARAM 
 #define KRNL_EVAL_PARAM \

@@ -10,7 +10,7 @@
 #include "H2Pack_aux_structs.h"
 #include "H2Pack_matmul.h"
 #include "H2Pack_utils.h"
-#include "x86_intrin_wrapper.h"
+#include "vec_wrapper_func.h"
 #include "utils.h"
 
 // Initialize auxiliary array y0 used in H2 matmul forward transformation

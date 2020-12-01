@@ -11,7 +11,7 @@
 #include "H2Pack_matmul.h"
 #include "H2Pack_matmul_periodic.h"
 #include "H2Pack_utils.h"
-#include "x86_intrin_wrapper.h"
+#include "vec_wrapper_func.h"
 #include "utils.h"
 
 // H2 matmul intermediate multiplication, calculate B_{ij} * (U_j^T * x_j)

@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <math.h>
 #include <omp.h>
 
 #include "utils.h"
@@ -63,6 +64,8 @@ void H2P_HSS_ULV_LU_factorize(H2Pack_p h2pack, const DTYPE shift)
         U_mid[i]   = NULL;
         D_mid[i]   = NULL;
     }
+
+    DTYPE HSS_logdet = 0.0;
 
     // Level by level factorization
     int nonsingular = 1;
@@ -231,6 +234,11 @@ void H2P_HSS_ULV_LU_factorize(H2Pack_p h2pack, const DTYPE shift)
                         int *perm = ULV_p[node]->data;
                         int *ipiv = ULV_p[node]->data + U_diff;
                         info = LAPACK_GETRF(LAPACK_ROW_MAJOR, U_diff, U_diff, tmpD22, U_nrow, ipiv);
+                        // logdet = logdet + log(abs(prod(diag(tmpLU))));
+                        DTYPE prod = 1.0;
+                        for (int k = 0; k < U_diff; k++) prod *= tmpD22[k * U_nrow + k];
+                        #pragma omp atomic update
+                        HSS_logdet += DLOG(DABS(prod));
                         // Convert ipiv to real permutation vector
                         for (int k = 0; k < U_diff; k++) perm[k] = k;
                         for (int k = 0; k < U_diff; k++)
@@ -304,6 +312,11 @@ void H2P_HSS_ULV_LU_factorize(H2Pack_p h2pack, const DTYPE shift)
                     int *perm = ULV_p[node]->data;
                     int *ipiv = ULV_p[node]->data + U_nrow;
                     info = LAPACK_GETRF(LAPACK_ROW_MAJOR, U_nrow, U_nrow, ULV_L[node]->data, U_nrow, ipiv);
+                    // logdet = logdet + log(abs(prod(diag(tmpLU))));
+                    DTYPE prod = 1.0;
+                    for (int k = 0; k < U_nrow; k++) prod *= ULV_L[node]->data[k * U_nrow + k];
+                    #pragma omp atomic update
+                    HSS_logdet += DLOG(DABS(prod));
                     // Convert ipiv to real permutation vector
                     for (int k = 0; k < U_nrow; k++) perm[k] = k;
                     for (int k = 0; k < U_nrow; k++)
@@ -389,6 +402,7 @@ void H2P_HSS_ULV_LU_factorize(H2Pack_p h2pack, const DTYPE shift)
     h2pack->ULV_Q   = ULV_Q;
     h2pack->ULV_L   = ULV_L;
     h2pack->is_HSS_SPD = nonsingular;
+    h2pack->HSS_logdet = HSS_logdet;
 
     // Count the total sizes of Q, L, idx matrices
     if (nonsingular)
@@ -634,6 +648,8 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_p h2pack, const DTYPE shift)
         D_mid[i]   = NULL;
     }
 
+    DTYPE HSS_logdet = 0.0;
+
     // Level by level factorization
     int is_SPD = 1;
     for (int i = max_level; i >= 0; i--)
@@ -805,6 +821,11 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_p h2pack, const DTYPE shift)
                             is_SPD = 0;
                             ERROR_PRINTF("Node %d potrf() returned %d, target matrix with shifting %.2lf is not SPD\n", node, info, shift);
                         }
+                        // logdet = logdet + 2 * log(abs(prod(diag(tmpL))));
+                        DTYPE prod = 1.0;
+                        for (int k = 0; k < U_diff; k++) prod *= tmpD22[k * U_nrow + k];
+                        #pragma omp atomic update
+                        HSS_logdet += 2.0 * DLOG(DABS(prod));
                         // LD21 = tmpL \ tmpD21;
                         // Here LD21 is stored in tmpD21
                         CBLAS_TRSM(
@@ -860,6 +881,11 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_p h2pack, const DTYPE shift)
                         is_SPD = 0;
                         ERROR_PRINTF("Node %d potrf() returned %d, target matrix with shifting %.2lf is not SPD\n", node, info, shift);
                     }
+                    // logdet = logdet + 2 * log(abs(prod(diag(tmpL))));
+                    DTYPE prod = 1.0;
+                    for (int k = 0; k < U_nrow; k++) prod *= ULV_L[node]->data[k * U_nrow + k];
+                    #pragma omp atomic update
+                    HSS_logdet += 2.0 * DLOG(DABS(prod));
                 }  // End of "if (i > 0)"
 
                 // 3. Construct ULV_idx{node}, row indices where ULV_Q{node} and ULV_L{node} are applied to
@@ -929,6 +955,7 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_p h2pack, const DTYPE shift)
     h2pack->ULV_Q   = ULV_Q;
     h2pack->ULV_L   = ULV_L;
     h2pack->is_HSS_SPD = is_SPD;
+    h2pack->HSS_logdet = HSS_logdet;
 
     // Count the total sizes of Q, L, idx matrices
     if (is_SPD)

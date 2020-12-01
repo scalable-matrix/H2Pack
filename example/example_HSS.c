@@ -18,7 +18,7 @@ int main(int argc, char **argv)
 
     // Point configuration, random generation
     int pt_dim  = 2;
-    int n_point = 40000;
+    int n_point = 20000;
     DTYPE* coord = (DTYPE*) malloc_aligned(sizeof(DTYPE) * n_point * pt_dim, 64);
     assert(coord != NULL);
 
@@ -33,10 +33,16 @@ int main(int argc, char **argv)
  
     // Kernel configuration
     int krnl_dim = 1;
+    /*
     DTYPE krnl_param[1] = {0.5};  //2D Gaussian kernel with the exponent parameter 
     kernel_eval_fptr krnl_eval = Gaussian_2D_eval_intrin_d;
     kernel_bimv_fptr krnl_bimv = Gaussian_2D_krnl_bimv_intrin_d;
     int krnl_bimv_flop = Gaussian_2D_krnl_bimv_flop;
+    */
+    DTYPE krnl_param[2] = {100.0, -0.5};  //2D quadratic kernel with the scale and exponent parameters
+    kernel_eval_fptr krnl_eval = Quadratic_2D_eval_intrin_d;
+    kernel_bimv_fptr krnl_bimv = Quadratic_2D_krnl_bimv_intrin_d;
+    int krnl_bimv_flop = Quadratic_2D_krnl_bimv_flop;
 
     // HSS construction configuration
     int krnl_mat_size = krnl_dim * n_point;
@@ -51,7 +57,8 @@ int main(int argc, char **argv)
     // Hierarchical partitioning
     int max_leaf_points = 0;    // use the default in h2pack for maximum number of points in the leaf node
     DTYPE max_leaf_size = 0.0;  // use the default in h2pack for maximum edge length of leaf box
-    char *pp_fname = "./PP_Gaussian2D_1e-6.dat"; //  file name for storage and reuse of proxy points, can be set as NULL.
+    //char *pp_fname = "./PP_Gaussian2D_1e-6.dat"; //  file name for storage and reuse of proxy points, can be set as NULL.
+    char *pp_fname = "./PP_Quadratic2D_1e-6.dat";
     H2P_calc_enclosing_box(pt_dim, n_point, coord, pp_fname, &h2pack->root_enbox);
     H2P_partition_points(h2pack, n_point, coord, max_leaf_points, max_leaf_size);
     
@@ -161,11 +168,10 @@ int main(int argc, char **argv)
     ref_norm = DSQRT(ref_norm);
     err_norm = DSQRT(err_norm);
     printf("H2P_HSS_ULV_Cholesky_solve relerr = %e\n",  err_norm / ref_norm);
-    #endif
-
+    #else
     // Construct LU-based ULV decomposition 
     // Could add an additional diagonal shift to the HSS matrix and then ULV decomposition.
-    const DTYPE shift = 0.00;    
+    const DTYPE shift = 0;    
     H2P_HSS_ULV_LU_factorize(h2pack, shift);
 
     // Direct Solve of the HSS matrix via ULV decomposition 
@@ -185,6 +191,8 @@ int main(int argc, char **argv)
     ref_norm = DSQRT(ref_norm);
     err_norm = DSQRT(err_norm);
     printf("H2P_HSS_ULV_LU_solve relerr = %e\n",  err_norm / ref_norm);
+    #endif
+    printf("HSS logdet = %e\n", h2pack->HSS_logdet);
 
     // Print out details of the H2 matrix
     H2P_print_statistic(h2pack);
@@ -195,9 +203,13 @@ int main(int argc, char **argv)
     scanf("%d", &store_to_file);
     if (store_to_file)
     {
-        printf("Storing HSS matrix data to files Gaussian_2D_1e-6.txt and Gaussian_2D_1e-6.bin...");
+        //const char *metadata_fname = "Gaussian_2D_1e-6.txt";
+        //const char *binary_fname   = "Gaussian_2D_1e-6.bin";
+        const char *metadata_fname = "Quadratic_2D_1e-6.txt";
+        const char *binary_fname   = "Quadratic_2D_1e-6.bin";
+        printf("Storing HSS matrix data to files %s and %s...", metadata_fname, binary_fname);
         fflush(stdout);
-        H2P_store_to_file(h2pack, "Gaussian_2D_1e-6.txt", "Gaussian_2D_1e-6.bin");
+        H2P_store_to_file(h2pack, metadata_fname, binary_fname);
         printf("done\n");
     }
 

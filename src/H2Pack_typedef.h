@@ -161,7 +161,8 @@ struct H2Pack
     void   *pkrnl_param;            // Pointer to periodic system kernel function parameter array
     DTYPE  max_leaf_size;           // Maximum size of a leaf node's box
     DTYPE  QR_stop_tol;             // Partial QR stop column norm tolerance
-    DTYPE  *coord;                  // Size n_point * pt_dim, sorted point coordinates
+    DTYPE  *coord;                  // Size n_point * xpt_dim, sorted point coordinates
+    DTYPE  *coord0;                 // Size n_point * xpt_dim, original (not sorted) point coordinates
     DTYPE  *enbox;                  // Size n_node * (2*pt_dim), enclosing box data of each node
     DTYPE  *root_enbox;             // Size 2 * pt_dim, enclosing box of the root node
     DTYPE  *per_lattices;           // Size n_lattice     * pt_dim, for periodic system, each row is a periodic lattice

@@ -233,6 +233,10 @@ H2P_tree_node_p H2P_bisection_partition_points(
 
 // Convert a linked list H2 tree to arrays
 void H2P_tree_to_array(H2P_tree_node_p node, H2Pack_p h2pack);
+
+// This function is used by H2Pack_file_IO.c
+// Calculate the inadmissible node list for each node, required by HSS construction
+void H2P_calc_node_inadm_lists(H2Pack_p h2pack);
 // ================================================================================
 
 

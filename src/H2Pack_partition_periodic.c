@@ -172,12 +172,13 @@ void H2P_partition_points_periodic(
     h2pack->max_leaf_size   = max_leaf_size;
     h2pack->coord_idx       = (int*)   malloc(sizeof(int)   * n_point);
     h2pack->coord           = (DTYPE*) malloc(sizeof(DTYPE) * n_point * xpt_dim);
+    h2pack->coord0          = (DTYPE*) malloc(sizeof(DTYPE) * n_point * xpt_dim);
     ASSERT_PRINTF(
         h2pack->coord != NULL && h2pack->coord_idx != NULL,
-        "Failed to allocate matrix of size %d * %d for storing point coordinates\n", 
-        pt_dim, n_point
+        "Failed to allocate matrix of size %d * %d for storing point coordinates\n", pt_dim, n_point
     );
-    memcpy(h2pack->coord, coord, sizeof(DTYPE) * n_point * xpt_dim);
+    memcpy(h2pack->coord,  coord, sizeof(DTYPE) * n_point * xpt_dim);
+    memcpy(h2pack->coord0, coord, sizeof(DTYPE) * n_point * xpt_dim);
     for (int i = 0; i < n_point; i++) h2pack->coord_idx[i] = i;
     
     // 2. Partition points for H2 tree using linked list 

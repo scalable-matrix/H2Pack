@@ -11,6 +11,7 @@
 #if DTYPE_SIZE == DOUBLE_SIZE           // Functions for double data type
 
 #define DTYPE           double          // Data type
+#define DTYPE_FMTSTR    "%lf"           // Data type format string
 #define DABS            fabs            // Abs function
 #define DLOG            log             // Natural logarithm function
 #define DLOG2           log2            // Base-2 logarithm function
@@ -49,6 +50,7 @@
 #if DTYPE_SIZE == FLOAT_SIZE            // Functions for float data type
 
 #define DTYPE           float
+#define DTYPE_FMTSTR    "%f"
 #define DABS            fabsf
 #define DLOG            logf
 #define DLOG2           log2f

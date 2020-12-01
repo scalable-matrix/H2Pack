@@ -189,6 +189,18 @@ int main(int argc, char **argv)
     // Print out details of the H2 matrix
     H2P_print_statistic(h2pack);
 
+    // Store H2 matrix data to file
+    int store_to_file = 0;
+    printf("Store HSS matrix data to file? 1-yes, 0-no : ");
+    scanf("%d", &store_to_file);
+    if (store_to_file)
+    {
+        printf("Storing HSS matrix data to files Gaussian_2D_1e-6.txt and Gaussian_2D_1e-6.bin...");
+        fflush(stdout);
+        H2P_store_to_file(h2pack, "Gaussian_2D_1e-6.txt", "Gaussian_2D_1e-6.bin");
+        printf("done\n");
+    }
+
     free(x0);
     free(x1);
     free(y0);

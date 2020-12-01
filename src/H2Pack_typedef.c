@@ -20,15 +20,16 @@ void H2P_init(
     ASSERT_PRINTF(h2pack != NULL, "Failed to allocate H2Pack structure\n");
     memset(h2pack, 0, sizeof(struct H2Pack));
     
-    h2pack->n_thread    = omp_get_max_threads();
-    h2pack->pt_dim      = pt_dim;
-    h2pack->xpt_dim     = pt_dim;  // By default, we don't have any extended information
-    h2pack->krnl_dim    = krnl_dim;
-    h2pack->max_child   = 1 << pt_dim;
-    h2pack->n_matvec    = 0;
-    h2pack->n_ULV_solve = 0;
-    h2pack->is_H2ERI    = 0;
-    h2pack->is_HSS      = 0;
+    h2pack->n_thread     = omp_get_max_threads();
+    h2pack->pt_dim       = pt_dim;
+    h2pack->xpt_dim      = pt_dim;  // By default, we don't have any extended information
+    h2pack->krnl_dim     = krnl_dim;
+    h2pack->max_child    = 1 << pt_dim;
+    h2pack->n_matvec     = 0;
+    h2pack->n_ULV_solve  = 0;
+    h2pack->is_H2ERI     = 0;
+    h2pack->is_HSS       = 0;
+    h2pack->is_RPY_Ewald = 0;
     memset(h2pack->mat_size,  0, sizeof(size_t) * 11);
     memset(h2pack->timers,    0, sizeof(double) * 11);
     memset(h2pack->JIT_flops, 0, sizeof(double) * 2);
@@ -79,6 +80,7 @@ void H2P_init(
     h2pack->B_ptr               = NULL;
     h2pack->D_ptr               = NULL;
     h2pack->coord               = NULL;
+    h2pack->coord0              = NULL;
     h2pack->enbox               = NULL;
     h2pack->root_enbox          = NULL;
     h2pack->per_lattices        = NULL;
@@ -246,6 +248,7 @@ void H2P_destroy(H2Pack_p *h2pack_)
     free(h2pack->B_ptr);
     free(h2pack->D_ptr);
     free(h2pack->coord);
+    free(h2pack->coord0);
     free(h2pack->enbox);
     free(h2pack->root_enbox);
     free(h2pack->per_lattices);

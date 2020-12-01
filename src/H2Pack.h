@@ -46,6 +46,9 @@
 // H2Pack SPDHSS H2 build
 #include "H2Pack_SPDHSS_H2.h"
 
+// H2Pack file IO
+#include "H2Pack_file_IO.h"
+
 // Linear algebra library (BLAS, LAPACK) wrapper header
 #include "linalg_lib_wrapper.h"
 

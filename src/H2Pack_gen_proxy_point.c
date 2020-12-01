@@ -14,10 +14,13 @@
 #include "H2Pack_utils.h"
 #include "utils.h"
 
-#define _GEN_PP_KRNL_T_IDX  0
-#define _GEN_PP_SPMM_T_IDX  1
-#define _GEN_PP_ID_T_IDX    2
-#define _GEN_PP_MISC_T_IDX  3
+typedef enum
+{
+    GEN_PP_KRNL_TIMER_IDX = 0,
+    GEN_PP_SPMM_TIMER_IDX,
+    GEN_PP_ID_TIMER_IDX,
+    GEN_PP_MISC_TIMER_IDX
+} gen_pp_timer_idx_t;
 
 struct H2P_gen_pp_param_
 {
@@ -78,7 +81,7 @@ void H2P_generate_proxy_point_nlayer(
     H2P_int_vec_init(&skel_idx, X0_size);
     H2P_int_vec_init(&ID_buff,  4 * Y0_size);
     et = get_wtime_sec();
-    timers[_GEN_PP_MISC_T_IDX] += et - st;
+    timers[GEN_PP_MISC_TIMER_IDX] += et - st;
     
     // 2. Generate initial candidate points in X and Y
     //    For Y0, we generate it layer by layer. Each layer has the same number of candidate 
@@ -93,7 +96,7 @@ void H2P_generate_proxy_point_nlayer(
         H2P_gen_coord_in_ring(Y0_lsize, pt_dim, layer_L0, layer_L1, Y0_coord->data + i * Y0_lsize, Y0_coord->ld);
     }
     et = get_wtime_sec();
-    timers[_GEN_PP_MISC_T_IDX] += et - st;
+    timers[GEN_PP_MISC_TIMER_IDX] += et - st;
 
     // 3. Select skeleton points in domain X
     //    Use sparsity + randomize to reduce the ID cost
@@ -101,7 +104,7 @@ void H2P_generate_proxy_point_nlayer(
     st = get_wtime_sec();
     H2P_eval_kernel_matrix_OMP(krnl_param, krnl_eval, krnl_dim, X0_coord, Y0_coord, tmpA);
     et = get_wtime_sec();
-    timers[_GEN_PP_KRNL_T_IDX] += et - st;
+    timers[GEN_PP_KRNL_TIMER_IDX] += et - st;
     // (2) Generate sparse random matrix and multiply with the kernel matrix to get a reduced matrix
     H2P_int_vec_p   rndmat_idx = ID_buff;
     H2P_dense_mat_p rndmat_val = QR_buff;
@@ -115,7 +118,7 @@ void H2P_generate_proxy_point_nlayer(
         tmpA->data, tmpA->ld, tmpA1->data, tmpA1->ld
     );
     et = get_wtime_sec();
-    timers[_GEN_PP_KRNL_T_IDX] += et - st;
+    timers[GEN_PP_KRNL_TIMER_IDX] += et - st;
     // (3) Calculate ID approximation on the reduced matrix and select skeleton points in X
     st = get_wtime_sec();
     if (krnl_dim == 1)
@@ -127,7 +130,7 @@ void H2P_generate_proxy_point_nlayer(
     }
     H2P_int_vec_set_capacity(ID_buff, 4 * tmpA1->nrow);
     et = get_wtime_sec();
-    timers[_GEN_PP_MISC_T_IDX] += et - st;
+    timers[GEN_PP_MISC_TIMER_IDX] += et - st;
 
     st = get_wtime_sec();
     DTYPE reltol_ = reltol * 1e-2;
@@ -136,13 +139,13 @@ void H2P_generate_proxy_point_nlayer(
         n_thread, QR_buff->data, ID_buff->data, krnl_dim
     );
     et = get_wtime_sec();
-    timers[_GEN_PP_ID_T_IDX]   += et - st;
+    timers[GEN_PP_ID_TIMER_IDX]   += et - st;
 
     st = get_wtime_sec();
     H2P_dense_mat_select_columns(X0_coord, skel_idx);
     H2P_dense_mat_p Xp_coord = X0_coord;
     et = get_wtime_sec();
-    timers[_GEN_PP_MISC_T_IDX] += et - st;
+    timers[GEN_PP_MISC_TIMER_IDX] += et - st;
 
     if (alg == 0 || alg == 1)
     {
@@ -152,7 +155,7 @@ void H2P_generate_proxy_point_nlayer(
         // Be careful, Y0_coord should be placed before Xp_coord
         H2P_eval_kernel_matrix_OMP(krnl_param, krnl_eval, krnl_dim, Y0_coord, Xp_coord, tmpA1);
         et = get_wtime_sec();
-        timers[_GEN_PP_KRNL_T_IDX] += et - st;
+        timers[GEN_PP_KRNL_TIMER_IDX] += et - st;
         // (2) Calculate ID approximation on the kernel matrix and select new proxy points in Y
         st = get_wtime_sec();
         if (krnl_dim == 1)
@@ -164,7 +167,7 @@ void H2P_generate_proxy_point_nlayer(
         }
         H2P_int_vec_set_capacity(ID_buff, 4 * tmpA1->nrow);
         et = get_wtime_sec();
-        timers[_GEN_PP_MISC_T_IDX] += et - st;
+        timers[GEN_PP_MISC_TIMER_IDX] += et - st;
 
         st = get_wtime_sec();
         DTYPE reltol2 = reltol * 1e-2;
@@ -173,14 +176,14 @@ void H2P_generate_proxy_point_nlayer(
             n_thread, QR_buff->data, ID_buff->data, krnl_dim
         );
         et = get_wtime_sec();
-        timers[_GEN_PP_ID_T_IDX]   += et - st;
+        timers[GEN_PP_ID_TIMER_IDX]   += et - st;
 
         st = get_wtime_sec();
         H2P_dense_mat_select_columns(Y0_coord, skel_idx);
         H2P_dense_mat_resize(Yp_coord, pt_dim, Y0_coord->ncol);
         copy_matrix_block(sizeof(DTYPE), pt_dim, Y0_coord->ncol, Y0_coord->data, Y0_coord->ld, Yp_coord->data, Yp_coord->ld);
         et = get_wtime_sec();
-        timers[_GEN_PP_MISC_T_IDX] += et - st;
+        timers[GEN_PP_MISC_TIMER_IDX] += et - st;
     }  // End of "if (alg == 1)"
 
     if (alg == 2)
@@ -199,7 +202,7 @@ void H2P_generate_proxy_point_nlayer(
             copy_matrix_block(sizeof(DTYPE), pt_dim, Yp_coord->ncol, Yp_coord_ptr,   Yp_coord->ld, tmp_coord_Yp_ptr, tmp_coord->ld);
             copy_matrix_block(sizeof(DTYPE), pt_dim, Y0_lsize,       Y0_layer_i_ptr, Y0_coord->ld, tmp_coord_li_ptr, tmp_coord->ld);
             et = get_wtime_sec();
-            timers[_GEN_PP_MISC_T_IDX] += et - st;
+            timers[GEN_PP_MISC_TIMER_IDX] += et - st;
 
             // (2) Generate kernel matrix for this layer 
             st = get_wtime_sec();
@@ -218,7 +221,7 @@ void H2P_generate_proxy_point_nlayer(
             }
             H2P_int_vec_set_capacity(ID_buff, 4 * tmpA1->nrow);
             et = get_wtime_sec();
-            timers[_GEN_PP_MISC_T_IDX] += et - st;
+            timers[GEN_PP_MISC_TIMER_IDX] += et - st;
 
             st = get_wtime_sec();
             DTYPE reltol2 = reltol * 1e-2;
@@ -227,14 +230,14 @@ void H2P_generate_proxy_point_nlayer(
                 n_thread, QR_buff->data, ID_buff->data, krnl_dim
             );
             et = get_wtime_sec();
-            timers[_GEN_PP_ID_T_IDX]   += et - st;
+            timers[GEN_PP_ID_TIMER_IDX]   += et - st;
 
             st = get_wtime_sec();
             H2P_dense_mat_select_columns(tmp_coord, skel_idx);
             H2P_dense_mat_resize(Yp_coord, pt_dim, tmp_coord->ncol);
             copy_matrix_block(sizeof(DTYPE), pt_dim, tmp_coord->ncol, tmp_coord->data, tmp_coord->ld, Yp_coord->data, Yp_coord->ld);
             et = get_wtime_sec();
-            timers[_GEN_PP_MISC_T_IDX] += et - st;
+            timers[GEN_PP_MISC_TIMER_IDX] += et - st;
         }  // End of i loop
     }  // End of "if (alg == 2)"
 
@@ -531,10 +534,10 @@ void H2P_generate_proxy_point_ID_file(
     // Calculate other proxy points
     double timers[4];
     DTYPE L3_nlayer_ = (DTYPE) gen_pp_param.L3_nlayer;
-    timers[_GEN_PP_KRNL_T_IDX] = 0.0;
-    timers[_GEN_PP_KRNL_T_IDX] = 0.0;
-    timers[_GEN_PP_ID_T_IDX]   = 0.0;
-    timers[_GEN_PP_MISC_T_IDX] = 0.0;
+    timers[GEN_PP_KRNL_TIMER_IDX] = 0.0;
+    timers[GEN_PP_KRNL_TIMER_IDX] = 0.0;
+    timers[GEN_PP_ID_TIMER_IDX]   = 0.0;
+    timers[GEN_PP_MISC_TIMER_IDX] = 0.0;
     for (int pp_i = 0; pp_i < curr_num_pp; pp_i++)
     {
         // Note: curr_minL is the radius, L1 is the edge length, need to * 2
@@ -563,8 +566,8 @@ void H2P_generate_proxy_point_ID_file(
     {
         INFO_PRINTF(
             "Proxy point generation: kernel, SpMM, ID, other time = %.3lf, %.3lf, %.3lf, %.3lf sec\n", 
-            timers[_GEN_PP_KRNL_T_IDX], timers[_GEN_PP_KRNL_T_IDX], 
-            timers[_GEN_PP_ID_T_IDX],   timers[_GEN_PP_MISC_T_IDX]
+            timers[GEN_PP_KRNL_TIMER_IDX], timers[GEN_PP_KRNL_TIMER_IDX], 
+            timers[GEN_PP_ID_TIMER_IDX],   timers[GEN_PP_MISC_TIMER_IDX]
         );
     }
 

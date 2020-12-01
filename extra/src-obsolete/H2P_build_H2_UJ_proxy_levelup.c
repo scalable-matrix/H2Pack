@@ -213,9 +213,9 @@ void H2P_build_H2_UJ_proxy(H2Pack_p h2pack)
             thread_buf[tid]->timer += get_wtime_sec();
 
             double *timers = U_timers + tid * 8;
-            timers[_U_BUILD_KRNL_T_IDX]  = krnl_t;
-            timers[_U_BUILD_QR_T_IDX]    = QR_t;
-            timers[_U_BUILD_OTHER_T_IDX] = other_t;
+            timers[U_BUILD_KRNL_TIMER_IDX]  = krnl_t;
+            timers[U_BUILD_QR_TIMER_IDX]    = QR_t;
+            timers[U_BUILD_OTHER_TIMER_IDX] = other_t;
         }  // End of "pragma omp parallel"
         
         if (h2pack->print_timers == 1)
@@ -238,8 +238,8 @@ void H2P_build_H2_UJ_proxy(H2Pack_p h2pack)
                 double *timers = U_timers + 8 * tid;
                 INFO_PRINTF(
                     "    %3d, %6.3lf, %6.3lf, %6.3lf, %6.3lf\n",
-                    tid, timers[_U_BUILD_KRNL_T_IDX], timers[_U_BUILD_QR_T_IDX], 
-                    timers[_U_BUILD_OTHER_T_IDX], thread_buf[tid]->timer
+                    tid, timers[U_BUILD_KRNL_TIMER_IDX], timers[U_BUILD_QR_TIMER_IDX], 
+                    timers[U_BUILD_OTHER_TIMER_IDX], thread_buf[tid]->timer
                 );
             }
         }  // End of "if (h2pack->print_timers == 1)"
@@ -256,10 +256,10 @@ void H2P_build_H2_UJ_proxy(H2Pack_p h2pack)
             U[i]->ld   = 0;
         } else {
             mat_size[_U_SIZE_IDX]      += U[i]->nrow * U[i]->ncol;
-            mat_size[_MV_FWD_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
-            mat_size[_MV_FWD_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
-            mat_size[_MV_BWD_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
-            mat_size[_MV_BWD_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
+            mat_size[MV_FWD_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
+            mat_size[MV_FWD_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
+            mat_size[MV_BWD_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
+            mat_size[MV_BWD_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
         }
         if (J[i] == NULL) H2P_int_vec_init(&J[i], 1);
         if (J_coord[i] == NULL)

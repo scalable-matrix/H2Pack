@@ -495,8 +495,8 @@ void H2P_matmul(
         st = get_wtime_sec();
         H2P_permute_matrix_row_forward(h2pack, layout, curr_n_vec, curr_mat_x, ldx, pmt_x, ld_pmt);
         et = get_wtime_sec();
-        timers[_MV_VOP_TIMER_IDX] += et - st;
-        mat_size[_MV_VOP_SIZE_IDX] += 2 * krnl_mat_size * curr_n_vec;
+        timers[MV_VOP_TIMER_IDX] += et - st;
+        mat_size[MV_VOP_SIZE_IDX] += 2 * krnl_mat_size * curr_n_vec;
     
         // 2. Reset output matrix
         st = get_wtime_sec();
@@ -521,8 +521,8 @@ void H2P_matmul(
             }
         }  // End of "if (layout == CblasRowMajor)"
         et = get_wtime_sec();
-        timers[_MV_VOP_TIMER_IDX] += et - st;
-        mat_size[_MV_VOP_SIZE_IDX] += krnl_mat_size * curr_n_vec;
+        timers[MV_VOP_TIMER_IDX] += et - st;
+        mat_size[MV_VOP_SIZE_IDX] += krnl_mat_size * curr_n_vec;
         
         // 3. Forward transformation, calculate U_j^T * x_j
         st = get_wtime_sec();
@@ -531,7 +531,7 @@ void H2P_matmul(
             pmt_x, ld_pmt, pmt_row_stride, x_trans
         );
         et = get_wtime_sec();
-        timers[_MV_FWD_TIMER_IDX] += et - st;
+        timers[MV_FWD_TIMER_IDX] += et - st;
 
         // 4. Intermediate multiplication, calculate B_{ij} * (U_j^T * x_j)
         st = get_wtime_sec();
@@ -541,7 +541,7 @@ void H2P_matmul(
             pmt_y, ld_pmt, pmt_row_stride, y_trans
         );
         et = get_wtime_sec();
-        timers[_MV_MID_TIMER_IDX] += et - st;
+        timers[MV_MID_TIMER_IDX] += et - st;
 
         // 5. Backward transformation, calculate U_i * (B_{ij} * (U_j^T * x_j))
         st = get_wtime_sec();
@@ -550,7 +550,7 @@ void H2P_matmul(
             pmt_y, ld_pmt, pmt_row_stride, y_trans
         );
         et = get_wtime_sec();
-        timers[_MV_BWD_TIMER_IDX] += et - st;
+        timers[MV_BWD_TIMER_IDX] += et - st;
 
         // 6. Dense multiplication, calculate D_{ij} * x_j
         st = get_wtime_sec();
@@ -560,14 +560,14 @@ void H2P_matmul(
             pmt_y, ld_pmt, pmt_row_stride, y_trans
         );
         et = get_wtime_sec();
-        timers[_MV_DEN_TIMER_IDX] += et - st;
+        timers[MV_DEN_TIMER_IDX] += et - st;
 
         // 7. Backward permute the output matrix
         st = get_wtime_sec();
         H2P_permute_matrix_row_backward(h2pack, layout, curr_n_vec, pmt_y, ld_pmt, curr_mat_y, ldy);
         et = get_wtime_sec();
-        timers[_MV_VOP_TIMER_IDX] += et - st;
-        mat_size[_MV_VOP_SIZE_IDX] += 4 * krnl_mat_size * curr_n_vec;
+        timers[MV_VOP_TIMER_IDX] += et - st;
+        mat_size[MV_VOP_SIZE_IDX] += 4 * krnl_mat_size * curr_n_vec;
     }  // End of i_vec loop
 
     h2pack->n_matvec += n_vec;

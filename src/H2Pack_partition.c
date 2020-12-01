@@ -706,5 +706,5 @@ void H2P_partition_points(
     H2P_partition_vars_destroy(&part_vars);
 
     et = get_wtime_sec();
-    h2pack->timers[_PT_TIMER_IDX] = et - st;
+    h2pack->timers[PT_TIMER_IDX] = et - st;
 }

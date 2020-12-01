@@ -118,25 +118,25 @@ void H2P_build_periodic(
     st = get_wtime_sec();
     H2P_build_H2_UJ_proxy(h2pack);
     et = get_wtime_sec();
-    timers[_U_BUILD_TIMER_IDX] = et - st;
+    timers[U_BUILD_TIMER_IDX] = et - st;
 
     // 2. Generate H2 generator matrices metadata
     st = get_wtime_sec();
     H2P_generate_B_metadata(h2pack);
     et = get_wtime_sec();
-    timers[_B_BUILD_TIMER_IDX] = et - st;
+    timers[B_BUILD_TIMER_IDX] = et - st;
     
     // 3. Generate H2 dense blocks metadata
     st = get_wtime_sec();
     H2P_generate_D_metadata(h2pack);
     et = get_wtime_sec();
-    timers[_D_BUILD_TIMER_IDX] = et - st;
+    timers[D_BUILD_TIMER_IDX] = et - st;
 
     // 4. Build periodic block for root node, add its timing to B build timing
     st = get_wtime_sec();
     H2P_build_periodic_block(h2pack);
     et = get_wtime_sec();
-    timers[_B_BUILD_TIMER_IDX] = et - st;
+    timers[B_BUILD_TIMER_IDX] = et - st;
 
     // 5. Set up forward and backward permutation indices
     int n_point    = h2pack->n_point;

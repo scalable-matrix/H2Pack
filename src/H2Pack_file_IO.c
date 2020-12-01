@@ -432,11 +432,11 @@ void H2P_read_from_file(
             U[i]->ncol = 0;
             U[i]->ld   = 0;
         } else {
-            mat_size[_U_SIZE_IDX]      += U[i]->nrow * U[i]->ncol;
-            mat_size[_MV_FWD_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
-            mat_size[_MV_FWD_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
-            mat_size[_MV_BWD_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
-            mat_size[_MV_BWD_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
+            mat_size[U_SIZE_IDX]      += U[i]->nrow * U[i]->ncol;
+            mat_size[MV_FWD_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
+            mat_size[MV_FWD_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
+            mat_size[MV_BWD_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
+            mat_size[MV_BWD_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
         }
     }
 
@@ -473,9 +473,9 @@ void H2P_read_from_file(
         B_pair_cnt++;
         node_n_r_adm[node0]++;
         node_n_r_adm[node1]++;
-        mat_size[_MV_MID_SIZE_IDX] +=  B_nrow[i] * B_ncol[i];
-        mat_size[_MV_MID_SIZE_IDX] += (B_nrow[i] + B_ncol[i]);
-        mat_size[_MV_MID_SIZE_IDX] += (B_nrow[i] + B_ncol[i]);
+        mat_size[MV_MID_SIZE_IDX] +=  B_nrow[i] * B_ncol[i];
+        mat_size[MV_MID_SIZE_IDX] += (B_nrow[i] + B_ncol[i]);
+        mat_size[MV_MID_SIZE_IDX] += (B_nrow[i] + B_ncol[i]);
         if (h2pack->BD_JIT)
         {
             int level0 = node_level[node0];
@@ -500,7 +500,7 @@ void H2P_read_from_file(
                 node0_npt = pt_e0 - pt_s0 + 1;
                 node1_npt = J[node1]->length;
             }
-            JIT_flops[_JIT_B_FLOPS_IDX] += (double)(krnl_bimv_flops) * (double)(node0_npt * node1_npt);
+            JIT_flops[JIT_B_FLOPS_IDX] += (double)(krnl_bimv_flops) * (double)(node0_npt * node1_npt);
         }
     }
     
@@ -508,7 +508,7 @@ void H2P_read_from_file(
     int n_B_blk = h2pack->n_thread * BD_ntask_thread;
     H2P_partition_workload(input_n_r_adm_pair, B_ptr + 1, B_total_size, n_B_blk, h2pack->B_blk);
     for (int i = 1; i <= input_n_r_adm_pair; i++) B_ptr[i] += B_ptr[i - 1];
-    mat_size[_B_SIZE_IDX] = B_total_size;
+    mat_size[B_SIZE_IDX] = B_total_size;
 
     h2pack->B_p2i_rowptr = (int*) malloc(sizeof(int) * (n_node + 1));
     h2pack->B_p2i_colidx = (int*) malloc(sizeof(int) * input_n_r_adm_pair * 2);
@@ -545,9 +545,9 @@ void H2P_read_from_file(
         D_pair_j[D_pair_cnt] = node;
         D_pair_v[D_pair_cnt] = i + 1;
         D_pair_cnt++;
-        mat_size[_MV_DEN_SIZE_IDX] += D_nrow[i] * D_ncol[i];
-        mat_size[_MV_DEN_SIZE_IDX] += D_nrow[i] + D_ncol[i];
-        if (h2pack->BD_JIT) JIT_flops[_JIT_D_FLOPS_IDX] += (double)(krnl_bimv_flops) * (double)(node_npt * node_npt);
+        mat_size[MV_DEN_SIZE_IDX] += D_nrow[i] * D_ncol[i];
+        mat_size[MV_DEN_SIZE_IDX] += D_nrow[i] + D_ncol[i];
+        if (h2pack->BD_JIT) JIT_flops[JIT_D_FLOPS_IDX] += (double)(krnl_bimv_flops) * (double)(node_npt * node_npt);
     }
     for (int i = 0; i < input_n_r_inadm_pair; i++)
     {
@@ -568,17 +568,17 @@ void H2P_read_from_file(
         D_pair_j[D_pair_cnt] = node0;
         D_pair_v[D_pair_cnt] = -(ii + 1);
         D_pair_cnt++;
-        mat_size[_MV_DEN_SIZE_IDX] +=  D_nrow[ii] * D_ncol[ii];
-        mat_size[_MV_DEN_SIZE_IDX] += (D_nrow[ii] + D_ncol[ii]);
-        mat_size[_MV_DEN_SIZE_IDX] += (D_nrow[ii] + D_ncol[ii]);
-        if (h2pack->BD_JIT) JIT_flops[_JIT_D_FLOPS_IDX] += (double)(krnl_bimv_flops) * (double)(node0_npt * node1_npt);
+        mat_size[MV_DEN_SIZE_IDX] +=  D_nrow[ii] * D_ncol[ii];
+        mat_size[MV_DEN_SIZE_IDX] += (D_nrow[ii] + D_ncol[ii]);
+        mat_size[MV_DEN_SIZE_IDX] += (D_nrow[ii] + D_ncol[ii]);
+        if (h2pack->BD_JIT) JIT_flops[JIT_D_FLOPS_IDX] += (double)(krnl_bimv_flops) * (double)(node0_npt * node1_npt);
     }
 
     int D_n_blk = h2pack->n_thread * BD_ntask_thread;
     H2P_partition_workload(n_leaf_node,          D_ptr + 1,               D0_total_size, D_n_blk, h2pack->D_blk0);
     H2P_partition_workload(input_n_r_inadm_pair, D_ptr + n_leaf_node + 1, D1_total_size, D_n_blk, h2pack->D_blk1);
     for (int i = 1; i <= n_leaf_node + input_n_r_inadm_pair; i++) D_ptr[i] += D_ptr[i - 1];
-    mat_size[_D_SIZE_IDX] = D_total_size;
+    mat_size[D_SIZE_IDX] = D_total_size;
 
     h2pack->D_p2i_rowptr = (int*) malloc(sizeof(int) * (n_node + 1));
     h2pack->D_p2i_colidx = (int*) malloc(sizeof(int) * n_Dij_pair);

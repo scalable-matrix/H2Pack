@@ -69,10 +69,10 @@ void H2P_generate_proxy_point_ID(
         }
         
         // Reset timers
-        timers[_GEN_PP_KRNL_T_IDX] = 0.0;
-        timers[_GEN_PP_KRNL_T_IDX] = 0.0;
-        timers[_GEN_PP_ID_T_IDX]   = 0.0;
-        timers[_GEN_PP_MISC_T_IDX] = 0.0;
+        timers[GEN_PP_KRNL_TIMER_IDX] = 0.0;
+        timers[GEN_PP_KRNL_TIMER_IDX] = 0.0;
+        timers[GEN_PP_ID_TIMER_IDX]   = 0.0;
+        timers[GEN_PP_MISC_TIMER_IDX] = 0.0;
 
         // Generate proxy points
         H2P_generate_proxy_point_nlayer(
@@ -88,8 +88,8 @@ void H2P_generate_proxy_point_ID(
             INFO_PRINTF("Level %d: %d proxy points generated\n", level, pp[level]->ncol);
             INFO_PRINTF(
                 "    kernel, SpMM, ID, other time = %.3lf, %.3lf, %.3lf, %.3lf sec\n", 
-                timers[_GEN_PP_KRNL_T_IDX], timers[_GEN_PP_KRNL_T_IDX], 
-                timers[_GEN_PP_ID_T_IDX],   timers[_GEN_PP_MISC_T_IDX]
+                timers[GEN_PP_KRNL_TIMER_IDX], timers[GEN_PP_KRNL_TIMER_IDX], 
+                timers[GEN_PP_ID_TIMER_IDX],   timers[GEN_PP_MISC_TIMER_IDX]
             );
         }
     }  // End of level loop

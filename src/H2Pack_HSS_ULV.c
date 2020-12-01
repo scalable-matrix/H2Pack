@@ -402,12 +402,12 @@ void H2P_HSS_ULV_LU_factorize(H2Pack_p h2pack, const DTYPE shift)
             ULV_I_size += ULV_p[i]->length;
         }
         ULV_I_size += n_node;
-        h2pack->mat_size[_ULV_Q_SIZE_IDX] = ULV_Q_size;
-        h2pack->mat_size[_ULV_L_SIZE_IDX] = ULV_L_size;
-        h2pack->mat_size[_ULV_I_SIZE_IDX] = ULV_I_size;
+        h2pack->mat_size[ULV_Q_SIZE_IDX] = ULV_Q_size;
+        h2pack->mat_size[ULV_L_SIZE_IDX] = ULV_L_size;
+        h2pack->mat_size[ULV_I_SIZE_IDX] = ULV_I_size;
         
         double et = get_wtime_sec();  
-        h2pack->timers[_ULV_FCT_TIMER_IDX] = et - st;
+        h2pack->timers[ULV_FCT_TIMER_IDX] = et - st;
     }
 }
 
@@ -580,7 +580,7 @@ void H2P_HSS_ULV_LU_solve(H2Pack_p h2pack, const int op, const DTYPE *b, DTYPE *
 
     double et = get_wtime_sec();
     h2pack->n_ULV_solve++;
-    h2pack->timers[_ULV_SLV_TIMER_IDX] += et - st;
+    h2pack->timers[ULV_SLV_TIMER_IDX] += et - st;
 }
 
 // Construct the ULV Cholesky factorization for a HSS matrix
@@ -941,12 +941,12 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_p h2pack, const DTYPE shift)
             ULV_I_size += ULV_idx[i]->length;
         }
         ULV_I_size += n_node;
-        h2pack->mat_size[_ULV_Q_SIZE_IDX] = ULV_Q_size;
-        h2pack->mat_size[_ULV_L_SIZE_IDX] = ULV_L_size;
-        h2pack->mat_size[_ULV_I_SIZE_IDX] = ULV_I_size;
+        h2pack->mat_size[ULV_Q_SIZE_IDX] = ULV_Q_size;
+        h2pack->mat_size[ULV_L_SIZE_IDX] = ULV_L_size;
+        h2pack->mat_size[ULV_I_SIZE_IDX] = ULV_I_size;
         
         double et = get_wtime_sec();  
-        h2pack->timers[_ULV_FCT_TIMER_IDX] = et - st;
+        h2pack->timers[ULV_FCT_TIMER_IDX] = et - st;
     }
 }
 
@@ -1128,5 +1128,5 @@ void H2P_HSS_ULV_Cholesky_solve(H2Pack_p h2pack, const int op, const DTYPE *b, D
 
     double et = get_wtime_sec();
     h2pack->n_ULV_solve++;
-    h2pack->timers[_ULV_SLV_TIMER_IDX] += et - st;
+    h2pack->timers[ULV_SLV_TIMER_IDX] += et - st;
 }

@@ -110,7 +110,7 @@ int main(int argc, char **argv)
     // Warm up, reset timers, and test the ULV solve performance
     H2P_HSS_ULV_Cholesky_solve(h2pack, 3, y1, x1);
     h2pack->n_ULV_solve = 0;
-    h2pack->timers[_ULV_SLV_TIMER_IDX] = 0.0;
+    h2pack->timers[ULV_SLV_TIMER_IDX] = 0.0;
     for (int i = 0; i < 10; i++) 
         H2P_HSS_ULV_Cholesky_solve(h2pack, 3, y1, x1);
     ref_norm = 0.0; 
@@ -136,7 +136,7 @@ int main(int argc, char **argv)
     // Warm up, reset timers, and test the ULV solve performance
     H2P_HSS_ULV_LU_solve(h2pack, 3, y1, x1);
     h2pack->n_ULV_solve = 0;
-    h2pack->timers[_ULV_SLV_TIMER_IDX] = 0.0;
+    h2pack->timers[ULV_SLV_TIMER_IDX] = 0.0;
     for (int i = 0; i < 10; i++) 
         H2P_HSS_ULV_LU_solve(h2pack, 3, y1, x1);
     ref_norm = 0.0; 

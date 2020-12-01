@@ -387,19 +387,19 @@ void H2P_print_statistic(H2Pack_p h2pack)
     size_t *mat_size = h2pack->mat_size;
     double DTYPE_MB = (double) sizeof(DTYPE) / 1048576.0;
     double int_MB   = (double) sizeof(int)   / 1048576.0;
-    double U_MB   = (double) mat_size[_U_SIZE_IDX]      * DTYPE_MB;
-    double B_MB   = (double) mat_size[_B_SIZE_IDX]      * DTYPE_MB;
-    double D_MB   = (double) mat_size[_D_SIZE_IDX]      * DTYPE_MB;
-    double fwd_MB = (double) mat_size[_MV_FWD_SIZE_IDX] * DTYPE_MB;
-    double mid_MB = (double) mat_size[_MV_MID_SIZE_IDX] * DTYPE_MB;
-    double bwd_MB = (double) mat_size[_MV_BWD_SIZE_IDX] * DTYPE_MB;
-    double den_MB = (double) mat_size[_MV_DEN_SIZE_IDX] * DTYPE_MB;
-    double vop_MB = (double) mat_size[_MV_VOP_SIZE_IDX] * DTYPE_MB;
+    double U_MB   = (double) mat_size[U_SIZE_IDX]      * DTYPE_MB;
+    double B_MB   = (double) mat_size[B_SIZE_IDX]      * DTYPE_MB;
+    double D_MB   = (double) mat_size[D_SIZE_IDX]      * DTYPE_MB;
+    double fwd_MB = (double) mat_size[MV_FWD_SIZE_IDX] * DTYPE_MB;
+    double mid_MB = (double) mat_size[MV_MID_SIZE_IDX] * DTYPE_MB;
+    double bwd_MB = (double) mat_size[MV_BWD_SIZE_IDX] * DTYPE_MB;
+    double den_MB = (double) mat_size[MV_DEN_SIZE_IDX] * DTYPE_MB;
+    double vop_MB = (double) mat_size[MV_VOP_SIZE_IDX] * DTYPE_MB;
     double mv_MB  = fwd_MB + mid_MB + bwd_MB + den_MB;
     double UBD_k  = 0.0;
-    UBD_k += (double) mat_size[_U_SIZE_IDX];
-    UBD_k += (double) mat_size[_B_SIZE_IDX];
-    UBD_k += (double) mat_size[_D_SIZE_IDX];
+    UBD_k += (double) mat_size[U_SIZE_IDX];
+    UBD_k += (double) mat_size[B_SIZE_IDX];
+    UBD_k += (double) mat_size[D_SIZE_IDX];
     UBD_k /= (double) h2pack->krnl_mat_size;
     double matvec_MB = 0.0;
     for (int i = 0; i < h2pack->n_thread; i++)
@@ -438,9 +438,9 @@ void H2P_print_statistic(H2Pack_p h2pack)
 
     if (h2pack->is_HSS == 1)
     {
-        double ULV_Q_MB = (double) mat_size[_ULV_Q_SIZE_IDX] * DTYPE_MB;
-        double ULV_L_MB = (double) mat_size[_ULV_L_SIZE_IDX] * DTYPE_MB;
-        double ULV_I_MB = (double) mat_size[_ULV_I_SIZE_IDX] * DTYPE_MB;
+        double ULV_Q_MB = (double) mat_size[ULV_Q_SIZE_IDX] * DTYPE_MB;
+        double ULV_L_MB = (double) mat_size[ULV_L_SIZE_IDX] * DTYPE_MB;
+        double ULV_I_MB = (double) mat_size[ULV_I_SIZE_IDX] * DTYPE_MB;
         printf("  * HSS ULV factorization Q, L, I : %.2lf, %.2lf, %.2lf (MB) \n", ULV_Q_MB, ULV_L_MB, ULV_I_MB);
     }
     
@@ -448,25 +448,25 @@ void H2P_print_statistic(H2Pack_p h2pack)
     double *timers = h2pack->timers;
     double build_t = 0.0, matvec_t = 0.0;
     double d_n_matvec = (double) h2pack->n_matvec;
-    build_t += timers[_PT_TIMER_IDX];
-    build_t += timers[_U_BUILD_TIMER_IDX];
-    build_t += timers[_B_BUILD_TIMER_IDX];
-    build_t += timers[_D_BUILD_TIMER_IDX];
+    build_t += timers[PT_TIMER_IDX];
+    build_t += timers[U_BUILD_TIMER_IDX];
+    build_t += timers[B_BUILD_TIMER_IDX];
+    build_t += timers[D_BUILD_TIMER_IDX];
     printf("  * H2 construction time (sec)   = %.3lf \n", build_t);
-    printf("      |----> Point partition     = %.3lf \n", timers[_PT_TIMER_IDX]);
-    printf("      |----> U construction      = %.3lf \n", timers[_U_BUILD_TIMER_IDX]);
-    printf("      |----> B construction      = %.3lf \n", timers[_B_BUILD_TIMER_IDX]);
-    printf("      |----> D construction      = %.3lf \n", timers[_D_BUILD_TIMER_IDX]);
+    printf("      |----> Point partition     = %.3lf \n", timers[PT_TIMER_IDX]);
+    printf("      |----> U construction      = %.3lf \n", timers[U_BUILD_TIMER_IDX]);
+    printf("      |----> B construction      = %.3lf \n", timers[B_BUILD_TIMER_IDX]);
+    printf("      |----> D construction      = %.3lf \n", timers[D_BUILD_TIMER_IDX]);
 
     if (h2pack->n_matvec == 0)
     {
         printf("H2Pack does not have matvec timings results yet.\n");
     } else {
-        double fwd_t = timers[_MV_FWD_TIMER_IDX] / d_n_matvec;
-        double mid_t = timers[_MV_MID_TIMER_IDX] / d_n_matvec;
-        double bwd_t = timers[_MV_BWD_TIMER_IDX] / d_n_matvec;
-        double den_t = timers[_MV_DEN_TIMER_IDX] / d_n_matvec;
-        double vop_t = timers[_MV_VOP_TIMER_IDX] / d_n_matvec;
+        double fwd_t = timers[MV_FWD_TIMER_IDX] / d_n_matvec;
+        double mid_t = timers[MV_MID_TIMER_IDX] / d_n_matvec;
+        double bwd_t = timers[MV_BWD_TIMER_IDX] / d_n_matvec;
+        double den_t = timers[MV_DEN_TIMER_IDX] / d_n_matvec;
+        double vop_t = timers[MV_VOP_TIMER_IDX] / d_n_matvec;
         matvec_t = fwd_t + mid_t + bwd_t + den_t + vop_t;
         printf(
             "  * H2 matvec average time (sec) = %.3lf, %.2lf GB/s\n", 
@@ -515,8 +515,8 @@ void H2P_print_statistic(H2Pack_p h2pack)
 
     if (h2pack->is_HSS == 1)
     {
-        double ULV_solve_t = timers[_ULV_SLV_TIMER_IDX] / (double) h2pack->n_ULV_solve;
-        printf("  * HSS factorization time (sec) = %.3lf\n", timers[_ULV_FCT_TIMER_IDX]);
+        double ULV_solve_t = timers[ULV_SLV_TIMER_IDX] / (double) h2pack->n_ULV_solve;
+        printf("  * HSS factorization time (sec) = %.3lf\n", timers[ULV_FCT_TIMER_IDX]);
         printf("  * HSS solve average time (sec) = %.3lf\n", ULV_solve_t);
     }
     
@@ -527,10 +527,10 @@ void H2P_print_statistic(H2Pack_p h2pack)
 void H2P_reset_timers(H2Pack_p h2pack)
 {
     h2pack->n_matvec = 0;
-    h2pack->mat_size[_MV_VOP_SIZE_IDX] = 0;
-    h2pack->timers[_MV_FWD_TIMER_IDX]  = 0.0;
-    h2pack->timers[_MV_MID_TIMER_IDX]  = 0.0;
-    h2pack->timers[_MV_BWD_TIMER_IDX]  = 0.0;
-    h2pack->timers[_MV_DEN_TIMER_IDX]  = 0.0;
-    h2pack->timers[_MV_VOP_TIMER_IDX]  = 0.0;
+    h2pack->mat_size[MV_VOP_SIZE_IDX] = 0;
+    h2pack->timers[MV_FWD_TIMER_IDX]  = 0.0;
+    h2pack->timers[MV_MID_TIMER_IDX]  = 0.0;
+    h2pack->timers[MV_BWD_TIMER_IDX]  = 0.0;
+    h2pack->timers[MV_DEN_TIMER_IDX]  = 0.0;
+    h2pack->timers[MV_VOP_TIMER_IDX]  = 0.0;
 }

@@ -15,11 +15,14 @@
 #include "DAG_task_queue.h"
 #include "utils.h"
 
-#define _U_BUILD_KRNL_T_IDX     0
-#define _U_BUILD_QR_T_IDX       1
-#define _U_BUILD_OTHER_T_IDX    2
-#define _U_BUILD_RANDN_T_IDX    3
-#define _U_BUILD_GEMM_T_IDX     4
+typedef enum
+{
+    U_BUILD_KRNL_TIMER_IDX = 0,
+    U_BUILD_QR_TIMER_IDX,
+    U_BUILD_OTHER_TIMER_IDX,
+    U_BUILD_RANDN_TIMER_IDX,
+    U_BUILD_GEMM_TIMER_IDX
+} u_build_timer_idx_t;
 
 // Build H2 projection matrices using proxy points
 // Input parameter:
@@ -241,11 +244,11 @@ void H2P_build_H2_UJ_proxy(H2Pack_p h2pack)
             U[i]->ncol = 0;
             U[i]->ld   = 0;
         } else {
-            mat_size[_U_SIZE_IDX]      += U[i]->nrow * U[i]->ncol;
-            mat_size[_MV_FWD_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
-            mat_size[_MV_FWD_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
-            mat_size[_MV_BWD_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
-            mat_size[_MV_BWD_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
+            mat_size[U_SIZE_IDX]      += U[i]->nrow * U[i]->ncol;
+            mat_size[MV_FWD_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
+            mat_size[MV_FWD_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
+            mat_size[MV_BWD_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
+            mat_size[MV_BWD_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
         }
         if (J[i] == NULL) H2P_int_vec_init(&J[i], 1);
         if (J_coord[i] == NULL)
@@ -567,11 +570,11 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_p h2pack)
             }  // End of j loop
             thread_buf[tid]->timer += get_wtime_sec();
             double *timers = U_timers + tid * 8;
-            timers[_U_BUILD_KRNL_T_IDX]  = krnl_t;
-            timers[_U_BUILD_RANDN_T_IDX] = randn_t;
-            timers[_U_BUILD_GEMM_T_IDX]  = gemm_t;
-            timers[_U_BUILD_QR_T_IDX]    = QR_t;
-            timers[_U_BUILD_OTHER_T_IDX] = other_t;
+            timers[U_BUILD_KRNL_TIMER_IDX]  = krnl_t;
+            timers[U_BUILD_RANDN_TIMER_IDX] = randn_t;
+            timers[U_BUILD_GEMM_TIMER_IDX]  = gemm_t;
+            timers[U_BUILD_QR_TIMER_IDX]    = QR_t;
+            timers[U_BUILD_OTHER_TIMER_IDX] = other_t;
         }  // End of "pragma omp parallel"
         
         if (h2pack->print_timers == 1)
@@ -594,8 +597,8 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_p h2pack)
                 double *timers = U_timers + 8 * tid;
                 INFO_PRINTF(
                     "    %3d, %6.3lf, %6.3lf, %6.3lf, %6.3lf, %6.3lf, %6.3lf\n",
-                    tid, timers[_U_BUILD_KRNL_T_IDX], timers[_U_BUILD_RANDN_T_IDX], timers[_U_BUILD_GEMM_T_IDX], 
-                    timers[_U_BUILD_QR_T_IDX], timers[_U_BUILD_OTHER_T_IDX], thread_buf[tid]->timer
+                    tid, timers[U_BUILD_KRNL_TIMER_IDX], timers[U_BUILD_RANDN_TIMER_IDX], timers[U_BUILD_GEMM_TIMER_IDX], 
+                    timers[U_BUILD_QR_TIMER_IDX], timers[U_BUILD_OTHER_TIMER_IDX], thread_buf[tid]->timer
                 );
             }
         }  // End of "if (h2pack->print_timers == 1)"
@@ -611,11 +614,11 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_p h2pack)
             U[i]->ncol = 0;
             U[i]->ld   = 0;
         } else {
-            mat_size[_U_SIZE_IDX]      += U[i]->nrow * U[i]->ncol;
-            mat_size[_MV_FWD_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
-            mat_size[_MV_FWD_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
-            mat_size[_MV_BWD_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
-            mat_size[_MV_BWD_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
+            mat_size[U_SIZE_IDX]      += U[i]->nrow * U[i]->ncol;
+            mat_size[MV_FWD_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
+            mat_size[MV_FWD_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
+            mat_size[MV_BWD_SIZE_IDX] += U[i]->nrow * U[i]->ncol;
+            mat_size[MV_BWD_SIZE_IDX] += U[i]->nrow + U[i]->ncol;
         }
         if (J[i] == NULL) H2P_int_vec_init(&J[i], 1);
         if (J_coord[i] == NULL)
@@ -743,10 +746,10 @@ void H2P_generate_B_metadata(H2Pack_p h2pack)
             B_pair_cnt++;
         }
         // Add Statistic info
-        mat_size[_MV_MID_SIZE_IDX]  += B_nrow[i] * B_ncol[i];
-        mat_size[_MV_MID_SIZE_IDX]  += (B_nrow[i] + B_ncol[i]);
-        JIT_flops[_JIT_B_FLOPS_IDX] += (double)(krnl_bimv_flops) * (double)(node0_npt * node1_npt);
-        if (is_RPY_Ewald == 0) mat_size[_MV_MID_SIZE_IDX] += (B_nrow[i] + B_ncol[i]);
+        mat_size[MV_MID_SIZE_IDX]  += B_nrow[i] * B_ncol[i];
+        mat_size[MV_MID_SIZE_IDX]  += (B_nrow[i] + B_ncol[i]);
+        JIT_flops[JIT_B_FLOPS_IDX] += (double)(krnl_bimv_flops) * (double)(node0_npt * node1_npt);
+        if (is_RPY_Ewald == 0) mat_size[MV_MID_SIZE_IDX] += (B_nrow[i] + B_ncol[i]);
     }
         
     // 3. Partition B matrices into multiple blocks s.t. each block has approximately
@@ -754,7 +757,7 @@ void H2P_generate_B_metadata(H2Pack_p h2pack)
     int BD_ntask_thread = (BD_JIT == 1) ? BD_NTASK_THREAD : 1;
     H2P_partition_workload(n_r_adm_pair, B_ptr + 1, B_total_size, n_thread * BD_ntask_thread, B_blk);
     for (int i = 1; i <= n_r_adm_pair; i++) B_ptr[i] += B_ptr[i - 1];
-    mat_size[_B_SIZE_IDX] = B_total_size;
+    mat_size[B_SIZE_IDX] = B_total_size;
 
     // 4. Store pair-to-index relations in a CSR matrix for matvec, matmul, and SPDHSS construction
     h2pack->B_p2i_rowptr = (int*) malloc(sizeof(int) * (n_node + 1));
@@ -793,7 +796,7 @@ void H2P_build_B_AOT(H2Pack_p h2pack)
     H2P_dense_mat_p  *J_coord    = h2pack->J_coord;
     H2P_thread_buf_p *thread_buf = h2pack->tb;
 
-    size_t B_total_size = h2pack->mat_size[_B_SIZE_IDX];
+    size_t B_total_size = h2pack->mat_size[B_SIZE_IDX];
     h2pack->B_data = (DTYPE*) malloc_aligned(sizeof(DTYPE) * B_total_size, 64);
     ASSERT_PRINTF(h2pack->B_data != NULL, "Failed to allocate space for storing all %zu B matrices elements\n", B_total_size);
     DTYPE *B_data = h2pack->B_data;
@@ -953,9 +956,9 @@ void H2P_generate_D_metadata(H2Pack_p h2pack)
         D_pair_v[D_pair_cnt] = i + 1;
         D_pair_cnt++;
         // Add statistic info
-        mat_size[_MV_DEN_SIZE_IDX]  += D_nrow[i] * D_ncol[i];
-        mat_size[_MV_DEN_SIZE_IDX]  += D_nrow[i] + D_ncol[i];
-        JIT_flops[_JIT_D_FLOPS_IDX] += (double)(krnl_bimv_flops) * (double)(node_npt * node_npt);
+        mat_size[MV_DEN_SIZE_IDX]  += D_nrow[i] * D_ncol[i];
+        mat_size[MV_DEN_SIZE_IDX]  += D_nrow[i] + D_ncol[i];
+        JIT_flops[JIT_D_FLOPS_IDX] += (double)(krnl_bimv_flops) * (double)(node_npt * node_npt);
     }
     size_t D1_total_size = 0;
     for (int i = 0; i < n_r_inadm_pair; i++)
@@ -987,10 +990,10 @@ void H2P_generate_D_metadata(H2Pack_p h2pack)
             D_pair_cnt++;
         }
         // Add statistic info
-        mat_size[_MV_DEN_SIZE_IDX]  += D_nrow[ii] * D_ncol[ii];
-        mat_size[_MV_DEN_SIZE_IDX]  += (D_nrow[ii] + D_ncol[ii]);
-        JIT_flops[_JIT_D_FLOPS_IDX] += (double)(krnl_bimv_flops) * (double)(node0_npt * node1_npt);
-        if (is_RPY_Ewald == 0) mat_size[_MV_DEN_SIZE_IDX]  += (D_nrow[ii] + D_ncol[ii]);
+        mat_size[MV_DEN_SIZE_IDX]  += D_nrow[ii] * D_ncol[ii];
+        mat_size[MV_DEN_SIZE_IDX]  += (D_nrow[ii] + D_ncol[ii]);
+        JIT_flops[JIT_D_FLOPS_IDX] += (double)(krnl_bimv_flops) * (double)(node0_npt * node1_npt);
+        if (is_RPY_Ewald == 0) mat_size[MV_DEN_SIZE_IDX]  += (D_nrow[ii] + D_ncol[ii]);
     }
 
     // 3. Partition D blocks into multiple blocks s.t. each block has approximately
@@ -999,7 +1002,7 @@ void H2P_generate_D_metadata(H2Pack_p h2pack)
     H2P_partition_workload(n_leaf_node,    D_ptr + 1,               D0_total_size, n_thread * BD_ntask_thread, D_blk0);
     H2P_partition_workload(n_r_inadm_pair, D_ptr + n_leaf_node + 1, D1_total_size, n_thread * BD_ntask_thread, D_blk1);
     for (int i = 1; i <= n_leaf_node + n_r_inadm_pair; i++) D_ptr[i] += D_ptr[i - 1];
-    mat_size[_D_SIZE_IDX] = D0_total_size + D1_total_size;
+    mat_size[D_SIZE_IDX] = D0_total_size + D1_total_size;
     
     // 4. Store pair-to-index relations in a CSR matrix for matvec, matmul, and SPDHSS construction
     h2pack->D_p2i_rowptr = (int*) malloc(sizeof(int) * (n_node + 1));
@@ -1039,7 +1042,7 @@ void H2P_build_D_AOT(H2Pack_p h2pack)
     H2P_int_vec_p    D_blk1      = h2pack->D_blk1;
     H2P_thread_buf_p *thread_buf = h2pack->tb;
 
-    size_t D_total_size = h2pack->mat_size[_D_SIZE_IDX];
+    size_t D_total_size = h2pack->mat_size[D_SIZE_IDX];
     h2pack->D_data = (DTYPE*) malloc_aligned(sizeof(DTYPE) * D_total_size, 64);
     ASSERT_PRINTF(
         h2pack->D_data != NULL, 
@@ -1165,21 +1168,21 @@ void H2P_build(
     if (h2pack->is_HSS) H2P_build_HSS_UJ_hybrid(h2pack);
     else H2P_build_H2_UJ_proxy(h2pack);
     et = get_wtime_sec();
-    timers[_U_BUILD_TIMER_IDX] = et - st;
+    timers[U_BUILD_TIMER_IDX] = et - st;
 
     // 2. Build generator matrices
     st = get_wtime_sec();
     H2P_generate_B_metadata(h2pack);
     if (BD_JIT == 0) H2P_build_B_AOT(h2pack);
     et = get_wtime_sec();
-    timers[_B_BUILD_TIMER_IDX] = et - st;
+    timers[B_BUILD_TIMER_IDX] = et - st;
     
     // 3. Build dense blocks
     st = get_wtime_sec();
     H2P_generate_D_metadata(h2pack);
     if (BD_JIT == 0) H2P_build_D_AOT(h2pack);
     et = get_wtime_sec();
-    timers[_D_BUILD_TIMER_IDX] = et - st;
+    timers[D_BUILD_TIMER_IDX] = et - st;
 
     // 4. Set up forward and backward permutation indices
     int n_point    = h2pack->n_point;

@@ -98,6 +98,22 @@ int main(int argc, char **argv)
     err_norm = DSQRT(err_norm);
     printf("For %d validation points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / y0_norm);
     
+    // Store H2 matrix data to file
+    int store_to_file = 0;
+    printf("Store H2 matrix data to file? 1-yes, 0-no : ");
+    scanf("%d", &store_to_file);
+    if (store_to_file)
+    {
+        char metadata_fname[1024];
+        char binary_fname[1024];
+        printf("Enter metadata file name: ");
+        scanf("%s", metadata_fname);
+        printf("Enter binary data file name: ");
+        scanf("%s", binary_fname);
+        H2P_store_to_file(h2pack, metadata_fname, binary_fname);
+        printf("done\n");
+    }
+
     free(x);
     free(y0);
     free(y1);

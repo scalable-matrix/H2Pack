@@ -354,7 +354,6 @@ void H2P_matvec_intmd_mult_AOT_task_block(
             
             int   ncol0     = y1[node0]->ncol;
             DTYPE *y1_dst_0 = y1[node0]->data + tid * ncol0;
-            y1_dst_0[ncol0 - 1] = 1.0;
             
             CBLAS_BI_GEMV(
                 Bi_nrow, Bi_ncol, Bi, Bi_ncol,
@@ -373,7 +372,6 @@ void H2P_matvec_intmd_mult_AOT_task_block(
             
             int   ncol1     = y1[node1]->ncol;
             DTYPE *y1_dst_1 = y1[node1]->data + tid * ncol1;
-            y1_dst_1[ncol1 - 1] = 1.0;
             
             CBLAS_BI_GEMV(
                 Bi_nrow, Bi_ncol, Bi, Bi_ncol,

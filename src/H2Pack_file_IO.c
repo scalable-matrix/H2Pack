@@ -218,7 +218,7 @@ void H2P_read_from_file(
         fscanf(metadata_file, "%d", &h2pack->pt_cluster[2 * node + 1]);
         fscanf(metadata_file, "%d", &h2pack->n_child[node]);
         h2pack->mat_cluster[2 * node]     = h2pack->krnl_dim * h2pack->pt_cluster[2 * node];
-        h2pack->mat_cluster[2 * node + 1] = h2pack->krnl_dim * h2pack->pt_cluster[2 * node + 1];
+        h2pack->mat_cluster[2 * node + 1] = h2pack->krnl_dim * (h2pack->pt_cluster[2 * node + 1] + 1) - 1;
         if (h2pack->n_child[node] == 0) n_leaf_node++;
         h2pack->node_level[node] = level;
         int *node_i_childs = h2pack->children + i * h2pack->max_child;

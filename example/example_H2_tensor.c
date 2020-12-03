@@ -17,7 +17,7 @@ int main(int argc, char **argv)
 
     // Point configuration, random generation
     int pt_dim  = 3;
-    int n_point = 80000;
+    int n_point = 20000;
     DTYPE* coord = (DTYPE*) malloc_aligned(sizeof(DTYPE) * n_point * pt_dim, 64);
     assert(coord != NULL);
 
@@ -139,6 +139,20 @@ int main(int argc, char **argv)
     err_norm = DSQRT(err_norm);
     printf("For %d validation points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / y0_norm);
     printf("The specified relative error threshold is %e\n", rel_tol);
+
+    // Store H2 matrix data to file
+    int store_to_file = 0;
+    printf("Store H2 matrix data to file? 1-yes, 0-no : ");
+    scanf("%d", &store_to_file);
+    if (store_to_file)
+    {
+        const char *metadata_fname = "Stokes_3D_1e-6.txt";
+        const char *binary_fname   = "Stokes_3D_1e-6.bin";
+        printf("Storing H2 matrix data to files %s and %s...", metadata_fname, binary_fname);
+        fflush(stdout);
+        H2P_store_to_file(h2pack, metadata_fname, binary_fname);
+        printf("done\n");
+    }
     
     free(x);
     free(y0);

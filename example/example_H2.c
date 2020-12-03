@@ -146,9 +146,11 @@ int main(int argc, char **argv)
     scanf("%d", &store_to_file);
     if (store_to_file)
     {
-        printf("Storing H2 matrix data to files Coulomb_3D_1e-6.txt and Coulomb_3D_1e-6.bin...");
+        const char *metadata_fname = "Coulomb_3D_1e-6.txt";
+        const char *binary_fname   = "Coulomb_3D_1e-6.bin";
+        printf("Storing H2 matrix data to files %s and %s...", metadata_fname, binary_fname);
         fflush(stdout);
-        H2P_store_to_file(h2pack, "Coulomb_3D_1e-6.txt", "Coulomb_3D_1e-6.bin");
+        H2P_store_to_file(h2pack, metadata_fname, binary_fname);
         printf("done\n");
     }
 

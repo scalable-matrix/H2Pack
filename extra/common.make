@@ -2,7 +2,7 @@ H2PACK_INSTALL_DIR = ..
 
 DEFS    = 
 INCS    = -I$(H2PACK_INSTALL_DIR)/include
-CFLAGS  = $(INCS) -Wall -g -std=gnu99 -O3 -fPIC $(DEFS)
+CFLAGS  = $(INCS) -Wall -g -std=gnu11 -O3 -fPIC $(DEFS)
 LDFLAGS = -g -O3 -fopenmp
 LIBS    = $(H2PACK_INSTALL_DIR)/lib/libH2Pack.a
 

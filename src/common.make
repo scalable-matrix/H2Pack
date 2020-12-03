@@ -6,7 +6,7 @@ C_OBJS  = $(C_SRCS:.c=.c.o)
 
 DEFS    = 
 INCS    = -I./include
-CFLAGS  = $(INCS) -Wall -g -std=gnu99 -O3 -fPIC $(DEFS)
+CFLAGS  = $(INCS) -Wall -g -std=gnu11 -O3 -fPIC $(DEFS)
 
 ifeq ($(shell $(CC) --version 2>&1 | grep -c "icc"), 1)
 AR      = xiar rcs

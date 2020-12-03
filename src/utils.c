@@ -1,6 +1,6 @@
 // @brief    : Implementations of some helper functions I use here and there
 // @author   : Hua Huang <huangh223@gatech.edu>
-// @modified : 2020-08-28
+// @modified : 2020-12-03
 
 #include <stdio.h>
 #include <string.h>
@@ -8,14 +8,6 @@
 #include <complex.h>
 #include <sys/time.h>
 #include <math.h>
-
-// For _mm_malloc and _mm_free
-#if defined(__INTEL_COMPILER)
-#include <malloc.h>
-#endif
-#if defined(__GNUC__) || (__clang__)
-#include <mm_malloc.h>
-#endif
 
 #include "utils.h"
 
@@ -58,13 +50,15 @@ void calc_block_spos_len(
 // Allocate a piece of aligned memory 
 void *malloc_aligned(size_t size, size_t alignment)
 {
-    return _mm_malloc(size, alignment);
+    void *ptr = NULL;
+    posix_memalign(&ptr, alignment, size);
+    return ptr;
 }
 
 // Free a piece of aligned memory allocated by malloc_aligned()
 void free_aligned(void *mem)
 {
-    _mm_free(mem);
+    free(mem);
 }
 
 // Calculate the 2-norm of a vector
@@ -120,21 +114,27 @@ void gather_vector_elements(const size_t dt_size, const int nelem, const int *id
     {
         const float *src_ = (float*) src;
         float *dst_ = (float*) dst;
+        #if defined(_OPENMP)
         #pragma omp simd
+        #endif
         for (int i = 0; i < nelem; i++) dst_[i] = src_[idx[i]];
     }
     if (dt_size == 8)
     {
         const double *src_ = (double*) src;
         double *dst_ = (double*) dst;
+        #if defined(_OPENMP)
         #pragma omp simd
+        #endif
         for (int i = 0; i < nelem; i++) dst_[i] = src_[idx[i]];
     }
     if (dt_size == 16)
     {
         const double _Complex *src_ = (double _Complex*) src;
         double _Complex *dst_ = (double _Complex*) dst;
+        #if defined(_OPENMP)
         #pragma omp simd
+        #endif
         for (int i = 0; i < nelem; i++) dst_[i] = src_[idx[i]];
     }
 }

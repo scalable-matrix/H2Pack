@@ -13,21 +13,22 @@ def metadata_txt_to_json(txt_file_name, json_file_name):
     txt_file.close()
 
     json_data = EmptyClass()
-    json_data.point_dimension            = int(lines[0])
-    json_data.kernel_dimension           = int(lines[1])
-    json_data.num_point                  = int(lines[2])
-    json_data.kernel_matrix_size         = int(lines[3])
-    json_data.symmetric_kernel_matrix    = int(lines[4])
-    json_data.max_points_in_leaf_node    = int(lines[5])
-    json_data.num_node                   = int(lines[6])
-    json_data.root_node_index            = int(lines[7])
-    json_data.num_level                  = int(lines[8])
-    json_data.is_HSS_matrix              = int(lines[9])
-    json_data.min_admissible_pair_level  = int(lines[10])
-    json_data.num_inadmissible_pair      = int(lines[11])
-    json_data.num_admissible_pair        = int(lines[12])
-    json_data.relative_accuracy          = float(lines[13])
-    curr_row = 14
+    json_data.dim_point                 = int(lines[0])
+    json_data.dim_kernel                = int(lines[1])
+    json_data.num_point                 = int(lines[2])
+    json_data.size_matrix               = int(lines[3])
+    json_data.is_symmetric              = int(lines[4])
+    json_data.max_points_in_leaf_node   = int(lines[5])
+    json_data.num_node                  = int(lines[6])
+    json_data.root_node_index           = int(lines[7])
+    json_data.num_level                 = int(lines[8])
+    json_data.is_HSS_matrix             = int(lines[9])
+    json_data.min_admissible_pair_level = int(lines[10])
+    json_data.num_inadmissible_pair     = int(lines[11])
+    json_data.num_admissible_pair       = int(lines[12])
+    json_data.has_partially_adm_pair    = int(lines[13])
+    json_data.relative_accuracy         = float(lines[14])
+    curr_row = 15
 
     nodes = []
     num_leaf_node = 0
@@ -52,9 +53,9 @@ def metadata_txt_to_json(txt_file_name, json_file_name):
     for i in range(json_data.num_node):
         raw_data = [x for x in lines[curr_row + i].split(' ') if x]
         U_i = EmptyClass()
-        U_i.node       = int(raw_data[0])
-        U_i.num_row    = int(raw_data[1])
-        U_i.num_column = int(raw_data[2])
+        U_i.node    = int(raw_data[0])
+        U_i.num_row = int(raw_data[1])
+        U_i.num_col = int(raw_data[2])
         U_mat.append(U_i)
     json_data.U_matrices = U_mat
     curr_row += json_data.num_node
@@ -63,10 +64,11 @@ def metadata_txt_to_json(txt_file_name, json_file_name):
     for i in range(json_data.num_admissible_pair):
         raw_data = [x for x in lines[curr_row + i].split(' ') if x]
         B_i = EmptyClass()
-        B_i.row_node    = int(raw_data[0])
-        B_i.column_node = int(raw_data[1])
+        B_i.node_row    = int(raw_data[0])
+        B_i.node_col    = int(raw_data[1])
         B_i.num_row     = int(raw_data[2])
-        B_i.num_column  = int(raw_data[3])
+        B_i.num_col     = int(raw_data[3])
+        B_i.is_part_adm = int(raw_data[4])
         B_mat.append(B_i)
     json_data.B_matrices = B_mat
     curr_row += json_data.num_admissible_pair
@@ -75,10 +77,10 @@ def metadata_txt_to_json(txt_file_name, json_file_name):
     for i in range(num_leaf_node + json_data.num_inadmissible_pair):
         raw_data = [x for x in lines[curr_row + i].split(' ') if x]
         D_i = EmptyClass()
-        D_i.row_node    = int(raw_data[0])
-        D_i.column_node = int(raw_data[1])
-        D_i.num_row     = int(raw_data[2])
-        D_i.num_column  = int(raw_data[3])
+        D_i.node_row = int(raw_data[0])
+        D_i.node_col = int(raw_data[1])
+        D_i.num_row  = int(raw_data[2])
+        D_i.num_col  = int(raw_data[3])
         D_mat.append(D_i)
     json_data.D_matrices = D_mat
     curr_row += (num_leaf_node + json_data.num_inadmissible_pair)
@@ -97,7 +99,7 @@ def metadata_txt_to_json(txt_file_name, json_file_name):
                 pt_idx.append(int(raw_data[2 + j]))
             skel_i.skeleton_point_indices = pt_idx
             node_skel.append(skel_i)
-        json_data.node_skeleton_points = node_skel
+        json_data.skeleton_points = node_skel
 
     json_file = open(json_file_name, 'w')
     json_file.write(json_data.toJSON())

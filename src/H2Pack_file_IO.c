@@ -54,9 +54,23 @@ void H2P_store_to_file(H2Pack_p h2pack, const char *metadata_fname, const char *
         output_r_inadm_pairs  = h2pack->r_inadm_pairs;
         output_r_adm_pairs    = h2pack->r_adm_pairs;
     }
+    int has_part_adm = 0;
+    for (int i = 0; i < output_n_r_adm_pair; i++)
+    {
+        int node0  = output_r_adm_pairs[2 * i];
+        int node1  = output_r_adm_pairs[2 * i + 1];
+        int level0 = h2pack->node_level[node0];
+        int level1 = h2pack->node_level[node1];
+        if (level0 != level1) 
+        {
+            has_part_adm = 1;
+            break;
+        }
+    }
     fprintf(metadata_file, "%d\n", output_min_adm_level);
     fprintf(metadata_file, "%d\n", output_n_r_inadm_pair);
     fprintf(metadata_file, "%d\n", output_n_r_adm_pair);
+    fprintf(metadata_file, "%d\n", has_part_adm);
     fprintf(metadata_file, "%e\n", h2pack->QR_stop_tol);
     for (int i = 0; i < h2pack->n_node; i++)
     {
@@ -94,10 +108,13 @@ void H2P_store_to_file(H2Pack_p h2pack, const char *metadata_fname, const char *
     // 4. Metadata & binary data: B matrices
     for (int i = 0; i < output_n_r_adm_pair; i++)
     {
-        int node0 = output_r_adm_pairs[2 * i];
-        int node1 = output_r_adm_pairs[2 * i + 1];
+        int node0       = output_r_adm_pairs[2 * i];
+        int node1       = output_r_adm_pairs[2 * i + 1];
+        int level0      = h2pack->node_level[node0];
+        int level1      = h2pack->node_level[node1];
+        int is_part_adm = (level0 != level1);
         H2P_get_Bij_block(h2pack, node0, node1, tmpM);
-        fprintf(metadata_file, "%6d %6d %5d %5d\n", node0, node1, tmpM->nrow, tmpM->ncol);
+        fprintf(metadata_file, "%6d %6d %5d %5d %d\n", node0, node1, tmpM->nrow, tmpM->ncol, is_part_adm);
         fwrite(tmpM->data, sizeof(DTYPE), tmpM->nrow * tmpM->ncol, binary_file);
     }
 
@@ -191,6 +208,8 @@ void H2P_read_from_file(
         input_r_inadm_pairs  = h2pack->r_inadm_pairs;
         input_r_adm_pairs    = h2pack->r_adm_pairs;
     }
+    int has_part_adm;
+    fscanf(metadata_file, "%d", &has_part_adm);
     fscanf(metadata_file, DTYPE_FMTSTR, &reltol);
     memcpy(&h2pack->QR_stop_tol, &reltol, sizeof(DTYPE));
     h2pack->xpt_dim = pt_dim;
@@ -305,10 +324,12 @@ void H2P_read_from_file(
     size_t *B_ptr  = h2pack->B_ptr;
     for (int i = 0; i < input_n_r_adm_pair; i++)
     {
+        int is_part_adm;
         fscanf(metadata_file, "%d", &input_r_adm_pairs[2 * i]);
         fscanf(metadata_file, "%d", &input_r_adm_pairs[2 * i + 1]);
         fscanf(metadata_file, "%d", &B_nrow[i]);
         fscanf(metadata_file, "%d", &B_ncol[i]);
+        fscanf(metadata_file, "%d", &is_part_adm);
         size_t Bi_size = (size_t) (B_nrow[i] * B_ncol[i]);
         B_ptr[i + 1] = Bi_size;
         B_total_size += Bi_size;

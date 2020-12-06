@@ -9,11 +9,11 @@ def metadata_json_to_txt(json_file_name, txt_file_name):
     json_file.close()
 
     with open(txt_file_name, 'w') as f:
-        f.write('%d\n'%json_data['point_dimension'])
-        f.write('%d\n'%json_data['kernel_dimension'])
+        f.write('%d\n'%json_data['dim_point'])
+        f.write('%d\n'%json_data['dim_kernel'])
         f.write('%d\n'%json_data['num_point'])
-        f.write('%d\n'%json_data['kernel_matrix_size'])
-        f.write('%d\n'%json_data['symmetric_kernel_matrix'])
+        f.write('%d\n'%json_data['size_matrix'])
+        f.write('%d\n'%json_data['is_symmetric'])
         f.write('%d\n'%json_data['max_points_in_leaf_node'])
         f.write('%d\n'%json_data['num_node'])
         f.write('%d\n'%json_data['root_node_index'])
@@ -22,9 +22,10 @@ def metadata_json_to_txt(json_file_name, txt_file_name):
         f.write('%d\n'%json_data['min_admissible_pair_level'])
         f.write('%d\n'%json_data['num_inadmissible_pair'])
         f.write('%d\n'%json_data['num_admissible_pair'])
+        f.write('%d\n'%json_data['has_partially_adm_pair'])
         f.write('%e\n'%json_data['relative_accuracy'])
 
-        max_children = 2 ** json_data['point_dimension']
+        max_children = 2 ** json_data['dim_point']
         nodes = json_data['nodes']
         num_leaf_node = 0
         for i in range(json_data['num_node']):
@@ -49,27 +50,28 @@ def metadata_json_to_txt(json_file_name, txt_file_name):
             U_i = U_mat[i]
             f.write('%6d '%U_i['node'])
             f.write('%5d '%U_i['num_row'])
-            f.write('%5d\n'%U_i['num_column'])
+            f.write('%5d\n'%U_i['num_col'])
 
         B_mat = json_data['B_matrices']
         for i in range(json_data['num_admissible_pair']):
             B_i = B_mat[i]
-            f.write('%6d '%B_i['row_node'])
-            f.write('%6d '%B_i['column_node'])
+            f.write('%6d '%B_i['node_row'])
+            f.write('%6d '%B_i['node_col'])
             f.write('%5d '%B_i['num_row'])
-            f.write('%5d\n'%B_i['num_column'])
+            f.write('%5d '%B_i['num_col'])
+            f.write('%d\n'%B_i['is_part_adm'])
 
         D_mat = json_data['D_matrices']
         for i in range(num_leaf_node + json_data['num_inadmissible_pair']):
             D_i = D_mat[i]
-            f.write('%6d '%D_i['row_node'])
-            f.write('%6d '%D_i['column_node'])
+            f.write('%6d '%D_i['node_row'])
+            f.write('%6d '%D_i['node_col'])
             f.write('%5d '%D_i['num_row'])
-            f.write('%5d\n'%D_i['num_column'])
+            f.write('%5d\n'%D_i['num_col'])
 
         f.write('%d\n'%json_data['has_extended_fields'])
         if 1 == json_data['has_extended_fields']:
-            node_skel = json_data['node_skeleton_points']
+            node_skel = json_data['skeleton_points']
             for i in range(json_data['num_node']):
                 node_i_skel = node_skel[i]
                 f.write('%6d '%node_i_skel['node'])

@@ -1867,7 +1867,6 @@ void H2P_SPDHSS_H2_build(
                     H2P_int_vec_set_capacity(jpvt, tmpQ->ncol);
                     memset(jpvt->data, 0, sizeof(int) * tmpQ->ncol);
                     LAPACK_GEQPF(LAPACK_ROW_MAJOR, tmpQ->nrow, tmpQ->ncol, tmpQ->data, tmpQ->ld, jpvt->data, tau);
-                    LAPACK_ORGQR(LAPACK_ROW_MAJOR, tmpQ->nrow, tmpQ_ncol, tmpQ_ncol, tmpQ->data, tmpQ->ld, tau);
                     int V_ncol1 = -1;
                     DTYPE stop_diag = DABS(tmpQ->data[0]) * reltol;
                     for (int k = 0; k < V_ncol; k++)
@@ -1879,6 +1878,7 @@ void H2P_SPDHSS_H2_build(
                         }
                     }
                     if (V_ncol1 > 0) V_ncol = V_ncol1;
+                    LAPACK_ORGQR(LAPACK_ROW_MAJOR, tmpQ->nrow, tmpQ_ncol, tmpQ_ncol, tmpQ->data, tmpQ->ld, tau);
                     H2P_dense_mat_init(&V[node], tmpQ->nrow, V_ncol);
                     copy_matrix_block(sizeof(DTYPE), tmpQ->nrow, V_ncol, tmpQ->data, tmpQ->ld, V[node]->data, V[node]->ld);
                     // HSS_U{node} = S{node} * V{node};
@@ -2086,7 +2086,6 @@ void H2P_SPDHSS_H2_build(
                     H2P_int_vec_set_capacity(jpvt, tmpQ->ncol);
                     memset(jpvt->data, 0, sizeof(int) * tmpQ->ncol);
                     LAPACK_GEQPF(LAPACK_ROW_MAJOR, tmpQ->nrow, tmpQ->ncol, tmpQ->data, tmpQ->ld, jpvt->data, tau);
-                    LAPACK_ORGQR(LAPACK_ROW_MAJOR, tmpQ->nrow, tmpQ_ncol, tmpQ_ncol, tmpQ->data, tmpQ->ld, tau);
                     int V_ncol1 = -1;
                     DTYPE stop_diag = DABS(tmpQ->data[0]) * reltol;
                     for (int k = 0; k < V_ncol; k++)
@@ -2098,6 +2097,7 @@ void H2P_SPDHSS_H2_build(
                         }
                     }
                     if (V_ncol1 > 0) V_ncol = V_ncol1;
+                    LAPACK_ORGQR(LAPACK_ROW_MAJOR, tmpQ->nrow, tmpQ_ncol, tmpQ_ncol, tmpQ->data, tmpQ->ld, tau);
                     H2P_dense_mat_init(&V[node], tmpQ->nrow, V_ncol);
                     copy_matrix_block(sizeof(DTYPE), tmpQ->nrow, V_ncol, tmpQ->data, tmpQ->ld, V[node]->data, V[node]->ld);
                     // HSS_U{node} = tmpM * V{node};

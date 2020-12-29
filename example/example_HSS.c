@@ -87,7 +87,7 @@ int main(int argc, char **argv)
         st = get_wtime_sec();
         H2P_generate_proxy_point_surface(
             pt_dim, pt_dim, num_pp, h2pack->max_level,
-            h2pack->min_adm_level, max_L, &pp
+            h2pack->HSS_min_adm_level, max_L, &pp
         );
         et = get_wtime_sec();
         printf("H2Pack generate proxy surface points used %.3lf (s)...\n", et - st);

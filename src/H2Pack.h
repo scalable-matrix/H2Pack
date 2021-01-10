@@ -53,7 +53,7 @@
 #include "linalg_lib_wrapper.h"
 
 // Vector wrapper function wrapper
-#include "vec_wrapper_func.h"
+#include "ASTER/include/aster.h"
 
 // Helper functions
 #include "utils.h"

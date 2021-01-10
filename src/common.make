@@ -39,9 +39,11 @@ all: install
 install: $(LIB_A) $(LIB_SO)
 	mkdir -p ../lib
 	mkdir -p ../include
+	mkdir -p ../include/ASTER/include
 	cp -u $(LIB_A)  ../lib/$(LIB_A)
 	cp -u $(LIB_SO) ../lib/$(LIB_SO)
 	cp -u *.h ../include/
+	cp -u ASTER/include/*.h ../include/ASTER/include
 
 $(LIB_A): $(C_OBJS) 
 	$(AR) $@ $^

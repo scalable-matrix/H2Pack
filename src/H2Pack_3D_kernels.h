@@ -4,7 +4,7 @@
 #include <math.h>
 
 #include "H2Pack_config.h"
-#include "vec_wrapper_func.h"
+#include "ASTER/include/aster.h"
 
 #ifndef KRNL_EVAL_PARAM 
 #define KRNL_EVAL_PARAM \

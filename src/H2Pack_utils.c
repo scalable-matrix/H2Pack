@@ -184,10 +184,10 @@ void H2P_calc_sparse_mm_trans(
 }
 
 // Generate normal distribution random number, Marsaglia polar method
-void H2P_gen_normal_distribution(const DTYPE mu, const DTYPE sigma, const int nelem, DTYPE *x)
+void H2P_gen_normal_distribution(const DTYPE mu, const DTYPE sigma, const size_t nelem, DTYPE *x)
 {
     DTYPE u1, u2, w, mult, x1, x2;
-    for (int i = 0; i < nelem - 1; i += 2)
+    for (size_t i = 0; i < nelem - 1; i += 2)
     {
         do 
         {

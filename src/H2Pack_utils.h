@@ -116,7 +116,7 @@ void H2P_calc_sparse_mm_trans(
 //   nelem     : Number of random numbers to be generated
 // Output parameter:
 //   x : Array, size nelem, generated random numbers
-void H2P_gen_normal_distribution(const DTYPE mu, const DTYPE sigma, const int nelem, DTYPE *x);
+void H2P_gen_normal_distribution(const DTYPE mu, const DTYPE sigma, const size_t nelem, DTYPE *x);
 
 // Quick sorting an integer key-value pair array by key
 // Input parameters:

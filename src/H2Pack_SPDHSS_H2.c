@@ -195,12 +195,13 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_p h2mat, const int n_vec, H2P_dense_mat_p *
     size_t vec_msize = sizeof(DTYPE) * (size_t) kms * (size_t) n_vec;
     DTYPE *vec    = (DTYPE*) malloc(vec_msize);
     DTYPE *Yk_mat = (DTYPE*) malloc(vec_msize * max_level);  // Note: we have max_level+1 levels in total
+    ASSERT_PRINTF(vec != NULL && Yk_mat != NULL, "Failed to allocate space for accu_matvec\n");
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
         int s_row, n_row;
         calc_block_spos_len(kms, n_thread, tid, &s_row, &n_row);
-        H2P_gen_normal_distribution(0.0, 1.0, n_row * n_vec, vec + s_row * n_vec);
+        H2P_gen_normal_distribution(0.0, 1.0, (size_t) n_row * (size_t) n_vec, vec + (size_t) s_row * (size_t) n_vec);
         size_t Yk_mat_offset = (size_t) s_row * (size_t) n_vec * (size_t) max_level;
         size_t Yk_mat_nelem  = (size_t) n_row * (size_t) n_vec * (size_t) max_level;
         memset(Yk_mat + Yk_mat_offset, 0, sizeof(DTYPE) * Yk_mat_nelem);
@@ -232,7 +233,7 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_p h2mat, const int n_vec, H2P_dense_mat_p *
                     int s_row = mat_cluster[2 * node];
                     int e_row = mat_cluster[2 * node + 1];
                     int nrow = e_row - s_row + 1;
-                    DTYPE *vec_blk = vec + s_row * n_vec;
+                    DTYPE *vec_blk = vec + (size_t)s_row * (size_t)n_vec;
                     CBLAS_GEMM(
                         CblasRowMajor, CblasTrans, CblasNoTrans, U_node->ncol, n_vec, nrow,
                         1.0, U_node->data, U_node->ld, vec_blk, n_vec, 0.0, y0[node]->data, y0[node]->ld
@@ -291,7 +292,7 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_p h2mat, const int n_vec, H2P_dense_mat_p *
                 int n_row1 = e_row1 - s_row1 + 1;
                 size_t Yk_mat_offset = (size_t) s_row0 * (size_t) Yk_mat_ld + (size_t) s_col;
                 DTYPE *Yk_mat_blk0 = Yk_mat + Yk_mat_offset;
-                DTYPE *vec_blk1    = vec + s_row1 * n_vec;
+                DTYPE *vec_blk1    = vec + (size_t)s_row1 * (size_t)n_vec;
 
                 int Dij_nrow, Dij_ncol, Dij_ld, Dij_trans;
                 H2P_get_Dij_block(h2mat, node0, node1, Dij);
@@ -373,7 +374,7 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_p h2mat, const int n_vec, H2P_dense_mat_p *
                     H2P_dense_mat_p y0_1 = y0[node1];
                     size_t Yk_mat_offset = (size_t) s_row0 * (size_t) Yk_mat_ld + (size_t) s_col;
                     DTYPE *Yk_mat_blk0 = Yk_mat + Yk_mat_offset;
-                    DTYPE *vec_blk1    = vec + s_row1 * n_vec;
+                    DTYPE *vec_blk1    = vec + (size_t)s_row1 * (size_t) n_vec;
 
                     // We only handle the update on Yk_mat_blk0, the symmetric operation for 
                     // updating Yk_mat_blk1 is handled by double counting the admissible pairs
@@ -493,6 +494,7 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_p h2mat, const int n_vec, H2P_dense_mat_p *
                 DTYPE *Yk_mat_blk = Yk_mat + Yk_mat_offset;
                 int Yk_idx = node * max_level + (level - 1 - j);
                 H2P_dense_mat_init(&Yk[Yk_idx], n_row, n_vec);
+                ASSERT_PRINTF(Yk[Yk_idx] != NULL, "Failed to allocate %d * %d Yk[idx] matrices\n", n_row, n_vec);
                 H2P_dense_mat_p Yk_ij = Yk[Yk_idx];
                 copy_matrix_block(sizeof(DTYPE), n_row, n_vec, Yk_mat_blk, Yk_mat_ld, Yk_ij->data, Yk_ij->ld);
             }
@@ -1664,6 +1666,8 @@ void H2P_SPDHSS_H2_build(
     H2P_SPDHSS_H2_acc_matvec(h2mat, n_vec, &Yk);
     et = get_wtime_sec();
     build_U_t += et - st;
+    printf("SPDHSS build: accumulative matvec finished %f.\n", et - st);
+    fflush(stdout);
 
     // 2. Get the new HSS Bij pairs on each level
     st = get_wtime_sec();
@@ -2208,6 +2212,8 @@ void H2P_SPDHSS_H2_build(
         }  // End of "#pragma omp parallel"
         et = get_wtime_sec();
         build_U_t += et - st;
+        printf("SPDHSS build at %d level: U build %f.\n", i, et - st);
+        fflush(stdout);
 
         st = get_wtime_sec();
         // Build new B matrices
@@ -2227,6 +2233,8 @@ void H2P_SPDHSS_H2_build(
         }  // End of "#pragma omp parallel"
         et = get_wtime_sec();
         build_B_t += et - st;
+        printf("SPDHSS build at %d level: B build %f.\n", i, et - st);
+        fflush(stdout);
     }  // End of i loop
 
     // 7. Wrap the new SPD HSS matrix

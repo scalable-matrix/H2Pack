@@ -97,5 +97,6 @@
 #define BD_NTASK_THREAD 10              // Average number of tasks each thread has in B & D build
 
 #include "linalg_lib_wrapper.h"
+#include "ASTER/include/aster.h"
 
 #endif

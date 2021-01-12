@@ -1,0 +1,3 @@
+[submodule "src/ASTER"]
+	path = src/ASTER
+	url = https://github.com/huanghua1994/ASTER

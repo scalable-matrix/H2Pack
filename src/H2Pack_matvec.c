@@ -10,7 +10,6 @@
 #include "H2Pack_aux_structs.h"
 #include "H2Pack_matvec.h"
 #include "H2Pack_utils.h"
-#include "vec_wrapper_func.h"
 #include "utils.h"
 
 // Calculate GEMV A * x0 and A^T * x1 in one run to reduce bandwidth pressure

@@ -5,7 +5,7 @@ C_SRCS  = $(wildcard *.c)
 C_OBJS  = $(C_SRCS:.c=.c.o)
 
 DEFS    = 
-INCS    = -I./include
+INCS    = 
 CFLAGS  = $(INCS) -Wall -g -std=gnu11 -O3 -fPIC $(DEFS)
 
 ifeq ($(shell $(CC) --version 2>&1 | grep -c "icc"), 1)

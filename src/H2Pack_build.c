@@ -265,8 +265,6 @@ void H2P_build_H2_UJ_proxy(H2Pack_p h2pack)
     BLAS_SET_NUM_THREADS(n_thread);
 }
 
-
-
 // Build HSS projection matrices using proxy points and skeleton points from H2 inadmissible nodes
 // Input parameter:
 //   h2pack : H2Pack structure with point partitioning info

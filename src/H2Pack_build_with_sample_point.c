@@ -77,57 +77,38 @@ int H2P_proportional_int_decompose(const int nelem, const int decomp_sum, DTYPE 
     return prod1;
 }
 
-// Quick-sort (key, val) pairs in ascending order where key is a DTYPE and val is an integer
-void H2P_qsort_DTYPE_key_int_val(DTYPE *key, int *val, int l, int r)
-{
-    int i = l, j = r, tmp_val;
-    DTYPE mid_key = key[(l + r) / 2], tmp_key;
-    while (i <= j)
-    {
-        while (key[i] < mid_key) i++;
-        while (key[j] > mid_key) j--;
-        if (i <= j)
-        {
-            tmp_key = key[i]; key[i] = key[j]; key[j] = tmp_key;
-            tmp_val = val[i]; val[i] = val[j]; val[j] = tmp_val;
-            i++;  j--;
-        }
-    }
-    if (i < r) H2P_qsort_DTYPE_key_int_val(key, val, i, r);
-    if (j > l) H2P_qsort_DTYPE_key_int_val(key, val, l, j);
-}
-
-// Sort neighbor points by distance in ascending order
+// Compute the squared pairwise distance of two point sets
 // Input parameters:
-//   pt_dim     : Point dimensions
-//   coord_s    : Self coordinate, stored in a column of another row-major matrix
-//   lds        : Leading dimension of coord_s
-//   coord_n    : Size pt_dim * ldn, coordinates of neighbor points, each column is a coordinate
-//   ldn        : Leading dimension of coord_n
-//   n_neighbor : Number of neighbor points
-//   dist2      : Size n_neighbor, work buffer for storing the squared distance
+//   coord{0, 1} : Size pt_dim * ld{0, 1}, point set coordinates, each column is a coordinate
+//   ld{0, 1}    : Leading dimension of coord{0, 1}
+//   n{0, 1}     : Number of points in coord{0, 1}
+//   pt_dim      : Point dimension
+//   ldd         : Leading dimension of dist2
 // Output parameter:
-//   idx : Size n_neighbor, indices of sorted neighbot points
-void H2P_sort_neighbor_ascending(
-    const int pt_dim, const DTYPE *coord_s, const int lds,
-    const DTYPE *coord_n, const int ldn, const int n_neighbor,
-    DTYPE *dist2, int *idx
+//   dist2 : Size n0 * ldd, squared distance
+void H2P_calc_pdist2(
+    const DTYPE *coord0, const int ld0, const int n0,
+    const DTYPE *coord1, const int ld1, const int n1,
+    const int pt_dim, DTYPE *dist2, const int ldd
 )
 {
-    #pragma omp simd
-    for (int i = 0; i < n_neighbor; i++)
+    for (int i = 0; i < n0; i++)
     {
-        const DTYPE *coord_n_i = coord_n + i;
-        DTYPE dist2_i = 0;
-        for (int j = 0; j < pt_dim; j++)
+        const DTYPE *coord0_i = coord0 + i;
+        DTYPE *dist2_i = dist2 + i * ldd;
+        #pragma omp simd
+        for (int j = 0; j < n1; j++)
         {
-            DTYPE diff = coord_s[j * lds] - coord_n_i[j * ldn];
-            dist2_i += diff * diff;
+            const DTYPE *coord1_j = coord1 + j;
+            DTYPE dist2_ij = 0;
+            for (int k = 0; k < pt_dim; k++)
+            {
+                DTYPE diff = coord0_i[k * ld0] - coord1_j[k * ld1];
+                dist2_ij += diff * diff;
+            }
+            dist2_i[j] = dist2_ij;
         }
-        dist2[i] = dist2_i;
-        idx[i] = i;
     }
-    H2P_qsort_DTYPE_key_int_val(dist2, idx, 0, n_neighbor - 1);
 }
 
 // For each point in the generated anchor grid, choose O(1) nearest points
@@ -137,14 +118,13 @@ void H2P_sort_neighbor_ascending(
 //   coord     : Size pt_dim * npt, each column is a point coordinate
 //   grid_size : Size pt_dim, anchor grid size
 //   grid_algo : Anchor grid generation algorithm
-//   nn_cnt    : Number of nearest neighbor points to select
 //   n_thread  : Number of threads to use
 //   workbuf_i : Integer work buffer
 //   workbuf_d : DTYPE work buffer
 // Output parameters:
 //   sample_idx : Indices of the chosen sample points
 void H2P_select_cluster_sample(
-    const int pt_dim, H2P_dense_mat_p coord, const int *grid_size, const int grid_algo, const int nn_cnt, 
+    const int pt_dim, H2P_dense_mat_p coord, const int *grid_size, const int grid_algo, 
     const int n_thread, H2P_int_vec_p workbuf_i, H2P_dense_mat_p workbuf_d, H2P_int_vec_p sample_idx
 )
 {
@@ -242,22 +222,32 @@ void H2P_select_cluster_sample(
     }
 
     // 4. Choose nearest points in the given point cluster
-    H2P_int_vec_set_capacity(workbuf_i, npt * (1 + n_thread));
+    H2P_int_vec_set_capacity(workbuf_i, npt);
     int *sample_idx_flag = workbuf_i->data;
     for (int i = 0; i < npt; i++) sample_idx_flag[i] = -1;
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
-        int *thread_idx = sample_idx_flag + npt + tid * npt;
         DTYPE *thread_dist2 = dist2_buf + tid * npt;
         #pragma omp for
         for (int i = 0; i < anchor_npt; i++)
         {
-            H2P_sort_neighbor_ascending(
-                pt_dim, anchor_coord + i, anchor_npt, 
-                coord->data, npt, npt, thread_dist2, thread_idx
+            H2P_calc_pdist2(
+                anchor_coord + i, anchor_npt, 1, 
+                coord->data, npt, npt, 
+                pt_dim, thread_dist2, npt
             );
-            for (int j = 0; j < nn_cnt; j++) sample_idx_flag[thread_idx[j]] = 1;
+            DTYPE min_dist2 = thread_dist2[0];
+            int min_idx = 0;
+            for (int j = 1; j < npt; j++)
+            {
+                if (min_dist2 > thread_dist2[j])
+                {
+                    min_dist2 = thread_dist2[j];
+                    min_idx = j;
+                }
+            }
+            sample_idx_flag[min_idx] = 1;
         }
     }
     H2P_int_vec_set_capacity(sample_idx, npt);
@@ -332,7 +322,6 @@ void H2P_select_sample_point(
     if (approx_rank <=  7) ri = approx_rank - 4;
     if (approx_rank <=  3) ri = approx_rank - 1;
     if (ri < 0) ri = 0;
-    const int nn_cnt = 1;
     for (int i = max_level; i >= min_adm_level; i--)
     {
         int *level_i_nodes = level_nodes + i * n_leaf_node;
@@ -388,7 +377,7 @@ void H2P_select_sample_point(
             if (ri_npt < node_npt_refine)
             {
                 H2P_select_cluster_sample(
-                    pt_dim, clu_refine[node], ri_list->data, 6, nn_cnt, 
+                    pt_dim, clu_refine[node], ri_list->data, 6,  
                     n_thread, workbuf_i, workbuf_d, sample_idx
                 );
                 H2P_dense_mat_select_columns(clu_refine[node], sample_idx);
@@ -443,7 +432,7 @@ void H2P_select_sample_point(
             if (ri_npt < init_sample_npt)
             {
                 H2P_select_cluster_sample(
-                    pt_dim, sample_pt[node], ri_list->data, 2, nn_cnt, 
+                    pt_dim, sample_pt[node], ri_list->data, 2,  
                     n_thread, workbuf_i, workbuf_d, sample_idx
                 );
                 H2P_dense_mat_select_columns(sample_pt[node], sample_idx);

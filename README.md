@@ -84,7 +84,7 @@ a single set of points (i.e., square, symmetric matrices)
 * [Vector Wrapper Functions for Kernel Evaluations](https://github.com/scalable-matrix/H2Pack/wiki/Vector-Wrapper-Functions-For-Kernel-Evaluations)
 * [Proxy Points and their Reuse](https://github.com/scalable-matrix/H2Pack/wiki/Proxy-Points-and-their-Reuse)
 * [Python Interface](https://github.com/scalable-matrix/H2Pack/wiki/Using-H2Pack-in-Python)
-
+* [H2 Matrix File Storage Scheme (draft)](https://github.com/scalable-matrix/H2Pack/wiki/H2-Matrix-File-Storage-Scheme)
 
 ## Numerical Tests
 

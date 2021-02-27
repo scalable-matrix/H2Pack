@@ -146,11 +146,12 @@ int main(int argc, char **argv)
     scanf("%d", &store_to_file);
     if (store_to_file)
     {
-        const char *metadata_fname = "Stokes_3D_1e-6.txt";
-        const char *binary_fname   = "Stokes_3D_1e-6.bin";
-        printf("Storing H2 matrix data to files %s and %s...", metadata_fname, binary_fname);
+        const char *meta_json_fname = "Stokes_3D_1e-6_meta.json";
+        const char *aux_json_fname  = "Stokes_3D_1e-6_aux.json";
+        const char *binary_fname    = "Stokes_3D_1e-6.bin";
+        printf("Storing H2 matrix data to files %s, %s, and %s...", meta_json_fname, aux_json_fname, binary_fname);
         fflush(stdout);
-        H2P_store_to_file(h2pack, metadata_fname, binary_fname);
+        H2P_store_to_file(h2pack, meta_json_fname, aux_json_fname, binary_fname);
         printf("done\n");
     }
     

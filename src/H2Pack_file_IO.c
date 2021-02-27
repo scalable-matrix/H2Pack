@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <unistd.h>
 #include <math.h>
 #include <omp.h>
 #include <inttypes.h>
@@ -13,7 +14,10 @@
 #include "H2Pack_gen_proxy_point.h"
 #include "H2Pack_file_IO.h"
 
-void H2P_store_to_file(H2Pack_p h2pack, const char *metadata_fname, const char *binary_fname)
+void H2P_store_to_file(
+    H2Pack_p h2pack, const char *meta_json_fname, 
+    const char *aux_json_fname, const char *binary_fname
+)
 {
     if (h2pack->is_H2ERI || h2pack->is_RPY_Ewald || (h2pack->xpt_dim > h2pack->pt_dim))
     {
@@ -21,44 +25,48 @@ void H2P_store_to_file(H2Pack_p h2pack, const char *metadata_fname, const char *
         return;
     }
 
-    FILE *metadata_file = fopen(metadata_fname, "w");
-    FILE *binary_file   = fopen(binary_fname,   "wb");
+    const char *meta_txt_fname = "tmp_metadata.txt";
+
+    FILE *meta_txt_file = fopen(meta_txt_fname, "w");
+    FILE *binary_file   = fopen(binary_fname,   "w");
+    ASSERT_PRINTF(meta_txt_file != NULL, "Cannot open metadata text file %s\n", meta_txt_fname);
+    ASSERT_PRINTF(binary_file   != NULL, "Cannot open binary data file %s\n",   binary_fname);
 
     H2P_dense_mat_p tmpM;
     H2P_dense_mat_init(&tmpM, 4096, 4096);
 
     // 1. Metadata: H2 / HSS common part
-    fprintf(metadata_file, "%d\n", h2pack->pt_dim);         // C.1 dim_point
-    fprintf(metadata_file, "%d\n", h2pack->krnl_dim);       // C.2 dim_kernel
-    fprintf(metadata_file, "%d\n", h2pack->n_point);        // C.3 num_point
-    fprintf(metadata_file, "%d\n", h2pack->krnl_mat_size);  // A.1 nrow_matrix
-    fprintf(metadata_file, "%d\n", h2pack->krnl_mat_size);  // A.2 ncol_matrix
-    fprintf(metadata_file, "%d\n", 1);                      // A.3 is_symmetric
-    fprintf(metadata_file, "%d\n", h2pack->n_node);         // A.4 num_node_row
-    fprintf(metadata_file, "%d\n", h2pack->n_node);         // A.5 num_node_col
-    fprintf(metadata_file, "%d\n", h2pack->root_idx);       // A.6 root_node_row
-    fprintf(metadata_file, "%d\n", h2pack->root_idx);       // A.7 root_node_col
-    fprintf(metadata_file, "%d\n", h2pack->max_level + 1);  // A.8 num_level_row
-    fprintf(metadata_file, "%d\n", h2pack->max_level + 1);  // A.9 num_level_col
+    fprintf(meta_txt_file, "%d\n", h2pack->pt_dim);         // C.1 dim_point
+    fprintf(meta_txt_file, "%d\n", h2pack->krnl_dim);       // C.2 dim_kernel
+    fprintf(meta_txt_file, "%d\n", h2pack->n_point);        // C.3 num_point
+    fprintf(meta_txt_file, "%d\n", h2pack->krnl_mat_size);  // A.1 nrow_matrix
+    fprintf(meta_txt_file, "%d\n", h2pack->krnl_mat_size);  // A.2 ncol_matrix
+    fprintf(meta_txt_file, "%d\n", 1);                      // A.3 is_symmetric
+    fprintf(meta_txt_file, "%d\n", h2pack->n_node);         // A.4 num_node_row
+    fprintf(meta_txt_file, "%d\n", h2pack->n_node);         // A.5 num_node_col
+    fprintf(meta_txt_file, "%d\n", h2pack->root_idx);       // A.6 root_node_row
+    fprintf(meta_txt_file, "%d\n", h2pack->root_idx);       // A.7 root_node_col
+    fprintf(meta_txt_file, "%d\n", h2pack->max_level + 1);  // A.8 num_level_row
+    fprintf(meta_txt_file, "%d\n", h2pack->max_level + 1);  // A.9 num_level_col
     int output_min_adm_level, output_n_r_inadm_pair, output_n_r_adm_pair;
     int *output_r_inadm_pairs, *output_r_adm_pairs;
     if (h2pack->is_HSS)
     {
-        fprintf(metadata_file, "1\n");  // C.4 is_HSS
+        fprintf(meta_txt_file, "1\n");  // C.4 is_HSS
         output_min_adm_level  = h2pack->HSS_min_adm_level;
         output_n_r_inadm_pair = h2pack->HSS_n_r_inadm_pair;
         output_n_r_adm_pair   = h2pack->HSS_n_r_adm_pair;
         output_r_inadm_pairs  = h2pack->HSS_r_inadm_pairs;
         output_r_adm_pairs    = h2pack->HSS_r_adm_pairs;
     } else {
-        fprintf(metadata_file, "0\n");  // C.4 is_HSS
+        fprintf(meta_txt_file, "0\n");  // C.4 is_HSS
         output_min_adm_level  = h2pack->min_adm_level;
         output_n_r_inadm_pair = h2pack->n_r_inadm_pair;
         output_n_r_adm_pair   = h2pack->n_r_adm_pair;
         output_r_inadm_pairs  = h2pack->r_inadm_pairs;
         output_r_adm_pairs    = h2pack->r_adm_pairs;
     }
-    fprintf(metadata_file, "%d\n", output_min_adm_level);   // C.5 min_adm_level
+    fprintf(meta_txt_file, "%d\n", output_min_adm_level);   // C.5 min_adm_level
     int has_part_adm = 0;
     for (int i = 0; i < output_n_r_adm_pair; i++)
     {
@@ -72,25 +80,25 @@ void H2P_store_to_file(H2Pack_p h2pack, const char *metadata_fname, const char *
             break;
         }
     }
-    fprintf(metadata_file, "%d\n", output_n_r_inadm_pair);  // A.14 num_inadmissible_blocks - n_leaf_node
-    fprintf(metadata_file, "%d\n", output_n_r_adm_pair);    // A.15 num_admissible_blocks
-    fprintf(metadata_file, "%d\n", has_part_adm);           // A.16 has_partial_adm_blocks
+    fprintf(meta_txt_file, "%d\n", output_n_r_inadm_pair);  // A.14 num_inadmissible_blocks - n_leaf_node
+    fprintf(meta_txt_file, "%d\n", output_n_r_adm_pair);    // A.15 num_admissible_blocks
+    fprintf(meta_txt_file, "%d\n", has_part_adm);           // A.16 has_partial_adm_blocks
     
 
     // 2. Metadata: partitioning tree
     // A.10 nodes_row; A.11 nodes_col == NULL since H2 matrix is symmetric
     for (int i = 0; i < h2pack->n_node; i++)
     {
-        fprintf(metadata_file, "%6d ", i);                              // A.10.1 index
-        fprintf(metadata_file, "%2d ", h2pack->node_level[i]);          // A.10.2 level
-        fprintf(metadata_file, "%8d ", h2pack->pt_cluster[2 * i]);      // A.10.3 cluster_head
-        fprintf(metadata_file, "%8d ", h2pack->pt_cluster[2 * i + 1]);  // A.10.4 cluster_tail
-        fprintf(metadata_file, "%2d ", h2pack->n_child[i]);             // A.10.5 num_children
+        fprintf(meta_txt_file, "%6d ", i);                              // A.10.1 index
+        fprintf(meta_txt_file, "%2d ", h2pack->node_level[i]);          // A.10.2 level
+        fprintf(meta_txt_file, "%8d ", h2pack->pt_cluster[2 * i]);      // A.10.3 cluster_head
+        fprintf(meta_txt_file, "%8d ", h2pack->pt_cluster[2 * i + 1]);  // A.10.4 cluster_tail
+        fprintf(meta_txt_file, "%2d ", h2pack->n_child[i]);             // A.10.5 num_children
         int *node_i_childs = h2pack->children + i * h2pack->max_child;
         // A.10.6 children
-        for (int j = 0; j < h2pack->n_child[i]; j++) fprintf(metadata_file, "%8d ", node_i_childs[j]);
-        for (int j = h2pack->n_child[i]; j < h2pack->max_child; j++) fprintf(metadata_file, "-1 ");
-        fprintf(metadata_file, "\n");
+        for (int j = 0; j < h2pack->n_child[i]; j++) fprintf(meta_txt_file, "%8d ", node_i_childs[j]);
+        for (int j = h2pack->n_child[i]; j < h2pack->max_child; j++) fprintf(meta_txt_file, "-1 ");
+        fprintf(meta_txt_file, "\n");
     }
     
     // 3. Metadata & binary data: U matrices
@@ -99,9 +107,9 @@ void H2P_store_to_file(H2Pack_p h2pack, const char *metadata_fname, const char *
     {
         int U_nrow = h2pack->U[i]->nrow;
         int U_ncol = h2pack->U[i]->ncol;
-        fprintf(metadata_file, "%6d ",  i);         // A.12.1 node
-        fprintf(metadata_file, "%5d ",  U_nrow);    // A.12.2 num_row
-        fprintf(metadata_file, "%5d\n", U_ncol);    // A.12.3 num_col
+        fprintf(meta_txt_file, "%6d ",  i);         // A.12.1 node
+        fprintf(meta_txt_file, "%5d ",  U_nrow);    // A.12.2 num_row
+        fprintf(meta_txt_file, "%5d\n", U_ncol);    // A.12.3 num_col
         // B.1; B.2 == NULL since H2 matrix is symmetric
         fwrite(h2pack->U[i]->data, sizeof(DTYPE), U_nrow * U_ncol, binary_file);
     }
@@ -115,11 +123,11 @@ void H2P_store_to_file(H2Pack_p h2pack, const char *metadata_fname, const char *
         int level1      = h2pack->node_level[node1];
         int is_part_adm = (level0 != level1);
         H2P_get_Bij_block(h2pack, node0, node1, tmpM);
-        fprintf(metadata_file, "%6d ", node0);          // A.17.1 node_row
-        fprintf(metadata_file, "%6d ", node1);          // A.17.2 node_col
-        fprintf(metadata_file, "%5d ", tmpM->nrow);     // A.17.3 num_row
-        fprintf(metadata_file, "%5d ", tmpM->ncol);     // A.17.4 num_col
-        fprintf(metadata_file, "%d\n", is_part_adm);    // A.17.5 is_part_adm
+        fprintf(meta_txt_file, "%6d ", node0);          // A.17.1 node_row
+        fprintf(meta_txt_file, "%6d ", node1);          // A.17.2 node_col
+        fprintf(meta_txt_file, "%5d ", tmpM->nrow);     // A.17.3 num_row
+        fprintf(meta_txt_file, "%5d ", tmpM->ncol);     // A.17.4 num_col
+        fprintf(meta_txt_file, "%d\n", is_part_adm);    // A.17.5 is_part_adm
         // B.3
         fwrite(tmpM->data, sizeof(DTYPE), tmpM->nrow * tmpM->ncol, binary_file);
     }
@@ -130,10 +138,10 @@ void H2P_store_to_file(H2Pack_p h2pack, const char *metadata_fname, const char *
     {
         int node = leaf_nodes[i];  // i-th leaf node
         H2P_get_Dij_block(h2pack, node, node, tmpM);
-        fprintf(metadata_file, "%6d ",  node);          // A.18.1 node_row
-        fprintf(metadata_file, "%6d ",  node);          // A.18.2 node_col
-        fprintf(metadata_file, "%5d ",  tmpM->nrow);    // A.18.3 num_row
-        fprintf(metadata_file, "%5d\n", tmpM->ncol);    // A.18.4 num_col
+        fprintf(meta_txt_file, "%6d ",  node);          // A.18.1 node_row
+        fprintf(meta_txt_file, "%6d ",  node);          // A.18.2 node_col
+        fprintf(meta_txt_file, "%5d ",  tmpM->nrow);    // A.18.3 num_row
+        fprintf(meta_txt_file, "%5d\n", tmpM->ncol);    // A.18.4 num_col
         // B.4
         fwrite(tmpM->data, sizeof(DTYPE), tmpM->nrow * tmpM->ncol, binary_file);
     }
@@ -142,18 +150,18 @@ void H2P_store_to_file(H2Pack_p h2pack, const char *metadata_fname, const char *
         int node0 = output_r_inadm_pairs[2 * i];
         int node1 = output_r_inadm_pairs[2 * i + 1];
         H2P_get_Dij_block(h2pack, node0, node1, tmpM);
-        fprintf(metadata_file, "%6d ",  node0);         // A.18.1 node_row
-        fprintf(metadata_file, "%6d ",  node1);         // A.18.2 node_col
-        fprintf(metadata_file, "%5d ",  tmpM->nrow);    // A.18.3 num_row
-        fprintf(metadata_file, "%5d\n", tmpM->ncol);    // A.18.4 num_col
+        fprintf(meta_txt_file, "%6d ",  node0);         // A.18.1 node_row
+        fprintf(meta_txt_file, "%6d ",  node1);         // A.18.2 node_col
+        fprintf(meta_txt_file, "%5d ",  tmpM->nrow);    // A.18.3 num_row
+        fprintf(meta_txt_file, "%5d\n", tmpM->ncol);    // A.18.4 num_col
         // B.4
         fwrite(tmpM->data, sizeof(DTYPE), tmpM->nrow * tmpM->ncol, binary_file);
     }
 
     // 6. Other necessary information for H2Pack 
-    fprintf(metadata_file, "%d\n", h2pack->max_leaf_points);    // C.6 max_leaf_points
-    fprintf(metadata_file, "%e\n", h2pack->QR_stop_tol);        // C.7 QR_stop_tol
-    fprintf(metadata_file, "1\n");                              // C.8 has_skeleton_points
+    fprintf(meta_txt_file, "%d\n", h2pack->max_leaf_points);    // C.6 max_leaf_points
+    fprintf(meta_txt_file, "%e\n", h2pack->QR_stop_tol);        // C.7 QR_stop_tol
+    fprintf(meta_txt_file, "1\n");                              // C.8 has_skeleton_points
     DTYPE *coord0 = (DTYPE *) malloc(sizeof(DTYPE) * h2pack->n_point * h2pack->pt_dim);
     for (int i = 0; i < h2pack->n_point; i++)
     {
@@ -168,71 +176,110 @@ void H2P_store_to_file(H2Pack_p h2pack, const char *metadata_fname, const char *
         for (int j = 0; j < h2pack->pt_dim; j++)
         {
             uint64_t cij = *((uint64_t *) coord0 + i * h2pack->pt_dim + j);
-            fprintf(metadata_file, "%"PRIx64" ", cij);
+            fprintf(meta_txt_file, "%"PRIx64" ", cij);
         }
-        fprintf(metadata_file, "\n");
+        fprintf(meta_txt_file, "\n");
     }
     // C.10 permutation_array
-    for (int i = 0; i < h2pack->n_point; i++) fprintf(metadata_file, "%d\n", h2pack->coord_idx[i]);
+    for (int i = 0; i < h2pack->n_point; i++) fprintf(meta_txt_file, "%d\n", h2pack->coord_idx[i]);
     // C.11 skeleton_point
     for (int i = 0; i < h2pack->n_node; i++)
     {
         H2P_int_vec_p Ji = h2pack->J[i];
-        fprintf(metadata_file, "%6d ", i);          // C.11.1 node
-        fprintf(metadata_file, "%6d ", Ji->length); // C.11.2 num_skeleton_point_indices
+        fprintf(meta_txt_file, "%6d ", i);          // C.11.1 node
+        fprintf(meta_txt_file, "%6d ", Ji->length); // C.11.2 num_skeleton_point_indices
         // C.11.3 skeleton_point_indices
         for (int j = 0; j < Ji->length; j++)
-            fprintf(metadata_file, "%d ", Ji->data[j]);
-        fprintf(metadata_file, "\n");
+            fprintf(meta_txt_file, "%d ", Ji->data[j]);
+        fprintf(meta_txt_file, "\n");
     }
     
     H2P_dense_mat_destroy(&tmpM);
-    fclose(metadata_file);
+    fclose(meta_txt_file);
     fclose(binary_file);
+    
+    FILE *inf = fopen("meta_txt_to_json.py", "r");
+    if (inf == NULL)
+    {
+        char cwd[1024];
+        getcwd(cwd, sizeof(cwd));
+        ERROR_PRINTF("Cannot find meta_txt_to_json.py in the current directory %s.", cwd);
+        ERROR_PRINTF("Please copy this python file from <H2Pack_directory>/examples/ to the current directory.\n");
+        return;
+    }
+    char exec_str[1024];
+    sprintf(exec_str, "./meta_txt_to_json.py %s %s %s\n", meta_txt_fname, meta_json_fname, aux_json_fname);
+    int status = system(exec_str);
+    if (status != 0)
+    {
+        ERROR_PRINTF("Executing %s error: %d, failed to convert intermediate text file to JSON files.\n", exec_str, status);
+        return;
+    }
 }
 
 void H2P_read_from_file(
-    H2Pack_p *h2pack_, const char *metadata_fname, const char *binary_fname, const int BD_JIT, 
-    void *krnl_param, kernel_eval_fptr krnl_eval, kernel_bimv_fptr krnl_bimv, const int krnl_bimv_flops
+    H2Pack_p *h2pack_, const char *meta_json_fname, const char *aux_json_fname, 
+    const char *binary_fname, const int BD_JIT, void *krnl_param, 
+    kernel_eval_fptr krnl_eval, kernel_bimv_fptr krnl_bimv, const int krnl_bimv_flops
 )
 {
     H2Pack_p h2pack;
 
-    FILE *metadata_file = fopen(metadata_fname, "r");
-    FILE *binary_file   = fopen(binary_fname,   "rb");
-    ASSERT_PRINTF(metadata_file != NULL, "Cannot open metadata file %s\n",    metadata_fname);
-    ASSERT_PRINTF(binary_file   != NULL, "Cannot open binary data file %s\n", binary_fname);
+    const char *meta_txt_fname = "tmp_metadata.txt";
+    
+    FILE *inf = fopen("meta_json_to_txt.py", "r");
+    if (inf == NULL)
+    {
+        char cwd[1024];
+        getcwd(cwd, sizeof(cwd));
+        ERROR_PRINTF("Cannot find meta_json_to_txt.py in the current directory %s.", cwd);
+        ERROR_PRINTF("Please copy this python file from <H2Pack_directory>/examples/ to the current directory.\n");
+        return;
+    }
+    char exec_str[1024];
+    sprintf(exec_str, "./meta_json_to_txt.py %s %s %s\n", meta_txt_fname, meta_json_fname, aux_json_fname);
+    int status = system(exec_str);
+    if (status != 0)
+    {
+        ERROR_PRINTF("Executing %s error: %d, failed to convert JSON files to intermediate text files for H2Pack.\n", exec_str, status);
+        return;
+    }
+
+    FILE *meta_txt_file = fopen(meta_txt_fname, "r");
+    FILE *binary_file   = fopen(binary_fname,   "r");
+    ASSERT_PRINTF(meta_txt_file != NULL, "Cannot open metadata text file %s\n", meta_txt_fname);
+    ASSERT_PRINTF(binary_file   != NULL, "Cannot open binary data file %s\n",   binary_fname);
 
     // 1. Metadata: H2 / HSS common part
     int pt_dim, krnl_dim, is_symm, has_part_adm;
     DTYPE reltol = 1e-6;
-    fscanf(metadata_file, "%d", &pt_dim);                   // C.1 dim_point
-    fscanf(metadata_file, "%d", &krnl_dim);                 // C.2 dim_kernel
+    fscanf(meta_txt_file, "%d", &pt_dim);                   // C.1 dim_point
+    fscanf(meta_txt_file, "%d", &krnl_dim);                 // C.2 dim_kernel
     H2P_init(&h2pack, pt_dim, krnl_dim, QR_REL_NRM, &reltol);
-    fscanf(metadata_file, "%d", &h2pack->n_point);          // C.3 num_point
-    fscanf(metadata_file, "%d", &h2pack->krnl_mat_size);    // A.1 nrow_matrix
-    fscanf(metadata_file, "%d", &h2pack->krnl_mat_size);    // A.2 ncol_matrix
-    fscanf(metadata_file, "%d", &is_symm);                  // A.3 is_symmetric
-    fscanf(metadata_file, "%d", &h2pack->n_node);           // A.4 num_node_row
-    fscanf(metadata_file, "%d", &h2pack->n_node);           // A.5 num_node_col
-    fscanf(metadata_file, "%d", &h2pack->root_idx);         // A.6 root_node_row
-    fscanf(metadata_file, "%d", &h2pack->root_idx);         // A.7 root_node_col
-    fscanf(metadata_file, "%d", &h2pack->max_level);        // A.8 num_level_row
-    fscanf(metadata_file, "%d", &h2pack->max_level);        // A.9 num_level_col
+    fscanf(meta_txt_file, "%d", &h2pack->n_point);          // C.3 num_point
+    fscanf(meta_txt_file, "%d", &h2pack->krnl_mat_size);    // A.1 nrow_matrix
+    fscanf(meta_txt_file, "%d", &h2pack->krnl_mat_size);    // A.2 ncol_matrix
+    fscanf(meta_txt_file, "%d", &is_symm);                  // A.3 is_symmetric
+    fscanf(meta_txt_file, "%d", &h2pack->n_node);           // A.4 num_node_row
+    fscanf(meta_txt_file, "%d", &h2pack->n_node);           // A.5 num_node_col
+    fscanf(meta_txt_file, "%d", &h2pack->root_idx);         // A.6 root_node_row
+    fscanf(meta_txt_file, "%d", &h2pack->root_idx);         // A.7 root_node_col
+    fscanf(meta_txt_file, "%d", &h2pack->max_level);        // A.8 num_level_row
+    fscanf(meta_txt_file, "%d", &h2pack->max_level);        // A.9 num_level_col
     if (is_symm != 1)
     {
         H2P_destroy(&h2pack);
         ASSERT_PRINTF(is_symm == 1, "H2Pack only support symmetric kernel matrix\n");
     }
     h2pack->max_level--;
-    fscanf(metadata_file, "%d", &h2pack->is_HSS);           // C.4 is_HSS
+    fscanf(meta_txt_file, "%d", &h2pack->is_HSS);           // C.4 is_HSS
     int input_n_r_inadm_pair, input_n_r_adm_pair;
     int *input_r_inadm_pairs, *input_r_adm_pairs;
     if (h2pack->is_HSS)
     {
-        fscanf(metadata_file, "%d", &h2pack->HSS_min_adm_level);    // C.5  min_adm_level
-        fscanf(metadata_file, "%d", &h2pack->HSS_n_r_inadm_pair);   // A.14 num_inadmissible_blocks - n_leaf_node
-        fscanf(metadata_file, "%d", &h2pack->HSS_n_r_adm_pair);     // A.15 num_admissible_blocks
+        fscanf(meta_txt_file, "%d", &h2pack->HSS_min_adm_level);    // C.5  min_adm_level
+        fscanf(meta_txt_file, "%d", &h2pack->HSS_n_r_inadm_pair);   // A.14 num_inadmissible_blocks - n_leaf_node
+        fscanf(meta_txt_file, "%d", &h2pack->HSS_n_r_adm_pair);     // A.15 num_admissible_blocks
         h2pack->HSS_r_inadm_pairs = (int *) malloc(sizeof(int) * h2pack->HSS_n_r_inadm_pair * 2);
         h2pack->HSS_r_adm_pairs   = (int *) malloc(sizeof(int) * h2pack->HSS_n_r_adm_pair * 2);
         input_n_r_inadm_pair = h2pack->HSS_n_r_inadm_pair;
@@ -240,9 +287,9 @@ void H2P_read_from_file(
         input_r_inadm_pairs  = h2pack->HSS_r_inadm_pairs;
         input_r_adm_pairs    = h2pack->HSS_r_adm_pairs;
     } else {
-        fscanf(metadata_file, "%d", &h2pack->min_adm_level);        // C.5  min_adm_level
-        fscanf(metadata_file, "%d", &h2pack->n_r_inadm_pair);       // A.14 num_inadmissible_blocks - n_leaf_node
-        fscanf(metadata_file, "%d", &h2pack->n_r_adm_pair);         // A.15 num_admissible_blocks
+        fscanf(meta_txt_file, "%d", &h2pack->min_adm_level);        // C.5  min_adm_level
+        fscanf(meta_txt_file, "%d", &h2pack->n_r_inadm_pair);       // A.14 num_inadmissible_blocks - n_leaf_node
+        fscanf(meta_txt_file, "%d", &h2pack->n_r_adm_pair);         // A.15 num_admissible_blocks
         h2pack->r_inadm_pairs = (int *) malloc(sizeof(int) * h2pack->n_r_inadm_pair * 2);
         h2pack->r_adm_pairs   = (int *) malloc(sizeof(int) * h2pack->n_r_adm_pair * 2);
         input_n_r_inadm_pair = h2pack->n_r_inadm_pair;
@@ -250,7 +297,7 @@ void H2P_read_from_file(
         input_r_inadm_pairs  = h2pack->r_inadm_pairs;
         input_r_adm_pairs    = h2pack->r_adm_pairs;
     }
-    fscanf(metadata_file, "%d", &has_part_adm);     // A.16 has_partial_adm_blocks
+    fscanf(meta_txt_file, "%d", &has_part_adm);     // A.16 has_partial_adm_blocks
     h2pack->xpt_dim    = pt_dim;
     h2pack->krnl_param = krnl_param;
     h2pack->krnl_eval  = krnl_eval;
@@ -271,11 +318,11 @@ void H2P_read_from_file(
     for (int i = 0; i < n_node; i++)
     {
         int node, level, tmp;
-        fscanf(metadata_file, "%d", &node);                             // A.10.1 index
-        fscanf(metadata_file, "%d", &level);                            // A.10.2 level
-        fscanf(metadata_file, "%d", &h2pack->pt_cluster[2 * node]);     // A.10.3 cluster_head
-        fscanf(metadata_file, "%d", &h2pack->pt_cluster[2 * node + 1]); // A.10.4 cluster_tail
-        fscanf(metadata_file, "%d", &h2pack->n_child[node]);            // A.10.5 num_children
+        fscanf(meta_txt_file, "%d", &node);                             // A.10.1 index
+        fscanf(meta_txt_file, "%d", &level);                            // A.10.2 level
+        fscanf(meta_txt_file, "%d", &h2pack->pt_cluster[2 * node]);     // A.10.3 cluster_head
+        fscanf(meta_txt_file, "%d", &h2pack->pt_cluster[2 * node + 1]); // A.10.4 cluster_tail
+        fscanf(meta_txt_file, "%d", &h2pack->n_child[node]);            // A.10.5 num_children
         h2pack->mat_cluster[2 * node]     = h2pack->krnl_dim * h2pack->pt_cluster[2 * node];
         h2pack->mat_cluster[2 * node + 1] = h2pack->krnl_dim * (h2pack->pt_cluster[2 * node + 1] + 1) - 1;
         if (h2pack->n_child[node] == 0) n_leaf_node++;
@@ -284,12 +331,12 @@ void H2P_read_from_file(
         // A.10.6 children
         for (int j = 0; j < h2pack->n_child[node]; j++)
         {
-            fscanf(metadata_file, "%d", &node_i_childs[j]);
+            fscanf(meta_txt_file, "%d", &node_i_childs[j]);
             h2pack->parent[node_i_childs[j]] = node;
         }
         for (int j = h2pack->n_child[node]; j < h2pack->max_child; j++)
         {
-            fscanf(metadata_file, "%d", &tmp);
+            fscanf(meta_txt_file, "%d", &tmp);
             node_i_childs[j] = -1;
         }
     }
@@ -327,9 +374,9 @@ void H2P_read_from_file(
     for (int i = 0; i < n_node; i++)
     {
         int node, U_nrow, U_ncol;
-        fscanf(metadata_file, "%d", &node);     // A.12.1 node
-        fscanf(metadata_file, "%d", &U_nrow);   // A.12.2 num_row
-        fscanf(metadata_file, "%d", &U_ncol);   // A.12.3 num_col
+        fscanf(meta_txt_file, "%d", &node);     // A.12.1 node
+        fscanf(meta_txt_file, "%d", &U_nrow);   // A.12.2 num_row
+        fscanf(meta_txt_file, "%d", &U_ncol);   // A.12.3 num_col
         H2P_dense_mat_init(&U[node], U_nrow, U_ncol);
         U[node]->nrow = U_nrow;
         U[node]->ncol = U_ncol;
@@ -349,11 +396,11 @@ void H2P_read_from_file(
     for (int i = 0; i < input_n_r_adm_pair; i++)
     {
         int is_part_adm;
-        fscanf(metadata_file, "%d", &input_r_adm_pairs[2 * i]);     // A.17.1 node_row
-        fscanf(metadata_file, "%d", &input_r_adm_pairs[2 * i + 1]); // A.17.2 node_col
-        fscanf(metadata_file, "%d", &B_nrow[i]);                    // A.17.3 num_row
-        fscanf(metadata_file, "%d", &B_ncol[i]);                    // A.17.4 num_col
-        fscanf(metadata_file, "%d", &is_part_adm);                  // A.17.5 is_part_adm
+        fscanf(meta_txt_file, "%d", &input_r_adm_pairs[2 * i]);     // A.17.1 node_row
+        fscanf(meta_txt_file, "%d", &input_r_adm_pairs[2 * i + 1]); // A.17.2 node_col
+        fscanf(meta_txt_file, "%d", &B_nrow[i]);                    // A.17.3 num_row
+        fscanf(meta_txt_file, "%d", &B_ncol[i]);                    // A.17.4 num_col
+        fscanf(meta_txt_file, "%d", &is_part_adm);                  // A.17.5 is_part_adm
         size_t Bi_size = (size_t) (B_nrow[i] * B_ncol[i]);
         B_ptr[i + 1] = Bi_size;
         B_total_size += Bi_size;
@@ -373,10 +420,10 @@ void H2P_read_from_file(
     int *leaf_nodes = h2pack->height_nodes;
     for (int i = 0; i < n_leaf_node; i++)
     {
-        fscanf(metadata_file, "%d", &leaf_nodes[i]);    // A.18.1 node_row
-        fscanf(metadata_file, "%d", &leaf_nodes[i]);    // A.18.2 node_col
-        fscanf(metadata_file, "%d", &D_nrow[i]);        // A.18.3 num_row
-        fscanf(metadata_file, "%d", &D_ncol[i]);        // A.18.4 num_col
+        fscanf(meta_txt_file, "%d", &leaf_nodes[i]);    // A.18.1 node_row
+        fscanf(meta_txt_file, "%d", &leaf_nodes[i]);    // A.18.2 node_col
+        fscanf(meta_txt_file, "%d", &D_nrow[i]);        // A.18.3 num_row
+        fscanf(meta_txt_file, "%d", &D_ncol[i]);        // A.18.4 num_col
         size_t Di_size = (size_t) (D_nrow[i] * D_ncol[i]);
         D_ptr[i + 1] = Di_size;
         D0_total_size += Di_size;
@@ -385,10 +432,10 @@ void H2P_read_from_file(
     for (int i = 0; i < input_n_r_inadm_pair; i++)
     {
         int ii = i + n_leaf_node;
-        fscanf(metadata_file, "%d", &input_r_inadm_pairs[2 * i]);       // A.18.1 node_row
-        fscanf(metadata_file, "%d", &input_r_inadm_pairs[2 * i + 1]);   // A.18.2 node_col
-        fscanf(metadata_file, "%d", &D_nrow[ii]);                       // A.18.3 num_row
-        fscanf(metadata_file, "%d", &D_ncol[ii]);                       // A.18.4 num_col
+        fscanf(meta_txt_file, "%d", &input_r_inadm_pairs[2 * i]);       // A.18.1 node_row
+        fscanf(meta_txt_file, "%d", &input_r_inadm_pairs[2 * i + 1]);   // A.18.2 node_col
+        fscanf(meta_txt_file, "%d", &D_nrow[ii]);                       // A.18.3 num_row
+        fscanf(meta_txt_file, "%d", &D_ncol[ii]);                       // A.18.4 num_col
         size_t Di_size = (size_t) (D_nrow[ii] * D_ncol[ii]);
         D_ptr[ii + 1] = Di_size;
         D1_total_size += Di_size;
@@ -397,9 +444,9 @@ void H2P_read_from_file(
 
     // 6. Other necessary information for H2Pack
     int has_skel;
-    fscanf(metadata_file, "%d",  &h2pack->max_leaf_points); // C.6 max_leaf_points
-    fscanf(metadata_file, "%lf", &h2pack->QR_stop_tol);     // C.7 QR_stop_tol
-    fscanf(metadata_file, "%d",  &has_skel);                // C.8 has_skeleton_points
+    fscanf(meta_txt_file, "%d",  &h2pack->max_leaf_points); // C.6 max_leaf_points
+    fscanf(meta_txt_file, "%lf", &h2pack->QR_stop_tol);     // C.7 QR_stop_tol
+    fscanf(meta_txt_file, "%d",  &has_skel);                // C.8 has_skeleton_points
     DTYPE *coord0     = (DTYPE*) malloc(sizeof(DTYPE) * n_point * pt_dim);
     h2pack->coord     = (DTYPE*) malloc(sizeof(DTYPE) * n_point * pt_dim);
     h2pack->coord0    = (DTYPE*) malloc(sizeof(DTYPE) * n_point * pt_dim);
@@ -411,11 +458,11 @@ void H2P_read_from_file(
         for (int j = 0; j < h2pack->pt_dim; j++) 
         {
             DTYPE *cij = coord0 + i * h2pack->pt_dim + j;
-            fscanf(metadata_file, "%"SCNx64, (uint64_t *) cij);
+            fscanf(meta_txt_file, "%"SCNx64, (uint64_t *) cij);
         }
     }
     // C.10 permutation_array
-    for (int i = 0; i < h2pack->n_point; i++) fscanf(metadata_file, "%d\n", &h2pack->coord_idx[i]);
+    for (int i = 0; i < h2pack->n_point; i++) fscanf(meta_txt_file, "%d\n", &h2pack->coord_idx[i]);
     // Transpose and permute the coordinate matrix in the input file
     for (int i = 0; i < n_point; i++)
     {
@@ -433,14 +480,14 @@ void H2P_read_from_file(
         for (int i = 0; i < n_node; i++)
         {
             int node, length;
-            fscanf(metadata_file, "%d", &node);     // C.11.1 node
-            fscanf(metadata_file, "%d", &length);   // C.11.2 num_skeleton_point
+            fscanf(meta_txt_file, "%d", &node);     // C.11.1 node
+            fscanf(meta_txt_file, "%d", &length);   // C.11.2 num_skeleton_point
             if (length > 0)
             {
                 H2P_int_vec_init(&J[node], length);
                 // C.11.3 skeleton_point_indices
                 for (int j = 0; j < length; j++)
-                    fscanf(metadata_file, "%d", &J[node]->data[j]); 
+                    fscanf(meta_txt_file, "%d", &J[node]->data[j]); 
                 J[node]->length = length;
                 H2P_dense_mat_init(&J_coord[node], pt_dim, length);
                 H2P_gather_matrix_columns(
@@ -702,7 +749,7 @@ void H2P_read_from_file(
         H2P_thread_buf_init(&h2pack->tb[i], h2pack->krnl_mat_size);
 
     // Finally done...
-    fclose(metadata_file);
+    fclose(meta_txt_file);
     fclose(binary_file);
     *h2pack_ = h2pack;
 }

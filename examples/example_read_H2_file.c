@@ -32,13 +32,15 @@ int main(int argc, char **argv)
     // Read H2 matrix data from file and construct H2Pack
     const int BD_JIT = 1;
     H2Pack_p h2pack;
-    const char *metadata_fname = "Coulomb_3D_1e-6.txt";
-    const char *binary_fname   = "Coulomb_3D_1e-6.bin";
-    //const char *metadata_fname = "Stokes_3D_1e-6.txt";
-    //const char *binary_fname   = "Stokes_3D_1e-6.bin";
-    printf("Reading H2 matrix data from files %s and %s\n", metadata_fname, binary_fname);
+    const char *meta_json_fname = "Coulomb_3D_1e-6_meta.json";
+    const char *aux_json_fname  = "Coulomb_3D_1e-6_aux.json";
+    const char *binary_fname    = "Coulomb_3D_1e-6.bin";
+    //const char *meta_json_fname = "Stokes_3D_1e-6_meta.json";
+    //const char *aux_json_fname  = "Stokes_3D_1e-6_aux.json";
+    //const char *binary_fname    = "Stokes_3D_1e-6.bin";
+    printf("Reading H2 matrix data from files %s, %s, and %s\n", meta_json_fname, aux_json_fname, binary_fname);
     H2P_read_from_file(
-        &h2pack, metadata_fname, binary_fname, BD_JIT, 
+        &h2pack, meta_json_fname, aux_json_fname, binary_fname, BD_JIT, 
         krnl_param, krnl_eval, krnl_bimv, krnl_bimv_flops
     );
     int pt_dim  = h2pack->pt_dim;

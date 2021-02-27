@@ -7,18 +7,18 @@
 extern "C" {
 #endif
 
-// Store constructed H2 representation to files 
+// Store a constructed H2 representation to a set of files 
 // Input parameters:
 //   h2pack          : H2Pack structure after calling H2P_build()
 //   meta_json_fname : Metadata JSON file name
-//   aux_json_fname  : Auxiliary JSON file name, can be NULL
+//   aux_json_fname  : Auxiliary JSON file name
 //   binary_fname    : Binary data file name
 void H2P_store_to_file(
     H2Pack_p h2pack, const char *meta_json_fname, 
     const char *aux_json_fname, const char *binary_fname
 );
 
-// Load a constructed H2 representation from files
+// Load a constructed H2 representation from a set of files
 // Input parameters:
 //   meta_json_fname : Metadata JSON file name
 //   aux_json_fname  : Auxiliary JSON file name, can be NULL
@@ -27,7 +27,7 @@ void H2P_store_to_file(
 //   krnl_param      : Pointer to the krnl_eval parameter buffer
 //   krnl_eval       : Pointer to the kernel matrix evaluation function, can be NULL
 //   krnl_bimv       : Pointer to the kernel matrix bi-matvec function, can be NULL
-//   krnl_bimv_flops : Number of flops required for each bi-matvec operation, for statistic only
+//   krnl_bimv_flops : Number of flops required for each bi-matvec operation, for performance statistic only
 // Output parameter:
 //   *h2pack_ : H2Pack structure constructed from given files
 // Notes:

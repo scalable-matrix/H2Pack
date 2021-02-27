@@ -85,6 +85,7 @@ a single set of points (i.e., square, symmetric matrices)
 * [Proxy Points and their Reuse](https://github.com/scalable-matrix/H2Pack/wiki/Proxy-Points-and-their-Reuse)
 * [Python Interface](https://github.com/scalable-matrix/H2Pack/wiki/Using-H2Pack-in-Python)
 * [H2 Matrix File Storage Scheme (draft)](https://github.com/scalable-matrix/H2Pack/wiki/H2-Matrix-File-Storage-Scheme)
+* [Using H2 Matrix File Storage](https://github.com/scalable-matrix/H2Pack/wiki/Using-H2-Matrix-File-Storage)
 
 ## Numerical Tests
 

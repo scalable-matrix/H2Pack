@@ -6,10 +6,11 @@
 #define DOUBLE_SIZE     8
 #define FLOAT_SIZE      4
 
+#ifndef DTYPE_SIZE
 #define DTYPE_SIZE      DOUBLE_SIZE     // Matrix data type: double or float
+#endif
 
-#if DTYPE_SIZE == DOUBLE_SIZE           // Functions for double data type
-
+#if DTYPE_SIZE == DOUBLE_SIZE           // Marcos for double data type
 #define DTYPE           double          // Data type
 #define DTYPE_FMTSTR    "%lf"           // Data type format string
 #define DABS            fabs            // Abs function
@@ -44,11 +45,11 @@
 #define LAPACK_SYEVD    LAPACKE_dsyevd  // LAPACK eigenvalue decomposition
 #define N_DTYPE_64B     8               // 8 double == 64 bytes, for alignment
 #define SIMD_LEN        SIMD_LEN_D      // SIMD vector length
-
+#define ASTER_DTYPE_DOUBLE
 #endif
 
-#if DTYPE_SIZE == FLOAT_SIZE            // Functions for float data type
 
+#if DTYPE_SIZE == FLOAT_SIZE            // Marcos for float data type
 #define DTYPE           float
 #define DTYPE_FMTSTR    "%f"
 #define DABS            fabsf
@@ -83,7 +84,7 @@
 #define LAPACK_SYEVD    LAPACKE_ssyevd
 #define N_DTYPE_64B     16
 #define SIMD_LEN        SIMD_LEN_S
-
+#define ASTER_DTYPE_SINGLE
 #endif
 
 #define QR_RANK         0               // Partial QR stop criteria: maximum rank

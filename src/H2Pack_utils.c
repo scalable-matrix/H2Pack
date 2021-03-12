@@ -161,9 +161,9 @@ void H2P_calc_sparse_mm_trans(
     DTYPE *x, const int ldx, DTYPE *y, const int ldy
 )
 {
-    double *val = A_valbuf->data;
-    int *row_ptr = A_idxbuf->data;
-    int *col_idx = row_ptr + (m + 1);
+    const double *val = A_valbuf->data;
+    const int *row_ptr = A_idxbuf->data;
+    const int *col_idx = row_ptr + (n + 1);  // A is k-by-n
     // Doing a naive OpenMP CSR SpMM here is good enough, using MKL SpBLAS is actually
     // slower, probably due to the cost of optimizing the storage of sparse matrix
     #pragma omp parallel for schedule(static)

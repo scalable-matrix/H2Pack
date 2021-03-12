@@ -174,8 +174,8 @@ struct H2Pack
     DTYPE  *per_blk;                // Size unknown, periodic system matvec periodic block 
     DTYPE  *xT;                     // Size krnl_mat_size, for transposing matvec input  "matrix" when krnl_dim > 1
     DTYPE  *yT;                     // Size krnl_mat_size, for transposing matvec output "matrix" when krnl_dim > 1
-    DTYPE  *pmt_x;                  // Size krnl_mat_size * max_n_vec, storing the permuted input vector/matrix (the input need to be permuted)
-    DTYPE  *pmt_y;                  // Size krnl_mat_size * max_n_vec, storing the permuted output vector/matrix (the final output need to be revered)
+    DTYPE  *pmt_x;                  // Size krnl_mat_size( * mm_max_n_vec), storing the permuted input vector/matrix (the input need to be permuted)
+    DTYPE  *pmt_y;                  // Size krnl_mat_size( * mm_max_n_vec), storing the permuted output vector/matrix (the final output need to be revered)
     H2P_int_vec_p     B_blk;        // Size BD_NTASK_THREAD * n_thread, B matrices task partitioning
     H2P_int_vec_p     D_blk0;       // Size BD_NTASK_THREAD * n_thread, diagonal blocks in D matrices task partitioning
     H2P_int_vec_p     D_blk1;       // Size BD_NTASK_THREAD * n_thread, inadmissible blocks in D matrices task partitioning

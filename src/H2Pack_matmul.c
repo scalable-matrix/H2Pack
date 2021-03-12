@@ -460,10 +460,20 @@ void H2P_matmul(
     double st, et;
     int    krnl_mat_size = h2pack->krnl_mat_size;
     int    mm_max_n_vec  = h2pack->mm_max_n_vec;
-    DTYPE  *pmt_x        = h2pack->pmt_x;
-    DTYPE  *pmt_y        = h2pack->pmt_y;
     double *timers       = h2pack->timers;
     size_t *mat_size     = h2pack->mat_size;
+
+    size_t pmt_xy_size = (size_t) krnl_mat_size * (size_t) mm_max_n_vec;
+    free(h2pack->pmt_x);
+    free(h2pack->pmt_y);
+    h2pack->pmt_x = (DTYPE*) malloc(sizeof(DTYPE) * pmt_xy_size);
+    h2pack->pmt_y = (DTYPE*) malloc(sizeof(DTYPE) * pmt_xy_size);
+    ASSERT_PRINTF(
+        h2pack->pmt_x != NULL && h2pack->pmt_y != NULL,
+        "Failed to allocate working arrays of size %zu for matmul\n", 2 * pmt_xy_size
+    );
+    DTYPE *pmt_x = h2pack->pmt_x;
+    DTYPE *pmt_y = h2pack->pmt_y;
 
     int x_col_stride, y_col_stride, pmt_row_stride, ld_pmt; 
     CBLAS_TRANSPOSE x_trans, y_trans;

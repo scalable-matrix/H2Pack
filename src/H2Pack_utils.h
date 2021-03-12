@@ -257,13 +257,22 @@ void H2P_generate_D_metadata(H2Pack_p h2pack);
 
 // ================================================================================
 // The following 6 functions are implemented in H2Pack_matvec.c and used by 
-// both H2Pack_matvec.c and H2Pack_matvec_periodic.c
+// both H2Pack_matvec.c, H2Pack_matvec_periodic.c, and H2ERI_matvec.c
+
+// Calculate GEMV A * x0 and A^T * x1 in one run to reduce bandwidth pressure
+void CBLAS_BI_GEMV(
+    const int nrow, const int ncol, const DTYPE *mat, const int ldm,
+    const DTYPE *x_in_0, const DTYPE *x_in_1, DTYPE *x_out_0, DTYPE *x_out_1
+);
 
 // Initialize auxiliary array y0 used in H2 matvec forward transformation
 void H2P_matvec_init_y0(H2Pack_p h2pack);
 
 // Initialize auxiliary array y1 used in H2 matvec intermediate multiplication
 void H2P_matvec_init_y1(H2Pack_p h2pack);
+
+// Sum thread-local buffers to obtain final y1 results
+void H2P_matvec_sum_y1_thread(H2Pack_p h2pack);
 
 // H2 matvec forward transformation, calculate U_j^T * x_j
 void H2P_matvec_fwd_transform(H2Pack_p h2pack, const DTYPE *x);

@@ -49,30 +49,30 @@ extern "C" {
 
 const  int  Coulomb_3D_krnl_bimv_flop = 14;
 
-static void Coulomb_3D_eval_intrin_d(KRNL_EVAL_PARAM)
+static void Coulomb_3D_eval_intrin_t(KRNL_EVAL_PARAM)
 {
     EXTRACT_3D_COORD();
     const int n1_vec = (n1 / SIMD_LEN) * SIMD_LEN;
-    const vec_d frsqrt_pf = vec_frsqrt_pf_d();
+    const vec_t frsqrt_pf = vec_frsqrt_pf_t();
     for (int i = 0; i < n0; i++)
     {
         DTYPE *mat_irow = mat + i * ldm;
         
-        vec_d x0_iv = vec_bcast_d(x0 + i);
-        vec_d y0_iv = vec_bcast_d(y0 + i);
-        vec_d z0_iv = vec_bcast_d(z0 + i);
+        vec_t x0_iv = vec_bcast_t(x0 + i);
+        vec_t y0_iv = vec_bcast_t(y0 + i);
+        vec_t z0_iv = vec_bcast_t(z0 + i);
         for (int j = 0; j < n1_vec; j += SIMD_LEN)
         {
-            vec_d dx = vec_sub_d(x0_iv, vec_loadu_d(x1 + j));
-            vec_d dy = vec_sub_d(y0_iv, vec_loadu_d(y1 + j));
-            vec_d dz = vec_sub_d(z0_iv, vec_loadu_d(z1 + j));
+            vec_t dx = vec_sub_t(x0_iv, vec_loadu_t(x1 + j));
+            vec_t dy = vec_sub_t(y0_iv, vec_loadu_t(y1 + j));
+            vec_t dz = vec_sub_t(z0_iv, vec_loadu_t(z1 + j));
             
-            vec_d r2 = vec_mul_d(dx, dx);
-            r2 = vec_fmadd_d(dy, dy, r2);
-            r2 = vec_fmadd_d(dz, dz, r2);
+            vec_t r2 = vec_mul_t(dx, dx);
+            r2 = vec_fmadd_t(dy, dy, r2);
+            r2 = vec_fmadd_t(dz, dz, r2);
             
-            vec_d rinv = vec_mul_d(frsqrt_pf, vec_frsqrt_d(r2));
-            vec_storeu_d(mat_irow + j, rinv);
+            vec_t rinv = vec_mul_t(frsqrt_pf, vec_frsqrt_t(r2));
+            vec_storeu_t(mat_irow + j, rinv);
         }
         
         const DTYPE x0_i = x0[i];
@@ -89,59 +89,59 @@ static void Coulomb_3D_eval_intrin_d(KRNL_EVAL_PARAM)
     }
 }
 
-static void Coulomb_3D_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
+static void Coulomb_3D_krnl_bimv_intrin_t(KRNL_BIMV_PARAM)
 {
     EXTRACT_3D_COORD();
-    const vec_d frsqrt_pf = vec_frsqrt_pf_d();
+    const vec_t frsqrt_pf = vec_frsqrt_pf_t();
     for (int i = 0; i < n0; i += 2)
     {
-        vec_d sum_v0 = vec_zero_d();
-        vec_d sum_v1 = vec_zero_d();
-        const vec_d x0_i0v = vec_bcast_d(x0 + i);
-        const vec_d y0_i0v = vec_bcast_d(y0 + i);
-        const vec_d z0_i0v = vec_bcast_d(z0 + i);
-        const vec_d x0_i1v = vec_bcast_d(x0 + i + 1);
-        const vec_d y0_i1v = vec_bcast_d(y0 + i + 1);
-        const vec_d z0_i1v = vec_bcast_d(z0 + i + 1);
-        const vec_d x_in_1_i0v = vec_bcast_d(x_in_1 + i);
-        const vec_d x_in_1_i1v = vec_bcast_d(x_in_1 + i + 1);
+        vec_t sum_v0 = vec_zero_t();
+        vec_t sum_v1 = vec_zero_t();
+        const vec_t x0_i0v = vec_bcast_t(x0 + i);
+        const vec_t y0_i0v = vec_bcast_t(y0 + i);
+        const vec_t z0_i0v = vec_bcast_t(z0 + i);
+        const vec_t x0_i1v = vec_bcast_t(x0 + i + 1);
+        const vec_t y0_i1v = vec_bcast_t(y0 + i + 1);
+        const vec_t z0_i1v = vec_bcast_t(z0 + i + 1);
+        const vec_t x_in_1_i0v = vec_bcast_t(x_in_1 + i);
+        const vec_t x_in_1_i1v = vec_bcast_t(x_in_1 + i + 1);
         for (int j = 0; j < n1; j += SIMD_LEN)
         {
-            vec_d d0, d1, jv, r20, r21;
+            vec_t d0, d1, jv, r20, r21;
             
-            jv  = vec_load_d(x1 + j);
-            d0  = vec_sub_d(x0_i0v, jv);
-            d1  = vec_sub_d(x0_i1v, jv);
-            r20 = vec_mul_d(d0, d0);
-            r21 = vec_mul_d(d1, d1);
+            jv  = vec_load_t(x1 + j);
+            d0  = vec_sub_t(x0_i0v, jv);
+            d1  = vec_sub_t(x0_i1v, jv);
+            r20 = vec_mul_t(d0, d0);
+            r21 = vec_mul_t(d1, d1);
             
-            jv  = vec_load_d(y1 + j);
-            d0  = vec_sub_d(y0_i0v, jv);
-            d1  = vec_sub_d(y0_i1v, jv);
-            r20 = vec_fmadd_d(d0, d0, r20);
-            r21 = vec_fmadd_d(d1, d1, r21);
+            jv  = vec_load_t(y1 + j);
+            d0  = vec_sub_t(y0_i0v, jv);
+            d1  = vec_sub_t(y0_i1v, jv);
+            r20 = vec_fmadd_t(d0, d0, r20);
+            r21 = vec_fmadd_t(d1, d1, r21);
             
-            jv  = vec_load_d(z1 + j);
-            d0  = vec_sub_d(z0_i0v, jv);
-            d1  = vec_sub_d(z0_i1v, jv);
-            r20 = vec_fmadd_d(d0, d0, r20);
-            r21 = vec_fmadd_d(d1, d1, r21);
+            jv  = vec_load_t(z1 + j);
+            d0  = vec_sub_t(z0_i0v, jv);
+            d1  = vec_sub_t(z0_i1v, jv);
+            r20 = vec_fmadd_t(d0, d0, r20);
+            r21 = vec_fmadd_t(d1, d1, r21);
             
-            d0 = vec_load_d(x_in_0 + j);
-            d1 = vec_load_d(x_out_1 + j);
+            d0 = vec_load_t(x_in_0 + j);
+            d1 = vec_load_t(x_out_1 + j);
             
-            r20 = vec_mul_d(frsqrt_pf, vec_frsqrt_d(r20));
-            r21 = vec_mul_d(frsqrt_pf, vec_frsqrt_d(r21));
+            r20 = vec_mul_t(frsqrt_pf, vec_frsqrt_t(r20));
+            r21 = vec_mul_t(frsqrt_pf, vec_frsqrt_t(r21));
             
-            sum_v0 = vec_fmadd_d(d0, r20, sum_v0);
-            sum_v1 = vec_fmadd_d(d0, r21, sum_v1);
+            sum_v0 = vec_fmadd_t(d0, r20, sum_v0);
+            sum_v1 = vec_fmadd_t(d0, r21, sum_v1);
             
-            d1 = vec_fmadd_d(x_in_1_i0v, r20, d1);
-            d1 = vec_fmadd_d(x_in_1_i1v, r21, d1);
-            vec_store_d(x_out_1 + j, d1);
+            d1 = vec_fmadd_t(x_in_1_i0v, r20, d1);
+            d1 = vec_fmadd_t(x_in_1_i1v, r21, d1);
+            vec_store_t(x_out_1 + j, d1);
         }
-        x_out_0[i]   += vec_reduce_add_d(sum_v0);
-        x_out_0[i+1] += vec_reduce_add_d(sum_v1);
+        x_out_0[i]   += vec_reduce_add_t(sum_v0);
+        x_out_0[i+1] += vec_reduce_add_t(sum_v1);
     }
 }
 
@@ -151,33 +151,33 @@ static void Coulomb_3D_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
 
 const  int  Gaussian_3D_krnl_bimv_flop = 14;
 
-static void Gaussian_3D_eval_intrin_d(KRNL_EVAL_PARAM)
+static void Gaussian_3D_eval_intrin_t(KRNL_EVAL_PARAM)
 {
     EXTRACT_3D_COORD();
     const int n1_vec = (n1 / SIMD_LEN) * SIMD_LEN;
     const DTYPE *param_ = (DTYPE*) param;
     const DTYPE neg_l = -param_[0];
-    const vec_d neg_l_v = vec_set1_d(neg_l);
+    const vec_t neg_l_v = vec_set1_t(neg_l);
     for (int i = 0; i < n0; i++)
     {
         DTYPE *mat_irow = mat + i * ldm;
         
-        vec_d x0_iv = vec_bcast_d(x0 + i);
-        vec_d y0_iv = vec_bcast_d(y0 + i);
-        vec_d z0_iv = vec_bcast_d(z0 + i);
+        vec_t x0_iv = vec_bcast_t(x0 + i);
+        vec_t y0_iv = vec_bcast_t(y0 + i);
+        vec_t z0_iv = vec_bcast_t(z0 + i);
         for (int j = 0; j < n1_vec; j += SIMD_LEN)
         {
-            vec_d dx = vec_sub_d(x0_iv, vec_loadu_d(x1 + j));
-            vec_d dy = vec_sub_d(y0_iv, vec_loadu_d(y1 + j));
-            vec_d dz = vec_sub_d(z0_iv, vec_loadu_d(z1 + j));
+            vec_t dx = vec_sub_t(x0_iv, vec_loadu_t(x1 + j));
+            vec_t dy = vec_sub_t(y0_iv, vec_loadu_t(y1 + j));
+            vec_t dz = vec_sub_t(z0_iv, vec_loadu_t(z1 + j));
             
-            vec_d r2 = vec_mul_d(dx, dx);
-            r2 = vec_fmadd_d(dy, dy, r2);
-            r2 = vec_fmadd_d(dz, dz, r2);
+            vec_t r2 = vec_mul_t(dx, dx);
+            r2 = vec_fmadd_t(dy, dy, r2);
+            r2 = vec_fmadd_t(dz, dz, r2);
             
-            r2 = vec_exp_d(vec_mul_d(neg_l_v, r2));
+            r2 = vec_exp_t(vec_mul_t(neg_l_v, r2));
             
-            vec_storeu_d(mat_irow + j, r2);
+            vec_storeu_t(mat_irow + j, r2);
         }
         
         const DTYPE x0_i = x0[i];
@@ -194,61 +194,61 @@ static void Gaussian_3D_eval_intrin_d(KRNL_EVAL_PARAM)
     }
 }
 
-static void Gaussian_3D_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
+static void Gaussian_3D_krnl_bimv_intrin_t(KRNL_BIMV_PARAM)
 {
     EXTRACT_3D_COORD();
     const DTYPE *param_ = (DTYPE*) param;
     const DTYPE neg_l = -param_[0];
-    const vec_d neg_l_v = vec_set1_d(neg_l);
+    const vec_t neg_l_v = vec_set1_t(neg_l);
     for (int i = 0; i < n0; i += 2)
     {
-        vec_d sum_v0 = vec_zero_d();
-        vec_d sum_v1 = vec_zero_d();
-        const vec_d x0_i0v = vec_bcast_d(x0 + i);
-        const vec_d y0_i0v = vec_bcast_d(y0 + i);
-        const vec_d z0_i0v = vec_bcast_d(z0 + i);
-        const vec_d x0_i1v = vec_bcast_d(x0 + i + 1);
-        const vec_d y0_i1v = vec_bcast_d(y0 + i + 1);
-        const vec_d z0_i1v = vec_bcast_d(z0 + i + 1);
-        const vec_d x_in_1_i0v = vec_bcast_d(x_in_1 + i);
-        const vec_d x_in_1_i1v = vec_bcast_d(x_in_1 + i + 1);
+        vec_t sum_v0 = vec_zero_t();
+        vec_t sum_v1 = vec_zero_t();
+        const vec_t x0_i0v = vec_bcast_t(x0 + i);
+        const vec_t y0_i0v = vec_bcast_t(y0 + i);
+        const vec_t z0_i0v = vec_bcast_t(z0 + i);
+        const vec_t x0_i1v = vec_bcast_t(x0 + i + 1);
+        const vec_t y0_i1v = vec_bcast_t(y0 + i + 1);
+        const vec_t z0_i1v = vec_bcast_t(z0 + i + 1);
+        const vec_t x_in_1_i0v = vec_bcast_t(x_in_1 + i);
+        const vec_t x_in_1_i1v = vec_bcast_t(x_in_1 + i + 1);
         for (int j = 0; j < n1; j += SIMD_LEN)
         {
-            vec_d d0, d1, jv, r20, r21;
+            vec_t d0, d1, jv, r20, r21;
             
-            jv  = vec_load_d(x1 + j);
-            d0  = vec_sub_d(x0_i0v, jv);
-            d1  = vec_sub_d(x0_i1v, jv);
-            r20 = vec_mul_d(d0, d0);
-            r21 = vec_mul_d(d1, d1);
+            jv  = vec_load_t(x1 + j);
+            d0  = vec_sub_t(x0_i0v, jv);
+            d1  = vec_sub_t(x0_i1v, jv);
+            r20 = vec_mul_t(d0, d0);
+            r21 = vec_mul_t(d1, d1);
             
-            jv  = vec_load_d(y1 + j);
-            d0  = vec_sub_d(y0_i0v, jv);
-            d1  = vec_sub_d(y0_i1v, jv);
-            r20 = vec_fmadd_d(d0, d0, r20);
-            r21 = vec_fmadd_d(d1, d1, r21);
+            jv  = vec_load_t(y1 + j);
+            d0  = vec_sub_t(y0_i0v, jv);
+            d1  = vec_sub_t(y0_i1v, jv);
+            r20 = vec_fmadd_t(d0, d0, r20);
+            r21 = vec_fmadd_t(d1, d1, r21);
             
-            jv  = vec_load_d(z1 + j);
-            d0  = vec_sub_d(z0_i0v, jv);
-            d1  = vec_sub_d(z0_i1v, jv);
-            r20 = vec_fmadd_d(d0, d0, r20);
-            r21 = vec_fmadd_d(d1, d1, r21);
+            jv  = vec_load_t(z1 + j);
+            d0  = vec_sub_t(z0_i0v, jv);
+            d1  = vec_sub_t(z0_i1v, jv);
+            r20 = vec_fmadd_t(d0, d0, r20);
+            r21 = vec_fmadd_t(d1, d1, r21);
             
-            d0 = vec_load_d(x_in_0 + j);
-            d1 = vec_load_d(x_out_1 + j);
+            d0 = vec_load_t(x_in_0 + j);
+            d1 = vec_load_t(x_out_1 + j);
             
-            r20 = vec_exp_d(vec_mul_d(neg_l_v, r20));
-            r21 = vec_exp_d(vec_mul_d(neg_l_v, r21));
+            r20 = vec_exp_t(vec_mul_t(neg_l_v, r20));
+            r21 = vec_exp_t(vec_mul_t(neg_l_v, r21));
             
-            sum_v0 = vec_fmadd_d(d0, r20, sum_v0);
-            sum_v1 = vec_fmadd_d(d0, r21, sum_v1);
+            sum_v0 = vec_fmadd_t(d0, r20, sum_v0);
+            sum_v1 = vec_fmadd_t(d0, r21, sum_v1);
             
-            d1 = vec_fmadd_d(x_in_1_i0v, r20, d1);
-            d1 = vec_fmadd_d(x_in_1_i1v, r21, d1);
-            vec_store_d(x_out_1 + j, d1);
+            d1 = vec_fmadd_t(x_in_1_i0v, r20, d1);
+            d1 = vec_fmadd_t(x_in_1_i1v, r21, d1);
+            vec_store_t(x_out_1 + j, d1);
         }
-        x_out_0[i]   += vec_reduce_add_d(sum_v0);
-        x_out_0[i+1] += vec_reduce_add_d(sum_v1);
+        x_out_0[i]   += vec_reduce_add_t(sum_v0);
+        x_out_0[i+1] += vec_reduce_add_t(sum_v1);
     }
 }
 
@@ -258,34 +258,34 @@ static void Gaussian_3D_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
 
 const  int  Expon_3D_krnl_bimv_flop = 15;
 
-static void Expon_3D_eval_intrin_d(KRNL_EVAL_PARAM)
+static void Expon_3D_eval_intrin_t(KRNL_EVAL_PARAM)
 {
     EXTRACT_3D_COORD();
     const int n1_vec = (n1 / SIMD_LEN) * SIMD_LEN;
     const DTYPE *param_ = (DTYPE*) param;
     const DTYPE neg_l = -param_[0];
-    const vec_d neg_l_v = vec_set1_d(neg_l);
+    const vec_t neg_l_v = vec_set1_t(neg_l);
     for (int i = 0; i < n0; i++)
     {
         DTYPE *mat_irow = mat + i * ldm;
         
-        vec_d x0_iv = vec_bcast_d(x0 + i);
-        vec_d y0_iv = vec_bcast_d(y0 + i);
-        vec_d z0_iv = vec_bcast_d(z0 + i);
+        vec_t x0_iv = vec_bcast_t(x0 + i);
+        vec_t y0_iv = vec_bcast_t(y0 + i);
+        vec_t z0_iv = vec_bcast_t(z0 + i);
         for (int j = 0; j < n1_vec; j += SIMD_LEN)
         {
-            vec_d dx = vec_sub_d(x0_iv, vec_loadu_d(x1 + j));
-            vec_d dy = vec_sub_d(y0_iv, vec_loadu_d(y1 + j));
-            vec_d dz = vec_sub_d(z0_iv, vec_loadu_d(z1 + j));
+            vec_t dx = vec_sub_t(x0_iv, vec_loadu_t(x1 + j));
+            vec_t dy = vec_sub_t(y0_iv, vec_loadu_t(y1 + j));
+            vec_t dz = vec_sub_t(z0_iv, vec_loadu_t(z1 + j));
             
-            vec_d r2 = vec_mul_d(dx, dx);
-            r2 = vec_fmadd_d(dy, dy, r2);
-            r2 = vec_fmadd_d(dz, dz, r2);
+            vec_t r2 = vec_mul_t(dx, dx);
+            r2 = vec_fmadd_t(dy, dy, r2);
+            r2 = vec_fmadd_t(dz, dz, r2);
 
-            r2 = vec_mul_d(neg_l_v, vec_sqrt_d(r2));
-            r2 = vec_exp_d(r2);
+            r2 = vec_mul_t(neg_l_v, vec_sqrt_t(r2));
+            r2 = vec_exp_t(r2);
             
-            vec_storeu_d(mat_irow + j, r2);
+            vec_storeu_t(mat_irow + j, r2);
         }
         
         const DTYPE x0_i = x0[i];
@@ -302,63 +302,63 @@ static void Expon_3D_eval_intrin_d(KRNL_EVAL_PARAM)
     }
 }
 
-static void Expon_3D_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
+static void Expon_3D_krnl_bimv_intrin_t(KRNL_BIMV_PARAM)
 {
     EXTRACT_3D_COORD();
     const DTYPE *param_ = (DTYPE*) param;
     const DTYPE neg_l = -param_[0];
-    const vec_d neg_l_v = vec_set1_d(neg_l);
+    const vec_t neg_l_v = vec_set1_t(neg_l);
     for (int i = 0; i < n0; i += 2)
     {
-        vec_d sum_v0 = vec_zero_d();
-        vec_d sum_v1 = vec_zero_d();
-        const vec_d x0_i0v = vec_bcast_d(x0 + i);
-        const vec_d y0_i0v = vec_bcast_d(y0 + i);
-        const vec_d z0_i0v = vec_bcast_d(z0 + i);
-        const vec_d x0_i1v = vec_bcast_d(x0 + i + 1);
-        const vec_d y0_i1v = vec_bcast_d(y0 + i + 1);
-        const vec_d z0_i1v = vec_bcast_d(z0 + i + 1);
-        const vec_d x_in_1_i0v = vec_bcast_d(x_in_1 + i);
-        const vec_d x_in_1_i1v = vec_bcast_d(x_in_1 + i + 1);
+        vec_t sum_v0 = vec_zero_t();
+        vec_t sum_v1 = vec_zero_t();
+        const vec_t x0_i0v = vec_bcast_t(x0 + i);
+        const vec_t y0_i0v = vec_bcast_t(y0 + i);
+        const vec_t z0_i0v = vec_bcast_t(z0 + i);
+        const vec_t x0_i1v = vec_bcast_t(x0 + i + 1);
+        const vec_t y0_i1v = vec_bcast_t(y0 + i + 1);
+        const vec_t z0_i1v = vec_bcast_t(z0 + i + 1);
+        const vec_t x_in_1_i0v = vec_bcast_t(x_in_1 + i);
+        const vec_t x_in_1_i1v = vec_bcast_t(x_in_1 + i + 1);
         for (int j = 0; j < n1; j += SIMD_LEN)
         {
-            vec_d d0, d1, jv, r20, r21;
+            vec_t d0, d1, jv, r20, r21;
             
-            jv  = vec_load_d(x1 + j);
-            d0  = vec_sub_d(x0_i0v, jv);
-            d1  = vec_sub_d(x0_i1v, jv);
-            r20 = vec_mul_d(d0, d0);
-            r21 = vec_mul_d(d1, d1);
+            jv  = vec_load_t(x1 + j);
+            d0  = vec_sub_t(x0_i0v, jv);
+            d1  = vec_sub_t(x0_i1v, jv);
+            r20 = vec_mul_t(d0, d0);
+            r21 = vec_mul_t(d1, d1);
             
-            jv  = vec_load_d(y1 + j);
-            d0  = vec_sub_d(y0_i0v, jv);
-            d1  = vec_sub_d(y0_i1v, jv);
-            r20 = vec_fmadd_d(d0, d0, r20);
-            r21 = vec_fmadd_d(d1, d1, r21);
+            jv  = vec_load_t(y1 + j);
+            d0  = vec_sub_t(y0_i0v, jv);
+            d1  = vec_sub_t(y0_i1v, jv);
+            r20 = vec_fmadd_t(d0, d0, r20);
+            r21 = vec_fmadd_t(d1, d1, r21);
             
-            jv  = vec_load_d(z1 + j);
-            d0  = vec_sub_d(z0_i0v, jv);
-            d1  = vec_sub_d(z0_i1v, jv);
-            r20 = vec_fmadd_d(d0, d0, r20);
-            r21 = vec_fmadd_d(d1, d1, r21);
+            jv  = vec_load_t(z1 + j);
+            d0  = vec_sub_t(z0_i0v, jv);
+            d1  = vec_sub_t(z0_i1v, jv);
+            r20 = vec_fmadd_t(d0, d0, r20);
+            r21 = vec_fmadd_t(d1, d1, r21);
 
-            d0 = vec_load_d(x_in_0 + j);
-            d1 = vec_load_d(x_out_1 + j);
+            d0 = vec_load_t(x_in_0 + j);
+            d1 = vec_load_t(x_out_1 + j);
             
-            r20 = vec_mul_d(neg_l_v, vec_sqrt_d(r20));
-            r21 = vec_mul_d(neg_l_v, vec_sqrt_d(r21));
-            r20 = vec_exp_d(r20);
-            r21 = vec_exp_d(r21);
+            r20 = vec_mul_t(neg_l_v, vec_sqrt_t(r20));
+            r21 = vec_mul_t(neg_l_v, vec_sqrt_t(r21));
+            r20 = vec_exp_t(r20);
+            r21 = vec_exp_t(r21);
             
-            sum_v0 = vec_fmadd_d(d0, r20, sum_v0);
-            sum_v1 = vec_fmadd_d(d0, r21, sum_v1);
+            sum_v0 = vec_fmadd_t(d0, r20, sum_v0);
+            sum_v1 = vec_fmadd_t(d0, r21, sum_v1);
             
-            d1 = vec_fmadd_d(x_in_1_i0v, r20, d1);
-            d1 = vec_fmadd_d(x_in_1_i1v, r21, d1);
-            vec_store_d(x_out_1 + j, d1);
+            d1 = vec_fmadd_t(x_in_1_i0v, r20, d1);
+            d1 = vec_fmadd_t(x_in_1_i1v, r21, d1);
+            vec_store_t(x_out_1 + j, d1);
         }
-        x_out_0[i]   += vec_reduce_add_d(sum_v0);
-        x_out_0[i+1] += vec_reduce_add_d(sum_v1);
+        x_out_0[i]   += vec_reduce_add_t(sum_v0);
+        x_out_0[i+1] += vec_reduce_add_t(sum_v1);
     }
 }
 
@@ -370,35 +370,35 @@ const  int  Matern32_3D_krnl_bimv_flop = 17;
 
 #define NSQRT3 -1.7320508075688772
 
-static void Matern32_3D_eval_intrin_d(KRNL_EVAL_PARAM)
+static void Matern32_3D_eval_intrin_t(KRNL_EVAL_PARAM)
 {
     EXTRACT_3D_COORD();
     const int n1_vec = (n1 / SIMD_LEN) * SIMD_LEN;
     const DTYPE *param_ = (DTYPE*) param;
     const DTYPE nsqrt3_l = NSQRT3 * param_[0];
-    const vec_d nsqrt3_l_v = vec_set1_d(nsqrt3_l);
-    const vec_d v_1 = vec_set1_d(1.0);
+    const vec_t nsqrt3_l_v = vec_set1_t(nsqrt3_l);
+    const vec_t v_1 = vec_set1_t(1.0);
     for (int i = 0; i < n0; i++)
     {
         DTYPE *mat_irow = mat + i * ldm;
         
-        vec_d x0_iv = vec_bcast_d(x0 + i);
-        vec_d y0_iv = vec_bcast_d(y0 + i);
-        vec_d z0_iv = vec_bcast_d(z0 + i);
+        vec_t x0_iv = vec_bcast_t(x0 + i);
+        vec_t y0_iv = vec_bcast_t(y0 + i);
+        vec_t z0_iv = vec_bcast_t(z0 + i);
         for (int j = 0; j < n1_vec; j += SIMD_LEN)
         {
-            vec_d dx = vec_sub_d(x0_iv, vec_loadu_d(x1 + j));
-            vec_d dy = vec_sub_d(y0_iv, vec_loadu_d(y1 + j));
-            vec_d dz = vec_sub_d(z0_iv, vec_loadu_d(z1 + j));
+            vec_t dx = vec_sub_t(x0_iv, vec_loadu_t(x1 + j));
+            vec_t dy = vec_sub_t(y0_iv, vec_loadu_t(y1 + j));
+            vec_t dz = vec_sub_t(z0_iv, vec_loadu_t(z1 + j));
             
-            vec_d r = vec_mul_d(dx, dx);
-            r = vec_fmadd_d(dy, dy, r);
-            r = vec_fmadd_d(dz, dz, r);
-            r = vec_sqrt_d(r);
-            r = vec_mul_d(r, nsqrt3_l_v);
-            r = vec_mul_d(vec_sub_d(v_1, r), vec_exp_d(r));
+            vec_t r = vec_mul_t(dx, dx);
+            r = vec_fmadd_t(dy, dy, r);
+            r = vec_fmadd_t(dz, dz, r);
+            r = vec_sqrt_t(r);
+            r = vec_mul_t(r, nsqrt3_l_v);
+            r = vec_mul_t(vec_sub_t(v_1, r), vec_exp_t(r));
             
-            vec_storeu_d(mat_irow + j, r);
+            vec_storeu_t(mat_irow + j, r);
         }
         
         const DTYPE x0_i = x0[i];
@@ -417,67 +417,67 @@ static void Matern32_3D_eval_intrin_d(KRNL_EVAL_PARAM)
     }
 }
 
-static void Matern32_3D_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
+static void Matern32_3D_krnl_bimv_intrin_t(KRNL_BIMV_PARAM)
 {
     EXTRACT_3D_COORD();
     const DTYPE *param_ = (DTYPE*) param;
     const DTYPE nsqrt3_l = NSQRT3 * param_[0];
-    const vec_d nsqrt3_l_v = vec_set1_d(nsqrt3_l);
-    const vec_d v_1 = vec_set1_d(1.0);
+    const vec_t nsqrt3_l_v = vec_set1_t(nsqrt3_l);
+    const vec_t v_1 = vec_set1_t(1.0);
     for (int i = 0; i < n0; i += 2)
     {
-        vec_d sum_v0 = vec_zero_d();
-        vec_d sum_v1 = vec_zero_d();
-        const vec_d x0_i0v = vec_bcast_d(x0 + i);
-        const vec_d y0_i0v = vec_bcast_d(y0 + i);
-        const vec_d z0_i0v = vec_bcast_d(z0 + i);
-        const vec_d x0_i1v = vec_bcast_d(x0 + i + 1);
-        const vec_d y0_i1v = vec_bcast_d(y0 + i + 1);
-        const vec_d z0_i1v = vec_bcast_d(z0 + i + 1);
-        const vec_d x_in_1_i0v = vec_bcast_d(x_in_1 + i);
-        const vec_d x_in_1_i1v = vec_bcast_d(x_in_1 + i + 1);
+        vec_t sum_v0 = vec_zero_t();
+        vec_t sum_v1 = vec_zero_t();
+        const vec_t x0_i0v = vec_bcast_t(x0 + i);
+        const vec_t y0_i0v = vec_bcast_t(y0 + i);
+        const vec_t z0_i0v = vec_bcast_t(z0 + i);
+        const vec_t x0_i1v = vec_bcast_t(x0 + i + 1);
+        const vec_t y0_i1v = vec_bcast_t(y0 + i + 1);
+        const vec_t z0_i1v = vec_bcast_t(z0 + i + 1);
+        const vec_t x_in_1_i0v = vec_bcast_t(x_in_1 + i);
+        const vec_t x_in_1_i1v = vec_bcast_t(x_in_1 + i + 1);
         for (int j = 0; j < n1; j += SIMD_LEN)
         {
-            vec_d d0, d1, jv, r0, r1;
+            vec_t d0, d1, jv, r0, r1;
             
-            jv = vec_load_d(x1 + j);
-            d0 = vec_sub_d(x0_i0v, jv);
-            d1 = vec_sub_d(x0_i1v, jv);
-            r0 = vec_mul_d(d0, d0);
-            r1 = vec_mul_d(d1, d1);
+            jv = vec_load_t(x1 + j);
+            d0 = vec_sub_t(x0_i0v, jv);
+            d1 = vec_sub_t(x0_i1v, jv);
+            r0 = vec_mul_t(d0, d0);
+            r1 = vec_mul_t(d1, d1);
             
-            jv = vec_load_d(y1 + j);
-            d0 = vec_sub_d(y0_i0v, jv);
-            d1 = vec_sub_d(y0_i1v, jv);
-            r0 = vec_fmadd_d(d0, d0, r0);
-            r1 = vec_fmadd_d(d1, d1, r1);
+            jv = vec_load_t(y1 + j);
+            d0 = vec_sub_t(y0_i0v, jv);
+            d1 = vec_sub_t(y0_i1v, jv);
+            r0 = vec_fmadd_t(d0, d0, r0);
+            r1 = vec_fmadd_t(d1, d1, r1);
             
-            jv = vec_load_d(z1 + j);
-            d0 = vec_sub_d(z0_i0v, jv);
-            d1 = vec_sub_d(z0_i1v, jv);
-            r0 = vec_fmadd_d(d0, d0, r0);
-            r1 = vec_fmadd_d(d1, d1, r1);
+            jv = vec_load_t(z1 + j);
+            d0 = vec_sub_t(z0_i0v, jv);
+            d1 = vec_sub_t(z0_i1v, jv);
+            r0 = vec_fmadd_t(d0, d0, r0);
+            r1 = vec_fmadd_t(d1, d1, r1);
             
-            r0 = vec_sqrt_d(r0);
-            r1 = vec_sqrt_d(r1);
+            r0 = vec_sqrt_t(r0);
+            r1 = vec_sqrt_t(r1);
             
-            d0 = vec_load_d(x_in_0 + j);
-            d1 = vec_load_d(x_out_1 + j);
+            d0 = vec_load_t(x_in_0 + j);
+            d1 = vec_load_t(x_out_1 + j);
             
-            r0 = vec_mul_d(r0, nsqrt3_l_v);
-            r1 = vec_mul_d(r1, nsqrt3_l_v);
-            r0 = vec_mul_d(vec_sub_d(v_1, r0), vec_exp_d(r0));
-            r1 = vec_mul_d(vec_sub_d(v_1, r1), vec_exp_d(r1));
+            r0 = vec_mul_t(r0, nsqrt3_l_v);
+            r1 = vec_mul_t(r1, nsqrt3_l_v);
+            r0 = vec_mul_t(vec_sub_t(v_1, r0), vec_exp_t(r0));
+            r1 = vec_mul_t(vec_sub_t(v_1, r1), vec_exp_t(r1));
             
-            sum_v0 = vec_fmadd_d(d0, r0, sum_v0);
-            sum_v1 = vec_fmadd_d(d0, r1, sum_v1);
+            sum_v0 = vec_fmadd_t(d0, r0, sum_v0);
+            sum_v1 = vec_fmadd_t(d0, r1, sum_v1);
             
-            d1 = vec_fmadd_d(x_in_1_i0v, r0, d1);
-            d1 = vec_fmadd_d(x_in_1_i1v, r1, d1);
-            vec_store_d(x_out_1 + j, d1);
+            d1 = vec_fmadd_t(x_in_1_i0v, r0, d1);
+            d1 = vec_fmadd_t(x_in_1_i1v, r1, d1);
+            vec_store_t(x_out_1 + j, d1);
         }
-        x_out_0[i]   += vec_reduce_add_d(sum_v0);
-        x_out_0[i+1] += vec_reduce_add_d(sum_v1);
+        x_out_0[i]   += vec_reduce_add_t(sum_v0);
+        x_out_0[i+1] += vec_reduce_add_t(sum_v1);
     }
 }
 
@@ -490,40 +490,40 @@ const  int  Matern52_3D_krnl_bimv_flop = 20;
 #define NSQRT5 -2.2360679774997896
 #define _1o3    0.3333333333333333
 
-static void Matern52_3D_eval_intrin_d(KRNL_EVAL_PARAM)
+static void Matern52_3D_eval_intrin_t(KRNL_EVAL_PARAM)
 {
     EXTRACT_3D_COORD();
     const int n1_vec = (n1 / SIMD_LEN) * SIMD_LEN;
     const DTYPE *param_ = (DTYPE*) param;
     const DTYPE nsqrt5_l = NSQRT5 * param_[0];
-    const vec_d nsqrt5_l_v = vec_set1_d(nsqrt5_l);
-    const vec_d v_1   = vec_set1_d(1.0);
-    const vec_d v_1o3 = vec_set1_d(_1o3);
+    const vec_t nsqrt5_l_v = vec_set1_t(nsqrt5_l);
+    const vec_t v_1   = vec_set1_t(1.0);
+    const vec_t v_1o3 = vec_set1_t(_1o3);
     for (int i = 0; i < n0; i++)
     {
         DTYPE *mat_irow = mat + i * ldm;
         
-        vec_d x0_iv = vec_bcast_d(x0 + i);
-        vec_d y0_iv = vec_bcast_d(y0 + i);
-        vec_d z0_iv = vec_bcast_d(z0 + i);
+        vec_t x0_iv = vec_bcast_t(x0 + i);
+        vec_t y0_iv = vec_bcast_t(y0 + i);
+        vec_t z0_iv = vec_bcast_t(z0 + i);
         for (int j = 0; j < n1_vec; j += SIMD_LEN)
         {
-            vec_d dx = vec_sub_d(x0_iv, vec_loadu_d(x1 + j));
-            vec_d dy = vec_sub_d(y0_iv, vec_loadu_d(y1 + j));
-            vec_d dz = vec_sub_d(z0_iv, vec_loadu_d(z1 + j));
+            vec_t dx = vec_sub_t(x0_iv, vec_loadu_t(x1 + j));
+            vec_t dy = vec_sub_t(y0_iv, vec_loadu_t(y1 + j));
+            vec_t dz = vec_sub_t(z0_iv, vec_loadu_t(z1 + j));
             
-            vec_d r = vec_mul_d(dx, dx);
-            r = vec_fmadd_d(dy, dy, r);
-            r = vec_fmadd_d(dz, dz, r);
-            r = vec_sqrt_d(r);
+            vec_t r = vec_mul_t(dx, dx);
+            r = vec_fmadd_t(dy, dy, r);
+            r = vec_fmadd_t(dz, dz, r);
+            r = vec_sqrt_t(r);
 
-            vec_d lk  = vec_mul_d(nsqrt5_l_v, r);
-            vec_d val = vec_sub_d(v_1, lk);
-            vec_d lk2 = vec_mul_d(lk, lk);
-            val = vec_fmadd_d(v_1o3, lk2, val);
-            val = vec_mul_d(val, vec_exp_d(lk));
+            vec_t lk  = vec_mul_t(nsqrt5_l_v, r);
+            vec_t val = vec_sub_t(v_1, lk);
+            vec_t lk2 = vec_mul_t(lk, lk);
+            val = vec_fmadd_t(v_1o3, lk2, val);
+            val = vec_mul_t(val, vec_exp_t(lk));
             
-            vec_storeu_d(mat_irow + j, val);
+            vec_storeu_t(mat_irow + j, val);
         }
         
         const DTYPE x0_i = x0[i];
@@ -542,75 +542,75 @@ static void Matern52_3D_eval_intrin_d(KRNL_EVAL_PARAM)
     }
 }
 
-static void Matern52_3D_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
+static void Matern52_3D_krnl_bimv_intrin_t(KRNL_BIMV_PARAM)
 {
     EXTRACT_3D_COORD();
     const DTYPE *param_ = (DTYPE*) param;
     const DTYPE nsqrt5_l = NSQRT5 * param_[0];
-    const vec_d nsqrt5_l_v = vec_set1_d(nsqrt5_l);
-    const vec_d v_1   = vec_set1_d(1.0);
-    const vec_d v_1o3 = vec_set1_d(_1o3);
+    const vec_t nsqrt5_l_v = vec_set1_t(nsqrt5_l);
+    const vec_t v_1   = vec_set1_t(1.0);
+    const vec_t v_1o3 = vec_set1_t(_1o3);
     for (int i = 0; i < n0; i += 2)
     {
-        vec_d sum_v0 = vec_zero_d();
-        vec_d sum_v1 = vec_zero_d();
-        const vec_d x0_i0v = vec_bcast_d(x0 + i);
-        const vec_d y0_i0v = vec_bcast_d(y0 + i);
-        const vec_d z0_i0v = vec_bcast_d(z0 + i);
-        const vec_d x0_i1v = vec_bcast_d(x0 + i + 1);
-        const vec_d y0_i1v = vec_bcast_d(y0 + i + 1);
-        const vec_d z0_i1v = vec_bcast_d(z0 + i + 1);
-        const vec_d x_in_1_i0v = vec_bcast_d(x_in_1 + i);
-        const vec_d x_in_1_i1v = vec_bcast_d(x_in_1 + i + 1);
+        vec_t sum_v0 = vec_zero_t();
+        vec_t sum_v1 = vec_zero_t();
+        const vec_t x0_i0v = vec_bcast_t(x0 + i);
+        const vec_t y0_i0v = vec_bcast_t(y0 + i);
+        const vec_t z0_i0v = vec_bcast_t(z0 + i);
+        const vec_t x0_i1v = vec_bcast_t(x0 + i + 1);
+        const vec_t y0_i1v = vec_bcast_t(y0 + i + 1);
+        const vec_t z0_i1v = vec_bcast_t(z0 + i + 1);
+        const vec_t x_in_1_i0v = vec_bcast_t(x_in_1 + i);
+        const vec_t x_in_1_i1v = vec_bcast_t(x_in_1 + i + 1);
         for (int j = 0; j < n1; j += SIMD_LEN)
         {
-            vec_d d0, d1, jv, r0, r1, lk0, lk1, lk02, lk12, val0, val1;
+            vec_t d0, d1, jv, r0, r1, lk0, lk1, lk02, lk12, val0, val1;
             
-            jv = vec_load_d(x1 + j);
-            d0 = vec_sub_d(x0_i0v, jv);
-            d1 = vec_sub_d(x0_i1v, jv);
-            r0 = vec_mul_d(d0, d0);
-            r1 = vec_mul_d(d1, d1);
+            jv = vec_load_t(x1 + j);
+            d0 = vec_sub_t(x0_i0v, jv);
+            d1 = vec_sub_t(x0_i1v, jv);
+            r0 = vec_mul_t(d0, d0);
+            r1 = vec_mul_t(d1, d1);
             
-            jv = vec_load_d(y1 + j);
-            d0 = vec_sub_d(y0_i0v, jv);
-            d1 = vec_sub_d(y0_i1v, jv);
-            r0 = vec_fmadd_d(d0, d0, r0);
-            r1 = vec_fmadd_d(d1, d1, r1);
+            jv = vec_load_t(y1 + j);
+            d0 = vec_sub_t(y0_i0v, jv);
+            d1 = vec_sub_t(y0_i1v, jv);
+            r0 = vec_fmadd_t(d0, d0, r0);
+            r1 = vec_fmadd_t(d1, d1, r1);
             
-            jv = vec_load_d(z1 + j);
-            d0 = vec_sub_d(z0_i0v, jv);
-            d1 = vec_sub_d(z0_i1v, jv);
-            r0 = vec_fmadd_d(d0, d0, r0);
-            r1 = vec_fmadd_d(d1, d1, r1);
+            jv = vec_load_t(z1 + j);
+            d0 = vec_sub_t(z0_i0v, jv);
+            d1 = vec_sub_t(z0_i1v, jv);
+            r0 = vec_fmadd_t(d0, d0, r0);
+            r1 = vec_fmadd_t(d1, d1, r1);
             
-            r0 = vec_sqrt_d(r0);
-            r1 = vec_sqrt_d(r1);
+            r0 = vec_sqrt_t(r0);
+            r1 = vec_sqrt_t(r1);
             
-            d0 = vec_load_d(x_in_0 + j);
-            d1 = vec_load_d(x_out_1 + j);
+            d0 = vec_load_t(x_in_0 + j);
+            d1 = vec_load_t(x_out_1 + j);
             
-            lk0  = vec_mul_d(nsqrt5_l_v, r0);
-            val0 = vec_sub_d(v_1, lk0);
-            lk02 = vec_mul_d(lk0, lk0);
-            val0 = vec_fmadd_d(v_1o3, lk02, val0);
-            val0 = vec_mul_d(val0, vec_exp_d(lk0));
+            lk0  = vec_mul_t(nsqrt5_l_v, r0);
+            val0 = vec_sub_t(v_1, lk0);
+            lk02 = vec_mul_t(lk0, lk0);
+            val0 = vec_fmadd_t(v_1o3, lk02, val0);
+            val0 = vec_mul_t(val0, vec_exp_t(lk0));
 
-            lk1  = vec_mul_d(nsqrt5_l_v, r1);
-            val1 = vec_sub_d(v_1, lk1);
-            lk12 = vec_mul_d(lk1, lk1);
-            val1 = vec_fmadd_d(v_1o3, lk12, val1);
-            val1 = vec_mul_d(val1, vec_exp_d(lk1));
+            lk1  = vec_mul_t(nsqrt5_l_v, r1);
+            val1 = vec_sub_t(v_1, lk1);
+            lk12 = vec_mul_t(lk1, lk1);
+            val1 = vec_fmadd_t(v_1o3, lk12, val1);
+            val1 = vec_mul_t(val1, vec_exp_t(lk1));
             
-            sum_v0 = vec_fmadd_d(d0, val0, sum_v0);
-            sum_v1 = vec_fmadd_d(d0, val1, sum_v1);
+            sum_v0 = vec_fmadd_t(d0, val0, sum_v0);
+            sum_v1 = vec_fmadd_t(d0, val1, sum_v1);
             
-            d1 = vec_fmadd_d(x_in_1_i0v, val0, d1);
-            d1 = vec_fmadd_d(x_in_1_i1v, val1, d1);
-            vec_store_d(x_out_1 + j, d1);
+            d1 = vec_fmadd_t(x_in_1_i0v, val0, d1);
+            d1 = vec_fmadd_t(x_in_1_i1v, val1, d1);
+            vec_store_t(x_out_1 + j, d1);
         }
-        x_out_0[i]   += vec_reduce_add_d(sum_v0);
-        x_out_0[i+1] += vec_reduce_add_d(sum_v1);
+        x_out_0[i]   += vec_reduce_add_t(sum_v0);
+        x_out_0[i+1] += vec_reduce_add_t(sum_v1);
     }
 }
 
@@ -620,37 +620,37 @@ static void Matern52_3D_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
 
 const  int  Quadratic_3D_krnl_bimv_flop = 15;
 
-static void Quadratic_3D_eval_intrin_d(KRNL_EVAL_PARAM)
+static void Quadratic_3D_eval_intrin_t(KRNL_EVAL_PARAM)
 {
     EXTRACT_3D_COORD();
     const int n1_vec = (n1 / SIMD_LEN) * SIMD_LEN;
     const DTYPE *param_ = (DTYPE*) param;
     const DTYPE c = param_[0];
     const DTYPE a = param_[1];
-    const vec_d vec_c = vec_set1_d(c);
-    const vec_d vec_a = vec_set1_d(a);
-    const vec_d vec_1 = vec_set1_d(1.0);
+    const vec_t vec_c = vec_set1_t(c);
+    const vec_t vec_a = vec_set1_t(a);
+    const vec_t vec_1 = vec_set1_t(1.0);
     for (int i = 0; i < n0; i++)
     {
         DTYPE *mat_irow = mat + i * ldm;
         
-        vec_d x0_iv = vec_bcast_d(x0 + i);
-        vec_d y0_iv = vec_bcast_d(y0 + i);
-        vec_d z0_iv = vec_bcast_d(z0 + i);
+        vec_t x0_iv = vec_bcast_t(x0 + i);
+        vec_t y0_iv = vec_bcast_t(y0 + i);
+        vec_t z0_iv = vec_bcast_t(z0 + i);
         for (int j = 0; j < n1_vec; j += SIMD_LEN)
         {
-            vec_d dx = vec_sub_d(x0_iv, vec_loadu_d(x1 + j));
-            vec_d dy = vec_sub_d(y0_iv, vec_loadu_d(y1 + j));
-            vec_d dz = vec_sub_d(z0_iv, vec_loadu_d(z1 + j));
+            vec_t dx = vec_sub_t(x0_iv, vec_loadu_t(x1 + j));
+            vec_t dy = vec_sub_t(y0_iv, vec_loadu_t(y1 + j));
+            vec_t dz = vec_sub_t(z0_iv, vec_loadu_t(z1 + j));
             
-            vec_d r2 = vec_mul_d(dx, dx);
-            r2 = vec_fmadd_d(dy, dy, r2);
-            r2 = vec_fmadd_d(dz, dz, r2);
+            vec_t r2 = vec_mul_t(dx, dx);
+            r2 = vec_fmadd_t(dy, dy, r2);
+            r2 = vec_fmadd_t(dz, dz, r2);
             
-            r2 = vec_fmadd_d(r2, vec_c, vec_1);
-            r2 = vec_pow_d(r2, vec_a);
+            r2 = vec_fmadd_t(r2, vec_c, vec_1);
+            r2 = vec_pow_t(r2, vec_a);
             
-            vec_storeu_d(mat_irow + j, r2);
+            vec_storeu_t(mat_irow + j, r2);
         }
         
         const DTYPE x0_i = x0[i];
@@ -670,65 +670,65 @@ static void Quadratic_3D_eval_intrin_d(KRNL_EVAL_PARAM)
     }
 }
 
-static void Quadratic_3D_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
+static void Quadratic_3D_krnl_bimv_intrin_t(KRNL_BIMV_PARAM)
 {
     EXTRACT_3D_COORD();
     const DTYPE *param_ = (DTYPE*) param;
-    const vec_d vec_c = vec_bcast_d(param_ + 0);
-    const vec_d vec_a = vec_bcast_d(param_ + 1);
-    const vec_d vec_1 = vec_set1_d(1.0);
+    const vec_t vec_c = vec_bcast_t(param_ + 0);
+    const vec_t vec_a = vec_bcast_t(param_ + 1);
+    const vec_t vec_1 = vec_set1_t(1.0);
     for (int i = 0; i < n0; i += 2)
     {
-        vec_d sum_v0 = vec_zero_d();
-        vec_d sum_v1 = vec_zero_d();
-        const vec_d x0_i0v = vec_bcast_d(x0 + i);
-        const vec_d y0_i0v = vec_bcast_d(y0 + i);
-        const vec_d z0_i0v = vec_bcast_d(z0 + i);
-        const vec_d x0_i1v = vec_bcast_d(x0 + i + 1);
-        const vec_d y0_i1v = vec_bcast_d(y0 + i + 1);
-        const vec_d z0_i1v = vec_bcast_d(z0 + i + 1);
-        const vec_d x_in_1_i0v = vec_bcast_d(x_in_1 + i);
-        const vec_d x_in_1_i1v = vec_bcast_d(x_in_1 + i + 1);
+        vec_t sum_v0 = vec_zero_t();
+        vec_t sum_v1 = vec_zero_t();
+        const vec_t x0_i0v = vec_bcast_t(x0 + i);
+        const vec_t y0_i0v = vec_bcast_t(y0 + i);
+        const vec_t z0_i0v = vec_bcast_t(z0 + i);
+        const vec_t x0_i1v = vec_bcast_t(x0 + i + 1);
+        const vec_t y0_i1v = vec_bcast_t(y0 + i + 1);
+        const vec_t z0_i1v = vec_bcast_t(z0 + i + 1);
+        const vec_t x_in_1_i0v = vec_bcast_t(x_in_1 + i);
+        const vec_t x_in_1_i1v = vec_bcast_t(x_in_1 + i + 1);
         for (int j = 0; j < n1; j += SIMD_LEN)
         {
-            vec_d d0, d1, jv, r20, r21;
+            vec_t d0, d1, jv, r20, r21;
             
-            jv  = vec_load_d(x1 + j);
-            d0  = vec_sub_d(x0_i0v, jv);
-            d1  = vec_sub_d(x0_i1v, jv);
-            r20 = vec_mul_d(d0, d0);
-            r21 = vec_mul_d(d1, d1);
+            jv  = vec_load_t(x1 + j);
+            d0  = vec_sub_t(x0_i0v, jv);
+            d1  = vec_sub_t(x0_i1v, jv);
+            r20 = vec_mul_t(d0, d0);
+            r21 = vec_mul_t(d1, d1);
             
-            jv  = vec_load_d(y1 + j);
-            d0  = vec_sub_d(y0_i0v, jv);
-            d1  = vec_sub_d(y0_i1v, jv);
-            r20 = vec_fmadd_d(d0, d0, r20);
-            r21 = vec_fmadd_d(d1, d1, r21);
+            jv  = vec_load_t(y1 + j);
+            d0  = vec_sub_t(y0_i0v, jv);
+            d1  = vec_sub_t(y0_i1v, jv);
+            r20 = vec_fmadd_t(d0, d0, r20);
+            r21 = vec_fmadd_t(d1, d1, r21);
             
-            jv  = vec_load_d(z1 + j);
-            d0  = vec_sub_d(z0_i0v, jv);
-            d1  = vec_sub_d(z0_i1v, jv);
-            r20 = vec_fmadd_d(d0, d0, r20);
-            r21 = vec_fmadd_d(d1, d1, r21);
+            jv  = vec_load_t(z1 + j);
+            d0  = vec_sub_t(z0_i0v, jv);
+            d1  = vec_sub_t(z0_i1v, jv);
+            r20 = vec_fmadd_t(d0, d0, r20);
+            r21 = vec_fmadd_t(d1, d1, r21);
             
-            d0 = vec_load_d(x_in_0 + j);
-            d1 = vec_load_d(x_out_1 + j);
+            d0 = vec_load_t(x_in_0 + j);
+            d1 = vec_load_t(x_out_1 + j);
             
-            r20 = vec_fmadd_d(r20, vec_c, vec_1);
-            r21 = vec_fmadd_d(r21, vec_c, vec_1);
+            r20 = vec_fmadd_t(r20, vec_c, vec_1);
+            r21 = vec_fmadd_t(r21, vec_c, vec_1);
 
-            r20 = vec_pow_d(r20, vec_a);
-            r21 = vec_pow_d(r21, vec_a);
+            r20 = vec_pow_t(r20, vec_a);
+            r21 = vec_pow_t(r21, vec_a);
             
-            sum_v0 = vec_fmadd_d(d0, r20, sum_v0);
-            sum_v1 = vec_fmadd_d(d0, r21, sum_v1);
+            sum_v0 = vec_fmadd_t(d0, r20, sum_v0);
+            sum_v1 = vec_fmadd_t(d0, r21, sum_v1);
             
-            d1 = vec_fmadd_d(x_in_1_i0v, r20, d1);
-            d1 = vec_fmadd_d(x_in_1_i1v, r21, d1);
-            vec_store_d(x_out_1 + j, d1);
+            d1 = vec_fmadd_t(x_in_1_i0v, r20, d1);
+            d1 = vec_fmadd_t(x_in_1_i1v, r21, d1);
+            vec_store_t(x_out_1 + j, d1);
         }
-        x_out_0[i]   += vec_reduce_add_d(sum_v0);
-        x_out_0[i+1] += vec_reduce_add_d(sum_v1);
+        x_out_0[i]   += vec_reduce_add_t(sum_v0);
+        x_out_0[i+1] += vec_reduce_add_t(sum_v1);
     }
 }
 
@@ -795,76 +795,76 @@ static void Stokes_eval_std(KRNL_EVAL_PARAM)
     }
 }
 
-static void Stokes_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
+static void Stokes_krnl_bimv_intrin_t(KRNL_BIMV_PARAM)
 {
     EXTRACT_3D_COORD();
     CALC_STOKES_CONST();
     for (int i = 0; i < n0; i++)
     {
-        vec_d txv = vec_bcast_d(x0 + i);
-        vec_d tyv = vec_bcast_d(y0 + i);
-        vec_d tzv = vec_bcast_d(z0 + i);
-        vec_d x_in_1_i0 = vec_bcast_d(x_in_1 + i + 0 * ld0);
-        vec_d x_in_1_i1 = vec_bcast_d(x_in_1 + i + 1 * ld0);
-        vec_d x_in_1_i2 = vec_bcast_d(x_in_1 + i + 2 * ld0);
-        vec_d xo0_0 = vec_zero_d();
-        vec_d xo0_1 = vec_zero_d();
-        vec_d xo0_2 = vec_zero_d();
-        vec_d frsqrt_pf = vec_frsqrt_pf_d();
+        vec_t txv = vec_bcast_t(x0 + i);
+        vec_t tyv = vec_bcast_t(y0 + i);
+        vec_t tzv = vec_bcast_t(z0 + i);
+        vec_t x_in_1_i0 = vec_bcast_t(x_in_1 + i + 0 * ld0);
+        vec_t x_in_1_i1 = vec_bcast_t(x_in_1 + i + 1 * ld0);
+        vec_t x_in_1_i2 = vec_bcast_t(x_in_1 + i + 2 * ld0);
+        vec_t xo0_0 = vec_zero_t();
+        vec_t xo0_1 = vec_zero_t();
+        vec_t xo0_2 = vec_zero_t();
+        vec_t frsqrt_pf = vec_frsqrt_pf_t();
         for (int j = 0; j < n1; j += SIMD_LEN_D)
         {
-            vec_d dx = vec_sub_d(txv, vec_load_d(x1 + j));
-            vec_d dy = vec_sub_d(tyv, vec_load_d(y1 + j));
-            vec_d dz = vec_sub_d(tzv, vec_load_d(z1 + j));
-            vec_d r2 = vec_mul_d(dx, dx);
-            r2 = vec_fmadd_d(dy, dy, r2);
-            r2 = vec_fmadd_d(dz, dz, r2);
-            vec_d inv_r = vec_mul_d(vec_frsqrt_d(r2), frsqrt_pf);
+            vec_t dx = vec_sub_t(txv, vec_load_t(x1 + j));
+            vec_t dy = vec_sub_t(tyv, vec_load_t(y1 + j));
+            vec_t dz = vec_sub_t(tzv, vec_load_t(z1 + j));
+            vec_t r2 = vec_mul_t(dx, dx);
+            r2 = vec_fmadd_t(dy, dy, r2);
+            r2 = vec_fmadd_t(dz, dz, r2);
+            vec_t inv_r = vec_mul_t(vec_frsqrt_t(r2), frsqrt_pf);
             
-            dx = vec_mul_d(dx, inv_r);
-            dy = vec_mul_d(dy, inv_r);
-            dz = vec_mul_d(dz, inv_r);
+            dx = vec_mul_t(dx, inv_r);
+            dy = vec_mul_t(dy, inv_r);
+            dz = vec_mul_t(dz, inv_r);
             
-            vec_cmp_d r2_eq_0 = vec_cmp_eq_d(r2, vec_zero_d());
-            vec_d tmp0 = vec_set1_d(C);
-            vec_d tmp1 = vec_mul_d(inv_r, vec_set1_d(Ca3o4));
-            vec_d t1 = vec_blend_d(tmp1, tmp0, r2_eq_0);
+            vec_cmp_t r2_eq_0 = vec_cmp_eq_t(r2, vec_zero_t());
+            vec_t tmp0 = vec_set1_t(C);
+            vec_t tmp1 = vec_mul_t(inv_r, vec_set1_t(Ca3o4));
+            vec_t t1 = vec_blend_t(tmp1, tmp0, r2_eq_0);
             
-            vec_d x_in_0_j0 = vec_load_d(x_in_0 + j + ld1 * 0);
-            vec_d x_in_0_j1 = vec_load_d(x_in_0 + j + ld1 * 1);
-            vec_d x_in_0_j2 = vec_load_d(x_in_0 + j + ld1 * 2);
+            vec_t x_in_0_j0 = vec_load_t(x_in_0 + j + ld1 * 0);
+            vec_t x_in_0_j1 = vec_load_t(x_in_0 + j + ld1 * 1);
+            vec_t x_in_0_j2 = vec_load_t(x_in_0 + j + ld1 * 2);
             
-            tmp0 = vec_mul_d(x_in_0_j0, dx);
-            tmp0 = vec_fmadd_d(x_in_0_j1, dy, tmp0);
-            tmp0 = vec_fmadd_d(x_in_0_j2, dz, tmp0);
+            tmp0 = vec_mul_t(x_in_0_j0, dx);
+            tmp0 = vec_fmadd_t(x_in_0_j1, dy, tmp0);
+            tmp0 = vec_fmadd_t(x_in_0_j2, dz, tmp0);
             
-            tmp1 = vec_mul_d(x_in_1_i0, dx);
-            tmp1 = vec_fmadd_d(x_in_1_i1, dy, tmp1);
-            tmp1 = vec_fmadd_d(x_in_1_i2, dz, tmp1);
+            tmp1 = vec_mul_t(x_in_1_i0, dx);
+            tmp1 = vec_fmadd_t(x_in_1_i1, dy, tmp1);
+            tmp1 = vec_fmadd_t(x_in_1_i2, dz, tmp1);
             
-            xo0_0 = vec_fmadd_d(t1, vec_fmadd_d(dx, tmp0, x_in_0_j0), xo0_0);
-            xo0_1 = vec_fmadd_d(t1, vec_fmadd_d(dy, tmp0, x_in_0_j1), xo0_1);
-            xo0_2 = vec_fmadd_d(t1, vec_fmadd_d(dz, tmp0, x_in_0_j2), xo0_2);
+            xo0_0 = vec_fmadd_t(t1, vec_fmadd_t(dx, tmp0, x_in_0_j0), xo0_0);
+            xo0_1 = vec_fmadd_t(t1, vec_fmadd_t(dy, tmp0, x_in_0_j1), xo0_1);
+            xo0_2 = vec_fmadd_t(t1, vec_fmadd_t(dz, tmp0, x_in_0_j2), xo0_2);
 
             DTYPE *x_out_1_0 = x_out_1 + j + 0 * ld1;
             DTYPE *x_out_1_1 = x_out_1 + j + 1 * ld1;
             DTYPE *x_out_1_2 = x_out_1 + j + 2 * ld1;
             
-            vec_d xo1_0 = vec_load_d(x_out_1_0);
-            vec_d xo1_1 = vec_load_d(x_out_1_1);
-            vec_d xo1_2 = vec_load_d(x_out_1_2);
+            vec_t xo1_0 = vec_load_t(x_out_1_0);
+            vec_t xo1_1 = vec_load_t(x_out_1_1);
+            vec_t xo1_2 = vec_load_t(x_out_1_2);
             
-            xo1_0 = vec_fmadd_d(t1, vec_fmadd_d(dx, tmp1, x_in_1_i0), xo1_0);
-            xo1_1 = vec_fmadd_d(t1, vec_fmadd_d(dy, tmp1, x_in_1_i1), xo1_1);
-            xo1_2 = vec_fmadd_d(t1, vec_fmadd_d(dz, tmp1, x_in_1_i2), xo1_2);
+            xo1_0 = vec_fmadd_t(t1, vec_fmadd_t(dx, tmp1, x_in_1_i0), xo1_0);
+            xo1_1 = vec_fmadd_t(t1, vec_fmadd_t(dy, tmp1, x_in_1_i1), xo1_1);
+            xo1_2 = vec_fmadd_t(t1, vec_fmadd_t(dz, tmp1, x_in_1_i2), xo1_2);
             
-            vec_store_d(x_out_1_0, xo1_0);
-            vec_store_d(x_out_1_1, xo1_1);
-            vec_store_d(x_out_1_2, xo1_2);
+            vec_store_t(x_out_1_0, xo1_0);
+            vec_store_t(x_out_1_1, xo1_1);
+            vec_store_t(x_out_1_2, xo1_2);
         }
-        x_out_0[i + 0 * ld0] += vec_reduce_add_d(xo0_0);
-        x_out_0[i + 1 * ld0] += vec_reduce_add_d(xo0_1);
-        x_out_0[i + 2 * ld0] += vec_reduce_add_d(xo0_2);
+        x_out_0[i + 0 * ld0] += vec_reduce_add_t(xo0_0);
+        x_out_0[i + 1 * ld0] += vec_reduce_add_t(xo0_1);
+        x_out_0[i + 2 * ld0] += vec_reduce_add_t(xo0_2);
     }
 }
 
@@ -914,7 +914,7 @@ static void RPY_eval_std(KRNL_EVAL_PARAM)
                 tmp1 = (ta * ta + sa * sa) * inv_r2;
                 t1 = tmp0 * (1.0 + tmp1 / 3.0);
                 t2 = tmp0 * (1.0 - tmp1);
-            } else if (r > fabs(ta_m_sa)) {
+            } else if (r > DABS(ta_m_sa)) {
                 tmp0 = ta_m_sa * ta_m_sa;
                 tmp1 = (inv_r2 * inv_r * C) / (ta * sa * 32.0);
                 t1 = tmp0 + 3.0 * r2;
@@ -1197,7 +1197,7 @@ static void RPY_Ewald_eval_std(KRNL_EVAL_PARAM)
     }  // End of i loop 
 }
 
-static void RPY_krnl_mv_intrin_d(KRNL_MV_PARAM)
+static void RPY_krnl_mv_intrin_t(KRNL_MV_PARAM)
 {
     EXTRACT_3D_COORD();
     // Radii
@@ -1206,93 +1206,93 @@ static void RPY_krnl_mv_intrin_d(KRNL_MV_PARAM)
     const DTYPE *param_ = (DTYPE*) param;
     const DTYPE eta = param_[0];
     const DTYPE C = 1.0 / (6.0 * M_PI * eta);
-    const vec_d vC    = vec_set1_d(C);
-    const vec_d vC3o4 = vec_set1_d(C * 0.75);
-    const vec_d v1    = vec_set1_d(1.0);
-    const vec_d v3    = vec_set1_d(3.0);
-    const vec_d v16   = vec_set1_d(16.0);
-    const vec_d v32   = vec_set1_d(32.0);
-    const vec_d v1o3  = vec_set1_d(1.0 / 3.0);
+    const vec_t vC    = vec_set1_t(C);
+    const vec_t vC3o4 = vec_set1_t(C * 0.75);
+    const vec_t v1    = vec_set1_t(1.0);
+    const vec_t v3    = vec_set1_t(3.0);
+    const vec_t v16   = vec_set1_t(16.0);
+    const vec_t v32   = vec_set1_t(32.0);
+    const vec_t v1o3  = vec_set1_t(1.0 / 3.0);
     for (int i = 0; i < n0; i++)
     {
-        vec_d txv = vec_bcast_d(x0 + i);
-        vec_d tyv = vec_bcast_d(y0 + i);
-        vec_d tzv = vec_bcast_d(z0 + i);
-        vec_d ta  = vec_bcast_d(a0 + i);
-        vec_d x_out_i0 = vec_zero_d();
-        vec_d x_out_i1 = vec_zero_d();
-        vec_d x_out_i2 = vec_zero_d();
-        vec_d frsqrt_pf = vec_frsqrt_pf_d();
+        vec_t txv = vec_bcast_t(x0 + i);
+        vec_t tyv = vec_bcast_t(y0 + i);
+        vec_t tzv = vec_bcast_t(z0 + i);
+        vec_t ta  = vec_bcast_t(a0 + i);
+        vec_t x_out_i0 = vec_zero_t();
+        vec_t x_out_i1 = vec_zero_t();
+        vec_t x_out_i2 = vec_zero_t();
+        vec_t frsqrt_pf = vec_frsqrt_pf_t();
         for (int j = 0; j < n1; j += SIMD_LEN_D)
         {
-            vec_d dx = vec_sub_d(txv, vec_load_d(x1 + j));
-            vec_d dy = vec_sub_d(tyv, vec_load_d(y1 + j));
-            vec_d dz = vec_sub_d(tzv, vec_load_d(z1 + j));
-            vec_d sa = vec_load_d(a1 + j);
-            vec_d r2 = vec_mul_d(dx, dx);
-            r2 = vec_fmadd_d(dy, dy, r2);
-            r2 = vec_fmadd_d(dz, dz, r2);
-            vec_d inv_r  = vec_mul_d(vec_frsqrt_d(r2), frsqrt_pf);
-            vec_d inv_r2 = vec_mul_d(inv_r, inv_r);
-            vec_d r      = vec_mul_d(inv_r, r2);
+            vec_t dx = vec_sub_t(txv, vec_load_t(x1 + j));
+            vec_t dy = vec_sub_t(tyv, vec_load_t(y1 + j));
+            vec_t dz = vec_sub_t(tzv, vec_load_t(z1 + j));
+            vec_t sa = vec_load_t(a1 + j);
+            vec_t r2 = vec_mul_t(dx, dx);
+            r2 = vec_fmadd_t(dy, dy, r2);
+            r2 = vec_fmadd_t(dz, dz, r2);
+            vec_t inv_r  = vec_mul_t(vec_frsqrt_t(r2), frsqrt_pf);
+            vec_t inv_r2 = vec_mul_t(inv_r, inv_r);
+            vec_t r      = vec_mul_t(inv_r, r2);
             
-            dx = vec_mul_d(dx, inv_r);
-            dy = vec_mul_d(dy, inv_r);
-            dz = vec_mul_d(dz, inv_r);
+            dx = vec_mul_t(dx, inv_r);
+            dy = vec_mul_t(dy, inv_r);
+            dz = vec_mul_t(dz, inv_r);
 
-            vec_d tmp0, tmp1, t1, t2;
-            vec_d t1_0, t2_0, t1_1, t2_1, t1_2, t2_2;
-            vec_d ta_p_sa = vec_add_d(ta, sa);
-            vec_d ta_m_sa = vec_max_d(vec_sub_d(ta, sa), vec_sub_d(sa, ta));
+            vec_t tmp0, tmp1, t1, t2;
+            vec_t t1_0, t2_0, t1_1, t2_1, t1_2, t2_2;
+            vec_t ta_p_sa = vec_add_t(ta, sa);
+            vec_t ta_m_sa = vec_max_t(vec_sub_t(ta, sa), vec_sub_t(sa, ta));
             // r > ta + sa
-            tmp0 = vec_mul_d(vC3o4, inv_r);
-            tmp1 = vec_mul_d(vec_fmadd_d(sa, sa, vec_mul_d(ta, ta)), inv_r2);
-            t1_0 = vec_mul_d(tmp0, vec_fmadd_d(v1o3, tmp1, v1));
-            t2_0 = vec_mul_d(tmp0, vec_sub_d(v1, tmp1));
+            tmp0 = vec_mul_t(vC3o4, inv_r);
+            tmp1 = vec_mul_t(vec_fmadd_t(sa, sa, vec_mul_t(ta, ta)), inv_r2);
+            t1_0 = vec_mul_t(tmp0, vec_fmadd_t(v1o3, tmp1, v1));
+            t2_0 = vec_mul_t(tmp0, vec_sub_t(v1, tmp1));
             // ta + sa >= r > abs(ta - sa)
-            tmp0 = vec_mul_d(ta_m_sa, ta_m_sa);
-            tmp1 = vec_div_d(vec_mul_d(vec_mul_d(vC, inv_r2), inv_r), vec_mul_d(vec_mul_d(ta, sa), v32));
-            t1_1 = vec_fmadd_d(v3, r2, tmp0);
-            t1_1 = vec_mul_d(t1_1, t1_1);
-            t1_1 = vec_fmsub_d(vec_mul_d(v16, r2), vec_mul_d(r, ta_p_sa), t1_1);
-            t1_1 = vec_mul_d(tmp1, t1_1);
-            t2_1 = vec_sub_d(tmp0, r2);
-            t2_1 = vec_mul_d(t2_1, t2_1);
-            t2_1 = vec_mul_d(vec_mul_d(tmp1, v3), t2_1);
+            tmp0 = vec_mul_t(ta_m_sa, ta_m_sa);
+            tmp1 = vec_div_t(vec_mul_t(vec_mul_t(vC, inv_r2), inv_r), vec_mul_t(vec_mul_t(ta, sa), v32));
+            t1_1 = vec_fmadd_t(v3, r2, tmp0);
+            t1_1 = vec_mul_t(t1_1, t1_1);
+            t1_1 = vec_fmsub_t(vec_mul_t(v16, r2), vec_mul_t(r, ta_p_sa), t1_1);
+            t1_1 = vec_mul_t(tmp1, t1_1);
+            t2_1 = vec_sub_t(tmp0, r2);
+            t2_1 = vec_mul_t(t2_1, t2_1);
+            t2_1 = vec_mul_t(vec_mul_t(tmp1, v3), t2_1);
             // r <= abs(ta - sa)
-            t1_2 = vec_div_d(vC, vec_max_d(ta, sa));
-            t2_2 = vec_set1_d(0.0);
+            t1_2 = vec_div_t(vC, vec_max_t(ta, sa));
+            t2_2 = vec_set1_t(0.0);
 
-            vec_cmp_d r_gt_ta_p_da = vec_cmp_gt_d(r, ta_p_sa);
-            vec_cmp_d r_le_ta_m_da = vec_cmp_le_d(r, ta_m_sa);
-            t1 = vec_blend_d(t1_1, t1_0, r_gt_ta_p_da);
-            t1 = vec_blend_d(t1,   t1_2, r_le_ta_m_da);
-            t2 = vec_blend_d(t2_1, t2_0, r_gt_ta_p_da);
-            t2 = vec_blend_d(t2,   t2_2, r_le_ta_m_da);
+            vec_cmp_t r_gt_ta_p_da = vec_cmp_gt_t(r, ta_p_sa);
+            vec_cmp_t r_le_ta_m_da = vec_cmp_le_t(r, ta_m_sa);
+            t1 = vec_blend_t(t1_1, t1_0, r_gt_ta_p_da);
+            t1 = vec_blend_t(t1,   t1_2, r_le_ta_m_da);
+            t2 = vec_blend_t(t2_1, t2_0, r_gt_ta_p_da);
+            t2 = vec_blend_t(t2,   t2_2, r_le_ta_m_da);
             
-            vec_d x_in_j0 = vec_load_d(x_in + j + ld1 * 0);
-            vec_d x_in_j1 = vec_load_d(x_in + j + ld1 * 1);
-            vec_d x_in_j2 = vec_load_d(x_in + j + ld1 * 2);
+            vec_t x_in_j0 = vec_load_t(x_in + j + ld1 * 0);
+            vec_t x_in_j1 = vec_load_t(x_in + j + ld1 * 1);
+            vec_t x_in_j2 = vec_load_t(x_in + j + ld1 * 2);
             
-            tmp0 = vec_mul_d(x_in_j0, dx);
-            tmp0 = vec_fmadd_d(x_in_j1, dy, tmp0);
-            tmp0 = vec_fmadd_d(x_in_j2, dz, tmp0);
-            tmp0 = vec_mul_d(tmp0, t2);
+            tmp0 = vec_mul_t(x_in_j0, dx);
+            tmp0 = vec_fmadd_t(x_in_j1, dy, tmp0);
+            tmp0 = vec_fmadd_t(x_in_j2, dz, tmp0);
+            tmp0 = vec_mul_t(tmp0, t2);
 
-            x_out_i0 = vec_fmadd_d(dx, tmp0, x_out_i0);
-            x_out_i1 = vec_fmadd_d(dy, tmp0, x_out_i1);
-            x_out_i2 = vec_fmadd_d(dz, tmp0, x_out_i2);
-            x_out_i0 = vec_fmadd_d(t1, x_in_j0, x_out_i0);
-            x_out_i1 = vec_fmadd_d(t1, x_in_j1, x_out_i1);
-            x_out_i2 = vec_fmadd_d(t1, x_in_j2, x_out_i2);
+            x_out_i0 = vec_fmadd_t(dx, tmp0, x_out_i0);
+            x_out_i1 = vec_fmadd_t(dy, tmp0, x_out_i1);
+            x_out_i2 = vec_fmadd_t(dz, tmp0, x_out_i2);
+            x_out_i0 = vec_fmadd_t(t1, x_in_j0, x_out_i0);
+            x_out_i1 = vec_fmadd_t(t1, x_in_j1, x_out_i1);
+            x_out_i2 = vec_fmadd_t(t1, x_in_j2, x_out_i2);
         }
-        x_out[i + 0 * ld0] += vec_reduce_add_d(x_out_i0);
-        x_out[i + 1 * ld0] += vec_reduce_add_d(x_out_i1);
-        x_out[i + 2 * ld0] += vec_reduce_add_d(x_out_i2);
+        x_out[i + 0 * ld0] += vec_reduce_add_t(x_out_i0);
+        x_out[i + 1 * ld0] += vec_reduce_add_t(x_out_i1);
+        x_out[i + 2 * ld0] += vec_reduce_add_t(x_out_i2);
     }
 }
 
-static void RPY_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
+static void RPY_krnl_bimv_intrin_t(KRNL_BIMV_PARAM)
 {
     EXTRACT_3D_COORD();
     // Radii
@@ -1301,116 +1301,116 @@ static void RPY_krnl_bimv_intrin_d(KRNL_BIMV_PARAM)
     const DTYPE *param_ = (DTYPE*) param;
     const DTYPE eta = param_[0];
     const DTYPE C = 1.0 / (6.0 * M_PI * eta);
-    const vec_d vC    = vec_set1_d(C);
-    const vec_d vC3o4 = vec_set1_d(C * 0.75);
-    const vec_d v1    = vec_set1_d(1.0);
-    const vec_d v3    = vec_set1_d(3.0);
-    const vec_d v16   = vec_set1_d(16.0);
-    const vec_d v32   = vec_set1_d(32.0);
-    const vec_d v1o3  = vec_set1_d(1.0 / 3.0);
+    const vec_t vC    = vec_set1_t(C);
+    const vec_t vC3o4 = vec_set1_t(C * 0.75);
+    const vec_t v1    = vec_set1_t(1.0);
+    const vec_t v3    = vec_set1_t(3.0);
+    const vec_t v16   = vec_set1_t(16.0);
+    const vec_t v32   = vec_set1_t(32.0);
+    const vec_t v1o3  = vec_set1_t(1.0 / 3.0);
     for (int i = 0; i < n0; i++)
     {
-        vec_d txv = vec_bcast_d(x0 + i);
-        vec_d tyv = vec_bcast_d(y0 + i);
-        vec_d tzv = vec_bcast_d(z0 + i);
-        vec_d ta  = vec_bcast_d(a0 + i);
-        vec_d x_in_1_i0 = vec_bcast_d(x_in_1 + i + 0 * ld0);
-        vec_d x_in_1_i1 = vec_bcast_d(x_in_1 + i + 1 * ld0);
-        vec_d x_in_1_i2 = vec_bcast_d(x_in_1 + i + 2 * ld0);
-        vec_d xo0_0 = vec_zero_d();
-        vec_d xo0_1 = vec_zero_d();
-        vec_d xo0_2 = vec_zero_d();
-        vec_d frsqrt_pf = vec_frsqrt_pf_d();
+        vec_t txv = vec_bcast_t(x0 + i);
+        vec_t tyv = vec_bcast_t(y0 + i);
+        vec_t tzv = vec_bcast_t(z0 + i);
+        vec_t ta  = vec_bcast_t(a0 + i);
+        vec_t x_in_1_i0 = vec_bcast_t(x_in_1 + i + 0 * ld0);
+        vec_t x_in_1_i1 = vec_bcast_t(x_in_1 + i + 1 * ld0);
+        vec_t x_in_1_i2 = vec_bcast_t(x_in_1 + i + 2 * ld0);
+        vec_t xo0_0 = vec_zero_t();
+        vec_t xo0_1 = vec_zero_t();
+        vec_t xo0_2 = vec_zero_t();
+        vec_t frsqrt_pf = vec_frsqrt_pf_t();
         for (int j = 0; j < n1; j += SIMD_LEN_D)
         {
-            vec_d dx = vec_sub_d(txv, vec_load_d(x1 + j));
-            vec_d dy = vec_sub_d(tyv, vec_load_d(y1 + j));
-            vec_d dz = vec_sub_d(tzv, vec_load_d(z1 + j));
-            vec_d sa = vec_load_d(a1 + j);
-            vec_d r2 = vec_mul_d(dx, dx);
-            r2 = vec_fmadd_d(dy, dy, r2);
-            r2 = vec_fmadd_d(dz, dz, r2);
-            vec_d inv_r  = vec_mul_d(vec_frsqrt_d(r2), frsqrt_pf);
-            vec_d inv_r2 = vec_mul_d(inv_r, inv_r);
-            vec_d r      = vec_mul_d(inv_r, r2);
+            vec_t dx = vec_sub_t(txv, vec_load_t(x1 + j));
+            vec_t dy = vec_sub_t(tyv, vec_load_t(y1 + j));
+            vec_t dz = vec_sub_t(tzv, vec_load_t(z1 + j));
+            vec_t sa = vec_load_t(a1 + j);
+            vec_t r2 = vec_mul_t(dx, dx);
+            r2 = vec_fmadd_t(dy, dy, r2);
+            r2 = vec_fmadd_t(dz, dz, r2);
+            vec_t inv_r  = vec_mul_t(vec_frsqrt_t(r2), frsqrt_pf);
+            vec_t inv_r2 = vec_mul_t(inv_r, inv_r);
+            vec_t r      = vec_mul_t(inv_r, r2);
             
-            dx = vec_mul_d(dx, inv_r);
-            dy = vec_mul_d(dy, inv_r);
-            dz = vec_mul_d(dz, inv_r);
+            dx = vec_mul_t(dx, inv_r);
+            dy = vec_mul_t(dy, inv_r);
+            dz = vec_mul_t(dz, inv_r);
 
-            vec_d tmp0, tmp1, t1, t2;
-            vec_d t1_0, t2_0, t1_1, t2_1, t1_2, t2_2;
-            vec_d ta_p_sa = vec_add_d(ta, sa);
-            vec_d ta_m_sa = vec_max_d(vec_sub_d(ta, sa), vec_sub_d(sa, ta));
+            vec_t tmp0, tmp1, t1, t2;
+            vec_t t1_0, t2_0, t1_1, t2_1, t1_2, t2_2;
+            vec_t ta_p_sa = vec_add_t(ta, sa);
+            vec_t ta_m_sa = vec_max_t(vec_sub_t(ta, sa), vec_sub_t(sa, ta));
             // r > ta + sa
-            tmp0 = vec_mul_d(vC3o4, inv_r);
-            tmp1 = vec_mul_d(vec_fmadd_d(sa, sa, vec_mul_d(ta, ta)), inv_r2);
-            t1_0 = vec_mul_d(tmp0, vec_fmadd_d(v1o3, tmp1, v1));
-            t2_0 = vec_mul_d(tmp0, vec_sub_d(v1, tmp1));
+            tmp0 = vec_mul_t(vC3o4, inv_r);
+            tmp1 = vec_mul_t(vec_fmadd_t(sa, sa, vec_mul_t(ta, ta)), inv_r2);
+            t1_0 = vec_mul_t(tmp0, vec_fmadd_t(v1o3, tmp1, v1));
+            t2_0 = vec_mul_t(tmp0, vec_sub_t(v1, tmp1));
             // ta + sa >= r > abs(ta - sa)
-            tmp0 = vec_mul_d(ta_m_sa, ta_m_sa);
-            tmp1 = vec_div_d(vec_mul_d(vec_mul_d(vC, inv_r2), inv_r), vec_mul_d(vec_mul_d(ta, sa), v32));
-            t1_1 = vec_fmadd_d(v3, r2, tmp0);
-            t1_1 = vec_mul_d(t1_1, t1_1);
-            t1_1 = vec_fmsub_d(vec_mul_d(v16, r2), vec_mul_d(r, ta_p_sa), t1_1);
-            t1_1 = vec_mul_d(tmp1, t1_1);
-            t2_1 = vec_sub_d(tmp0, r2);
-            t2_1 = vec_mul_d(t2_1, t2_1);
-            t2_1 = vec_mul_d(vec_mul_d(tmp1, v3), t2_1);
+            tmp0 = vec_mul_t(ta_m_sa, ta_m_sa);
+            tmp1 = vec_div_t(vec_mul_t(vec_mul_t(vC, inv_r2), inv_r), vec_mul_t(vec_mul_t(ta, sa), v32));
+            t1_1 = vec_fmadd_t(v3, r2, tmp0);
+            t1_1 = vec_mul_t(t1_1, t1_1);
+            t1_1 = vec_fmsub_t(vec_mul_t(v16, r2), vec_mul_t(r, ta_p_sa), t1_1);
+            t1_1 = vec_mul_t(tmp1, t1_1);
+            t2_1 = vec_sub_t(tmp0, r2);
+            t2_1 = vec_mul_t(t2_1, t2_1);
+            t2_1 = vec_mul_t(vec_mul_t(tmp1, v3), t2_1);
             // r <= abs(ta - sa)
-            t1_2 = vec_div_d(vC, vec_max_d(ta, sa));
-            t2_2 = vec_set1_d(0.0);
+            t1_2 = vec_div_t(vC, vec_max_t(ta, sa));
+            t2_2 = vec_set1_t(0.0);
 
-            vec_cmp_d r_gt_ta_p_da = vec_cmp_gt_d(r, ta_p_sa);
-            vec_cmp_d r_le_ta_m_da = vec_cmp_le_d(r, ta_m_sa);
-            t1 = vec_blend_d(t1_1, t1_0, r_gt_ta_p_da);
-            t1 = vec_blend_d(t1,   t1_2, r_le_ta_m_da);
-            t2 = vec_blend_d(t2_1, t2_0, r_gt_ta_p_da);
-            t2 = vec_blend_d(t2,   t2_2, r_le_ta_m_da);
+            vec_cmp_t r_gt_ta_p_da = vec_cmp_gt_t(r, ta_p_sa);
+            vec_cmp_t r_le_ta_m_da = vec_cmp_le_t(r, ta_m_sa);
+            t1 = vec_blend_t(t1_1, t1_0, r_gt_ta_p_da);
+            t1 = vec_blend_t(t1,   t1_2, r_le_ta_m_da);
+            t2 = vec_blend_t(t2_1, t2_0, r_gt_ta_p_da);
+            t2 = vec_blend_t(t2,   t2_2, r_le_ta_m_da);
             
-            vec_d x_in_0_j0 = vec_load_d(x_in_0 + j + ld1 * 0);
-            vec_d x_in_0_j1 = vec_load_d(x_in_0 + j + ld1 * 1);
-            vec_d x_in_0_j2 = vec_load_d(x_in_0 + j + ld1 * 2);
+            vec_t x_in_0_j0 = vec_load_t(x_in_0 + j + ld1 * 0);
+            vec_t x_in_0_j1 = vec_load_t(x_in_0 + j + ld1 * 1);
+            vec_t x_in_0_j2 = vec_load_t(x_in_0 + j + ld1 * 2);
             
-            tmp0 = vec_mul_d(x_in_0_j0, dx);
-            tmp0 = vec_fmadd_d(x_in_0_j1, dy, tmp0);
-            tmp0 = vec_fmadd_d(x_in_0_j2, dz, tmp0);
-            tmp0 = vec_mul_d(tmp0, t2);
+            tmp0 = vec_mul_t(x_in_0_j0, dx);
+            tmp0 = vec_fmadd_t(x_in_0_j1, dy, tmp0);
+            tmp0 = vec_fmadd_t(x_in_0_j2, dz, tmp0);
+            tmp0 = vec_mul_t(tmp0, t2);
             
-            tmp1 = vec_mul_d(x_in_1_i0, dx);
-            tmp1 = vec_fmadd_d(x_in_1_i1, dy, tmp1);
-            tmp1 = vec_fmadd_d(x_in_1_i2, dz, tmp1);
-            tmp1 = vec_mul_d(tmp1, t2);
+            tmp1 = vec_mul_t(x_in_1_i0, dx);
+            tmp1 = vec_fmadd_t(x_in_1_i1, dy, tmp1);
+            tmp1 = vec_fmadd_t(x_in_1_i2, dz, tmp1);
+            tmp1 = vec_mul_t(tmp1, t2);
             
             DTYPE *x_out_1_0 = x_out_1 + j + 0 * ld1;
             DTYPE *x_out_1_1 = x_out_1 + j + 1 * ld1;
             DTYPE *x_out_1_2 = x_out_1 + j + 2 * ld1;
             
-            vec_d xo1_0 = vec_load_d(x_out_1_0);
-            vec_d xo1_1 = vec_load_d(x_out_1_1);
-            vec_d xo1_2 = vec_load_d(x_out_1_2);
+            vec_t xo1_0 = vec_load_t(x_out_1_0);
+            vec_t xo1_1 = vec_load_t(x_out_1_1);
+            vec_t xo1_2 = vec_load_t(x_out_1_2);
 
-            xo0_0 = vec_fmadd_d(dx, tmp0, xo0_0);
-            xo0_1 = vec_fmadd_d(dy, tmp0, xo0_1);
-            xo0_2 = vec_fmadd_d(dz, tmp0, xo0_2);
-            xo0_0 = vec_fmadd_d(t1, x_in_0_j0, xo0_0);
-            xo0_1 = vec_fmadd_d(t1, x_in_0_j1, xo0_1);
-            xo0_2 = vec_fmadd_d(t1, x_in_0_j2, xo0_2);
+            xo0_0 = vec_fmadd_t(dx, tmp0, xo0_0);
+            xo0_1 = vec_fmadd_t(dy, tmp0, xo0_1);
+            xo0_2 = vec_fmadd_t(dz, tmp0, xo0_2);
+            xo0_0 = vec_fmadd_t(t1, x_in_0_j0, xo0_0);
+            xo0_1 = vec_fmadd_t(t1, x_in_0_j1, xo0_1);
+            xo0_2 = vec_fmadd_t(t1, x_in_0_j2, xo0_2);
             
-            xo1_0 = vec_fmadd_d(dx, tmp1, xo1_0);
-            xo1_1 = vec_fmadd_d(dy, tmp1, xo1_1);
-            xo1_2 = vec_fmadd_d(dz, tmp1, xo1_2);
-            xo1_0 = vec_fmadd_d(t1, x_in_1_i0, xo1_0);
-            xo1_1 = vec_fmadd_d(t1, x_in_1_i1, xo1_1);
-            xo1_2 = vec_fmadd_d(t1, x_in_1_i2, xo1_2);
+            xo1_0 = vec_fmadd_t(dx, tmp1, xo1_0);
+            xo1_1 = vec_fmadd_t(dy, tmp1, xo1_1);
+            xo1_2 = vec_fmadd_t(dz, tmp1, xo1_2);
+            xo1_0 = vec_fmadd_t(t1, x_in_1_i0, xo1_0);
+            xo1_1 = vec_fmadd_t(t1, x_in_1_i1, xo1_1);
+            xo1_2 = vec_fmadd_t(t1, x_in_1_i2, xo1_2);
             
-            vec_store_d(x_out_1_0, xo1_0);
-            vec_store_d(x_out_1_1, xo1_1);
-            vec_store_d(x_out_1_2, xo1_2);
+            vec_store_t(x_out_1_0, xo1_0);
+            vec_store_t(x_out_1_1, xo1_1);
+            vec_store_t(x_out_1_2, xo1_2);
         }
-        x_out_0[i + 0 * ld0] += vec_reduce_add_d(xo0_0);
-        x_out_0[i + 1 * ld0] += vec_reduce_add_d(xo0_1);
-        x_out_0[i + 2 * ld0] += vec_reduce_add_d(xo0_2);
+        x_out_0[i + 0 * ld0] += vec_reduce_add_t(xo0_0);
+        x_out_0[i + 1 * ld0] += vec_reduce_add_t(xo0_1);
+        x_out_0[i + 2 * ld0] += vec_reduce_add_t(xo0_2);
     }
 }
 

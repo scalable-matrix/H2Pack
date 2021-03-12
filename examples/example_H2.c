@@ -33,8 +33,8 @@ int main(int argc, char **argv)
     // Kernel configuration
     int krnl_dim = 1;
     DTYPE *krnl_param = NULL;  // Coulomb kernel has no parameter
-    kernel_eval_fptr krnl_eval = Coulomb_3D_eval_intrin_d;
-    kernel_bimv_fptr krnl_bimv = Coulomb_3D_krnl_bimv_intrin_d;
+    kernel_eval_fptr krnl_eval = Coulomb_3D_eval_intrin_t;
+    kernel_bimv_fptr krnl_bimv = Coulomb_3D_krnl_bimv_intrin_t;
     int krnl_bimv_flops = Coulomb_3D_krnl_bimv_flop;
 
     // H2 construction configuration

@@ -161,7 +161,7 @@ void H2P_calc_sparse_mm_trans(
     DTYPE *x, const int ldx, DTYPE *y, const int ldy
 )
 {
-    const double *val = A_valbuf->data;
+    const DTYPE *val = A_valbuf->data;
     const int *row_ptr = A_idxbuf->data;
     const int *col_idx = row_ptr + (n + 1);  // A is k-by-n
     // Doing a naive OpenMP CSR SpMM here is good enough, using MKL SpBLAS is actually
@@ -169,12 +169,12 @@ void H2P_calc_sparse_mm_trans(
     #pragma omp parallel for schedule(static)
     for (int i = 0; i < m; i++)
     {
-        double *x_i = x + i * ldx;
-        double *y_i = y + i * ldy;
+        DTYPE *x_i = x + i * ldx;
+        DTYPE *y_i = y + i * ldy;
         
         for (int j = 0; j < n; j++)
         {
-            double res = 0.0;
+            DTYPE res = 0.0;
             #pragma omp simd
             for (int l = row_ptr[j]; l < row_ptr[j+1]; l++)
                 res += val[l] * x_i[col_idx[l]];

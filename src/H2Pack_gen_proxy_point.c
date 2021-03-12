@@ -58,7 +58,7 @@ void H2P_generate_proxy_point_nlayer(
     const void *krnl_param, kernel_eval_fptr krnl_eval, 
     const DTYPE L1, const DTYPE L2, const DTYPE L3, 
     const int alg, const int X0_size, const int Y0_lsize, const int max_layer, 
-    H2P_dense_mat_p pp, DTYPE *timers
+    H2P_dense_mat_p pp, double *timers
 )
 {
     // 1. Initialize working arrays and parameters

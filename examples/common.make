@@ -43,7 +43,7 @@ all: $(EXES)
 %.c.o: %.c
 	$(CC) $(CFLAGS) -c $^ -o $@
 
-%.exe: %.c.o $(LIBS)
+%.exe: %.c.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 clean:

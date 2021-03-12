@@ -84,7 +84,7 @@
 #define LAPACK_SYEVD    LAPACKE_ssyevd
 #define N_DTYPE_64B     16
 #define SIMD_LEN        SIMD_LEN_S
-#define ASTER_DTYPE_SINGLE
+#define ASTER_DTYPE_FLOAT
 #endif
 
 #define QR_RANK         0               // Partial QR stop criteria: maximum rank

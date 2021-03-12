@@ -35,13 +35,13 @@ int main(int argc, char **argv)
     int krnl_dim = 1;
     /*
     DTYPE krnl_param[1] = {0.5};  //2D Gaussian kernel with the exponent parameter 
-    kernel_eval_fptr krnl_eval = Gaussian_2D_eval_intrin_d;
-    kernel_bimv_fptr krnl_bimv = Gaussian_2D_krnl_bimv_intrin_d;
+    kernel_eval_fptr krnl_eval = Gaussian_2D_eval_intrin_t;
+    kernel_bimv_fptr krnl_bimv = Gaussian_2D_krnl_bimv_intrin_t;
     int krnl_bimv_flop = Gaussian_2D_krnl_bimv_flop;
     */
     DTYPE krnl_param[2] = {100.0, -0.5};  //2D quadratic kernel with the scale and exponent parameters
-    kernel_eval_fptr krnl_eval = Quadratic_2D_eval_intrin_d;
-    kernel_bimv_fptr krnl_bimv = Quadratic_2D_krnl_bimv_intrin_d;
+    kernel_eval_fptr krnl_eval = Quadratic_2D_eval_intrin_t;
+    kernel_bimv_fptr krnl_bimv = Quadratic_2D_krnl_bimv_intrin_t;
     int krnl_bimv_flop = Quadratic_2D_krnl_bimv_flop;
 
     // HSS construction configuration

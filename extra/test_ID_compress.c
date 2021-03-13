@@ -6,8 +6,7 @@
 #include <time.h>
 #include <omp.h>
 
-#include "H2Pack_aux_structs.h"
-#include "H2Pack_ID_compress.h"
+#include "H2Pack.h"
 #include "utils.h"
 
 int main()
@@ -28,13 +27,13 @@ int main()
     assert(x1 != NULL && x2 != NULL && y1 != NULL && y2 != NULL);
     for (int i = 0; i < nrow; i++) 
     {
-        x1[i] = drand48();
-        y1[i] = drand48();
+        x1[i] = (DTYPE) drand48();
+        y1[i] = (DTYPE) drand48();
     }
     for (int i = 0; i < ncol; i++) 
     {
-        x2[i] = drand48() + 0.6;
-        y2[i] = drand48() + 0.4;
+        x2[i] = (DTYPE) (drand48() + 0.6);
+        y2[i] = (DTYPE) (drand48() + 0.4);
     }
     for (int irow = 0; irow < nrow; irow++)
     {
@@ -44,13 +43,13 @@ int main()
         {
             DTYPE dx = x1[irow] - x2[icol];
             DTYPE dy = y1[irow] - y2[icol];
-            DTYPE d  = sqrt(dx * dx + dy * dy);
+            DTYPE d  = DSQRT(dx * dx + dy * dy);
             A_irow[icol]  = 1.0 / d;
             A0_irow[icol] = A_irow[icol];
             A0_fnorm += A_irow[icol] * A_irow[icol];
         }
     }
-    A0_fnorm = sqrt(A0_fnorm);
+    A0_fnorm = DSQRT(A0_fnorm);
     
     /*
     FILE *ouf = fopen("A.csv", "w");
@@ -72,7 +71,7 @@ int main()
     H2P_int_vec_init(&J, nrow);
     DTYPE tol_norm;
     printf("norm_rel_tol: ");
-    scanf("%lf", &tol_norm);
+    scanf(DTYPE_FMTSTR, &tol_norm);
     int n_thread = omp_get_max_threads();
     int   *ID_buff = (int*)   malloc(sizeof(int)   * A->nrow * 4);
     DTYPE *QR_buff = (DTYPE*) malloc(sizeof(DTYPE) * A->nrow);
@@ -116,14 +115,14 @@ int main()
     DTYPE *AJ = (DTYPE*) malloc(sizeof(DTYPE) * ncol * U->ncol);
     for (int i = 0; i < U->ncol; i++)
         memcpy(AJ + i * ncol, A0->data + J->data[i] * ncol, sizeof(DTYPE) * ncol);
-    cblas_dgemm(
+    CBLAS_GEMM(
         CblasRowMajor, CblasNoTrans, CblasNoTrans, nrow, ncol, U->ncol,
         1.0, U->data, U->ncol, AJ, ncol, -1.0, A0->data, A0->ncol
     );
     DTYPE res_fnorm = 0.0;
     for (int i = 0; i < nrow * ncol; i++) 
         res_fnorm += A0->data[i] * A0->data[i];
-    res_fnorm = sqrt(res_fnorm);
+    res_fnorm = DSQRT(res_fnorm);
     printf("||A - A_{ID}||_fro / ||A||_fro = %e\n", res_fnorm / A0_fnorm);
     
     free(ID_buff);

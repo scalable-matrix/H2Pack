@@ -131,7 +131,7 @@ void H2P_gen_rand_sparse_mat_trans(
     int *flag = col_idx + nnz; 
     memset(flag, 0, sizeof(int) * k);
     for (int i = 0; i < nnz; i++) 
-        val[i] = 2.0 * (rand() & 1) - 1.0;
+        val[i] = (DTYPE) (2.0 * (rand() & 1) - 1.0);
     for (int i = 0; i <= n; i++) 
         row_ptr[i] = i * rand_nnz_col;
     for (int i = 0; i < n; i++)
@@ -191,8 +191,8 @@ void H2P_gen_normal_distribution(const DTYPE mu, const DTYPE sigma, const size_t
     {
         do 
         {
-            u1 = drand48() * 2.0 - 1.0;
-            u2 = drand48() * 2.0 - 1.0;
+            u1 = (DTYPE) (drand48() * 2.0 - 1.0);
+            u2 = (DTYPE) (drand48() * 2.0 - 1.0);
             w  = u1 * u1 + u2 * u2;
         } while (w >= 1.0 || w <= 1e-15);
         mult = DSQRT((-2.0 * DLOG(w)) / w);
@@ -205,8 +205,8 @@ void H2P_gen_normal_distribution(const DTYPE mu, const DTYPE sigma, const size_t
     {
         do 
         {
-            u1 = drand48() * 2.0 - 1.0;
-            u2 = drand48() * 2.0 - 1.0;
+            u1 = (DTYPE) (drand48() * 2.0 - 1.0);
+            u2 = (DTYPE) (drand48() * 2.0 - 1.0);
             w  = u1 * u1 + u2 * u2;
         } while (w >= 1.0 || w <= 1e-15);
         mult = DSQRT((-2.0 * DLOG(w)) / w);

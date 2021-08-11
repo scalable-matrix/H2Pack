@@ -145,7 +145,7 @@ static PyObject *setup(H2Mat *self, PyObject *args, PyObject *keywds) {
     }
     if (self->params.pts_dim != 1 && self->params.pts_dim != 2 && self->params.pts_dim != 3)    
     {
-        PyErr_SetString(PyExc_ValueError, "Pyh2pack presently only supports 1D, 2D, and 3D problems. \n");
+        PyErr_SetString(PyExc_ValueError, "Pyh2pack only supports 1D, 2D, and 3D problems. \n");
         return NULL;
     }
     self->params.pts_coord = (DTYPE*) malloc_aligned(sizeof(DTYPE) * coord->dimensions[0] * coord->dimensions[1], 64);
@@ -478,31 +478,31 @@ static PyObject *print_statistic(H2Mat *self, PyObject *args) {
 static PyObject *print_setting(H2Mat *self, PyObject *args) {
     if (self->flag_setup == 1)
     {
-        printf("==================== Kernel Function Information ====================\n");
-        printf("  * Kernel Function Name           : %s\n", self->params.krnl_name);
-        printf("  * Dimension of kernel's output   : %d\n", self->params.krnl_dim);
-        printf("  * Dimension of input points      : %d\n", self->params.pts_dim);
-        printf("  * Number of kernel parameters    : %d\n", self->params.krnl_param_len);
-        printf("  * Kernel parameters              : ");
+        PySys_WriteStdout("==================== Kernel Function Information ====================\n");
+        PySys_WriteStdout("  * Kernel Function Name           : %s\n", self->params.krnl_name);
+        PySys_WriteStdout("  * Dimension of kernel's output   : %d\n", self->params.krnl_dim);
+        PySys_WriteStdout("  * Dimension of input points      : %d\n", self->params.pts_dim);
+        PySys_WriteStdout("  * Number of kernel parameters    : %d\n", self->params.krnl_param_len);
+        PySys_WriteStdout("  * Kernel parameters              : ");
         for (int i = 0; i < self->params.krnl_param_len; i++)
-            printf("%f ", self->params.krnl_param[i]);
-        printf("\n");
-        printf("  * Parameter Description          : %s\n\n", self->params.krnl_param_descr);
+            PySys_WriteStdout("%f ", self->params.krnl_param[i]);
+        PySys_WriteStdout("\n");
+        PySys_WriteStdout("  * Parameter Description          : %s\n\n", self->params.krnl_param_descr);
 
 
-        printf("==================== H2Pack SetUp Information ====================\n");
-        printf("  * Number of Points               : %d\n", self->params.pts_num);
-        printf("  * Compression relative tol       : %e\n", self->params.rel_tol);
+        PySys_WriteStdout("==================== H2Pack SetUp Information ====================\n");
+        PySys_WriteStdout("  * Number of Points               : %d\n", self->params.pts_num);
+        PySys_WriteStdout("  * Compression relative tol       : %e\n", self->params.rel_tol);
         if (self->params.BD_JIT != 0)
-            printf("  * JIT_mode                       : on\n");
+            PySys_WriteStdout("  * JIT_mode                       : on\n");
         else
-            printf("  * JIT_mode                       : off\n");
+            PySys_WriteStdout("  * JIT_mode                       : off\n");
         if (self->params.flag_proxysurface != 0)
-            printf("  * Select scheme for proxy points : proxy surface\n");
+            PySys_WriteStdout("  * Select scheme for proxy points : proxy surface\n");
         else
-            printf("  * Select scheme for proxy points : QR\n");
+            PySys_WriteStdout("  * Select scheme for proxy points : QR\n");
         if (self->params.pp_fname[0] != '\0')
-            printf("  * Proxy points file loaded from/written to: %s", self->params.pp_fname);
+            PySys_WriteStdout("  * Proxy points file loaded from/written to: %s", self->params.pp_fname);
     }
     else
         PySys_WriteStdout("PyH2pack has not been set up yet!\n");
@@ -512,23 +512,23 @@ static PyObject *print_setting(H2Mat *self, PyObject *args) {
 
 static PyObject *print_kernels(PyObject *self, PyObject *args) {
     int num_kernel = sizeof(kernel_list)/sizeof(H2P_kernel);
-    printf("==================== Supported kernel functions ====================\n");
+    PySys_WriteStdout("==================== Supported kernel functions ====================\n");
     for (int i = 0 ; i < num_kernel; i++)
     {
         const H2P_kernel* ktmp = kernel_list + i;
-        printf(" * KERNEL %d: %s\n", i, ktmp->krnl_name);
-        printf("    - dimension of kernel output   : %d * %d\n", ktmp->krnl_dim, ktmp->krnl_dim);
-        printf("    - dimension of input point     : %d\n", ktmp->pts_dim);
-        printf("    - number of kernel parameters  : %d\n", ktmp->krnl_param_len);
-        printf("    - default kernel parameters    : ");
+        PySys_WriteStdout(" * KERNEL %d: %s\n", i, ktmp->krnl_name);
+        PySys_WriteStdout("    - dimension of kernel output   : %d * %d\n", ktmp->krnl_dim, ktmp->krnl_dim);
+        PySys_WriteStdout("    - dimension of input point     : %d\n", ktmp->pts_dim);
+        PySys_WriteStdout("    - number of kernel parameters  : %d\n", ktmp->krnl_param_len);
+        PySys_WriteStdout("    - default kernel parameters    : ");
         for (int j = 0; j < ktmp->krnl_param_len; j++)
-            printf("%f ", ktmp->krnl_param[j]);
-        printf("\n");
-        printf("    - kernel parameter description : %s\n", ktmp->param_descr);
+            PySys_WriteStdout("%f ", ktmp->krnl_param[j]);
+        PySys_WriteStdout("\n");
+        PySys_WriteStdout("    - kernel parameter description : %s\n", ktmp->param_descr);
         if (ktmp->flag_proxysurface != 0)
-            printf("    - default proxy point select   : proxy surface\n");
+            PySys_WriteStdout("    - default proxy point select   : proxy surface\n");
         else
-            printf("    - default proxy point select   : QR\n");
+            PySys_WriteStdout("    - default proxy point select   : QR\n");
     }
     Py_RETURN_NONE;
 }

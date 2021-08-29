@@ -2,15 +2,15 @@ import pyh2pack
 import numpy as np
 
 '''
-   NOTE: 
-   In Jupyter notebook, the outputs of `print_statistics/print_setting' might be redirected to terminals and will not be properly shown. 
-   Solution to this problem is to use package 'wurlitzer'   
-   Run `%load_ext wurlitzer` in Jupyeter. 
+   NOTE:
+   In Jupyter notebook, the outputs of `print_statistics/print_setting' might be redirected to terminals and will not be properly shown.
+   Solution to this problem is to use package 'wurlitzer'
+   Run `%load_ext wurlitzer` in Jupyeter.
 '''
 
 N = 80000
 krnl_dim = 1
-pt_dim = 2
+pt_dim = 3
 coord = np.random.uniform(0, 1, size=(pt_dim, N))
 x = np.random.normal(size=(krnl_dim*N))
 
@@ -63,7 +63,7 @@ A.clean()
 #   build
 krnl_param = np.array([1,-0.5])
 A = pyh2pack.H2Mat(kernel="Quadratic_3D", krnl_dim=krnl_dim, pt_coord=coord, pt_dim=pt_dim, JIT_mode=1, rel_tol=1e-3, krnl_param=krnl_param)
-#   matmul 
+#   matmul
 nvec = 10
 xs = np.random.normal(size=(krnl_dim*N, nvec))
 ys = A.matmul(xs)

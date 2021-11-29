@@ -36,7 +36,7 @@ void RPY_kernel_3d(
             DTYPE r1 = y0 - coord1[j + ld1];
             DTYPE r2 = z0 - coord1[j + ld1 * 2];
             DTYPE s2 = r0 * r0 + r1 * r1 + r2 * r2;
-            DTYPE s  = sqrt(s2);
+            DTYPE s  = DSQRT(s2);
             DTYPE inv_s = 1.0 / s;
             r0 *= inv_s;
             r1 *= inv_s;
@@ -75,7 +75,7 @@ int main()
     int A_ncol = ncol * kdim;
     DTYPE tol_norm;
     printf("norm_rel_tol: ");
-    scanf("%lf", &tol_norm);
+    scanf(DTYPE_FMTSTR, &tol_norm);
     
     H2P_dense_mat_p A, A0, U;
     H2P_int_vec_p J;
@@ -91,15 +91,15 @@ int main()
     DTYPE *z0 = coord0 + nrow * 2, *z1 = coord1 + ncol * 2;
     for (int i = 0; i < nrow; i++) 
     {
-        x0[i] = drand48();
-        y0[i] = drand48();
-        z0[i] = drand48();
+        x0[i] = (DTYPE) drand48();
+        y0[i] = (DTYPE) drand48();
+        z0[i] = (DTYPE) drand48();
     }
     for (int i = 0; i < ncol; i++) 
     {
-        x1[i] = drand48() + 1.9;
-        y1[i] = drand48() + 0.89;
-        z1[i] = drand48() + 0.64;
+        x1[i] = (DTYPE) (drand48() + 1.9);
+        y1[i] = (DTYPE) (drand48() + 0.8);
+        z1[i] = (DTYPE) (drand48() + 0.9);
     }
     
     RPY_kernel_3d(
@@ -137,14 +137,14 @@ int main()
         memcpy(AJ + i31*A_ncol, A0->data + j31*A_ncol, sizeof(DTYPE) * A_ncol);
         memcpy(AJ + i32*A_ncol, A0->data + j32*A_ncol, sizeof(DTYPE) * A_ncol);
     }
-    cblas_dgemm(
+    CBLAS_GEMM(
         CblasRowMajor, CblasNoTrans, CblasNoTrans, A_nrow, A_ncol, U->ncol,
         1.0, U->data, U->ncol, AJ, A_ncol, -1.0, A0->data, A_ncol
     );
     DTYPE res_fnorm = 0.0;
     for (int i = 0; i < A_nrow * A_ncol; i++)
         res_fnorm += A0->data[i] * A0->data[i];
-    res_fnorm = sqrt(res_fnorm);
+    res_fnorm = DSQRT(res_fnorm);
     printf("U rank = %d (%d column blocks)\n", U->ncol, J->length);
     printf("||A - A_{ID}||_fro / ||A||_fro = %e\n", res_fnorm / A0_fnorm);
     

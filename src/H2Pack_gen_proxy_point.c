@@ -58,7 +58,7 @@ void H2P_generate_proxy_point_nlayer(
     const void *krnl_param, kernel_eval_fptr krnl_eval, 
     const DTYPE L1, const DTYPE L2, const DTYPE L3, 
     const int alg, const int X0_size, const int Y0_lsize, const int max_layer, 
-    H2P_dense_mat_p pp, DTYPE *timers
+    H2P_dense_mat_p pp, double *timers
 )
 {
     // 1. Initialize working arrays and parameters
@@ -368,7 +368,7 @@ void H2P_calc_enclosing_box(const int pt_dim, const int n_point, const DTYPE *co
     {
         int pt_dim_, L3_nlayer, num_pp;
         DTYPE reltol, minL;
-        const char *fmt_str = (DTYPE_SIZE == 8) ? "%d %lf %d %lf %d" : "%d %f %d %lf %d";
+        const char *fmt_str = (DTYPE_SIZE == 8) ? "%d %lf %d %lf %d" : "%d %f %d %f %d";
         fscanf(inf, fmt_str, &pt_dim_, &reltol, &L3_nlayer, &minL, &num_pp);
         if (pt_dim == pt_dim_)
         {
@@ -400,7 +400,7 @@ void H2P_write_proxy_point_file(
     FILE *ouf = fopen(fname, "w");
 
     // Line 1: parameters
-    fprintf(ouf, "%d %.3e %d %16.12lf %d\n", pt_dim, reltol, L3_nlayer, minL, num_pp);
+    fprintf(ouf, "%d %.3e %d %16.12f %d\n", pt_dim, reltol, L3_nlayer, minL, num_pp);
 
     // Line 2: number of proxy points in each proxy point set
     for (int i = 0; i < num_pp; i++) fprintf(ouf, "%d ", pp[i]->ncol);
@@ -456,7 +456,7 @@ void H2P_generate_proxy_point_ID_file(
     if (fname != NULL) inf = fopen(fname, "r");
     if (inf != NULL)
     {
-        const char *fmt_str = (DTYPE_SIZE == 8) ? "%d %lf %d %lf %d" : "%d %f %d %lf %d";
+        const char *fmt_str = (DTYPE_SIZE == 8) ? "%d %lf %d %lf %d" : "%d %f %d %f %d";
         fscanf(inf, fmt_str, &pt_dim0, &reltol0, &L3_nlayer0, &minL0, &num_pp0);
         maxL0 = minL0 * DPOW(2.0, (DTYPE) (num_pp0 - 1));
         DTYPE k  = DLOG2(pt_maxL / minL0);
@@ -514,7 +514,6 @@ void H2P_generate_proxy_point_ID_file(
     {
         int *pp_sizes = (int*) malloc(sizeof(int) * num_pp0);
         for (int i = 0; i < num_pp0; i++) fscanf(inf, "%d", pp_sizes + i);
-        const char *fmt_str = (DTYPE_SIZE == 8) ? "%lf" : "%f";
         for (int pp_i = file_idx_s; pp_i <= file_idx_e; pp_i++)
         {
             H2P_dense_mat_p pp0_i = pp0[pp_i];
@@ -524,7 +523,7 @@ void H2P_generate_proxy_point_ID_file(
             for (int j = 0; j < pp0_i_npt; j++)
             {
                 for (int i = 0; i < pt_dim; i++) 
-                    fscanf(inf, fmt_str, &pp0_i_coord[i * pp0_i_npt + j]);
+                    fscanf(inf, DTYPE_FMTSTR, &pp0_i_coord[i * pp0_i_npt + j]);
             }
         }
         free(pp_sizes);

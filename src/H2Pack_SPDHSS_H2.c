@@ -1666,7 +1666,7 @@ void H2P_SPDHSS_H2_build(
     H2P_SPDHSS_H2_acc_matvec(h2mat, n_vec, &Yk);
     et = get_wtime_sec();
     build_U_t += et - st;
-    printf("SPDHSS build: accumulative matvec finished %f.\n", et - st);
+    // printf("SPDHSS build: accumulative matvec finished %f.\n", et - st);
     fflush(stdout);
 
     // 2. Get the new HSS Bij pairs on each level
@@ -2212,7 +2212,7 @@ void H2P_SPDHSS_H2_build(
         }  // End of "#pragma omp parallel"
         et = get_wtime_sec();
         build_U_t += et - st;
-        printf("SPDHSS build at %d level: U build %f.\n", i, et - st);
+        // printf("SPDHSS build at %d level: U build %f.\n", i, et - st);
         fflush(stdout);
 
         st = get_wtime_sec();
@@ -2233,7 +2233,7 @@ void H2P_SPDHSS_H2_build(
         }  // End of "#pragma omp parallel"
         et = get_wtime_sec();
         build_B_t += et - st;
-        printf("SPDHSS build at %d level: B build %f.\n", i, et - st);
+        // printf("SPDHSS build at %d level: B build %f.\n", i, et - st);
         fflush(stdout);
     }  // End of i loop
 
@@ -2245,6 +2245,7 @@ void H2P_SPDHSS_H2_build(
     (*hssmat_)->timers[U_BUILD_TIMER_IDX] = build_U_t;
     (*hssmat_)->timers[B_BUILD_TIMER_IDX] = build_B_t;
     (*hssmat_)->timers[D_BUILD_TIMER_IDX] = build_D_t;
+    (*hssmat_)->is_HSS_SPD = is_SPD; 
 
     #ifdef __linux__
     // Restore default value

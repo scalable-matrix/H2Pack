@@ -131,7 +131,7 @@ void H2P_gen_rand_sparse_mat_trans(
     int *flag = col_idx + nnz; 
     memset(flag, 0, sizeof(int) * k);
     for (int i = 0; i < nnz; i++) 
-        val[i] = 2.0 * (rand() & 1) - 1.0;
+        val[i] = (DTYPE) (2.0 * (rand() & 1) - 1.0);
     for (int i = 0; i <= n; i++) 
         row_ptr[i] = i * rand_nnz_col;
     for (int i = 0; i < n; i++)
@@ -161,20 +161,20 @@ void H2P_calc_sparse_mm_trans(
     DTYPE *x, const int ldx, DTYPE *y, const int ldy
 )
 {
-    double *val = A_valbuf->data;
-    int *row_ptr = A_idxbuf->data;
-    int *col_idx = row_ptr + (m + 1);
+    const DTYPE *val = A_valbuf->data;
+    const int *row_ptr = A_idxbuf->data;
+    const int *col_idx = row_ptr + (n + 1);  // A is k-by-n
     // Doing a naive OpenMP CSR SpMM here is good enough, using MKL SpBLAS is actually
     // slower, probably due to the cost of optimizing the storage of sparse matrix
     #pragma omp parallel for schedule(static)
     for (int i = 0; i < m; i++)
     {
-        double *x_i = x + i * ldx;
-        double *y_i = y + i * ldy;
+        DTYPE *x_i = x + i * ldx;
+        DTYPE *y_i = y + i * ldy;
         
         for (int j = 0; j < n; j++)
         {
-            double res = 0.0;
+            DTYPE res = 0.0;
             #pragma omp simd
             for (int l = row_ptr[j]; l < row_ptr[j+1]; l++)
                 res += val[l] * x_i[col_idx[l]];
@@ -191,8 +191,8 @@ void H2P_gen_normal_distribution(const DTYPE mu, const DTYPE sigma, const size_t
     {
         do 
         {
-            u1 = drand48() * 2.0 - 1.0;
-            u2 = drand48() * 2.0 - 1.0;
+            u1 = (DTYPE) (drand48() * 2.0 - 1.0);
+            u2 = (DTYPE) (drand48() * 2.0 - 1.0);
             w  = u1 * u1 + u2 * u2;
         } while (w >= 1.0 || w <= 1e-15);
         mult = DSQRT((-2.0 * DLOG(w)) / w);
@@ -205,8 +205,8 @@ void H2P_gen_normal_distribution(const DTYPE mu, const DTYPE sigma, const size_t
     {
         do 
         {
-            u1 = drand48() * 2.0 - 1.0;
-            u2 = drand48() * 2.0 - 1.0;
+            u1 = (DTYPE) (drand48() * 2.0 - 1.0);
+            u2 = (DTYPE) (drand48() * 2.0 - 1.0);
             w  = u1 * u1 + u2 * u2;
         } while (w >= 1.0 || w <= 1e-15);
         mult = DSQRT((-2.0 * DLOG(w)) / w);

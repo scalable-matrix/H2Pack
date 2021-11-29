@@ -60,7 +60,17 @@ void H2P_partial_pivot_QR(
     
     BLAS_SET_NUM_THREADS(n_thread);
     
-    DTYPE *col_norm = QR_buff; 
+    DTYPE *col_norm = QR_buff;
+
+    DTYPE eps_t, fast_norm_threshold_t;
+    if (sizeof(DTYPE) == 8)
+    {
+        eps_t = 1e-15;
+        fast_norm_threshold_t = 1e-10;
+    } else {
+        eps_t = 1e-6;
+        fast_norm_threshold_t = 1e-5;
+    }
     
     // Find a column with largest 2-norm
     #pragma omp parallel for if (n_thread > 1) \
@@ -83,7 +93,7 @@ void H2P_partial_pivot_QR(
     
     // Scale the stopping norm
     int stop_rank = MIN(max_iter, tol_rank);
-    DTYPE norm_eps = DSQRT((DTYPE) nrow) * 1e-15;
+    DTYPE norm_eps = DSQRT((DTYPE) nrow) * eps_t;
     DTYPE stop_norm = MAX(norm_eps, tol_norm);
     if (rel_norm) stop_norm *= norm_p;
     
@@ -143,7 +153,7 @@ void H2P_partial_pivot_QR(
             }
             DTYPE tmp = R_block_j[0] * R_block_j[0];
             tmp = col_norm[ji1] * col_norm[ji1] - tmp;
-            if (tmp <= 1e-10)
+            if (tmp <= fast_norm_threshold_t)
             {
                 col_norm[ji1] = CBLAS_NRM2(h_len_m1, R_block_j + 1, 1);
             } else {
@@ -190,6 +200,16 @@ void H2P_partial_pivot_QR_kdim(
     int max_iter = MIN(nrow, ncol) / kdim;
     
     BLAS_SET_NUM_THREADS(n_thread);
+
+    DTYPE eps_t, fast_norm_threshold_t;
+    if (sizeof(DTYPE) == 8)
+    {
+        eps_t = 1e-15;
+        fast_norm_threshold_t = 1e-10;
+    } else {
+        eps_t = 1e-6;
+        fast_norm_threshold_t = 1e-5;
+    }
     
     for (int j = 0; j < ncol; j++) p[j] = j;
     
@@ -228,7 +248,7 @@ void H2P_partial_pivot_QR_kdim(
     
     // Scale the stopping norm
     int stop_rank   = MIN(max_iter, tol_rank/kdim);
-    DTYPE norm_eps  = DSQRT((DTYPE) nrow) * 1e-15;
+    DTYPE norm_eps  = DSQRT((DTYPE) nrow) * eps_t;
     DTYPE stop_norm = MAX(norm_eps, tol_norm);
     if (rel_norm) stop_norm *= norm_p;
     
@@ -361,7 +381,7 @@ void H2P_partial_pivot_QR_kdim(
                 }
             }
             
-            if (tmp <= 1e-10)
+            if (tmp <= fast_norm_threshold_t)
             {
                 const int nrm_len = nrow - (i + 1) * kdim;
                 tmp = 0.0;

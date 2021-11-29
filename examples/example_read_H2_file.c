@@ -18,27 +18,29 @@ int main(int argc, char **argv)
     // Kernel configuration
     int krnl_dim = 1;
     DTYPE *krnl_param = NULL;  // Coulomb kernel has no parameter
-    kernel_eval_fptr krnl_eval = Coulomb_3D_eval_intrin_d;
-    kernel_bimv_fptr krnl_bimv = Coulomb_3D_krnl_bimv_intrin_d;
+    kernel_eval_fptr krnl_eval = Coulomb_3D_eval_intrin_t;
+    kernel_bimv_fptr krnl_bimv = Coulomb_3D_krnl_bimv_intrin_t;
     int krnl_bimv_flops = Coulomb_3D_krnl_bimv_flop;
     /*
     int krnl_dim = 3;
     DTYPE krnl_param[2] = {1.0, 0.1};  // Stokes kernel with parameter, eta, a
     kernel_eval_fptr krnl_eval = Stokes_eval_std;
-    kernel_bimv_fptr krnl_bimv = Stokes_krnl_bimv_intrin_d;
+    kernel_bimv_fptr krnl_bimv = Stokes_krnl_bimv_intrin_t;
     int krnl_bimv_flops = Stokes_krnl_bimv_flop;
     */
 
     // Read H2 matrix data from file and construct H2Pack
     const int BD_JIT = 1;
     H2Pack_p h2pack;
-    const char *metadata_fname = "Coulomb_3D_1e-6.txt";
-    const char *binary_fname   = "Coulomb_3D_1e-6.bin";
-    //const char *metadata_fname = "Stokes_3D_1e-6.txt";
-    //const char *binary_fname   = "Stokes_3D_1e-6.bin";
-    printf("Reading H2 matrix data from files %s and %s\n", metadata_fname, binary_fname);
+    const char *meta_json_fname = "Coulomb_3D_1e-6_meta.json";
+    const char *aux_json_fname  = "Coulomb_3D_1e-6_aux.json";
+    const char *binary_fname    = "Coulomb_3D_1e-6.bin";
+    //const char *meta_json_fname = "Stokes_3D_1e-6_meta.json";
+    //const char *aux_json_fname  = "Stokes_3D_1e-6_aux.json";
+    //const char *binary_fname    = "Stokes_3D_1e-6.bin";
+    printf("Reading H2 matrix data from files %s, %s, and %s\n", meta_json_fname, aux_json_fname, binary_fname);
     H2P_read_from_file(
-        &h2pack, metadata_fname, binary_fname, BD_JIT, 
+        &h2pack, meta_json_fname, aux_json_fname, binary_fname, BD_JIT, 
         krnl_param, krnl_eval, krnl_bimv, krnl_bimv_flops
     );
     int pt_dim  = h2pack->pt_dim;

@@ -104,13 +104,16 @@ int main(int argc, char **argv)
     scanf("%d", &store_to_file);
     if (store_to_file)
     {
-        char metadata_fname[1024];
+        char meta_json_fname[1024];
+        char aux_json_fname[1024];
         char binary_fname[1024];
-        printf("Enter metadata file name: ");
-        scanf("%s", metadata_fname);
+        printf("Enter meta JSON file name: ");
+        scanf("%s", meta_json_fname);
+        printf("Enter auxiliary JSON file name: ");
+        scanf("%s", aux_json_fname);
         printf("Enter binary data file name: ");
         scanf("%s", binary_fname);
-        H2P_store_to_file(h2pack, metadata_fname, binary_fname);
+        H2P_store_to_file(h2pack, meta_json_fname, aux_json_fname, binary_fname);
         printf("done\n");
     }
 

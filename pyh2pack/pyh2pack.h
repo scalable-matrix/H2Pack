@@ -15,6 +15,7 @@ typedef struct{
     kernel_bimv_fptr krnl_bimv; //  Function pointer for kernel_bimv
   
     DTYPE rel_tol;              //  Relative error threshold for kernel matrix compression.
+    int   max_rank;             //  Maximum rank for kernel matrix compression.
     int   BD_JIT;               //  Flag of Just-In-Time matvec mode. 
     int   krnl_mat_size;        //  Size of the defined kernel matrix K(coord, coord)
     
@@ -31,10 +32,20 @@ typedef struct{
     H2Pack_Params params;
     //  Indicate whether h2mat has been built
     int flag_setup;
+
+    //  Indicate whether ULV factorziation of an HSS has been contructed
+    int flag_ulv;
+    //  Indicate whether this ULV factorization is a Cholesky.
+    int flag_chol;  
+    //  Possible diagonal shift 
+    DTYPE shift; 
 } H2Mat;
 
 
-const char description_setup[] = 
+
+//  H2Mat class memeber function
+
+const char description_h2setup[] = 
             "H2Pack function setup(...) involves the following three computation steps:\n\
                 1. parse the test information \n\
                 2. select the proxy points \n\
@@ -52,7 +63,44 @@ const char description_setup[] =
                 (optional) max_leaf_size  : double, the maximum edge length of each leaf box.;\n\
                 (optional) pp_filename    : string, path to a file that either contains precomputed proxy points or will be written to in the setup process;";
 
-static PyObject *setup(H2Mat *self, PyObject *args, PyObject *keywds);
+static PyObject *h2setup(H2Mat *self, PyObject *args, PyObject *keywds);
+
+
+const char description_hsssetup[] = 
+            "H2Pack function setup(...) involves the following three computation steps:\n\
+                1. parse the test information \n\
+                2. select the proxy points \n\
+                3. construct the H2 matrix representation of the kernel matrix \n\n\
+             Input description (keywords : datatype): \n\
+                kernel        : string, kernel name (presently support 'Coulomb', 'Matern', 'Gaussian', 'RPY', 'Stokes'); \n\
+                krnl_dim      : integer, dimension of the kernel function's output;\n\
+                pt_coord      : 2d numpy array, point coordinates. Each row or column stores the coordinate of one point;\n\
+                pt_dim        : integer, dimension of the space points lying in (support 1D,2D,and 3D);\n\
+                rel_tol       : float, accuracy threshold for the H2 matrix representation;\n\
+                (optional) JIT_mode       : 1 or 0, flag for running matvec in JIT mode (JIT mode reduces storage cost but has slower matvec);\n\
+                (optional) krnl_param     : 1d numpy array, parameters of the kernel function;\n\
+                (optional) proxy_surface  : 1 or 0, flag for using proxy surface points (mainly work for potential kernel;\n\
+                (optional) max_leaf_points: integer, the maximum number of points in each leaf node.;\n\
+                (optional) max_leaf_size  : double, the maximum edge length of each leaf box.;\n\
+                (optional) pp_filename    : string, path to a file that either contains precomputed proxy points or will be written to in the setup process;";
+static PyObject *hss_setup(H2Mat *self, PyObject *args, PyObject *keywds);
+
+const char description_hssULV[] = 
+            "H2Pack function factorize(...) involves the following three computation steps:\n";
+
+static PyObject *hss_ulv(H2Mat *self, PyObject *args, PyObject *keywds);
+
+
+const char description_hssSolve[] = 
+            "H2Pack function solve(...) involves the following three computation steps:\n";
+
+static PyObject *hss_solve(H2Mat *self, PyObject *args, PyObject *keywds);
+
+const char description_hsslogdet[] = 
+            "H2Pack function logdet(...) involves the following three computation steps:\n";
+
+static PyObject *hss_logdet(H2Mat *self, PyObject *args);
+
 
 
 const char description_h2matvec[] = 
@@ -63,9 +111,9 @@ const char description_h2matvec[] =
 static PyObject *h2matvec(H2Mat *self, PyObject *args);
 
 const char description_h2matmul[] = 
-            "H2Pack function matvec(x) efficiently multiplies the kernel matrix with ONE vector\n\
+            "H2Pack function matvec(x) efficiently multiplies the kernel matrix with multiple vectors\n\
              Input description (no need for keywords): \n\
-                x: 1d numpy array, the multiplied vector. should be of the same dimension as the matrix.\
+                x: 2d numpy array, the multiplied vectors. the number of rows should be of the same dimension as the matrix.\
             ";
 static PyObject *h2matmul(H2Mat *self, PyObject *args);
 
@@ -86,9 +134,23 @@ const char description_printset[] =
             "H2Pack funciton print_setting() prints out the main information of H2Pack setting.";
 static PyObject *print_setting(H2Mat *self, PyObject *args);
 
+
+
+
+//  Package function
+
 const char description_printkernel[] = 
-            "H2Pack funciton print_kernels() lists all the supported kernel functions and their descriptions.";
+            "Pyh2Pack method print_kernels() lists all the supported kernel functions and their descriptions.";
 static PyObject *print_kernels(PyObject *self, PyObject *args);
+
+const char description_kernelmatvec[] = 
+            "Pyh2Pack method kernel_matvec() apply direct matrix vector multiplication";
+static PyObject *kernel_matvec(PyObject *self, PyObject *args, PyObject *keywds);
+
+const char description_kernelblock[] = 
+            "Pyh2Pack method kernel_block() calculates K(X,Y) with given kernel and source/target points";
+static PyObject *kernel_block(PyObject *self, PyObject *args, PyObject *keywds);
+
 
 static PyObject *clean(H2Mat *self);
 

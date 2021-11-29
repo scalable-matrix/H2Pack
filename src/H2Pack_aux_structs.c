@@ -253,7 +253,7 @@ void H2P_dense_mat_normalize_columns(H2P_dense_mat_p mat, H2P_dense_mat_p workbu
         inv_2norm[icol] = mat->data[icol] * mat->data[icol];
     for (int irow = 1; irow < nrow; irow++)
     {
-        double *mat_row = mat->data + irow * mat->ld;
+        DTYPE *mat_row = mat->data + irow * mat->ld;
         #pragma omp simd
         for (int icol = 0; icol < ncol; icol++) 
             inv_2norm[icol] += mat_row[icol] * mat_row[icol];
@@ -269,7 +269,7 @@ void H2P_dense_mat_normalize_columns(H2P_dense_mat_p mat, H2P_dense_mat_p workbu
     
     for (int irow = 0; irow < nrow; irow++)
     {
-        double *mat_row = mat->data + irow * mat->ld;
+        DTYPE *mat_row = mat->data + irow * mat->ld;
         #pragma omp simd
         for (int icol = 0; icol < ncol; icol++) 
             mat_row[icol] *= inv_2norm[icol];

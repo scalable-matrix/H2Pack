@@ -1,4 +1,20 @@
 
+void calc_err_2norm_dtype(
+    const int len, const DTYPE *x0, const DTYPE *x1, 
+    DTYPE *x0_2norm_, DTYPE *err_2norm_
+)
+{
+    DTYPE x0_2norm = 0.0, err_2norm = 0.0, diff;
+    for (int i = 0; i < len; i++)
+    {
+        diff = x0[i] - x1[i];
+        x0_2norm  += x0[i] * x0[i];
+        err_2norm += diff  * diff;
+    }
+    *x0_2norm_  = DSQRT(x0_2norm);
+    *err_2norm_ = DSQRT(err_2norm);
+}
+
 void test_H2_matmul(H2Pack_p h2pack, const int n_vec)
 {
     double st, et;
@@ -49,7 +65,7 @@ void test_H2_matmul(H2Pack_p h2pack, const int n_vec)
     {
         DTYPE *y0_ivec = y0 + i * krnl_mat_size;
         DTYPE *y1_ivec = y1 + i * krnl_mat_size;
-        calc_err_2norm(krnl_mat_size, y0_ivec, y1_ivec, &y0_2norm, &err_2norm);
+        calc_err_2norm_dtype(krnl_mat_size, y0_ivec, y1_ivec, &y0_2norm, &err_2norm);
         relerr = err_2norm / y0_2norm;
         if (relerr > cm_max_relerr) cm_max_relerr = relerr;
         cm_avg_relerr += relerr;
@@ -82,7 +98,7 @@ void test_H2_matmul(H2Pack_p h2pack, const int n_vec)
     {
         DTYPE *y0_ivec = y0 + i * krnl_mat_size;
         DTYPE *y2_ivec = y2 + i * krnl_mat_size;
-        calc_err_2norm(krnl_mat_size, y0_ivec, y2_ivec, &y0_2norm, &err_2norm);
+        calc_err_2norm_dtype(krnl_mat_size, y0_ivec, y2_ivec, &y0_2norm, &err_2norm);
         relerr = err_2norm / y0_2norm;
         if (relerr > rm_max_relerr) rm_max_relerr = relerr;
         rm_avg_relerr += relerr;

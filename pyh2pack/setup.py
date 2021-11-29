@@ -13,7 +13,7 @@ extra_cflags += ["-DUSE_OPENBLAS", "-fopenmp", "-march=native"]
 extra_cflags += ["-Wno-unused-result", "-Wno-unused-function"]
 
 LIB = [H2PACK_DIR+"/lib/libH2Pack.a", OPENBLAS_INSTALL_DIR+"/lib/libopenblas.a"]
-extra_lflags = LIB + ["-g", "-O3", "-fopenmp", "-lm"]
+extra_lflags = LIB + ["-g", "-O3", "-fopenmp", "-lm", "-lgfortran"]
 
 def main():
     setup(name="pyh2pack",

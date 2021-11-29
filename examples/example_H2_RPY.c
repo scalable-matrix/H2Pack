@@ -17,8 +17,9 @@ int main(int argc, char **argv)
 
     // Point configuration, random generation
     int pt_dim  = 3;
-    int n_point = 40000;
-    DTYPE* coord = (DTYPE*) malloc_aligned(sizeof(DTYPE) * n_point * pt_dim, 64);
+    int xpt_dim = pt_dim + 1;
+    int n_point = 20000;
+    DTYPE* coord = (DTYPE*) malloc_aligned(sizeof(DTYPE) * n_point * xpt_dim, 64);
     assert(coord != NULL);
 
     DTYPE prefac = DPOW((DTYPE) n_point, 1.0 / (DTYPE) pt_dim);
@@ -28,14 +29,17 @@ int main(int argc, char **argv)
         coord[i] = (DTYPE) drand48();
         coord[i] *= prefac;
     }
+    DTYPE radius = 0.01;
+    for (int i = 0; i < n_point; i++)
+        coord[n_point * pt_dim + i] = radius;  // Uniform radius
     printf(" done.\n");
  
     // Kernel configuration
-    int krnl_dim = 1;
-    DTYPE *krnl_param = NULL;  // Coulomb kernel has no parameter
-    kernel_eval_fptr krnl_eval = Coulomb_3D_eval_intrin_t;
-    kernel_bimv_fptr krnl_bimv = Coulomb_3D_krnl_bimv_intrin_t;
-    int krnl_bimv_flops = Coulomb_3D_krnl_bimv_flop;
+    int krnl_dim = 3;
+    DTYPE krnl_param[1] = {1.0};  // Stokes kernel with parameter, eta, a
+    kernel_eval_fptr krnl_eval = RPY_eval_std;
+    kernel_bimv_fptr krnl_bimv = RPY_krnl_bimv_intrin_t;
+    int krnl_bimv_flops = RPY_krnl_bimv_flop;
 
     // H2 construction configuration
     int krnl_mat_size = krnl_dim * n_point;
@@ -45,11 +49,22 @@ int main(int argc, char **argv)
     // Initialization of H2Pack
     H2Pack_p h2pack;
     H2P_init(&h2pack, pt_dim, krnl_dim, QR_REL_NRM, &rel_tol);
+
+    H2P_run_RPY(h2pack);
+
+    int max_leaf_points = 300;
+    DTYPE max_leaf_size = 0.0;
+
+    // We need to ensure the size of each leaf box >= 2 * max(radii), but the 
+    // stopping criteria is "if (box_size <= max_leaf_size)", so max_leaf_size
+    // should be set as 4 * max(radii).
+    DTYPE *radii = coord + 3 * n_point; 
+    for (int i = 0; i < n_point; i++)
+        max_leaf_size = (max_leaf_size < radii[i]) ? radii[i] : max_leaf_size;
+    max_leaf_size *= 4.0;
     
     // Hierarchical partitioning
-    int max_leaf_points = 0;    // use the default in h2pack for maximum number of points in the leaf node
-    DTYPE max_leaf_size = 0.0;  // use the default in h2pack for maximum edge length of leaf box
-    char *pp_fname = "./PP_Coulomb3D_1e-6.dat"; //  file name for storage and reuse of proxy points, can be set as NULL.
+    char *pp_fname = "./PP_RPY3D_1e-6.dat"; //  file name for storage and reuse of proxy points, can be set as NULL.
     H2P_calc_enclosing_box(pt_dim, n_point, coord, pp_fname, &h2pack->root_enbox);
     H2P_partition_points(h2pack, n_point, coord, max_leaf_points, max_leaf_size);
     
@@ -57,7 +72,7 @@ int main(int argc, char **argv)
     H2P_dense_mat_p *pp;
     //  method 1: numerical proxy point selection, works for any kernel but require relatively expensive precomputation
     //            the computed proxy points will be stored in `pp_fname' (if not NULL) for reuse if needed. 
-    if (1)
+    if (0)
     {
         st = get_wtime_sec();
         H2P_generate_proxy_point_ID_file(h2pack, krnl_param, krnl_eval, pp_fname, &pp);
@@ -73,8 +88,7 @@ int main(int argc, char **argv)
         int num_pp, num_pp_dim = ceil(-log10(rel_tol));
         if (num_pp_dim < 4 ) num_pp_dim = 4;
         if (num_pp_dim > 10) num_pp_dim = 10;
-        if (pt_dim == 2) num_pp = 2 * pt_dim * num_pp_dim;
-        if (pt_dim == 3) num_pp = 2 * pt_dim * num_pp_dim * num_pp_dim;
+        num_pp = 2 * pt_dim * num_pp_dim * num_pp_dim;
         st = get_wtime_sec();
         H2P_generate_proxy_point_surface(
             pt_dim, pt_dim, num_pp, h2pack->max_level,
@@ -139,22 +153,22 @@ int main(int argc, char **argv)
     err_norm = DSQRT(err_norm);
     printf("For %d validation points: ||y_{H2} - y||_2 / ||y||_2 = %e\n", n_check_pt, err_norm / y0_norm);
     printf("The specified relative error threshold is %e\n", rel_tol);
-    
+
     // Store H2 matrix data to file
     int store_to_file = 0;
     printf("Store H2 matrix data to file? 1-yes, 0-no : ");
     scanf("%d", &store_to_file);
     if (store_to_file)
     {
-        const char *meta_json_fname = "Coulomb_3D_1e-6_meta.json";
-        const char *aux_json_fname  = "Coulomb_3D_1e-6_aux.json";
-        const char *binary_fname    = "Coulomb_3D_1e-6.bin";
+        const char *meta_json_fname = "RPY_3D_1e-6_meta.json";
+        const char *aux_json_fname  = "RPY_3D_1e-6_aux.json";
+        const char *binary_fname    = "RPY_3D_1e-6.bin";
         printf("Storing H2 matrix data to files %s, %s, and %s...", meta_json_fname, aux_json_fname, binary_fname);
         fflush(stdout);
         H2P_store_to_file(h2pack, meta_json_fname, aux_json_fname, binary_fname);
         printf("done\n");
     }
-
+    
     free(x);
     free(y0);
     free(y1);

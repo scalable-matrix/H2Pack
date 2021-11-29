@@ -55,4 +55,4 @@ $(LIB_SO): $(C_OBJS)
 	$(CC) $(CFLAGS) -c $^ -o $@
 
 clean:
-	rm $(C_OBJS) $(LIB_A) $(LIB_SO)
+	rm -f $(C_OBJS) $(LIB_A) $(LIB_SO)

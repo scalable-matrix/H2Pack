@@ -66,7 +66,7 @@ a single set of points (i.e., square, symmetric matrices)
 
 **References**
 
-* H. Huang, X. Xing, and E. Chow, [H2Pack: High-performance H2 matrix package for kernel matrices using the proxy point method](https://www.cc.gatech.edu/~echow/pubs/h2pack.pdf), _ACM Transactions on Mathematical Software_, to appear (2020).
+* H. Huang, X. Xing, and E. Chow, [H2Pack: High-performance H2 matrix package for kernel matrices using the proxy point method](https://www.cc.gatech.edu/~echow/pubs/h2pack.pdf), _ACM Transactions on Mathematical Software_, 47(1), Article 3 (2020).
 * X. Xing and E. Chow, [Interpolative decomposition via proxy points for kernel matrices](https://www.cc.gatech.edu/~echow/pubs/xing-chow-simax-2019.pdf), _SIAM Journal on Matrix Analysis and Applications_, 41(1), 221–243 (2020).
 
 
@@ -84,7 +84,8 @@ a single set of points (i.e., square, symmetric matrices)
 * [Vector Wrapper Functions for Kernel Evaluations](https://github.com/scalable-matrix/H2Pack/wiki/Vector-Wrapper-Functions-For-Kernel-Evaluations)
 * [Proxy Points and their Reuse](https://github.com/scalable-matrix/H2Pack/wiki/Proxy-Points-and-their-Reuse)
 * [Python Interface](https://github.com/scalable-matrix/H2Pack/wiki/Using-H2Pack-in-Python)
-
+* [H2 Matrix File Storage Scheme (draft)](https://github.com/scalable-matrix/H2Pack/wiki/H2-Matrix-File-Storage-Scheme)
+* [Using H2 Matrix File Storage](https://github.com/scalable-matrix/H2Pack/wiki/Using-H2-Matrix-File-Storage)
 
 ## Numerical Tests
 

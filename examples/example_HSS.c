@@ -35,13 +35,13 @@ int main(int argc, char **argv)
     int krnl_dim = 1;
     /*
     DTYPE krnl_param[1] = {0.5};  //2D Gaussian kernel with the exponent parameter 
-    kernel_eval_fptr krnl_eval = Gaussian_2D_eval_intrin_d;
-    kernel_bimv_fptr krnl_bimv = Gaussian_2D_krnl_bimv_intrin_d;
+    kernel_eval_fptr krnl_eval = Gaussian_2D_eval_intrin_t;
+    kernel_bimv_fptr krnl_bimv = Gaussian_2D_krnl_bimv_intrin_t;
     int krnl_bimv_flop = Gaussian_2D_krnl_bimv_flop;
     */
     DTYPE krnl_param[2] = {100.0, -0.5};  //2D quadratic kernel with the scale and exponent parameters
-    kernel_eval_fptr krnl_eval = Quadratic_2D_eval_intrin_d;
-    kernel_bimv_fptr krnl_bimv = Quadratic_2D_krnl_bimv_intrin_d;
+    kernel_eval_fptr krnl_eval = Quadratic_2D_eval_intrin_t;
+    kernel_bimv_fptr krnl_bimv = Quadratic_2D_krnl_bimv_intrin_t;
     int krnl_bimv_flop = Quadratic_2D_krnl_bimv_flop;
 
     // HSS construction configuration
@@ -203,14 +203,12 @@ int main(int argc, char **argv)
     scanf("%d", &store_to_file);
     if (store_to_file)
     {
-        //const char *metadata_fname = "Gaussian_2D_1e-6.txt";
-        //const char *binary_fname   = "Gaussian_2D_1e-6.bin";
-        const char *metadata_fname = "Quadratic_2D_1e-6.txt";
-        const char *binary_fname   = "Quadratic_2D_1e-6.bin";
-        printf("Storing HSS matrix data to files %s and %s...", metadata_fname, binary_fname);
+        const char *meta_json_fname = "Quadratic_2D_1e-6_meta.json";
+        const char *aux_json_fname  = "Quadratic_2D_1e-6_aux.json";
+        const char *binary_fname    = "Quadratic_2D_1e-6.bin";
+        printf("Storing HSS matrix data to files %s, %s, and %s...", meta_json_fname, aux_json_fname, binary_fname);
         fflush(stdout);
-        H2P_store_to_file(h2pack, metadata_fname, binary_fname);
-        printf("done\n");
+        H2P_store_to_file(h2pack, meta_json_fname, aux_json_fname, binary_fname);
     }
 
     free(x0);

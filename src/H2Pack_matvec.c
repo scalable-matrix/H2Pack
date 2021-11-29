@@ -490,10 +490,8 @@ void H2P_ext_krnl_bimv(
         DTYPE *c1_dst = src_coord + i * n1_ext;
         memcpy(c0_dst, c0_src, sizeof(DTYPE) * n0);
         memcpy(c1_dst, c1_src, sizeof(DTYPE) * n1);
-        // Use an extremely large coordinate so the inverse distance of these 
-        // extra points to original points are numerically zero
-        for (int j = n0; j < n0_ext; j++) c0_dst[j] = 1e100;
-        for (int j = n1; j < n1_ext; j++) c1_dst[j] = 1e100;
+        for (int j = n0; j < n0_ext; j++) c0_dst[j] = 0;
+        for (int j = n1; j < n1_ext; j++) c1_dst[j] = 0;
     }
     
     // Copy input vectors and initialize output vectors

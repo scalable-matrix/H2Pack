@@ -47,6 +47,7 @@ int main(int argc, char **argv)
     //__itt_pause();
     srand48(time(NULL));
     
+    printf("For this sample point example program, please enter an arbitrary proxy point file name if asked\n\n");
     parse_scalar_params(argc, argv);
     
     double st, et;
@@ -78,7 +79,7 @@ int main(int argc, char **argv)
         approx_rank, &sample_pt
     );
     et = get_wtime_sec();
-    printf("H2Pack load/generate proxy points used %.3lf (s)\n", et - st);
+    printf("H2Pack select sample points used %.3lf (s)\n", et - st);
     
     H2P_build_with_sample_point(
         h2pack, sample_pt, test_params.BD_JIT, test_params.krnl_param, 
@@ -142,13 +143,16 @@ int main(int argc, char **argv)
     scanf("%d", &store_to_file);
     if (store_to_file)
     {
-        char metadata_fname[1024];
+        char meta_json_fname[1024];
+        char aux_json_fname[1024];
         char binary_fname[1024];
-        printf("Enter metadata file name: ");
-        scanf("%s", metadata_fname);
+        printf("Enter meta JSON file name: ");
+        scanf("%s", meta_json_fname);
+        printf("Enter auxiliary JSON file name: ");
+        scanf("%s", aux_json_fname);
         printf("Enter binary data file name: ");
         scanf("%s", binary_fname);
-        H2P_store_to_file(h2pack, metadata_fname, binary_fname);
+        H2P_store_to_file(h2pack, meta_json_fname, aux_json_fname, binary_fname);
         printf("done\n");
     }
 

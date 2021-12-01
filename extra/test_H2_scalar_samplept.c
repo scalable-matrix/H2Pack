@@ -62,8 +62,9 @@ int main(int argc, char **argv)
     DTYPE max_leaf_size = 0.0;    
     H2P_partition_points(h2pack, test_params.n_point, test_params.coord, max_leaf_points, max_leaf_size);
 
+    DTYPE tau = 0.7;  // Separation threshold
+    #if 0
     int approx_rank, approx_rank0;
-    DTYPE tau = 0.7;
     approx_rank0 = sample_approx_rank(tau, test_params.rel_tol);
     if (argc >= 9) approx_rank = atoi(argv[8]);
     else 
@@ -71,12 +72,13 @@ int main(int argc, char **argv)
         printf("Sample approx rank (suggested %d): ", approx_rank0);
         scanf("%d", &approx_rank);
     }
+    #endif
 
     H2P_dense_mat_p *sample_pt;
     st = get_wtime_sec();
     H2P_select_sample_point(
         h2pack, test_params.krnl_param, test_params.krnl_eval, 
-        approx_rank, &sample_pt
+        tau, &sample_pt
     );
     et = get_wtime_sec();
     printf("H2Pack select sample points used %.3lf (s)\n", et - st);

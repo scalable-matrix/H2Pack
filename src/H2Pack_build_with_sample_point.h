@@ -14,12 +14,12 @@ extern "C" {
 //   h2pack      : Initialized H2Pack structure
 //   krnl_param  : Pointer to kernel function parameter array
 //   krnl_eval   : Pointer to kernel matrix evaluation function
-//   approx_rank : Approximation rank (what is this??)
+//   tau         : Separation threshold, usually is 0.7
 // Output parameter:
 //   *sample_points_  : Array of sample points for each node
 void H2P_select_sample_point(
     H2Pack_p h2pack, const void *krnl_param, kernel_eval_fptr krnl_eval, 
-    const int approx_rank, H2P_dense_mat_p **sample_points_
+    const DTYPE tau, H2P_dense_mat_p **sample_points_
 );
 
 // Build H2 representation with a kernel function and sample points

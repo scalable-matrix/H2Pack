@@ -263,10 +263,164 @@ void H2P_select_cluster_sample(
     sample_idx->length = sample_idx_cnt;
 }
 
+int H2P_select_sample_point_r(
+    H2Pack_p h2pack, const void *krnl_param, kernel_eval_fptr krnl_eval, 
+    const DTYPE tau, const DTYPE reltol
+)
+{
+    ASSERT_PRINTF(h2pack->pt_dim == h2pack->xpt_dim, "Sample point algorithm does not support RPY with different radii yet\n");
+
+    int k        = h2pack->max_leaf_points * 2;
+    int pt_dim   = h2pack->pt_dim;
+    int krnl_dim = h2pack->krnl_dim;
+    int n_thread = h2pack->n_thread;
+    DTYPE *root_enbox = h2pack->root_enbox;
+    DTYPE L = root_enbox[pt_dim];
+    for (int i = 1; i < pt_dim; i++) 
+        L = (L > root_enbox[pt_dim + i]) ? root_enbox[pt_dim + i] : L;
+    L /= 6.0;  // Don't know why we need this, just copy from the MATLAB code
+
+    DTYPE *c1_enbox_size = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim * 2);
+    int *r_list = (int *) malloc(sizeof(int) * pt_dim);
+    int r_vol;
+    H2P_dense_mat_p coord0, coord1, coord1s, A0, A1, U, UA, workbuf_d, QR_buff;
+    H2P_int_vec_p workbuf_i, sample_idx, sub_idx, ID_buff;
+    H2P_dense_mat_init(&coord0,  pt_dim, k);
+    H2P_dense_mat_init(&coord1,  pt_dim, k);
+    H2P_dense_mat_init(&coord1s, pt_dim, k);
+    H2P_dense_mat_init(&A0, k * krnl_dim, k * krnl_dim);
+    H2P_dense_mat_init(&A1, k * krnl_dim, k * krnl_dim);
+    H2P_dense_mat_init(&U,  k * krnl_dim, k * krnl_dim);
+    H2P_dense_mat_init(&UA, k * krnl_dim, k * krnl_dim);
+    H2P_dense_mat_init(&workbuf_d, 1, 8192);
+    H2P_dense_mat_init(&QR_buff, 1, 8192);
+    H2P_int_vec_init(&workbuf_i, 1024);
+    H2P_int_vec_init(&sample_idx, 1024);
+    H2P_int_vec_init(&ID_buff, 1024);
+    sub_idx = sample_idx;
+
+    int stop_type = QR_REL_NRM;
+    DTYPE stop_tol = reltol * 1e-4;
+    if (stop_tol < 1e-15) stop_tol = 1e-15;
+    void *stop_param = (void *) &stop_tol;
+
+    // Create two sets of points in unit boxes
+    DTYPE coord1_shift = L / tau;
+    for (int i = 0; i < k * pt_dim; i++)
+    {
+        coord0->data[i] = L * (DTYPE) drand48();
+        coord1->data[i] = L * (DTYPE) drand48() + coord1_shift;
+    }
+
+    // Find an r value by checking approximation error to A
+    int r = 1, flag = 0;
+    DTYPE A0_fnorm = 0.0;
+    krnl_eval(
+        coord0->data, k, k,
+        coord1->data, k, k, 
+        krnl_param, A0->data, A0->ld
+    );
+    #pragma omp parallel for reduction(+: A0_fnorm)
+    for (int i = 0; i < A0->nrow * A0->ncol; i++)
+        A0_fnorm += A0->data[i] * A0->data[i];
+    A0_fnorm = DSQRT(A0_fnorm);
+    while (flag == 0)
+    {
+        H2P_calc_enclosing_box_size(pt_dim, k, coord1->data, c1_enbox_size);
+        r_vol = H2P_proportional_int_decompose(pt_dim, r, c1_enbox_size, r_list);
+        if (r_vol < k)
+        {
+            // sample_idx = H2_select_cluster_sample(pt_dim, coord2, r_list, 6);
+            // coord2_samples = coord2(sample_idx, :);
+            H2P_select_cluster_sample(pt_dim, coord1, r_list, 6, n_thread, workbuf_i, workbuf_d, sample_idx);
+            H2P_dense_mat_copy(coord1, coord1s);
+            H2P_dense_mat_select_columns(coord1s, sample_idx);
+
+            // A1 = kernel({coord1, coord2_samples});
+            int n_sample = sample_idx->length;
+            H2P_dense_mat_resize(A1, k * krnl_dim, n_sample * krnl_dim);
+            krnl_eval(
+                coord0->data, k, k,
+                coord1s->data, n_sample, n_sample, 
+                krnl_param, A1->data, A1->ld
+            );
+
+            // ID compress of A1
+            if (krnl_dim == 1)
+            {
+                H2P_dense_mat_resize(QR_buff, A1->nrow, 1);
+            } else {
+                int QR_buff_size = (2 * krnl_dim + 2) * A1->ncol + (krnl_dim + 1) * A1->nrow;
+                H2P_dense_mat_resize(QR_buff, QR_buff_size, 1);
+            }
+            H2P_int_vec_set_capacity(ID_buff, 4 * A1->nrow);
+            H2P_ID_compress(
+                A1, stop_type, stop_param, &U, sub_idx, 
+                n_thread, QR_buff->data, ID_buff->data, krnl_dim
+            );
+
+            // Copy A0(sub_idx, :) to A1
+            H2P_dense_mat_resize(A1, sub_idx->length * krnl_dim, k * krnl_dim);
+            #pragma omp parallel for
+            for (int i = 0; i < sub_idx->length; i++)
+            {
+                for (int j = 0; j < krnl_dim; j++)
+                {
+                    int A1_irow = i * krnl_dim + j;
+                    int A0_irow = sub_idx->data[i] * krnl_dim + j;
+                    memcpy(A1->data + A1_irow * A1->ld, A0->data + A0_irow * A0->ld, sizeof(DTYPE) * k * krnl_dim);
+                }
+            }
+
+            // UA = U * A(subidx, :);
+            H2P_dense_mat_resize(UA, U->nrow, A0->ncol);
+            CBLAS_GEMM(
+                CblasRowMajor, CblasNoTrans, CblasNoTrans, A0->nrow, A0->ncol, U->ncol,
+                1.0, U->data, U->ld, A1->data, A1->ld, 0, UA->data, UA->ld
+            );
+
+            // err = norm(UA - A, 'fro') / norm(A, 'fro');
+            DTYPE err_fnorm = 0.0, relerr;
+            #pragma omp parallel for reduction(+: err_fnorm)
+            for (int i = 0; i < A0->nrow * A0->ncol; i++)
+            {
+                DTYPE diff = DABS(A0->data[i] - UA->data[i]);
+                err_fnorm += diff * diff;
+            }
+            err_fnorm = DSQRT(err_fnorm);
+            relerr = err_fnorm / A0_fnorm;
+            if (relerr < reltol * 0.1) flag = 1;
+            else r++;
+        } else {
+            flag = 1;
+        }  // End of "if (r_vol < k)"
+    }  // End "while (flag == 0)"
+
+    // Not in the MATLAB code, but the C code usually gives a smaller average rank
+    // when using the same parameter set, so increase r and use a smaller stop_tol
+    r++;  
+
+    free(c1_enbox_size);
+    free(r_list);
+    H2P_dense_mat_destroy(&coord0);
+    H2P_dense_mat_destroy(&coord1);
+    H2P_dense_mat_destroy(&coord1s);
+    H2P_dense_mat_destroy(&A0);
+    H2P_dense_mat_destroy(&A1);
+    H2P_dense_mat_destroy(&U);
+    H2P_dense_mat_destroy(&UA);
+    H2P_dense_mat_destroy(&workbuf_d);
+    H2P_dense_mat_destroy(&QR_buff);
+    H2P_int_vec_destroy(&workbuf_i);
+    H2P_int_vec_destroy(&sample_idx);
+    H2P_int_vec_destroy(&ID_buff);
+    return r;
+}
+
 // Select sample points for constructing H2 projection and skeleton matrices 
 void H2P_select_sample_point(
     H2Pack_p h2pack, const void *krnl_param, kernel_eval_fptr krnl_eval, 
-    const int approx_rank, H2P_dense_mat_p **sample_points_
+    const DTYPE tau, H2P_dense_mat_p **sample_points_
 )
 {
     int   pt_dim        = h2pack->pt_dim;
@@ -316,12 +470,16 @@ void H2P_select_sample_point(
 
     // 3. Bottom-up sweep
     int ri;  // What the heck is this ri parameter??
+    #if 0
     if (approx_rank >= 15) ri = approx_rank - 9;
     if (approx_rank <= 14) ri = approx_rank - 8;
     if (approx_rank <=  9) ri = approx_rank - 5;
     if (approx_rank <=  7) ri = approx_rank - 4;
     if (approx_rank <=  3) ri = approx_rank - 1;
     if (ri < 0) ri = 0;
+    #else
+    ri = H2P_select_sample_point_r(h2pack, krnl_param, krnl_eval, tau, h2pack->QR_stop_tol);
+    #endif
     for (int i = max_level; i >= min_adm_level; i--)
     {
         int *level_i_nodes = level_nodes + i * n_leaf_node;
@@ -386,9 +544,11 @@ void H2P_select_sample_point(
     }  // End of i loop
     
     // 4. Top-down sweep
+    #if 0
     // What the heck?? Why ri is changed??
     ri = approx_rank + 3;
     if (approx_rank > 3 && ri < 10) ri = 10;
+    #endif
     for (int i = min_adm_level; i <= max_level; i++)
     {
         int *level_i_nodes = level_nodes + i * n_leaf_node;

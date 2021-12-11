@@ -282,7 +282,6 @@ int H2P_select_sample_point_r(
 
     DTYPE *c1_enbox_size = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim * 2);
     int *r_list = (int *) malloc(sizeof(int) * pt_dim);
-    int r_vol;
     H2P_dense_mat_p coord0, coord1, coord1s, A0, A1, U, UA, workbuf_d, QR_buff;
     H2P_int_vec_p workbuf_i, sample_idx, sub_idx, ID_buff;
     H2P_dense_mat_init(&coord0,  pt_dim, k);
@@ -327,73 +326,69 @@ int H2P_select_sample_point_r(
     while (flag == 0)
     {
         H2P_calc_enclosing_box_size(pt_dim, k, coord1->data, c1_enbox_size);
-        r_vol = H2P_proportional_int_decompose(pt_dim, r, c1_enbox_size, r_list);
-        if (r_vol < k)
+        H2P_proportional_int_decompose(pt_dim, r, c1_enbox_size, r_list);
+
+        // sample_idx = H2_select_cluster_sample(pt_dim, coord2, r_list, 6);
+        // coord2_samples = coord2(sample_idx, :);
+        H2P_select_cluster_sample(pt_dim, coord1, r_list, 6, n_thread, workbuf_i, workbuf_d, sample_idx);
+        H2P_dense_mat_copy(coord1, coord1s);
+        H2P_dense_mat_select_columns(coord1s, sample_idx);
+
+        // A1 = kernel({coord1, coord2_samples});
+        int n_sample = sample_idx->length;
+        H2P_dense_mat_resize(A1, k * krnl_dim, n_sample * krnl_dim);
+        krnl_eval(
+            coord0->data, k, k,
+            coord1s->data, n_sample, n_sample, 
+            krnl_param, A1->data, A1->ld
+        );
+
+        // ID compress of A1
+        if (krnl_dim == 1)
         {
-            // sample_idx = H2_select_cluster_sample(pt_dim, coord2, r_list, 6);
-            // coord2_samples = coord2(sample_idx, :);
-            H2P_select_cluster_sample(pt_dim, coord1, r_list, 6, n_thread, workbuf_i, workbuf_d, sample_idx);
-            H2P_dense_mat_copy(coord1, coord1s);
-            H2P_dense_mat_select_columns(coord1s, sample_idx);
-
-            // A1 = kernel({coord1, coord2_samples});
-            int n_sample = sample_idx->length;
-            H2P_dense_mat_resize(A1, k * krnl_dim, n_sample * krnl_dim);
-            krnl_eval(
-                coord0->data, k, k,
-                coord1s->data, n_sample, n_sample, 
-                krnl_param, A1->data, A1->ld
-            );
-
-            // ID compress of A1
-            if (krnl_dim == 1)
-            {
-                H2P_dense_mat_resize(QR_buff, A1->nrow, 1);
-            } else {
-                int QR_buff_size = (2 * krnl_dim + 2) * A1->ncol + (krnl_dim + 1) * A1->nrow;
-                H2P_dense_mat_resize(QR_buff, QR_buff_size, 1);
-            }
-            H2P_int_vec_set_capacity(ID_buff, 4 * A1->nrow);
-            H2P_ID_compress(
-                A1, stop_type, stop_param, &U, sub_idx, 
-                n_thread, QR_buff->data, ID_buff->data, krnl_dim
-            );
-
-            // Copy A0(sub_idx, :) to A1
-            H2P_dense_mat_resize(A1, sub_idx->length * krnl_dim, k * krnl_dim);
-            #pragma omp parallel for
-            for (int i = 0; i < sub_idx->length; i++)
-            {
-                for (int j = 0; j < krnl_dim; j++)
-                {
-                    int A1_irow = i * krnl_dim + j;
-                    int A0_irow = sub_idx->data[i] * krnl_dim + j;
-                    memcpy(A1->data + A1_irow * A1->ld, A0->data + A0_irow * A0->ld, sizeof(DTYPE) * k * krnl_dim);
-                }
-            }
-
-            // UA = U * A(subidx, :);
-            H2P_dense_mat_resize(UA, U->nrow, A0->ncol);
-            CBLAS_GEMM(
-                CblasRowMajor, CblasNoTrans, CblasNoTrans, A0->nrow, A0->ncol, U->ncol,
-                1.0, U->data, U->ld, A1->data, A1->ld, 0, UA->data, UA->ld
-            );
-
-            // err = norm(UA - A, 'fro') / norm(A, 'fro');
-            DTYPE err_fnorm = 0.0, relerr;
-            #pragma omp parallel for reduction(+: err_fnorm)
-            for (int i = 0; i < A0->nrow * A0->ncol; i++)
-            {
-                DTYPE diff = DABS(A0->data[i] - UA->data[i]);
-                err_fnorm += diff * diff;
-            }
-            err_fnorm = DSQRT(err_fnorm);
-            relerr = err_fnorm / A0_fnorm;
-            if (relerr < reltol * 0.1) flag = 1;
-            else r++;
+            H2P_dense_mat_resize(QR_buff, A1->nrow, 1);
         } else {
-            flag = 1;
-        }  // End of "if (r_vol < k)"
+            int QR_buff_size = (2 * krnl_dim + 2) * A1->ncol + (krnl_dim + 1) * A1->nrow;
+            H2P_dense_mat_resize(QR_buff, QR_buff_size, 1);
+        }
+        H2P_int_vec_set_capacity(ID_buff, 4 * A1->nrow);
+        H2P_ID_compress(
+            A1, stop_type, stop_param, &U, sub_idx, 
+            n_thread, QR_buff->data, ID_buff->data, krnl_dim
+        );
+
+        // Copy A0(sub_idx, :) to A1
+        H2P_dense_mat_resize(A1, sub_idx->length * krnl_dim, k * krnl_dim);
+        #pragma omp parallel for
+        for (int i = 0; i < sub_idx->length; i++)
+        {
+            for (int j = 0; j < krnl_dim; j++)
+            {
+                int A1_irow = i * krnl_dim + j;
+                int A0_irow = sub_idx->data[i] * krnl_dim + j;
+                memcpy(A1->data + A1_irow * A1->ld, A0->data + A0_irow * A0->ld, sizeof(DTYPE) * k * krnl_dim);
+            }
+        }
+
+        // UA = U * A(subidx, :);
+        H2P_dense_mat_resize(UA, U->nrow, A0->ncol);
+        CBLAS_GEMM(
+            CblasRowMajor, CblasNoTrans, CblasNoTrans, A0->nrow, A0->ncol, U->ncol,
+            1.0, U->data, U->ld, A1->data, A1->ld, 0, UA->data, UA->ld
+        );
+
+        // err = norm(UA - A, 'fro') / norm(A, 'fro');
+        DTYPE err_fnorm = 0.0, relerr;
+        #pragma omp parallel for reduction(+: err_fnorm)
+        for (int i = 0; i < A0->nrow * A0->ncol; i++)
+        {
+            DTYPE diff = DABS(A0->data[i] - UA->data[i]);
+            err_fnorm += diff * diff;
+        }
+        err_fnorm = DSQRT(err_fnorm);
+        relerr = err_fnorm / A0_fnorm;
+        if ( (relerr < reltol * 0.1) || ((k - n_sample) < (k / 10)) ) flag = 1;
+        else r++;
     }  // End "while (flag == 0)"
 
     // Not in the MATLAB code, but the C code usually gives a smaller average rank
@@ -656,11 +651,15 @@ void H2P_build_H2_UJ_sample(H2Pack_p h2pack, H2P_dense_mat_p *sample_pt)
     H2P_thread_buf_p *thread_buf = h2pack->tb;
     kernel_eval_fptr krnl_eval   = h2pack->krnl_eval;
     DAG_task_queue_p upward_tq   = h2pack->upward_tq;
+
+    // In Difeng's MATLAB code, the rrqrSVD tolerance == 0.01 * prescribed tolerance
+    DTYPE QR_stop_tol = h2pack->QR_stop_tol * 0.01;  
+    
     void *stop_param = NULL;
     if (stop_type == QR_RANK) 
         stop_param = &h2pack->QR_stop_rank;
     if ((stop_type == QR_REL_NRM) || (stop_type == QR_ABS_NRM))
-        stop_param = &h2pack->QR_stop_tol;
+        stop_param = &QR_stop_tol;
     
     // 1. Allocate U and J
     h2pack->n_UJ = n_node;

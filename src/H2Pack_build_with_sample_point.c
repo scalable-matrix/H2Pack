@@ -96,17 +96,18 @@ void H2P_calc_pdist2(
     {
         const DTYPE *coord0_i = coord0 + i;
         DTYPE *dist2_i = dist2 + i * ldd;
-        #pragma omp simd
-        for (int j = 0; j < n1; j++)
+        // This implementation makes GCC auto-vectorization happy
+        memset(dist2_i, 0, sizeof(DTYPE) * n1);
+        for (int k = 0; k < pt_dim; k++)
         {
-            const DTYPE *coord1_j = coord1 + j;
-            DTYPE dist2_ij = 0;
-            for (int k = 0; k < pt_dim; k++)
+            const DTYPE coord0_k_i = coord0_i[k * ld0];
+            const DTYPE *coord1_k = coord1 + k * ld1;
+            #pragma omp simd
+            for (int j = 0; j < n1; j++)
             {
-                DTYPE diff = coord0_i[k * ld0] - coord1_j[k * ld1];
-                dist2_ij += diff * diff;
+                DTYPE diff = coord0_k_i - coord1_k[j];
+                dist2_i[j] += diff * diff;
             }
-            dist2_i[j] = dist2_ij;
         }
     }
 }
@@ -652,8 +653,8 @@ void H2P_build_H2_UJ_sample(H2Pack_p h2pack, H2P_dense_mat_p *sample_pt)
     kernel_eval_fptr krnl_eval   = h2pack->krnl_eval;
     DAG_task_queue_p upward_tq   = h2pack->upward_tq;
 
-    // In Difeng's MATLAB code, the rrqrSVD tolerance == 0.01 * prescribed tolerance
-    DTYPE QR_stop_tol = h2pack->QR_stop_tol * 0.01;  
+    // 1e-4 is suggested by Difeng
+    DTYPE QR_stop_tol = h2pack->QR_stop_tol * 1e-4;  
     
     void *stop_param = NULL;
     if (stop_type == QR_RANK) 

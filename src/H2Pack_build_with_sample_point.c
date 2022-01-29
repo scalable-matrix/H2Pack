@@ -112,26 +112,12 @@ void H2P_calc_pdist2(
     }
 }
 
-// For each point in the generated anchor grid, choose O(1) nearest points
-// in the given point cluster as sample points
-// Input parameters:
-//   pt_dim    : Point dimension
-//   coord     : Size pt_dim * npt, each column is a point coordinate
-//   grid_size : Size pt_dim, anchor grid size
-//   grid_algo : Anchor grid generation algorithm
-//   n_thread  : Number of threads to use
-//   workbuf_i : Integer work buffer
-//   workbuf_d : DTYPE work buffer
-// Output parameters:
-//   sample_idx : Indices of the chosen sample points
-void H2P_select_cluster_sample(
+void H2P_select_anchor_grid(
     const int pt_dim, H2P_dense_mat_p coord, const int *grid_size, const int grid_algo, 
-    const int n_thread, H2P_int_vec_p workbuf_i, H2P_dense_mat_p workbuf_d, H2P_int_vec_p sample_idx
+    H2P_dense_mat_p anchor_coord_
 )
 {
-    int workbuf_d_size = 0;
     int npt = coord->ncol;
-    workbuf_d_size += 3 * npt;
     int max_grid_size = 0;
     int anchor_npt = 1;
     for (int i = 0; i < pt_dim; i++)
@@ -140,17 +126,14 @@ void H2P_select_cluster_sample(
         anchor_npt *= (grid_size[i] + 1);
     }
     max_grid_size++;
-    workbuf_d_size += pt_dim * max_grid_size;
-    workbuf_d_size += pt_dim * anchor_npt;
-    workbuf_d_size += n_thread * npt;
 
-    H2P_dense_mat_resize(workbuf_d, 1, workbuf_d_size);
-    DTYPE *coord_min    = workbuf_d->data;
-    DTYPE *coord_max    = coord_min + pt_dim;
-    DTYPE *enbox_size   = coord_max + pt_dim;
-    DTYPE *anchor_dim   = enbox_size + pt_dim;
-    DTYPE *anchor_coord = anchor_dim + pt_dim * max_grid_size;
-    DTYPE *dist2_buf    = anchor_coord + pt_dim * anchor_npt;
+    DTYPE *coord_min  = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim);
+    DTYPE *coord_max  = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim);
+    DTYPE *enbox_size = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim);
+    DTYPE *anchor_dim = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim * max_grid_size);
+    
+    H2P_dense_mat_resize(anchor_coord_, pt_dim, anchor_npt);
+    DTYPE *anchor_coord = anchor_coord_->data;
 
     // 1. Calculate the min / max coordinate on each dimension and the size of enclosing box
     for (int i = 0; i < pt_dim; i++)
@@ -209,8 +192,7 @@ void H2P_select_cluster_sample(
     }
 
     // 3. Do a tensor product to get all anchor points
-    H2P_int_vec_set_capacity(workbuf_i, pt_dim + 1);
-    int *stride = workbuf_i->data;
+    int *stride = (int *) malloc(sizeof(int) * (pt_dim + 1));
     stride[0] = 1;
     for (int i = 0; i < pt_dim; i++) stride[i + 1] = stride[i] * (grid_size[i] + 1);
     for (int i = 0; i < anchor_npt; i++)
@@ -222,9 +204,38 @@ void H2P_select_cluster_sample(
         }
     }
 
-    // 4. Choose nearest points in the given point cluster
-    H2P_int_vec_set_capacity(workbuf_i, npt);
-    int *sample_idx_flag = workbuf_i->data;
+    free(stride);
+    free(coord_min);
+    free(coord_max);
+    free(enbox_size);
+    free(anchor_dim);
+}
+
+// For each point in the generated anchor grid, choose O(1) nearest points
+// in the given point cluster as sample points
+// Input parameters:
+//   pt_dim    : Point dimension
+//   coord     : Size pt_dim * npt, each column is a point coordinate
+//   grid_size : Size pt_dim, anchor grid size
+//   grid_algo : Anchor grid generation algorithm
+//   n_thread  : Number of threads to use
+// Output parameters:
+//   sample_idx : Indices of the chosen sample points
+void H2P_select_cluster_sample(
+    const int pt_dim, H2P_dense_mat_p coord, const int *grid_size, const int grid_algo, 
+    const int n_thread, H2P_int_vec_p sample_idx
+)
+{
+    H2P_dense_mat_p anchor_coord_;
+    H2P_dense_mat_init(&anchor_coord_, pt_dim, 1024);
+    H2P_select_anchor_grid(pt_dim, coord, grid_size, grid_algo, anchor_coord_);
+    DTYPE *anchor_coord = anchor_coord_->data;
+    
+    // Choose nearest points in the given point cluster
+    int npt = coord->ncol;
+    int anchor_npt = anchor_coord_->ncol;
+    DTYPE *dist2_buf = (DTYPE *) malloc(sizeof(DTYPE) * n_thread * npt);
+    int *sample_idx_flag = (int *) malloc(sizeof(int) * npt);
     for (int i = 0; i < npt; i++) sample_idx_flag[i] = -1;
     #pragma omp parallel num_threads(n_thread)
     {
@@ -262,6 +273,9 @@ void H2P_select_cluster_sample(
         }
     }
     sample_idx->length = sample_idx_cnt;
+    free(sample_idx_flag);
+    free(dist2_buf);
+    H2P_dense_mat_destroy(&anchor_coord_);
 }
 
 int H2P_select_sample_point_r(
@@ -283,8 +297,8 @@ int H2P_select_sample_point_r(
 
     DTYPE *c1_enbox_size = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim * 2);
     int *r_list = (int *) malloc(sizeof(int) * pt_dim);
-    H2P_dense_mat_p coord0, coord1, coord1s, A0, A1, U, UA, workbuf_d, QR_buff;
-    H2P_int_vec_p workbuf_i, sample_idx, sub_idx, ID_buff;
+    H2P_dense_mat_p coord0, coord1, coord1s, A0, A1, U, UA, QR_buff;
+    H2P_int_vec_p sample_idx, sub_idx, ID_buff;
     H2P_dense_mat_init(&coord0,  pt_dim, k);
     H2P_dense_mat_init(&coord1,  pt_dim, k);
     H2P_dense_mat_init(&coord1s, pt_dim, k);
@@ -292,9 +306,7 @@ int H2P_select_sample_point_r(
     H2P_dense_mat_init(&A1, k * krnl_dim, k * krnl_dim);
     H2P_dense_mat_init(&U,  k * krnl_dim, k * krnl_dim);
     H2P_dense_mat_init(&UA, k * krnl_dim, k * krnl_dim);
-    H2P_dense_mat_init(&workbuf_d, 1, 8192);
     H2P_dense_mat_init(&QR_buff, 1, 8192);
-    H2P_int_vec_init(&workbuf_i, 1024);
     H2P_int_vec_init(&sample_idx, 1024);
     H2P_int_vec_init(&ID_buff, 1024);
     sub_idx = sample_idx;
@@ -313,7 +325,12 @@ int H2P_select_sample_point_r(
     }
 
     // Find an r value by checking approximation error to A
-    int r = 1, flag = 0;
+    // The r initial guess formula is provided by Difeng
+    int r1 = floor(-1.25 * log10(stop_tol) - 0.25);
+    if (r1 < 1) r1 = 1;
+    int r2 = ceil(sqrt(floor(2.0 * log10(stop_tol) / log10(0.7))));
+    int r = (r1 < r2) ? r1 : r2;
+    int flag = 0;
     DTYPE A0_fnorm = 0.0;
     krnl_eval(
         coord0->data, k, k,
@@ -331,7 +348,7 @@ int H2P_select_sample_point_r(
 
         // sample_idx = H2_select_cluster_sample(pt_dim, coord2, r_list, 6);
         // coord2_samples = coord2(sample_idx, :);
-        H2P_select_cluster_sample(pt_dim, coord1, r_list, 6, n_thread, workbuf_i, workbuf_d, sample_idx);
+        H2P_select_cluster_sample(pt_dim, coord1, r_list, 6, n_thread, sample_idx);
         H2P_dense_mat_copy(coord1, coord1s);
         H2P_dense_mat_select_columns(coord1s, sample_idx);
 
@@ -405,9 +422,7 @@ int H2P_select_sample_point_r(
     H2P_dense_mat_destroy(&A1);
     H2P_dense_mat_destroy(&U);
     H2P_dense_mat_destroy(&UA);
-    H2P_dense_mat_destroy(&workbuf_d);
     H2P_dense_mat_destroy(&QR_buff);
-    H2P_int_vec_destroy(&workbuf_i);
     H2P_int_vec_destroy(&sample_idx);
     H2P_int_vec_destroy(&ID_buff);
     return r;
@@ -438,16 +453,15 @@ void H2P_select_sample_point(
     DTYPE *coord        = h2pack->coord;
 
     // 1. Allocate temporary arrays and output arrays
-    H2P_int_vec_p   workbuf_i, sample_idx, ri_list;
-    H2P_dense_mat_p enbox_size, workbuf_d;
+    H2P_int_vec_p   sample_idx, ri_list;
+    H2P_dense_mat_p workbuf_d;
     H2P_int_vec_p   *adm_list   = (H2P_int_vec_p *)   malloc(sizeof(H2P_int_vec_p)   * n_node);
     H2P_dense_mat_p *clu_refine = (H2P_dense_mat_p *) malloc(sizeof(H2P_dense_mat_p) * n_node);
     H2P_dense_mat_p *sample_pt  = (H2P_dense_mat_p *) malloc(sizeof(H2P_dense_mat_p) * n_node);
-    H2P_int_vec_init(&workbuf_i,  128 * 1024);
+    DTYPE *enbox_size = (DTYPE *) malloc(sizeof(DTYPE) * 2 * pt_dim);
     H2P_int_vec_init(&sample_idx, 1024);
     H2P_int_vec_init(&ri_list,    1024);
-    H2P_dense_mat_init(&enbox_size, 128, 1024);
-    H2P_dense_mat_init(&workbuf_d,  128, 1024);
+    H2P_dense_mat_init(&workbuf_d, 128, 1024);
     for (int i = 0; i < n_node; i++)
     {
         H2P_int_vec_init(adm_list + i, n_node);
@@ -465,17 +479,7 @@ void H2P_select_sample_point(
     }
 
     // 3. Bottom-up sweep
-    int ri;  // What the heck is this ri parameter??
-    #if 0
-    if (approx_rank >= 15) ri = approx_rank - 9;
-    if (approx_rank <= 14) ri = approx_rank - 8;
-    if (approx_rank <=  9) ri = approx_rank - 5;
-    if (approx_rank <=  7) ri = approx_rank - 4;
-    if (approx_rank <=  3) ri = approx_rank - 1;
-    if (ri < 0) ri = 0;
-    #else
-    ri = H2P_select_sample_point_r(h2pack, krnl_param, krnl_eval, tau, h2pack->QR_stop_tol);
-    #endif
+    int ri = H2P_select_sample_point_r(h2pack, krnl_param, krnl_eval, tau, h2pack->QR_stop_tol);
     for (int i = max_level; i >= min_adm_level; i--)
     {
         int *level_i_nodes = level_nodes + i * n_leaf_node;
@@ -519,20 +523,19 @@ void H2P_select_sample_point(
         }  // End of j loop
 
         // (2) Select refined points for all nodes at i-th level
-        H2P_dense_mat_resize(enbox_size, 1, 2 * pt_dim);
         H2P_int_vec_set_capacity(ri_list, pt_dim);
         for (int j = 0; j < level_i_n_node; j++)
         {
             int node = level_i_nodes[j];
             int node_npt_refine = clu_refine[node]->ncol;
             if (node_npt_refine <= 5) continue;
-            H2P_calc_enclosing_box_size(pt_dim, clu_refine[node]->ncol, clu_refine[node]->data, enbox_size->data);
-            int ri_npt = H2P_proportional_int_decompose(pt_dim, ri, enbox_size->data, ri_list->data);
+            H2P_calc_enclosing_box_size(pt_dim, clu_refine[node]->ncol, clu_refine[node]->data, enbox_size);
+            int ri_npt = H2P_proportional_int_decompose(pt_dim, ri, enbox_size, ri_list->data);
             if (ri_npt < node_npt_refine)
             {
                 H2P_select_cluster_sample(
                     pt_dim, clu_refine[node], ri_list->data, 6,  
-                    n_thread, workbuf_i, workbuf_d, sample_idx
+                    n_thread, sample_idx
                 );
                 H2P_dense_mat_select_columns(clu_refine[node], sample_idx);
             }
@@ -540,16 +543,10 @@ void H2P_select_sample_point(
     }  // End of i loop
     
     // 4. Top-down sweep
-    #if 0
-    // What the heck?? Why ri is changed??
-    ri = approx_rank + 3;
-    if (approx_rank > 3 && ri < 10) ri = 10;
-    #endif
     for (int i = min_adm_level; i <= max_level; i++)
     {
         int *level_i_nodes = level_nodes + i * n_leaf_node;
         int level_i_n_node = level_n_node[i];
-        H2P_dense_mat_resize(enbox_size, 1, 2 * pt_dim);
         H2P_int_vec_set_capacity(ri_list, pt_dim);
         for (int j = 0; j < level_i_n_node; j++)
         {
@@ -583,13 +580,13 @@ void H2P_select_sample_point(
             }
 
             // (2) Refine initial sample points
-            H2P_calc_enclosing_box_size(pt_dim, sample_pt[node]->ncol, sample_pt[node]->data, enbox_size->data);
-            int ri_npt = H2P_proportional_int_decompose(pt_dim, ri, enbox_size->data, ri_list->data);
+            H2P_calc_enclosing_box_size(pt_dim, sample_pt[node]->ncol, sample_pt[node]->data, enbox_size);
+            int ri_npt = H2P_proportional_int_decompose(pt_dim, ri, enbox_size, ri_list->data);
             if (ri_npt < init_sample_npt)
             {
                 H2P_select_cluster_sample(
                     pt_dim, sample_pt[node], ri_list->data, 2,  
-                    n_thread, workbuf_i, workbuf_d, sample_idx
+                    n_thread, sample_idx
                 );
                 H2P_dense_mat_select_columns(sample_pt[node], sample_idx);
             }
@@ -615,6 +612,10 @@ void H2P_select_sample_point(
     }
     free(adm_list);
     free(clu_refine);
+    free(enbox_size);
+    H2P_int_vec_destroy(&sample_idx);
+    H2P_int_vec_destroy(&ri_list);
+    H2P_dense_mat_destroy(&workbuf_d);
     *sample_points_ = sample_pt;
 }
 

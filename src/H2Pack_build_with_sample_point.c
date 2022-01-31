@@ -113,11 +113,10 @@ void H2P_calc_pdist2(
 }
 
 void H2P_select_anchor_grid(
-    const int pt_dim, H2P_dense_mat_p coord, const int *grid_size, const int grid_algo, 
-    H2P_dense_mat_p anchor_coord_
+    const int pt_dim, const DTYPE *coord_min, const DTYPE *coord_max, const DTYPE *enbox_size, 
+    const int *grid_size, const int grid_algo, H2P_dense_mat_p anchor_coord_
 )
 {
-    int npt = coord->ncol;
     int max_grid_size = 0;
     int anchor_npt = 1;
     for (int i = 0; i < pt_dim; i++)
@@ -127,30 +126,11 @@ void H2P_select_anchor_grid(
     }
     max_grid_size++;
 
-    DTYPE *coord_min  = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim);
-    DTYPE *coord_max  = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim);
-    DTYPE *enbox_size = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim);
     DTYPE *anchor_dim = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim * max_grid_size);
-    
     H2P_dense_mat_resize(anchor_coord_, pt_dim, anchor_npt);
     DTYPE *anchor_coord = anchor_coord_->data;
 
-    // 1. Calculate the min / max coordinate on each dimension and the size of enclosing box
-    for (int i = 0; i < pt_dim; i++)
-    {
-        DTYPE *coord_i = coord->data + i * npt;
-        DTYPE max_c = coord_i[0], min_c = coord_i[0];
-        for (int j = 1; j < npt; j++)
-        {
-            if (coord_i[j] > max_c) max_c = coord_i[j];
-            if (coord_i[j] < min_c) min_c = coord_i[j];
-        }
-        coord_min[i]  = min_c;
-        coord_max[i]  = max_c;
-        enbox_size[i] = max_c - min_c;
-    }
-
-    // 2. Assign anchor points in each dimension
+    // 1. Assign anchor points in each dimension
     for (int i = 0; i < pt_dim; i++)
     {
         DTYPE *anchor_dim_i = anchor_dim + i * max_grid_size;
@@ -191,7 +171,7 @@ void H2P_select_anchor_grid(
         }
     }
 
-    // 3. Do a tensor product to get all anchor points
+    // 2. Do a tensor product to get all anchor points
     int *stride = (int *) malloc(sizeof(int) * (pt_dim + 1));
     stride[0] = 1;
     for (int i = 0; i < pt_dim; i++) stride[i + 1] = stride[i] * (grid_size[i] + 1);
@@ -205,9 +185,6 @@ void H2P_select_anchor_grid(
     }
 
     free(stride);
-    free(coord_min);
-    free(coord_max);
-    free(enbox_size);
     free(anchor_dim);
 }
 
@@ -226,13 +203,35 @@ void H2P_select_cluster_sample(
     const int n_thread, H2P_int_vec_p sample_idx
 )
 {
+    int npt = coord->ncol;
     H2P_dense_mat_p anchor_coord_;
     H2P_dense_mat_init(&anchor_coord_, pt_dim, 1024);
-    H2P_select_anchor_grid(pt_dim, coord, grid_size, grid_algo, anchor_coord_);
+    DTYPE *coord_min  = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim);
+    DTYPE *coord_max  = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim);
+    DTYPE *enbox_size = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim);
+    for (int i = 0; i < pt_dim; i++)
+    {
+        DTYPE *coord_i = coord->data + i * npt;
+        DTYPE max_c = coord_i[0], min_c = coord_i[0];
+        for (int j = 1; j < npt; j++)
+        {
+            if (coord_i[j] > max_c) max_c = coord_i[j];
+            if (coord_i[j] < min_c) min_c = coord_i[j];
+        }
+        coord_min[i]  = min_c;
+        coord_max[i]  = max_c;
+        enbox_size[i] = max_c - min_c;
+    }
+    H2P_select_anchor_grid(
+        pt_dim, coord_min, coord_max, enbox_size, 
+        grid_size, grid_algo, anchor_coord_
+    );
+    free(coord_min);
+    free(coord_max);
+    free(enbox_size);
     DTYPE *anchor_coord = anchor_coord_->data;
     
     // Choose nearest points in the given point cluster
-    int npt = coord->ncol;
     int anchor_npt = anchor_coord_->ncol;
     DTYPE *dist2_buf = (DTYPE *) malloc(sizeof(DTYPE) * n_thread * npt);
     int *sample_idx_flag = (int *) malloc(sizeof(int) * npt);
@@ -409,10 +408,6 @@ int H2P_select_sample_point_r(
         else r++;
     }  // End "while (flag == 0)"
 
-    // Not in the MATLAB code, but the C code usually gives a smaller average rank
-    // when using the same parameter set, so increase r and use a smaller stop_tol
-    r++;  
-
     free(c1_enbox_size);
     free(r_list);
     H2P_dense_mat_destroy(&coord0);
@@ -429,7 +424,7 @@ int H2P_select_sample_point_r(
 }
 
 // Select sample points for constructing H2 projection and skeleton matrices 
-void H2P_select_sample_point(
+void H2P_select_sample_point_ref(
     H2Pack_p h2pack, const void *krnl_param, kernel_eval_fptr krnl_eval, 
     const DTYPE tau, H2P_dense_mat_p **sample_points_
 )
@@ -442,7 +437,6 @@ void H2P_select_sample_point(
     int   n_point       = h2pack->n_point;
     int   n_node        = h2pack->n_node;
     int   n_leaf_node   = h2pack->n_leaf_node;
-    int   n_thread      = h2pack->n_thread;
     int   n_r_adm_pair  = h2pack->is_HSS ? h2pack->HSS_n_r_adm_pair : h2pack->n_r_adm_pair;
     int   *level_n_node = h2pack->level_n_node;
     int   *level_nodes  = h2pack->level_nodes;
@@ -453,15 +447,9 @@ void H2P_select_sample_point(
     DTYPE *coord        = h2pack->coord;
 
     // 1. Allocate temporary arrays and output arrays
-    H2P_int_vec_p   sample_idx, ri_list;
-    H2P_dense_mat_p workbuf_d;
     H2P_int_vec_p   *adm_list   = (H2P_int_vec_p *)   malloc(sizeof(H2P_int_vec_p)   * n_node);
     H2P_dense_mat_p *clu_refine = (H2P_dense_mat_p *) malloc(sizeof(H2P_dense_mat_p) * n_node);
     H2P_dense_mat_p *sample_pt  = (H2P_dense_mat_p *) malloc(sizeof(H2P_dense_mat_p) * n_node);
-    DTYPE *enbox_size = (DTYPE *) malloc(sizeof(DTYPE) * 2 * pt_dim);
-    H2P_int_vec_init(&sample_idx, 1024);
-    H2P_int_vec_init(&ri_list,    1024);
-    H2P_dense_mat_init(&workbuf_d, 128, 1024);
     for (int i = 0; i < n_node; i++)
     {
         H2P_int_vec_init(adm_list + i, n_node);
@@ -478,14 +466,17 @@ void H2P_select_sample_point(
         H2P_int_vec_push_back(adm_list[c1], c0);
     }
 
-    // 3. Bottom-up sweep
     int ri = H2P_select_sample_point_r(h2pack, krnl_param, krnl_eval, tau, h2pack->QR_stop_tol);
+
+    // 3. Bottom-up sweep
+    int r_up = ri;
     for (int i = max_level; i >= min_adm_level; i--)
     {
         int *level_i_nodes = level_nodes + i * n_leaf_node;
         int level_i_n_node = level_n_node[i];
 
         // (1) Update refined points associated with clusters at level i
+        #pragma omp parallel for schedule(dynamic)
         for (int j = 0; j < level_i_n_node; j++)
         {
             int node = level_i_nodes[j];
@@ -523,85 +514,106 @@ void H2P_select_sample_point(
         }  // End of j loop
 
         // (2) Select refined points for all nodes at i-th level
-        H2P_int_vec_set_capacity(ri_list, pt_dim);
-        for (int j = 0; j < level_i_n_node; j++)
+        #pragma omp parallel
         {
-            int node = level_i_nodes[j];
-            int node_npt_refine = clu_refine[node]->ncol;
-            if (node_npt_refine <= 5) continue;
-            H2P_calc_enclosing_box_size(pt_dim, clu_refine[node]->ncol, clu_refine[node]->data, enbox_size);
-            int ri_npt = H2P_proportional_int_decompose(pt_dim, ri, enbox_size, ri_list->data);
-            if (ri_npt < node_npt_refine)
+            int *ri_list = (int *) malloc(sizeof(int) * pt_dim);
+            H2P_int_vec_p sample_idx;
+            H2P_int_vec_init(&sample_idx, 1024);
+            DTYPE *enbox_size = (DTYPE *) malloc(sizeof(DTYPE) * 2 * pt_dim);
+            #pragma omp for schedule(dynamic)
+            for (int j = 0; j < level_i_n_node; j++)
             {
-                H2P_select_cluster_sample(
-                    pt_dim, clu_refine[node], ri_list->data, 6,  
-                    n_thread, sample_idx
-                );
-                H2P_dense_mat_select_columns(clu_refine[node], sample_idx);
-            }
-        }  // End of j loop
+                int node = level_i_nodes[j];
+                int node_npt_refine = clu_refine[node]->ncol;
+                if (node_npt_refine <= 5) continue;
+                H2P_calc_enclosing_box_size(pt_dim, clu_refine[node]->ncol, clu_refine[node]->data, enbox_size);
+                int ri_npt = H2P_proportional_int_decompose(pt_dim, r_up, enbox_size, ri_list);
+                if (ri_npt < node_npt_refine)
+                {
+                    H2P_select_cluster_sample(pt_dim, clu_refine[node], ri_list, 6,  1, sample_idx);
+                    H2P_dense_mat_select_columns(clu_refine[node], sample_idx);
+                }
+            }  // End of j loop
+            H2P_int_vec_destroy(&sample_idx);
+            free(ri_list);
+            free(enbox_size);
+        }
     }  // End of i loop
     
     // 4. Top-down sweep
+    int r_down;
+    if (ri > 3) r_down = (ri + 3 > 10) ? (ri + 3) : 10;
+    else r_down = ri + 3;
     for (int i = min_adm_level; i <= max_level; i++)
     {
         int *level_i_nodes = level_nodes + i * n_leaf_node;
         int level_i_n_node = level_n_node[i];
-        H2P_int_vec_set_capacity(ri_list, pt_dim);
-        for (int j = 0; j < level_i_n_node; j++)
+
+        #pragma omp parallel
         {
-            int node = level_i_nodes[j];
-            if (adm_list[node]->length == 0) continue;
+            int *ri_list = (int *) malloc(sizeof(int) * pt_dim);
+            H2P_int_vec_p sample_idx;
+            H2P_int_vec_init(&sample_idx, 1024);
+            DTYPE *enbox_size = (DTYPE *) malloc(sizeof(DTYPE) * 2 * pt_dim);
+            H2P_dense_mat_p workbuf_d;
+            H2P_dense_mat_init(&workbuf_d, 1, 1024);
+            #pragma omp for schedule(dynamic)
+            for (int j = 0; j < level_i_n_node; j++)
+            {
+                int node = level_i_nodes[j];
+                if (adm_list[node]->length == 0) continue;
 
-            // (1) Gather all far-field refined points as initial sample points
-            int sample_npt0 = sample_pt[node]->ncol;
-            H2P_dense_mat_resize(workbuf_d, xpt_dim, sample_npt0);
-            copy_matrix_block(sizeof(DTYPE), xpt_dim, sample_npt0, sample_pt[node]->data, sample_npt0, workbuf_d->data, sample_npt0);
-            int init_sample_npt = sample_npt0;
-            for (int k = 0; k < adm_list[node]->length; k++)
-            {
-                int pair_node = adm_list[node]->data[k];
-                int pair_node_npt = clu_refine[pair_node]->ncol;
-                init_sample_npt += pair_node_npt;
-            }
-            H2P_dense_mat_resize(sample_pt[node], xpt_dim, init_sample_npt);
-            copy_matrix_block(sizeof(DTYPE), xpt_dim, sample_npt0, workbuf_d->data, sample_npt0, sample_pt[node]->data, init_sample_npt);
-            init_sample_npt = sample_npt0;
-            for (int k = 0; k < adm_list[node]->length; k++)
-            {
-                int pair_node = adm_list[node]->data[k];
-                int pair_node_npt = clu_refine[pair_node]->ncol;
-                int lds = pair_node_npt;
-                int ldd = sample_pt[node]->ncol;
-                DTYPE *src = clu_refine[pair_node]->data;
-                DTYPE *dst = sample_pt[node]->data + init_sample_npt;
-                copy_matrix_block(sizeof(DTYPE), xpt_dim, pair_node_npt, src, lds, dst, ldd);
-                init_sample_npt += pair_node_npt;
-            }
+                // (1) Gather all far-field refined points as initial sample points
+                int sample_npt0 = sample_pt[node]->ncol;
+                H2P_dense_mat_resize(workbuf_d, xpt_dim, sample_npt0);
+                copy_matrix_block(sizeof(DTYPE), xpt_dim, sample_npt0, sample_pt[node]->data, sample_npt0, workbuf_d->data, sample_npt0);
+                int init_sample_npt = sample_npt0;
+                for (int k = 0; k < adm_list[node]->length; k++)
+                {
+                    int pair_node = adm_list[node]->data[k];
+                    int pair_node_npt = clu_refine[pair_node]->ncol;
+                    init_sample_npt += pair_node_npt;
+                }
+                H2P_dense_mat_resize(sample_pt[node], xpt_dim, init_sample_npt);
+                copy_matrix_block(sizeof(DTYPE), xpt_dim, sample_npt0, workbuf_d->data, sample_npt0, sample_pt[node]->data, init_sample_npt);
+                init_sample_npt = sample_npt0;
+                for (int k = 0; k < adm_list[node]->length; k++)
+                {
+                    int pair_node = adm_list[node]->data[k];
+                    int pair_node_npt = clu_refine[pair_node]->ncol;
+                    int lds = pair_node_npt;
+                    int ldd = sample_pt[node]->ncol;
+                    DTYPE *src = clu_refine[pair_node]->data;
+                    DTYPE *dst = sample_pt[node]->data + init_sample_npt;
+                    copy_matrix_block(sizeof(DTYPE), xpt_dim, pair_node_npt, src, lds, dst, ldd);
+                    init_sample_npt += pair_node_npt;
+                }
 
-            // (2) Refine initial sample points
-            H2P_calc_enclosing_box_size(pt_dim, sample_pt[node]->ncol, sample_pt[node]->data, enbox_size);
-            int ri_npt = H2P_proportional_int_decompose(pt_dim, ri, enbox_size, ri_list->data);
-            if (ri_npt < init_sample_npt)
-            {
-                H2P_select_cluster_sample(
-                    pt_dim, sample_pt[node], ri_list->data, 2,  
-                    n_thread, sample_idx
-                );
-                H2P_dense_mat_select_columns(sample_pt[node], sample_idx);
-            }
+                // (2) Refine initial sample points
+                H2P_calc_enclosing_box_size(pt_dim, sample_pt[node]->ncol, sample_pt[node]->data, enbox_size);
+                int ri_npt = H2P_proportional_int_decompose(pt_dim, r_down, enbox_size, ri_list);
+                if (ri_npt < init_sample_npt)
+                {
+                    H2P_select_cluster_sample(pt_dim, sample_pt[node], ri_list, 2, 1, sample_idx);
+                    H2P_dense_mat_select_columns(sample_pt[node], sample_idx);
+                }
 
-            // (3) Pass refined sample points to children
-            int sample_npt   = sample_idx->length;
-            int n_child_node = n_child[node];
-            int *child_nodes = children + node * max_child;
-            for (int i_child = 0; i_child < n_child_node; i_child++)
-            {
-                int i_child_node = child_nodes[i_child];
-                H2P_dense_mat_resize(sample_pt[i_child_node], xpt_dim, sample_pt[node]->ncol);
-                copy_matrix_block(sizeof(DTYPE), xpt_dim, sample_npt, sample_pt[node]->data, sample_npt, sample_pt[i_child_node]->data, sample_npt);
-            }
-        }  // End of j loop
+                // (3) Pass refined sample points to children
+                int sample_npt   = sample_idx->length;
+                int n_child_node = n_child[node];
+                int *child_nodes = children + node * max_child;
+                for (int i_child = 0; i_child < n_child_node; i_child++)
+                {
+                    int i_child_node = child_nodes[i_child];
+                    H2P_dense_mat_resize(sample_pt[i_child_node], xpt_dim, sample_pt[node]->ncol);
+                    copy_matrix_block(sizeof(DTYPE), xpt_dim, sample_npt, sample_pt[node]->data, sample_npt, sample_pt[i_child_node]->data, sample_npt);
+                }
+            }  // End of j loop
+            free(enbox_size);
+            free(ri_list);
+            H2P_int_vec_destroy(&sample_idx);
+            H2P_dense_mat_destroy(&workbuf_d);
+        }
     }  // End of i loop
 
     // Free temporary arrays and return sample points
@@ -612,11 +624,410 @@ void H2P_select_sample_point(
     }
     free(adm_list);
     free(clu_refine);
-    free(enbox_size);
-    H2P_int_vec_destroy(&sample_idx);
-    H2P_int_vec_destroy(&ri_list);
-    H2P_dense_mat_destroy(&workbuf_d);
     *sample_points_ = sample_pt;
+}
+
+void H2P_select_sample_point_vol(
+    H2Pack_p h2pack, const void *krnl_param, kernel_eval_fptr krnl_eval, 
+    const DTYPE tau, H2P_dense_mat_p **sample_points_
+)
+{
+    int   pt_dim        = h2pack->pt_dim;
+    int   xpt_dim       = h2pack->xpt_dim;
+    int   min_adm_level = h2pack->is_HSS ? h2pack->HSS_min_adm_level : h2pack->min_adm_level;
+    int   max_level     = h2pack->max_level;
+    int   max_child     = h2pack->max_child;
+    int   n_point       = h2pack->n_point;
+    int   n_node        = h2pack->n_node;
+    int   n_leaf_node   = h2pack->n_leaf_node;
+    int   n_r_adm_pair  = h2pack->is_HSS ? h2pack->HSS_n_r_adm_pair : h2pack->n_r_adm_pair;
+    int   *level_n_node = h2pack->level_n_node;
+    int   *level_nodes  = h2pack->level_nodes;
+    int   *n_child      = h2pack->n_child;
+    int   *children     = h2pack->children;
+    int   *pt_cluster   = h2pack->pt_cluster;
+    int   *r_adm_pairs  = h2pack->is_HSS ? h2pack->HSS_r_adm_pairs : h2pack->r_adm_pairs;
+    DTYPE *coord        = h2pack->coord;
+
+    // 1. Allocate temporary arrays and output arrays
+    H2P_int_vec_p   *adm_list   = (H2P_int_vec_p *)   malloc(sizeof(H2P_int_vec_p)   * n_node);
+    H2P_dense_mat_p *clu_refine = (H2P_dense_mat_p *) malloc(sizeof(H2P_dense_mat_p) * n_node);
+    H2P_dense_mat_p *sample_pt  = (H2P_dense_mat_p *) malloc(sizeof(H2P_dense_mat_p) * n_node);
+    for (int i = 0; i < n_node; i++)
+    {
+        H2P_int_vec_init(adm_list + i, n_node);
+        H2P_dense_mat_init(clu_refine + i, 300, xpt_dim);
+        H2P_dense_mat_init(sample_pt + i, 300, xpt_dim);
+    }
+
+    // 2. Convert the reduced admissible pairs to reduced admissible list of each node
+    for (int i = 0; i < n_r_adm_pair; i++)
+    {
+        int c0 = r_adm_pairs[2 * i + 0];
+        int c1 = r_adm_pairs[2 * i + 1];
+        H2P_int_vec_push_back(adm_list[c0], c1);
+        H2P_int_vec_push_back(adm_list[c1], c0);
+    }
+
+    int ri = H2P_select_sample_point_r(h2pack, krnl_param, krnl_eval, tau, h2pack->QR_stop_tol);
+
+    // 3. Bottom-up sweep
+    int r_up = ri;
+    for (int i = max_level; i >= min_adm_level; i--)
+    {
+        int *level_i_nodes = level_nodes + i * n_leaf_node;
+        int level_i_n_node = level_n_node[i];
+
+        // (1) Update refined points associated with clusters at level i
+        #pragma omp parallel for schedule(dynamic)
+        for (int j = 0; j < level_i_n_node; j++)
+        {
+            int node = level_i_nodes[j];
+            int n_child_node = n_child[node];
+            if (n_child_node == 0)
+            {
+                int pt_s = pt_cluster[node * 2];
+                int pt_e = pt_cluster[node * 2 + 1];
+                int node_npt = pt_e - pt_s + 1;
+                H2P_dense_mat_resize(clu_refine[node], xpt_dim, node_npt);
+                copy_matrix_block(sizeof(DTYPE), xpt_dim, node_npt, coord + pt_s, n_point, clu_refine[node]->data, node_npt);
+            } else {
+                int *child_nodes = children + node * max_child;
+                int child_clu_sum = 0;
+                for (int i_child = 0; i_child < n_child_node; i_child++)
+                {
+                    int i_child_node = child_nodes[i_child];
+                    int i_child_npt  = clu_refine[i_child_node]->ncol;
+                    child_clu_sum += i_child_npt;
+                }
+                H2P_dense_mat_resize(clu_refine[node], xpt_dim, child_clu_sum);
+                child_clu_sum = 0;
+                for (int i_child = 0; i_child < n_child_node; i_child++)
+                {
+                    int i_child_node = child_nodes[i_child];
+                    int i_child_npt  = clu_refine[i_child_node]->ncol;
+                    int lds = i_child_npt;
+                    int ldd = clu_refine[node]->ncol;
+                    DTYPE *src = clu_refine[i_child_node]->data;
+                    DTYPE *dst = clu_refine[node]->data + child_clu_sum;
+                    copy_matrix_block(sizeof(DTYPE), xpt_dim, i_child_npt, src, lds, dst, ldd);
+                    child_clu_sum += i_child_npt;
+                }
+            }  // End of "if (n_child_node == 0)"
+        }  // End of j loop
+
+        // (2) Select refined points for all nodes at i-th level
+        #pragma omp parallel
+        {
+            int *ri_list = (int *) malloc(sizeof(int) * pt_dim);
+            H2P_int_vec_p sample_idx;
+            H2P_int_vec_init(&sample_idx, 1024);
+            DTYPE *enbox_size = (DTYPE *) malloc(sizeof(DTYPE) * 2 * pt_dim);
+            #pragma omp for schedule(dynamic)
+            for (int j = 0; j < level_i_n_node; j++)
+            {
+                int node = level_i_nodes[j];
+                int node_npt_refine = clu_refine[node]->ncol;
+                if (node_npt_refine <= 5) continue;
+                H2P_calc_enclosing_box_size(pt_dim, clu_refine[node]->ncol, clu_refine[node]->data, enbox_size);
+                int ri_npt = H2P_proportional_int_decompose(pt_dim, r_up, enbox_size, ri_list);
+                if (ri_npt < node_npt_refine)
+                {
+                    H2P_select_cluster_sample(pt_dim, clu_refine[node], ri_list, 6,  1, sample_idx);
+                    H2P_dense_mat_select_columns(clu_refine[node], sample_idx);
+                }
+            }  // End of j loop
+            H2P_int_vec_destroy(&sample_idx);
+            free(ri_list);
+            free(enbox_size);
+        }
+    }  // End of i loop
+    
+    // 4. Top-down sweep
+    int r_down;
+    if (ri > 3) r_down = (ri + 3 > 10) ? (ri + 3) : 10;
+    else r_down = ri + 3;
+    for (int i = min_adm_level; i <= max_level; i++)
+    {
+        int *level_i_nodes = level_nodes + i * n_leaf_node;
+        int level_i_n_node = level_n_node[i];
+
+        #pragma omp parallel
+        {
+            int *ri_list = (int *) malloc(sizeof(int) * pt_dim);
+            DTYPE *enbox_size = (DTYPE *) malloc(sizeof(DTYPE) * 2 * pt_dim);
+            DTYPE *coord_max  = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim);
+            DTYPE *coord_min  = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim);
+            H2P_int_vec_p sample_idx;
+            H2P_dense_mat_p workbuf_d, yFi;
+            H2P_int_vec_init(&sample_idx, 1024);
+            H2P_dense_mat_init(&workbuf_d, 1, 1024);
+            H2P_dense_mat_init(&yFi, 1, 1024);
+
+            #pragma omp for schedule(dynamic)
+            for (int j = 0; j < level_i_n_node; j++)
+            {
+                int node = level_i_nodes[j];
+                if (adm_list[node]->length == 0) continue;
+
+                // Stage 1 in Difeng's code
+                // (1) Calculate enclosing box of all far-field refined points
+                for (int k = 0; k < pt_dim; k++)
+                {
+                    coord_max[k] = -1e100;
+                    coord_min[k] =  1e100;
+                }
+                int nFp = 0;
+                for (int k = 0; k < adm_list[node]->length; k++)
+                {
+                    int pair_node = adm_list[node]->data[k];
+                    int pair_node_npt = clu_refine[pair_node]->ncol;
+                    nFp += pair_node_npt;
+                    for (int ii = 0; ii < pt_dim; ii++)
+                    {
+                        DTYPE *pair_coord_ii = clu_refine[pair_node]->data + ii * clu_refine[pair_node]->ld;
+                        for (int jj = 0; jj < pair_node_npt; jj++)
+                        {
+                            coord_min[ii] = (coord_min[ii] < pair_coord_ii[jj]) ? coord_min[ii] : pair_coord_ii[jj];
+                            coord_max[ii] = (coord_max[ii] > pair_coord_ii[jj]) ? coord_max[ii] : pair_coord_ii[jj];
+                        }
+                        enbox_size[ii] = coord_max[ii] - coord_min[ii];
+                    }
+                }
+
+                // Here sample_pt[node] are passed from parent node
+                int yFi_size = 0;
+                if (sample_pt[node]->ncol > nFp)
+                {
+                    // Put all refined points in far-field nodes into yFi
+                    H2P_dense_mat_resize(yFi, xpt_dim, nFp);
+                    for (int k = 0; k < adm_list[node]->length; k++)
+                    {
+                        int pair_node = adm_list[node]->data[k];
+                        int pair_node_npt = clu_refine[pair_node]->ncol;
+                        int lds = pair_node_npt;
+                        int ldd = yFi->ncol;
+                        DTYPE *src = clu_refine[pair_node]->data;
+                        DTYPE *dst = yFi->data + yFi_size;
+                        copy_matrix_block(sizeof(DTYPE), xpt_dim, pair_node_npt, src, lds, dst, ldd);
+                        yFi_size += pair_node_npt;
+                    }
+                } else {
+                    int ri_npt0 = H2P_proportional_int_decompose(pt_dim, r_down, enbox_size, ri_list);
+                    int num_far = adm_list[node]->length;
+
+                    // (1) Find the center of each far-field node's refined points
+                    DTYPE *centers = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim * num_far);
+                    for (int k = 0; k < num_far; k++)
+                    {
+                        int pair_node = adm_list[node]->data[k];
+                        int pair_node_npt = clu_refine[pair_node]->ncol;
+                        for (int ii = 0; ii < pt_dim; ii++)
+                        {
+                            DTYPE *pair_coord_ii = clu_refine[pair_node]->data + ii * clu_refine[pair_node]->ld;
+                            DTYPE sum = 0.0;
+                            for (int jj = 0; jj < pair_node_npt; jj++)
+                                sum += pair_coord_ii[jj];
+                            centers[ii * num_far + k] = sum / (DTYPE) pair_node_npt;
+                        }
+                    }
+
+                    // (2) For each anchor point, assign it to the closest center
+                    H2P_dense_mat_p anchor_coord_;
+                    H2P_dense_mat_init(&anchor_coord_, 1, 1024);
+                    H2P_select_anchor_grid(
+                        pt_dim, coord_min, coord_max, enbox_size,
+                        ri_list, 2, anchor_coord_
+                    );
+                    int num_anchor = ri_npt0;
+                    DTYPE *anchor_coord = anchor_coord_->data;
+                    
+                    int *iG = (int *) malloc(sizeof(int) * num_anchor);
+                    int *center_group_cnt = (int *) malloc(sizeof(int) * num_far);
+                    DTYPE *tmp_dist2 = (DTYPE *) malloc(sizeof(DTYPE) * num_anchor * num_far);
+                    H2P_calc_pdist2(
+                        anchor_coord_->data, anchor_coord_->ld, num_anchor,
+                        centers, num_far, num_far,
+                        pt_dim, tmp_dist2, num_far
+                    );
+                    memset(center_group_cnt, 0, sizeof(int) * num_far);
+                    for (int k = 0; k < num_anchor; k++)
+                    {
+                        iG[k] = 0;
+                        DTYPE *dist2_k = tmp_dist2 + k * num_far;
+                        DTYPE min_dist = dist2_k[0];
+                        for (int ii = 1; ii < num_far; ii++)
+                        {
+                            if (dist2_k[ii] < min_dist)
+                            {
+                                min_dist = dist2_k[ii];
+                                iG[k] = ii;
+                            }
+                        }
+                        center_group_cnt[iG[k]]++;
+                    }
+
+                    // (3) Group the anchor points by their assigned center
+                    int *group_displs = (int *) malloc(sizeof(int) * num_far);
+                    DTYPE *anchor_group = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim * num_anchor);
+                    group_displs[0] = 0;
+                    for (int k = 1; k < num_far; k++)
+                        group_displs[k] = group_displs[k - 1] + center_group_cnt[k - 1];
+                    for (int k = 0; k < num_anchor; k++)
+                    {
+                        int group_idx = iG[k];
+                        int displs = group_displs[group_idx];
+                        group_displs[group_idx]++;
+                        assert(displs < num_anchor);
+                        for (int ii = 0; ii < pt_dim; ii++)
+                            anchor_group[ii * num_anchor + displs] = anchor_coord[ii * num_anchor + k];
+                    }
+                    group_displs[0] = 0;
+                    for (int k = 1; k < num_far; k++) 
+                        group_displs[k] = group_displs[k - 1] + center_group_cnt[k - 1];
+
+                    // (4) Select refined points from each group
+                    int max_yFi_size = num_anchor + num_far;
+                    H2P_dense_mat_resize(yFi, xpt_dim, max_yFi_size);
+                    yFi_size = 0;
+                    for (int k = 0; k < num_far; k++)
+                    {
+                        int pair_node = adm_list[node]->data[k];
+                        int pair_node_npt = clu_refine[pair_node]->ncol;
+                        int group_k_cnt = center_group_cnt[k];
+                        if (group_k_cnt > 0)
+                        {
+                            size_t tmp_dist2_bytes = sizeof(DTYPE) * pair_node_npt * group_k_cnt;
+                            int *select_flag = (int *) malloc(sizeof(int) * pair_node_npt);
+                            memset(select_flag, 0, sizeof(int) * pair_node_npt);
+                            DTYPE *tmp_dist2 = (DTYPE *) malloc(tmp_dist2_bytes);
+
+                            H2P_calc_pdist2(
+                                anchor_group + group_displs[k], num_anchor, group_k_cnt,
+                                clu_refine[pair_node]->data, pair_node_npt, pair_node_npt,
+                                pt_dim, tmp_dist2, pair_node_npt
+                            );
+                            
+                            for (int ii = 0; ii < group_k_cnt; ii++)
+                            {
+                                DTYPE *dist2_ii = tmp_dist2 + ii * pair_node_npt;
+                                DTYPE min_dist = dist2_ii[0];
+                                int min_idx = 0;
+                                for (int jj = 1; jj < pair_node_npt; jj++)
+                                {
+                                    if (dist2_ii[jj] < min_dist)
+                                    {
+                                        min_dist = dist2_ii[jj];
+                                        min_idx = jj;
+                                    }
+                                }
+                                select_flag[min_idx] = 1;
+                            }
+
+                            for (int ii = 0; ii < pair_node_npt; ii++)
+                            {
+                                if (select_flag[ii] == 0) continue;
+                                for (int jj = 0; jj < pt_dim; jj++)
+                                    yFi->data[jj * yFi->ld + yFi_size] = clu_refine[pair_node]->data[jj * pair_node_npt + ii];
+                                yFi_size++;
+                                ASSERT_PRINTF(yFi_size <= max_yFi_size, "yFi_size %d > max_yFi_size %d\n", yFi_size, max_yFi_size);
+                            }
+
+                            free(tmp_dist2);
+                            free(select_flag);
+                        } else {
+                            DTYPE *tmp_dist2 = (DTYPE *) malloc(sizeof(DTYPE) * pair_node_npt);
+                            H2P_calc_pdist2(
+                                centers + k, num_far, 1,
+                                clu_refine[pair_node]->data, pair_node_npt, pair_node_npt,
+                                pt_dim, tmp_dist2, pair_node_npt
+                            );
+                            DTYPE min_dist = tmp_dist2[0];
+                            int min_idx = 0;
+                            for (int jj = 1; jj < pair_node_npt; jj++)
+                            {
+                                if (tmp_dist2[jj] < min_dist)
+                                {
+                                    min_dist = tmp_dist2[jj];
+                                    min_idx = jj;
+                                }
+                            }
+                            for (int jj = 0; jj < pt_dim; jj++)
+                                yFi->data[jj * yFi->ld + yFi_size] = clu_refine[pair_node]->data[jj * pair_node_npt + min_idx];
+                            yFi_size++;
+                            ASSERT_PRINTF(yFi_size <= max_yFi_size, "yFi_size %d > max_yFi_size %d\n", yFi_size, max_yFi_size);
+                            free(tmp_dist2);
+                        }
+                    }  // End of k loop
+                    
+                    free(centers);
+                    free(iG);
+                    free(center_group_cnt);
+                    free(tmp_dist2);
+                    free(group_displs);
+                    free(anchor_group);
+                    H2P_dense_mat_destroy(&anchor_coord_);
+                }  // End of "if (sample_pt[node]->ncol > nFp)"
+
+                // Stage 2 in Difeng's code
+
+                // (1) Gather selected far-field refined points as initial sample points
+                int sample_npt0 = sample_pt[node]->ncol;
+                int init_sample_npt = sample_npt0 + yFi_size;
+                H2P_dense_mat_resize(workbuf_d, xpt_dim, sample_npt0);
+                copy_matrix_block(sizeof(DTYPE), xpt_dim, sample_npt0, sample_pt[node]->data, sample_npt0, workbuf_d->data, sample_npt0);
+                H2P_dense_mat_resize(sample_pt[node], xpt_dim, init_sample_npt);
+                copy_matrix_block(sizeof(DTYPE), xpt_dim, sample_npt0, workbuf_d->data, sample_npt0, sample_pt[node]->data, init_sample_npt);
+                copy_matrix_block(sizeof(DTYPE), xpt_dim, yFi_size, yFi->data, yFi->ld, sample_pt[node]->data + sample_npt0, init_sample_npt);
+
+                // (2) Refine initial sample points
+                H2P_calc_enclosing_box_size(pt_dim, sample_pt[node]->ncol, sample_pt[node]->data, enbox_size);
+                int ri_npt = H2P_proportional_int_decompose(pt_dim, r_down, enbox_size, ri_list);
+                if (ri_npt < init_sample_npt)
+                {
+                    H2P_select_cluster_sample(pt_dim, sample_pt[node], ri_list, 2, 1, sample_idx);
+                    H2P_dense_mat_select_columns(sample_pt[node], sample_idx);
+                }
+
+                // (3) Pass refined sample points to children
+                int sample_npt   = sample_idx->length;
+                int n_child_node = n_child[node];
+                int *child_nodes = children + node * max_child;
+                for (int i_child = 0; i_child < n_child_node; i_child++)
+                {
+                    int i_child_node = child_nodes[i_child];
+                    H2P_dense_mat_resize(sample_pt[i_child_node], xpt_dim, sample_pt[node]->ncol);
+                    copy_matrix_block(sizeof(DTYPE), xpt_dim, sample_npt, sample_pt[node]->data, sample_npt, sample_pt[i_child_node]->data, sample_npt);
+                }
+            }  // End of j loop
+            H2P_dense_mat_destroy(&workbuf_d);
+            H2P_dense_mat_destroy(&yFi);
+            H2P_int_vec_destroy(&sample_idx);
+            free(ri_list);
+            free(enbox_size);
+        }
+    }  // End of i loop
+
+    // Free temporary arrays and return sample points
+    for (int i = 0; i < n_node; i++)
+    {
+        H2P_int_vec_destroy(adm_list + i);
+        H2P_dense_mat_destroy(clu_refine + i);
+    }
+    free(adm_list);
+    free(clu_refine);
+    *sample_points_ = sample_pt;
+}
+
+void H2P_select_sample_point(
+    H2Pack_p h2pack, const void *krnl_param, kernel_eval_fptr krnl_eval, 
+    const DTYPE tau, H2P_dense_mat_p **sample_points_
+)
+{
+    int algo = 0;
+    GET_ENV_INT_VAR(algo, "H2P_SELECT_SP_ALG", "select_sp_alg", 1, 0, 1);
+    if (algo == 0) H2P_select_sample_point_ref(h2pack, krnl_param, krnl_eval, tau, sample_points_);
+    if (algo == 1) H2P_select_sample_point_vol(h2pack, krnl_param, krnl_eval, tau, sample_points_);
 }
 
 typedef enum

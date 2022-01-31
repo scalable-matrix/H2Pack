@@ -43,7 +43,7 @@ all: $(EXES)
 %.c.o: %.c
 	$(CC) $(CFLAGS) -c $^ -o $@
 
-%.exe: %.c.o
+%.exe: %.c.o $(H2PACK_INSTALL_DIR)/lib/libH2Pack.a
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 clean:

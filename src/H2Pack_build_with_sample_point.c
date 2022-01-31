@@ -424,7 +424,7 @@ int H2P_select_sample_point_r(
 }
 
 // Select sample points for constructing H2 projection and skeleton matrices 
-void H2P_select_sample_point_ref(
+void H2P_select_sample_point(
     H2Pack_p h2pack, const void *krnl_param, kernel_eval_fptr krnl_eval, 
     const DTYPE tau, H2P_dense_mat_p **sample_points_
 )
@@ -446,208 +446,8 @@ void H2P_select_sample_point_ref(
     int   *r_adm_pairs  = h2pack->is_HSS ? h2pack->HSS_r_adm_pairs : h2pack->r_adm_pairs;
     DTYPE *coord        = h2pack->coord;
 
-    // 1. Allocate temporary arrays and output arrays
-    H2P_int_vec_p   *adm_list   = (H2P_int_vec_p *)   malloc(sizeof(H2P_int_vec_p)   * n_node);
-    H2P_dense_mat_p *clu_refine = (H2P_dense_mat_p *) malloc(sizeof(H2P_dense_mat_p) * n_node);
-    H2P_dense_mat_p *sample_pt  = (H2P_dense_mat_p *) malloc(sizeof(H2P_dense_mat_p) * n_node);
-    for (int i = 0; i < n_node; i++)
-    {
-        H2P_int_vec_init(adm_list + i, n_node);
-        H2P_dense_mat_init(clu_refine + i, 300, xpt_dim);
-        H2P_dense_mat_init(sample_pt + i, 300, xpt_dim);
-    }
-
-    // 2. Convert the reduced admissible pairs to reduced admissible list of each node
-    for (int i = 0; i < n_r_adm_pair; i++)
-    {
-        int c0 = r_adm_pairs[2 * i + 0];
-        int c1 = r_adm_pairs[2 * i + 1];
-        H2P_int_vec_push_back(adm_list[c0], c1);
-        H2P_int_vec_push_back(adm_list[c1], c0);
-    }
-
-    int ri = H2P_select_sample_point_r(h2pack, krnl_param, krnl_eval, tau, h2pack->QR_stop_tol);
-
-    // 3. Bottom-up sweep
-    int r_up = ri;
-    for (int i = max_level; i >= min_adm_level; i--)
-    {
-        int *level_i_nodes = level_nodes + i * n_leaf_node;
-        int level_i_n_node = level_n_node[i];
-
-        // (1) Update refined points associated with clusters at level i
-        #pragma omp parallel for schedule(dynamic)
-        for (int j = 0; j < level_i_n_node; j++)
-        {
-            int node = level_i_nodes[j];
-            int n_child_node = n_child[node];
-            if (n_child_node == 0)
-            {
-                int pt_s = pt_cluster[node * 2];
-                int pt_e = pt_cluster[node * 2 + 1];
-                int node_npt = pt_e - pt_s + 1;
-                H2P_dense_mat_resize(clu_refine[node], xpt_dim, node_npt);
-                copy_matrix_block(sizeof(DTYPE), xpt_dim, node_npt, coord + pt_s, n_point, clu_refine[node]->data, node_npt);
-            } else {
-                int *child_nodes = children + node * max_child;
-                int child_clu_sum = 0;
-                for (int i_child = 0; i_child < n_child_node; i_child++)
-                {
-                    int i_child_node = child_nodes[i_child];
-                    int i_child_npt  = clu_refine[i_child_node]->ncol;
-                    child_clu_sum += i_child_npt;
-                }
-                H2P_dense_mat_resize(clu_refine[node], xpt_dim, child_clu_sum);
-                child_clu_sum = 0;
-                for (int i_child = 0; i_child < n_child_node; i_child++)
-                {
-                    int i_child_node = child_nodes[i_child];
-                    int i_child_npt  = clu_refine[i_child_node]->ncol;
-                    int lds = i_child_npt;
-                    int ldd = clu_refine[node]->ncol;
-                    DTYPE *src = clu_refine[i_child_node]->data;
-                    DTYPE *dst = clu_refine[node]->data + child_clu_sum;
-                    copy_matrix_block(sizeof(DTYPE), xpt_dim, i_child_npt, src, lds, dst, ldd);
-                    child_clu_sum += i_child_npt;
-                }
-            }  // End of "if (n_child_node == 0)"
-        }  // End of j loop
-
-        // (2) Select refined points for all nodes at i-th level
-        #pragma omp parallel
-        {
-            int *ri_list = (int *) malloc(sizeof(int) * pt_dim);
-            H2P_int_vec_p sample_idx;
-            H2P_int_vec_init(&sample_idx, 1024);
-            DTYPE *enbox_size = (DTYPE *) malloc(sizeof(DTYPE) * 2 * pt_dim);
-            #pragma omp for schedule(dynamic)
-            for (int j = 0; j < level_i_n_node; j++)
-            {
-                int node = level_i_nodes[j];
-                int node_npt_refine = clu_refine[node]->ncol;
-                if (node_npt_refine <= 5) continue;
-                H2P_calc_enclosing_box_size(pt_dim, clu_refine[node]->ncol, clu_refine[node]->data, enbox_size);
-                int ri_npt = H2P_proportional_int_decompose(pt_dim, r_up, enbox_size, ri_list);
-                if (ri_npt < node_npt_refine)
-                {
-                    H2P_select_cluster_sample(pt_dim, clu_refine[node], ri_list, 6,  1, sample_idx);
-                    H2P_dense_mat_select_columns(clu_refine[node], sample_idx);
-                }
-            }  // End of j loop
-            H2P_int_vec_destroy(&sample_idx);
-            free(ri_list);
-            free(enbox_size);
-        }
-    }  // End of i loop
-    
-    // 4. Top-down sweep
-    int r_down;
-    if (ri > 3) r_down = (ri + 3 > 10) ? (ri + 3) : 10;
-    else r_down = ri + 3;
-    for (int i = min_adm_level; i <= max_level; i++)
-    {
-        int *level_i_nodes = level_nodes + i * n_leaf_node;
-        int level_i_n_node = level_n_node[i];
-
-        #pragma omp parallel
-        {
-            int *ri_list = (int *) malloc(sizeof(int) * pt_dim);
-            H2P_int_vec_p sample_idx;
-            H2P_int_vec_init(&sample_idx, 1024);
-            DTYPE *enbox_size = (DTYPE *) malloc(sizeof(DTYPE) * 2 * pt_dim);
-            H2P_dense_mat_p workbuf_d;
-            H2P_dense_mat_init(&workbuf_d, 1, 1024);
-            #pragma omp for schedule(dynamic)
-            for (int j = 0; j < level_i_n_node; j++)
-            {
-                int node = level_i_nodes[j];
-                if (adm_list[node]->length == 0) continue;
-
-                // (1) Gather all far-field refined points as initial sample points
-                int sample_npt0 = sample_pt[node]->ncol;
-                H2P_dense_mat_resize(workbuf_d, xpt_dim, sample_npt0);
-                copy_matrix_block(sizeof(DTYPE), xpt_dim, sample_npt0, sample_pt[node]->data, sample_npt0, workbuf_d->data, sample_npt0);
-                int init_sample_npt = sample_npt0;
-                for (int k = 0; k < adm_list[node]->length; k++)
-                {
-                    int pair_node = adm_list[node]->data[k];
-                    int pair_node_npt = clu_refine[pair_node]->ncol;
-                    init_sample_npt += pair_node_npt;
-                }
-                H2P_dense_mat_resize(sample_pt[node], xpt_dim, init_sample_npt);
-                copy_matrix_block(sizeof(DTYPE), xpt_dim, sample_npt0, workbuf_d->data, sample_npt0, sample_pt[node]->data, init_sample_npt);
-                init_sample_npt = sample_npt0;
-                for (int k = 0; k < adm_list[node]->length; k++)
-                {
-                    int pair_node = adm_list[node]->data[k];
-                    int pair_node_npt = clu_refine[pair_node]->ncol;
-                    int lds = pair_node_npt;
-                    int ldd = sample_pt[node]->ncol;
-                    DTYPE *src = clu_refine[pair_node]->data;
-                    DTYPE *dst = sample_pt[node]->data + init_sample_npt;
-                    copy_matrix_block(sizeof(DTYPE), xpt_dim, pair_node_npt, src, lds, dst, ldd);
-                    init_sample_npt += pair_node_npt;
-                }
-
-                // (2) Refine initial sample points
-                H2P_calc_enclosing_box_size(pt_dim, sample_pt[node]->ncol, sample_pt[node]->data, enbox_size);
-                int ri_npt = H2P_proportional_int_decompose(pt_dim, r_down, enbox_size, ri_list);
-                if (ri_npt < init_sample_npt)
-                {
-                    H2P_select_cluster_sample(pt_dim, sample_pt[node], ri_list, 2, 1, sample_idx);
-                    H2P_dense_mat_select_columns(sample_pt[node], sample_idx);
-                }
-
-                // (3) Pass refined sample points to children
-                int sample_npt   = sample_idx->length;
-                int n_child_node = n_child[node];
-                int *child_nodes = children + node * max_child;
-                for (int i_child = 0; i_child < n_child_node; i_child++)
-                {
-                    int i_child_node = child_nodes[i_child];
-                    H2P_dense_mat_resize(sample_pt[i_child_node], xpt_dim, sample_pt[node]->ncol);
-                    copy_matrix_block(sizeof(DTYPE), xpt_dim, sample_npt, sample_pt[node]->data, sample_npt, sample_pt[i_child_node]->data, sample_npt);
-                }
-            }  // End of j loop
-            free(enbox_size);
-            free(ri_list);
-            H2P_int_vec_destroy(&sample_idx);
-            H2P_dense_mat_destroy(&workbuf_d);
-        }
-    }  // End of i loop
-
-    // Free temporary arrays and return sample points
-    for (int i = 0; i < n_node; i++)
-    {
-        H2P_int_vec_destroy(adm_list + i);
-        H2P_dense_mat_destroy(clu_refine + i);
-    }
-    free(adm_list);
-    free(clu_refine);
-    *sample_points_ = sample_pt;
-}
-
-void H2P_select_sample_point_vol(
-    H2Pack_p h2pack, const void *krnl_param, kernel_eval_fptr krnl_eval, 
-    const DTYPE tau, H2P_dense_mat_p **sample_points_
-)
-{
-    int   pt_dim        = h2pack->pt_dim;
-    int   xpt_dim       = h2pack->xpt_dim;
-    int   min_adm_level = h2pack->is_HSS ? h2pack->HSS_min_adm_level : h2pack->min_adm_level;
-    int   max_level     = h2pack->max_level;
-    int   max_child     = h2pack->max_child;
-    int   n_point       = h2pack->n_point;
-    int   n_node        = h2pack->n_node;
-    int   n_leaf_node   = h2pack->n_leaf_node;
-    int   n_r_adm_pair  = h2pack->is_HSS ? h2pack->HSS_n_r_adm_pair : h2pack->n_r_adm_pair;
-    int   *level_n_node = h2pack->level_n_node;
-    int   *level_nodes  = h2pack->level_nodes;
-    int   *n_child      = h2pack->n_child;
-    int   *children     = h2pack->children;
-    int   *pt_cluster   = h2pack->pt_cluster;
-    int   *r_adm_pairs  = h2pack->is_HSS ? h2pack->HSS_r_adm_pairs : h2pack->r_adm_pairs;
-    DTYPE *coord        = h2pack->coord;
+    int select_sp_alg = 0;
+    GET_ENV_INT_VAR(select_sp_alg, "H2P_SELECT_SP_ALG", "select_sp_alg", 1, 0, 1);
 
     // 1. Allocate temporary arrays and output arrays
     H2P_int_vec_p   *adm_list   = (H2P_int_vec_p *)   malloc(sizeof(H2P_int_vec_p)   * n_node);
@@ -795,9 +595,9 @@ void H2P_select_sample_point_vol(
                     }
                 }
 
-                // Here sample_pt[node] are passed from parent node
+                // If select_sp_alg == 0, use the old algorithm
                 int yFi_size = 0;
-                if (sample_pt[node]->ncol > nFp)
+                if ((sample_pt[node]->ncol > nFp) || (select_sp_alg == 0))
                 {
                     // Put all refined points in far-field nodes into yFi
                     H2P_dense_mat_resize(yFi, xpt_dim, nFp);
@@ -972,6 +772,7 @@ void H2P_select_sample_point_vol(
                 // Stage 2 in Difeng's code
 
                 // (1) Gather selected far-field refined points as initial sample points
+                // Here sample_pt[node] are passed from parent node
                 int sample_npt0 = sample_pt[node]->ncol;
                 int init_sample_npt = sample_npt0 + yFi_size;
                 H2P_dense_mat_resize(workbuf_d, xpt_dim, sample_npt0);
@@ -1017,17 +818,6 @@ void H2P_select_sample_point_vol(
     free(adm_list);
     free(clu_refine);
     *sample_points_ = sample_pt;
-}
-
-void H2P_select_sample_point(
-    H2Pack_p h2pack, const void *krnl_param, kernel_eval_fptr krnl_eval, 
-    const DTYPE tau, H2P_dense_mat_p **sample_points_
-)
-{
-    int algo = 0;
-    GET_ENV_INT_VAR(algo, "H2P_SELECT_SP_ALG", "select_sp_alg", 1, 0, 1);
-    if (algo == 0) H2P_select_sample_point_ref(h2pack, krnl_param, krnl_eval, tau, sample_points_);
-    if (algo == 1) H2P_select_sample_point_vol(h2pack, krnl_param, krnl_eval, tau, sample_points_);
 }
 
 typedef enum

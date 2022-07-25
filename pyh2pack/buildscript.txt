@@ -1,9 +1,0 @@
-#   for GCC+OPENBLAS
-CC=gcc python3 setup.py install
-
-#   for ICC+MKL
-LDSHARED="icc -shared" CC=icc python3 setup_icc.py install
-
-For ICC+MKL, before running python3, you need mannually preload the following mkl files: 
-export LD_PRELOAD=$MKLROOT/lib/intel64/libmkl_rt.so
-

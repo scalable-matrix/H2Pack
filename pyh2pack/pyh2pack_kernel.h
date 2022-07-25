@@ -18,7 +18,9 @@ struct H2P_kernel
     kernel_eval_fptr krnl_eval; //  function pointer for kernel_evaluation
     kernel_bimv_fptr krnl_bimv; //  function pointer for kernel_bimv
     int krnl_bimv_flops;        //  flops of applying krnl_bimv once. 
+    int flag_proxypoint;        //  flag for whether to use proxy point method.
     int flag_proxysurface;      //  flag for whether to use proxy surface method. 
+    int flag_samplept;          //  flag for whether to use sample point method.
     char *param_descr;          //  description of the kernel function.
 };
 typedef struct H2P_kernel H2P_kernel;
@@ -37,7 +39,9 @@ const H2P_kernel kernel_list[] =
         .krnl_eval = Gaussian_3D_eval_intrin_t, 
         .krnl_bimv = Gaussian_3D_krnl_bimv_intrin_t,
         .krnl_bimv_flops = Gaussian_3D_krnl_bimv_flop,
+        .flag_proxypoint = 1,
         .flag_proxysurface = 0,
+        .flag_samplept = 0,
         .param_descr = "one parameter l: K(x,y) = exp(-l|x-y|^2) "
     }, 
     // 2D Gaussian kernel
@@ -50,7 +54,9 @@ const H2P_kernel kernel_list[] =
         .krnl_eval = Gaussian_2D_eval_intrin_t, 
         .krnl_bimv = Gaussian_2D_krnl_bimv_intrin_t,
         .krnl_bimv_flops = Gaussian_2D_krnl_bimv_flop,
+        .flag_proxypoint = 1,
         .flag_proxysurface = 0,
+        .flag_samplept = 0,
         .param_descr = "one parameter l: K(x,y) = exp(-l|x-y|^2) "
     }, 
     // 3D Exponential kernel
@@ -63,7 +69,9 @@ const H2P_kernel kernel_list[] =
         .krnl_eval = Expon_3D_eval_intrin_t, 
         .krnl_bimv = Expon_3D_krnl_bimv_intrin_t,
         .krnl_bimv_flops = Expon_3D_krnl_bimv_flop,
+        .flag_proxypoint = 1,
         .flag_proxysurface = 0,
+        .flag_samplept = 0,
         .param_descr = "one parameter l: K(x,y) = exp(-l|x-y|) "
     },
     // 2D Exponential kernel
@@ -76,7 +84,9 @@ const H2P_kernel kernel_list[] =
         .krnl_eval = Expon_2D_eval_intrin_t, 
         .krnl_bimv = Expon_2D_krnl_bimv_intrin_t,
         .krnl_bimv_flops = Expon_2D_krnl_bimv_flop,
+        .flag_proxypoint = 1,
         .flag_proxysurface = 0,
+        .flag_samplept = 0,
         .param_descr = "one parameter l: K(x,y) = exp(-l|x-y|) "
     },
     // 3D Matern 3/2 kernel
@@ -89,7 +99,9 @@ const H2P_kernel kernel_list[] =
         .krnl_eval = Matern32_3D_eval_intrin_t, 
         .krnl_bimv = Matern32_3D_krnl_bimv_intrin_t,
         .krnl_bimv_flops = Matern32_3D_krnl_bimv_flop,
+        .flag_proxypoint = 1,
         .flag_proxysurface = 0,
+        .flag_samplept = 0,
         .param_descr = "one parameter l: K(x,y) = (1+sqrt(3)*l) exp(-sqrt(3)*l|x-y|) "
     },
     // 2D Matern 3/2 kernel
@@ -102,7 +114,9 @@ const H2P_kernel kernel_list[] =
         .krnl_eval = Matern32_2D_eval_intrin_t, 
         .krnl_bimv = Matern32_2D_krnl_bimv_intrin_t,
         .krnl_bimv_flops = Matern32_2D_krnl_bimv_flop,
+        .flag_proxypoint = 1,
         .flag_proxysurface = 0,
+        .flag_samplept = 0,
         .param_descr = "one parameter l: K(x,y) = (1+sqrt(3)*l) exp(-sqrt(3)*l|x-y|) "
     },
     // 3D Matern 5/2 kernel
@@ -115,7 +129,9 @@ const H2P_kernel kernel_list[] =
         .krnl_eval = Matern52_3D_eval_intrin_t, 
         .krnl_bimv = Matern52_3D_krnl_bimv_intrin_t,
         .krnl_bimv_flops = Matern52_3D_krnl_bimv_flop,
+        .flag_proxypoint = 1,
         .flag_proxysurface = 0,
+        .flag_samplept = 0,
         .param_descr = "one parameter l: K(x,y) = (1+sqrt(5)*l+5/3*l) exp(-sqrt(5)*l|x-y|) "
     },
     // 2D Matern 5/2 kernel
@@ -128,7 +144,9 @@ const H2P_kernel kernel_list[] =
         .krnl_eval = Matern52_2D_eval_intrin_t, 
         .krnl_bimv = Matern52_2D_krnl_bimv_intrin_t,
         .krnl_bimv_flops = Matern52_2D_krnl_bimv_flop,
+        .flag_proxypoint = 1,
         .flag_proxysurface = 0,
+        .flag_samplept = 0,
         .param_descr = "one parameter l: K(x,y) = (1+sqrt(5)*l+5/3*l) exp(-sqrt(5)*l|x-y|) "
     },
     // 3D Quadratic kernel
@@ -141,7 +159,9 @@ const H2P_kernel kernel_list[] =
         .krnl_eval = Quadratic_3D_eval_intrin_t, 
         .krnl_bimv = Quadratic_3D_krnl_bimv_intrin_t,
         .krnl_bimv_flops = Quadratic_3D_krnl_bimv_flop,
+        .flag_proxypoint = 1,
         .flag_proxysurface = 0,
+        .flag_samplept = 0,
         .param_descr = "two parameters c,a: K(x,y) = (1+c*|x-y|^2)^a"
     },
     // 2D Quadratic kernel
@@ -154,7 +174,9 @@ const H2P_kernel kernel_list[] =
         .krnl_eval = Quadratic_2D_eval_intrin_t, 
         .krnl_bimv = Quadratic_2D_krnl_bimv_intrin_t,
         .krnl_bimv_flops = Quadratic_2D_krnl_bimv_flop,
+        .flag_proxypoint = 1,
         .flag_proxysurface = 0,
+        .flag_samplept = 0,
         .param_descr = "two parameters c,a: K(x,y) = (1+c*|x-y|^2)^a"
     },
     // 3D Coulomb kernel
@@ -167,7 +189,9 @@ const H2P_kernel kernel_list[] =
         .krnl_eval = Coulomb_3D_eval_intrin_t, 
         .krnl_bimv = Coulomb_3D_krnl_bimv_intrin_t,
         .krnl_bimv_flops = Coulomb_3D_krnl_bimv_flop,
+        .flag_proxypoint = 0,
         .flag_proxysurface = 1,
+        .flag_samplept = 0,
         .param_descr = "no parameters"
     },
     // 2D Laplace kernel
@@ -180,7 +204,9 @@ const H2P_kernel kernel_list[] =
         .krnl_eval = Laplace_2D_eval_intrin_t, 
         .krnl_bimv = Laplace_2D_krnl_bimv_intrin_t,
         .krnl_bimv_flops = Laplace_2D_krnl_bimv_flop,
+        .flag_proxypoint = 0,
         .flag_proxysurface = 1,
+        .flag_samplept = 0,
         .param_descr = "no parameters"
     },
     // 3D Stokes kernel
@@ -193,10 +219,12 @@ const H2P_kernel kernel_list[] =
         .krnl_eval = Stokes_eval_std, 
         .krnl_bimv = Stokes_krnl_bimv_intrin_t,
         .krnl_bimv_flops = Stokes_krnl_bimv_flop,
+        .flag_proxypoint = 0,
         .flag_proxysurface = 1,
+        .flag_samplept = 0,
         .param_descr = "two parameters: (eta,  a)"
     },
-    // 3D RPY
+    // 3D RPY kernel
     {
         .krnl_name = "RPY",
         .krnl_dim = 3,
@@ -206,7 +234,9 @@ const H2P_kernel kernel_list[] =
         .krnl_eval = RPY_eval_std,
         .krnl_bimv = RPY_krnl_bimv_intrin_t,
         .krnl_bimv_flops = RPY_krnl_bimv_flop,
+        .flag_proxypoint = 0,
         .flag_proxysurface = 1,
+        .flag_samplept = 0,
         .param_descr = "two parameters: eta"
     }
 };

@@ -50,7 +50,7 @@ static PyMethodDef H2Mat_methods[] = {
 static PyTypeObject H2PackType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "pyh2pack.H2Mat",
-    .tp_doc = "H2 matrix data structure in Pyh2pack",
+    .tp_doc = "H2 matrix data structure in PyH2Pack",
     .tp_basicsize = sizeof(H2Mat),
     .tp_itemsize = 0,
     .tp_init = (initproc) H2Mat_init,
@@ -99,7 +99,7 @@ static PyMethodDef HSSMat_methods[] = {
 static PyTypeObject HSSPackType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "pyh2pack.HSSMat",
-    .tp_doc = "HSS matrix data structure in Pyh2pack",
+    .tp_doc = "HSS matrix data structure in PyH2Pack",
     .tp_basicsize = sizeof(H2Mat),
     .tp_itemsize = 0,
     .tp_init = (initproc) HSSMat_init,
@@ -174,6 +174,7 @@ static PyObject *h2setup(H2Mat *self, PyObject *args, PyObject *keywds) {
     char *pp_fname = NULL;
     double st, et;                      //  timing variable.
     int flag_proxysurface_in = -1;      //  flag for the use of proxy surface points
+    int flag_samplept_in = -1;          //  flag for the use of sample points
     int max_leaf_points = 0;
     double max_leaf_size = 0.0;
     
@@ -189,12 +190,12 @@ static PyObject *h2setup(H2Mat *self, PyObject *args, PyObject *keywds) {
     //  Step 2: parse input variables
     static char *keywdslist[] = {"kernel", "krnl_dim", "pt_coord", "pt_dim", 
                                 "rel_tol", "JIT_mode", "krnl_param",  "proxy_surface", 
-                                "pp_filename", "max_leaf_pts", "max_leaf_size", NULL};
+                                "sample_pt", "pp_filename", "max_leaf_pts", "max_leaf_size", NULL};
     self->params.BD_JIT = 1;
-    if (!PyArg_ParseTupleAndKeywords(args, keywds, "siO!id|iO!isid", keywdslist,
+    if (!PyArg_ParseTupleAndKeywords(args, keywds, "siO!id|iO!iisid", keywdslist,
                                     &krnl_name_in, &(self->params.krnl_dim), &PyArray_Type, &coord, &(self->params.pts_dim), 
                                     &(self->params.rel_tol), &(self->params.BD_JIT), &PyArray_Type, &kernel_param, &flag_proxysurface_in, 
-                                    &pp_fname, &max_leaf_points, &max_leaf_size))
+                                    &flag_samplept_in, &pp_fname, &max_leaf_points, &max_leaf_size))
     {
         PyErr_SetString(PyExc_TypeError, 
             "Error in the input arguments for initializing an h2pack structure. Refer to help(pyh2pack.setup) for detailed description of the function inputs"
@@ -221,7 +222,7 @@ static PyObject *h2setup(H2Mat *self, PyObject *args, PyObject *keywds) {
     }
     if (self->params.pts_dim != 1 && self->params.pts_dim != 2 && self->params.pts_dim != 3)    
     {
-        PyErr_SetString(PyExc_ValueError, "Pyh2pack only supports 1D, 2D, and 3D problems. \n");
+        PyErr_SetString(PyExc_ValueError, "PyH2Pack only supports 1D, 2D, and 3D problems. \n");
         return NULL;
     }
     self->params.pts_coord = (DTYPE*) malloc_aligned(sizeof(DTYPE) * coord->dimensions[0] * coord->dimensions[1], 64);
@@ -253,7 +254,7 @@ static PyObject *h2setup(H2Mat *self, PyObject *args, PyObject *keywds) {
     H2P_kernel kernel_info = identify_kernel_info(krnl_name_in, self->params.krnl_dim, self->params.pts_dim);
     if (kernel_info.krnl_name == NULL)
     {
-        PyErr_SetString(PyExc_ValueError, "Pyh2pack presently does not suppor the specified kernel\n");
+        PyErr_SetString(PyExc_ValueError, "PyH2Pack presently does not support the specified kernel\n");
         free_aligned(self->params.pts_coord);
         return NULL;
     }
@@ -293,10 +294,29 @@ static PyObject *h2setup(H2Mat *self, PyObject *args, PyObject *keywds) {
     max_leaf_points = (max_leaf_points > 0) ? max_leaf_points : 0;
     max_leaf_size = (max_leaf_size > 0) ? max_leaf_size : 0;
 
+    self->params.flag_proxypoint = 1;
+
     if (flag_proxysurface_in < 0)
         self->params.flag_proxysurface = kernel_info.flag_proxysurface;
     else
         self->params.flag_proxysurface = flag_proxysurface_in;
+
+    if (flag_samplept_in < 0)
+        self->params.flag_samplept = kernel_info.flag_samplept;
+    else
+        self->params.flag_samplept = flag_samplept_in;
+
+    if (self->params.flag_samplept == 1)
+    {
+        self->params.flag_proxypoint = 0;
+        self->params.flag_proxysurface = 0;
+    }
+
+    if (self->params.flag_proxysurface == 1)
+    {
+        self->params.flag_proxypoint = 0;
+        self->params.flag_samplept = 0;
+    }
 
     if (pp_fname != NULL)
         snprintf(self->params.pp_fname, sizeof(self->params.pp_fname), "%s", pp_fname);
@@ -310,9 +330,10 @@ static PyObject *h2setup(H2Mat *self, PyObject *args, PyObject *keywds) {
     H2P_calc_enclosing_box(self->params.pts_dim, self->params.pts_num, self->params.pts_coord, pp_fname, &self->h2mat->root_enbox);
     H2P_partition_points(self->h2mat, self->params.pts_num, self->params.pts_coord, max_leaf_points, max_leaf_size);
 
-    //  Main Step 3: construction of the proxy points
-    H2P_dense_mat_p *pp;
-    if (self->params.flag_proxysurface == 0)   
+    //  Main Step 3: construction of the proxy points / proxy surface / sample points
+    H2P_dense_mat_p *pp = NULL;
+    H2P_dense_mat_p *sample_pt = NULL;
+    if (self->params.flag_proxypoint == 1)
     {
         //  Numerical selection of the proxy points
         st = get_wtime_sec();
@@ -322,7 +343,7 @@ static PyObject *h2setup(H2Mat *self, PyObject *args, PyObject *keywds) {
         et = get_wtime_sec();
         // PySys_WriteStdout("Step 1: H2Pack generate/load NUMERICAL proxy points used %.3lf (s)\n", et - st);
     }
-    else    
+    if (self->params.flag_proxysurface == 1) 
     {
         //  Proxy surface points
         DTYPE max_L = self->h2mat->root_enbox[self->params.pts_dim];
@@ -338,14 +359,36 @@ static PyObject *h2setup(H2Mat *self, PyObject *args, PyObject *keywds) {
         et = get_wtime_sec();
         // PySys_WriteStdout("Step 1: H2Pack generate SURFACE proxy points used %.3lf (s)\n", et - st);
     }
+    if (self->params.flag_samplept == 1)
+    {
+        // Sample point algorithm
+        DTYPE tau = 0.7;
+        st = get_wtime_sec();
+        H2P_select_sample_point(
+            self->h2mat, self->params.krnl_param, self->params.krnl_eval, 
+            tau, &sample_pt
+        );
+        et = get_wtime_sec();
+        // PySys_WriteStdout("Step 1: H2Pack generate sample points used %.3lf (s)\n", et - st);
+    }
     // PySys_WriteStdout("number of proxy points at different layers %d %d\n", pp[2]->ncol, pp[3]->ncol);
 
     //  Main Step 4: H2 Matrix Construction
     st = get_wtime_sec();
-    H2P_build(
-        self->h2mat, pp, self->params.BD_JIT, self->params.krnl_param, 
-        self->params.krnl_eval, self->params.krnl_bimv, self->params.krnl_bimv_flops
-    );
+    if ((self->params.flag_proxypoint == 1) || (self->params.flag_proxysurface == 1))
+    {
+        H2P_build(
+            self->h2mat, pp, self->params.BD_JIT, self->params.krnl_param, 
+            self->params.krnl_eval, self->params.krnl_bimv, self->params.krnl_bimv_flops
+        );
+    }
+    if (self->params.flag_samplept == 1)
+    {
+        H2P_build_with_sample_point(
+            self->h2mat, sample_pt, self->params.BD_JIT, self->params.krnl_param, 
+            self->params.krnl_eval, self->params.krnl_bimv, self->params.krnl_bimv_flops
+        );
+    }
     et = get_wtime_sec();
     // PySys_WriteStdout("Step 2: H2Pack constructs the H2 matrix rep. used %.3lf (s)\n", et - st);
  
@@ -354,7 +397,7 @@ static PyObject *h2setup(H2Mat *self, PyObject *args, PyObject *keywds) {
     Py_RETURN_NONE;
 }
 
-//  HSS matrix contruction
+//  HSS matrix construction
 static PyObject *hss_setup(H2Mat *self, PyObject *args, PyObject *keywds) {
     PyArrayObject *coord = NULL, *kernel_param = NULL;
     char *krnl_name_in;                 //  kernel name
@@ -416,7 +459,7 @@ static PyObject *hss_setup(H2Mat *self, PyObject *args, PyObject *keywds) {
     }
     if (self->params.pts_dim != 1 && self->params.pts_dim != 2 && self->params.pts_dim != 3)    
     {
-        PyErr_SetString(PyExc_ValueError, "Pyh2pack only supports 1D, 2D, and 3D problems. \n");
+        PyErr_SetString(PyExc_ValueError, "PyH2Pack only supports 1D, 2D, and 3D problems. \n");
         return NULL;
     }
     self->params.pts_coord = (DTYPE*) malloc_aligned(sizeof(DTYPE) * coord->dimensions[0] * coord->dimensions[1], 64);
@@ -448,7 +491,7 @@ static PyObject *hss_setup(H2Mat *self, PyObject *args, PyObject *keywds) {
     H2P_kernel kernel_info = identify_kernel_info(krnl_name_in, self->params.krnl_dim, self->params.pts_dim);
     if (kernel_info.krnl_name == NULL)
     {
-        PyErr_SetString(PyExc_ValueError, "Pyh2pack presently does not suppor the specified kernel\n");
+        PyErr_SetString(PyExc_ValueError, "PyH2Pack presently does not support the specified kernel\n");
         free_aligned(self->params.pts_coord);
         return NULL;
     }
@@ -627,7 +670,7 @@ static PyObject *hss_setup(H2Mat *self, PyObject *args, PyObject *keywds) {
 
         if (!self->h2mat->is_HSS_SPD)
         {
-            PyErr_Format(PyExc_ValueError, "The given matrix with shift %f and h2 reltol %e is not SPD, cannot construct an SPDHSS\n",
+            PyErr_Format(PyExc_ValueError, "The given matrix with shift %f and H2 reltol %e is not SPD, cannot construct an SPDHSS\n",
                 self->shift, self->params.rel_tol);        
             //  TODO: need free intermeidate block when ULV fails in H2Pack
             self->flag_setup = 0;
@@ -701,7 +744,7 @@ static PyObject *hss_ulv(H2Mat *self, PyObject *args, PyObject *kywds)
                 "The HSS matrix with given shift is not SPD, cannot be decomposed into Cholesky ULV form"
             );
             self->flag_ulv = 0;
-            //  TODO: need free intermeidate block when ULV fails in H2Pack
+            //  TODO: need free intermediate block when ULV fails in H2Pack
             Py_RETURN_NONE;
         }
     }        
@@ -752,7 +795,7 @@ static PyObject *hss_solve(H2Mat *self, PyObject *args, PyObject *keywds)
     //  Check Input
     if (vec_in->descr->type_num != PyArray_DOUBLE || vec_in->nd != 1) 
     {
-        PyErr_SetString(PyExc_ValueError, "Input of .solve() should be a one-dimensional float numpy array");
+        PyErr_SetString(PyExc_ValueError, "Input of .solve() should be a one-dimensional float NumPy array");
         return NULL; 
     }
     if (vec_in->dimensions[0] != self->params.krnl_mat_size)
@@ -831,7 +874,7 @@ static PyObject *h2matvec(H2Mat *self, PyObject *args) {
     //  Check Input
     if (x_in->descr->type_num != PyArray_DOUBLE || x_in->nd != 1) 
     {
-        PyErr_SetString(PyExc_ValueError, "Input of h2matvec should be a one-dimensional float numpy array");
+        PyErr_SetString(PyExc_ValueError, "Input of h2matvec should be a one-dimensional float NumPy array");
         return NULL; 
     }
     if (x_in->dimensions[0] != self->params.krnl_mat_size)
@@ -884,7 +927,7 @@ static PyObject *h2matmul(H2Mat *self, PyObject *args) {
     //  Check Input
     if (x_in->descr->type_num != PyArray_DOUBLE || x_in->nd != 2) 
     {
-        PyErr_SetString(PyExc_ValueError, "Input of h2matmul should be a two-dimensional float numpy array");
+        PyErr_SetString(PyExc_ValueError, "Input of h2matmul should be a two-dimensional float NumPy array");
         return NULL; 
     }
     if (x_in->dimensions[0] != self->params.krnl_mat_size)
@@ -942,7 +985,7 @@ static PyObject *direct_matvec(H2Mat *self, PyObject *args) {
     //  Check Input
     if (x_in->descr->type_num != PyArray_DOUBLE || x_in->nd != 1) 
     {
-        PyErr_SetString(PyExc_ValueError, "Input of direct_matvec should be a one-dimensional float numpy array");
+        PyErr_SetString(PyExc_ValueError, "Input of direct_matvec should be a one-dimensional float NumPy array");
         return NULL; 
     }
     if (x_in->dimensions[0] != self->params.krnl_mat_size)
@@ -1022,25 +1065,29 @@ static PyObject *print_setting(H2Mat *self, PyObject *args) {
         for (int i = 0; i < self->params.krnl_param_len; i++)
             PySys_WriteStdout("%f ", self->params.krnl_param[i]);
         PySys_WriteStdout("\n");
-        PySys_WriteStdout("  * Parameter Description          : %s\n\n", self->params.krnl_param_descr);
+        PySys_WriteStdout("  * Parameter Description          : %s\n", self->params.krnl_param_descr);
+        PySys_WriteStdout("==================================================================\n\n");
 
 
-        PySys_WriteStdout("==================== H2Pack SetUp Information ====================\n");
+        PySys_WriteStdout("==================== H2Pack Setup Information ====================\n");
         PySys_WriteStdout("  * Number of Points               : %d\n", self->params.pts_num);
         PySys_WriteStdout("  * Compression relative tol       : %e\n", self->params.rel_tol);
         if (self->params.BD_JIT != 0)
             PySys_WriteStdout("  * JIT_mode                       : on\n");
         else
             PySys_WriteStdout("  * JIT_mode                       : off\n");
-        if (self->params.flag_proxysurface != 0)
+        if (self->params.flag_proxysurface == 1)
             PySys_WriteStdout("  * Select scheme for proxy points : proxy surface\n");
-        else
+        if (self->params.flag_proxypoint == 1)
             PySys_WriteStdout("  * Select scheme for proxy points : QR\n");
+        if (self->params.flag_samplept == 1)
+            PySys_WriteStdout("  * Using data-driven sample point method\n");
         if (self->params.pp_fname[0] != '\0')
             PySys_WriteStdout("  * Proxy points file loaded from/written to: %s", self->params.pp_fname);
+        PySys_WriteStdout("==================================================================\n\n");
     }
     else
-        PySys_WriteStdout("PyH2pack has not been set up yet!\n");
+        PySys_WriteStdout("PyH2Pack has not been set up yet!\n");
     Py_RETURN_NONE;
 }
 
@@ -1118,7 +1165,7 @@ static PyObject *kernel_matvec(PyObject *self, PyObject *args, PyObject *keywds)
     }
     if (pts_dim != 1 && pts_dim != 2 && pts_dim != 3)    
     {
-        PyErr_SetString(PyExc_ValueError, "Pyh2pack only supports 1D, 2D, and 3D problems. \n");
+        PyErr_SetString(PyExc_ValueError, "PyH2Pack only supports 1D, 2D, and 3D problems. \n");
         return NULL;
     }
 
@@ -1174,7 +1221,7 @@ static PyObject *kernel_matvec(PyObject *self, PyObject *args, PyObject *keywds)
     H2P_kernel kernel_info = identify_kernel_info(krnl_name_in, krnl_dim, pts_dim);
     if (kernel_info.krnl_name == NULL)
     {
-        PyErr_SetString(PyExc_ValueError, "Pyh2pack presently does not support the specified kernel\n");
+        PyErr_SetString(PyExc_ValueError, "PyH2Pack presently does not support the specified kernel\n");
         free_aligned(target_coord_c);
         free_aligned(source_coord_c);
         return NULL;
@@ -1206,7 +1253,7 @@ static PyObject *kernel_matvec(PyObject *self, PyObject *args, PyObject *keywds)
     //  Check Input Vector
     if (x_in->descr->type_num != PyArray_DOUBLE || x_in->nd != 1) 
     {
-        PyErr_SetString(PyExc_ValueError, "Input of kernel_matvec should be a one-dimensional float numpy array");
+        PyErr_SetString(PyExc_ValueError, "Input of kernel_matvec should be a one-dimensional float NumPy array");
         free_aligned(target_coord_c);
         free_aligned(source_coord_c);   
         free(krnl_param);
@@ -1300,7 +1347,7 @@ static PyObject *kernel_block(PyObject *self, PyObject *args, PyObject *keywds) 
     }
     if (pts_dim != 1 && pts_dim != 2 && pts_dim != 3)    
     {
-        PyErr_SetString(PyExc_ValueError, "Pyh2pack only supports 1D, 2D, and 3D problems. \n");
+        PyErr_SetString(PyExc_ValueError, "PyH2Pack only supports 1D, 2D, and 3D problems. \n");
         return NULL;
     }
 
@@ -1356,7 +1403,7 @@ static PyObject *kernel_block(PyObject *self, PyObject *args, PyObject *keywds) 
     H2P_kernel kernel_info = identify_kernel_info(krnl_name_in, krnl_dim, pts_dim);
     if (kernel_info.krnl_name == NULL)
     {
-        PyErr_SetString(PyExc_ValueError, "Pyh2pack presently does not support the specified kernel\n");
+        PyErr_SetString(PyExc_ValueError, "PyH2Pack presently does not support the specified kernel\n");
         free_aligned(target_coord_c);
         free_aligned(source_coord_c);
         return NULL;

@@ -49,7 +49,7 @@ Vector wrapper functions are provided to help users optimize
 the evaluation of their own kernel functions.
 * HSS hierarchical block low-rank representations are also available,
 including ULV decomposition and solve.
-* A Matlab version of H2Pack is available in [this repo](https://github.com/xinxing02/H2Pack-Matlab).
+* A MATLAB version of H2Pack is available in [this repo](https://github.com/xinxing02/H2Pack-Matlab).
 
 **Limitations**
 
@@ -66,8 +66,35 @@ a single set of points (i.e., square, symmetric matrices)
 
 **References**
 
-* H. Huang, X. Xing, and E. Chow, [H2Pack: High-performance H2 matrix package for kernel matrices using the proxy point method](https://www.cc.gatech.edu/~echow/pubs/h2pack.pdf), _ACM Transactions on Mathematical Software_, 47(1), Article 3 (2020).
-* X. Xing and E. Chow, [Interpolative decomposition via proxy points for kernel matrices](https://www.cc.gatech.edu/~echow/pubs/xing-chow-simax-2019.pdf), _SIAM Journal on Matrix Analysis and Applications_, 41(1), 221–243 (2020).
+Please cite the following two papers if you use H2Pack in your work:
+
+```bibtex
+@article{huang2020toms,
+    title = { {H2Pack}: High-performance \textit $^{\textrm{2}}$ Matrix Package for Kernel Matrices Using the Proxy Point Method },
+    journal = {ACM Transactions on Mathematical Software},
+    author = {Huang, Hua and Xing, Xin and Chow, Edmond},
+    year = {2020},
+    month = {Dec},
+    volume = {47},
+    pages = {1--29},
+    doi = {10.1145/3412850},
+    issn = {0098-3500, 1557-7295},
+    number = {1},
+}
+```
+
+```bibtex
+@article{xin2019,
+	title = {Interpolative decomposition via proxy points for kernel matrices},
+	journal = {SIAM Journal on Matrix Analysis and Applications},
+	author = {Xing, Xin and Chow, Edmond},
+	year = {2020},
+	volume = {41},
+    pages = {221--243},
+}
+```
+
+H2Pack also implements the hierarchical matrix construction algorithm in this paper: [Data-driven Construction of Hierarchical Matrices with Nested Bases](https://arxiv.org/pdf/2206.01885.pdf). This paper is accepted by SIAM Journal on Scientific Computing and will appear soon. Please cite this paper if you use the data-driven method in H2Pack.
 
 
 ## Getting Started

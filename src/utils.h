@@ -1,6 +1,6 @@
 // @brief    : Implementations of some helper functions I use here and there
 // @author   : Hua Huang <huangh223@gatech.edu>
-// @modified : 2020-08-30
+// @modified : 2023-05-09
 
 #ifndef __HUANGH223_UTILS_H__
 #define __HUANGH223_UTILS_H__
@@ -136,7 +136,7 @@ void calc_err_2norm(
     double *x0_2norm_, double *err_2norm_
 );
 
-// Copy a row-major matrix block to another row-major matrix
+// Copy a row-major matrix to another row-major matrix
 // Input parameters:
 //   dt_size : Size of matrix element data type, in bytes
 //   nrow    : Number of rows to be copied
@@ -144,11 +144,12 @@ void calc_err_2norm(
 //   src     : Size >= lds * nrow, source matrix
 //   lds     : Leading dimension of src, >= ncol
 //   ldd     : Leading dimension of dst, >= ncol
+//   use_omp : 0 or 1, if this function should use OpenMP parallelization
 // Output parameter:
 //   dst : Size >= ldd * nrow, destination matrix
-void copy_matrix_block(
+void copy_matrix(
     const size_t dt_size, const int nrow, const int ncol,
-    const void *src, const int lds, void *dst, const int ldd
+    const void *src, const int lds, void *dst, const int ldd, const int use_omp
 );
 
 // Gather elements from a vector to another vector

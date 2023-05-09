@@ -127,9 +127,9 @@ static void H2P_search_knn(H2Pack_p h2pack, const int k, int *knn)
             int node_j_pt_s = pt_cluster[2 * node_j];
             int node_j_pt_e = pt_cluster[2 * node_j + 1];
             int node_j_npt  = node_j_pt_e - node_j_pt_s + 1;
-            copy_matrix_block(
+            copy_matrix(
                 sizeof(DTYPE), pt_dim, node_j_npt, coord + node_j_pt_s, n_point, 
-                neighbor_pt_coord->data + neighbor_pt_cnt, max_candidate
+                neighbor_pt_coord->data + neighbor_pt_cnt, max_candidate, 0
             );
             for (int k = 0; k < node_j_npt; k++)
                 pt_idx->data[neighbor_pt_cnt + k] = node_j_pt_s + k;
@@ -179,9 +179,9 @@ static void H2P_search_knn(H2Pack_p h2pack, const int k, int *knn)
                 int   *pt_idx_j = pt_idx->data + j * neighbor_pt_cnt;
                 qsort_DTYPE_int_pair(dist_j, pt_idx_j, 0, neighbor_pt_cnt - 1);
             }  // End of j loop
-            copy_matrix_block(sizeof(int), node_npt, k, pt_idx->data, neighbor_pt_cnt, knn + node_pt_s * k, k);
+            copy_matrix(sizeof(int), node_npt, k, pt_idx->data, neighbor_pt_cnt, knn + node_pt_s * k, k, 1);
         } else {
-            copy_matrix_block(sizeof(int), node_npt, neighbor_pt_cnt, pt_idx->data, neighbor_pt_cnt, knn + node_pt_s * k, k);
+            copy_matrix(sizeof(int), node_npt, neighbor_pt_cnt, pt_idx->data, neighbor_pt_cnt, knn + node_pt_s * k, k, 1);
             // Not enough neighbor points, set the rest as self
             #pragma omp parallel for
             for (int j = node_pt_s; j <= node_pt_e; j++)
@@ -329,7 +329,7 @@ void H2P_build_FSAI_precond(H2Pack_p h2pack, const int rank, const DTYPE shift, 
                 H2P_transpose_dmat(1, A_size, krnl_dim, tmpU, krnl_dim, tmpY, A_size);
                 // tmpD = tmpY(:, end-krnl_dim+1:end); 
                 DTYPE *tmpY_src = tmpY + (A_size - krnl_dim);
-                copy_matrix_block(sizeof(DTYPE), krnl_dim, krnl_dim, tmpY_src, A_size, tmpD, krnl_dim);
+                copy_matrix(sizeof(DTYPE), krnl_dim, krnl_dim, tmpY_src, A_size, tmpD, krnl_dim, 0);
                 // tmpL = 0.5 * (tmpL + tmpL');
                 for (int j = 0; j < krnl_dim; j++)
                 {

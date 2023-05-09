@@ -329,7 +329,7 @@ void H2P_matmul_bwd_transform(
                         if (y1[child_k]->ld == 0)
                         {
                             H2P_dense_mat_resize(y1[child_k], child_k_len, n_vec);
-                            copy_matrix_block(sizeof(DTYPE), child_k_len, n_vec, y1_tmp_spos, y1_tmp->ld, y1[child_k]->data, y1[child_k]->ld);
+                            copy_matrix(sizeof(DTYPE), child_k_len, n_vec, y1_tmp_spos, y1_tmp->ld, y1[child_k]->data, y1[child_k]->ld, 0);
                         } else {
                             for (int k0 = 0; k0 < child_k_len; k0++)
                             {

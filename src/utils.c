@@ -1,6 +1,6 @@
 // @brief    : Implementations of some helper functions I use here and there
 // @author   : Hua Huang <huangh223@gatech.edu>
-// @modified : 2020-12-03
+// @modified : 2023-05-09
 
 #include <stdio.h>
 #include <string.h>
@@ -88,10 +88,10 @@ void calc_err_2norm(
     *err_2norm_ = sqrt(err_2norm);
 }
 
-// Copy a row-major matrix block to another row-major matrix
-void copy_matrix_block(
+// Copy a row-major matrix to another row-major matrix
+void copy_matrix(
     const size_t dt_size, const int nrow, const int ncol, 
-    const void *src, const int lds, void *dst, const int ldd
+    const void *src, const int lds, void *dst, const int ldd, const int use_omp
 )
 {
     const char *src_ = (char*) src;
@@ -99,11 +99,24 @@ void copy_matrix_block(
     const size_t lds_ = dt_size * (size_t) lds;
     const size_t ldd_ = dt_size * (size_t) ldd;
     const size_t row_msize = dt_size * (size_t) ncol;
-    for (int irow = 0; irow < nrow; irow++)
+    if (use_omp == 0)
     {
-        size_t src_offset = (size_t) irow * lds_;
-        size_t dst_offset = (size_t) irow * ldd_;
-        memcpy(dst_ + dst_offset, src_ + src_offset, row_msize);
+        for (int irow = 0; irow < nrow; irow++)
+        {
+            size_t src_offset = (size_t) irow * lds_;
+            size_t dst_offset = (size_t) irow * ldd_;
+            memcpy(dst_ + dst_offset, src_ + src_offset, row_msize);
+        }
+    } else {
+        #if defined(_OPENMP)
+        #pragma omp parallel for schedule(static)
+        #endif
+        for (int irow = 0; irow < nrow; irow++)
+        {
+            size_t src_offset = (size_t) irow * lds_;
+            size_t dst_offset = (size_t) irow * ldd_;
+            memcpy(dst_ + dst_offset, src_ + src_offset, row_msize);
+        }
     }
 }
 
@@ -182,43 +195,39 @@ void gather_matrix_cols(
     }
 }
 
-// Print a row-major int matrix block to standard output
-void print_int_mat_blk(
-    const int *mat, const int ldm, const int nrow, const int ncol, 
-    const char *fmt, const char *mat_name
+// Print a matrix to standard output
+void print_matrix(
+    const int dtype, const int stype, const void *mat, const int ldm, 
+    const int nrow, const int ncol, const char *fmt, const char *name
 )
 {
-    printf("%s:\n", mat_name);
-    for (int i = 0; i < nrow; i++)
+    printf("%s:\n", name);
+    int row_stride, col_stride;
+    if (stype == 0)
     {
-        const int *mat_i = mat + i * ldm;
-        for (int j = 0; j < ncol; j++)
-        {
-            printf(fmt, mat_i[j]);
-            printf("  ");
-        }
-        printf("\n");
+        row_stride = ldm;
+        col_stride = 1;
+    } else {
+        row_stride = 1;
+        col_stride = ldm;
     }
-    printf("\n");
-}
 
-// Print a row-major double matrix block to standard output
-void print_dbl_mat_blk(
-    const double *mat, const int ldm, const int nrow, const int ncol, 
-    const char *fmt, const char *mat_name
-)
-{
-    printf("%s:\n", mat_name);
-    for (int i = 0; i < nrow; i++)
-    {
-        const double *mat_i = mat + i * ldm;
-        for (int j = 0; j < ncol; j++)
-        {
-            printf(fmt, mat_i[j]);
-            printf("  ");
-        }
-        printf("\n");
-    }
-    printf("\n");
+    #define PRINT_MATRIX(DTYPE) \
+    do { \
+        const DTYPE *mat_ = (const DTYPE *) mat; \
+        for (int i = 0; i < nrow; i++) \
+        { \
+            for (int j = 0; j < ncol; j++) \
+            { \
+                printf(fmt, mat_[i * row_stride + j * col_stride]); \
+            } \
+            printf("\n"); \
+        } \
+    } while (0)
+
+    if (dtype == 0) PRINT_MATRIX(int);
+    if (dtype == 1) PRINT_MATRIX(double);
+
+    #undef PRINT_MATRIX
 }
 

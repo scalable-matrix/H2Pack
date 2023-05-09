@@ -97,7 +97,7 @@ void H2P_HSS_ULV_LU_factorize(H2Pack_p h2pack, const DTYPE shift)
                 {
                     // Leaf node, use the original U and D
                     H2P_dense_mat_resize(tmpU, U[node]->nrow, U[node]->ncol);
-                    copy_matrix_block(sizeof(DTYPE), U[node]->nrow, U[node]->ncol, U[node]->data, U[node]->ld, tmpU->data, tmpU->ld);
+                    copy_matrix(sizeof(DTYPE), U[node]->nrow, U[node]->ncol, U[node]->data, U[node]->ld, tmpU->data, tmpU->ld, 0);
                     H2P_get_Dij_block(h2pack, node, node, tmpD);
                     for (int k = 0; k < tmpD->nrow; k++)
                         tmpD->data[k * tmpD->ld + k] += shift;
@@ -126,9 +126,9 @@ void H2P_HSS_ULV_LU_factorize(H2Pack_p h2pack, const DTYPE shift)
                         int idx_k_len = offset[k + 1] - idx_k_s;
                         // Diagonal blocks
                         // tmpD(idx_k, idx_k) = D_mid{child_k};
-                        copy_matrix_block(
+                        copy_matrix(
                             sizeof(DTYPE), D_mid[child_k]->nrow, D_mid[child_k]->ncol, D_mid[child_k]->data, 
-                            D_mid[child_k]->ld, tmpD->data + idx_k_s * (tmpD->ld + 1), tmpD->ld
+                            D_mid[child_k]->ld, tmpD->data + idx_k_s * (tmpD->ld + 1), tmpD->ld, 0
                         );
                         // Off-diagonal blocks
                         for (int l = k + 1; l < node_n_child; l++)
@@ -167,9 +167,9 @@ void H2P_HSS_ULV_LU_factorize(H2Pack_p h2pack, const DTYPE shift)
                         int idx_k_s = offset[k];
                         // Diagonal blocks
                         // tmpU(idx_k, idx_k) = U_mid{child_k};
-                        copy_matrix_block(
+                        copy_matrix(
                             sizeof(DTYPE), U_mid[child_k]->nrow, U_mid[child_k]->ncol, U_mid[child_k]->data, 
-                            U_mid[child_k]->ld, tmpU->data + idx_k_s * (tmpU->ld + 1), tmpU->ld
+                            U_mid[child_k]->ld, tmpU->data + idx_k_s * (tmpU->ld + 1), tmpU->ld, 0
                         );
                     }  // End of k loop
                     // if (level > 1), tmpU = tmpU * U{node}; end
@@ -182,7 +182,7 @@ void H2P_HSS_ULV_LU_factorize(H2Pack_p h2pack, const DTYPE shift)
                             1.0, tmpU->data, tmpU->ld, U[node]->data, U[node]->ld, 0.0, tmpB->data, tmpB->ld
                         );
                         H2P_dense_mat_resize(tmpU, tmpB->nrow, tmpB->ncol);
-                        copy_matrix_block(sizeof(DTYPE), tmpB->nrow, tmpB->ncol, tmpB->data, tmpB->ld, tmpU->data, tmpU->ld);
+                        copy_matrix(sizeof(DTYPE), tmpB->nrow, tmpB->ncol, tmpB->data, tmpB->ld, tmpU->data, tmpU->ld, 0);
                     }
                 }  // End of "if (node_n_child == 0)"
                 U_nrow = tmpU->nrow;
@@ -200,7 +200,7 @@ void H2P_HSS_ULV_LU_factorize(H2Pack_p h2pack, const DTYPE shift)
                     H2P_dense_mat_init(&ULV_Q[node], U_nrow + 1, U_ncol);
                     H2P_dense_mat_init(&U_mid[node], U_ncol, U_ncol);
                     // [Q{node}, R] = qr(tmpU);
-                    copy_matrix_block(sizeof(DTYPE), U_nrow, U_ncol, tmpU->data, tmpU->ld, ULV_Q[node]->data, ULV_Q[node]->ld);
+                    copy_matrix(sizeof(DTYPE), U_nrow, U_ncol, tmpU->data, tmpU->ld, ULV_Q[node]->data, ULV_Q[node]->ld, 0);
                     DTYPE *A   = ULV_Q[node]->data;
                     DTYPE *tau = ULV_Q[node]->data + U_nrow * U_ncol;
                     info = LAPACK_GEQRF(LAPACK_ROW_MAJOR, U_nrow, U_ncol, A, U_ncol, tau);
@@ -257,9 +257,9 @@ void H2P_HSS_ULV_LU_factorize(H2Pack_p h2pack, const DTYPE shift)
                         // LD21 = tmpLL \ tmpD21(Lp{node}, :);
                         // Here tmpD21(Lp{node}, :) and LD21 is stored in tmpD21
                         H2P_dense_mat_resize(tmpM, U_diff, U_ncol);
-                        copy_matrix_block(sizeof(DTYPE), U_diff, U_ncol, tmpD21, U_nrow, tmpM->data, tmpM->ld);
+                        copy_matrix(sizeof(DTYPE), U_diff, U_ncol, tmpD21, U_nrow, tmpM->data, tmpM->ld, 0);
                         H2P_dense_mat_permute_rows(tmpM, ULV_p[node]->data);
-                        copy_matrix_block(sizeof(DTYPE), U_diff, U_ncol, tmpM->data, tmpM->ld, tmpD21, U_nrow);
+                        copy_matrix(sizeof(DTYPE), U_diff, U_ncol, tmpM->data, tmpM->ld, tmpD21, U_nrow, 0);
                         CBLAS_TRSM(
                             CblasRowMajor, CblasLeft, CblasLower, CblasNoTrans, CblasUnit,
                             U_diff, U_ncol, 1.0, tmpD22, U_nrow, tmpD21, U_nrow
@@ -284,13 +284,13 @@ void H2P_HSS_ULV_LU_factorize(H2Pack_p h2pack, const DTYPE shift)
                         DTYPE *L12 = ULV_L[node]->data + U_ncol;
                         DTYPE *L21 = ULV_L[node]->data + U_ncol * U_nrow;
                         DTYPE *L22 = ULV_L[node]->data + U_ncol * (U_nrow + 1);
-                        copy_matrix_block(sizeof(DTYPE), U_ncol, U_diff, tmpD12, U_nrow, L12, U_nrow);
-                        copy_matrix_block(sizeof(DTYPE), U_diff, U_ncol, tmpD21, U_nrow, L21, U_nrow);
-                        copy_matrix_block(sizeof(DTYPE), U_diff, U_diff, tmpD22, U_nrow, L22, U_nrow);
+                        copy_matrix(sizeof(DTYPE), U_ncol, U_diff, tmpD12, U_nrow, L12, U_nrow, 0);
+                        copy_matrix(sizeof(DTYPE), U_diff, U_ncol, tmpD21, U_nrow, L21, U_nrow, 0);
+                        copy_matrix(sizeof(DTYPE), U_diff, U_diff, tmpD22, U_nrow, L22, U_nrow, 0);
                     }
                     // D_mid{node} = tmpD11 - DU12 * LD21;
                     H2P_dense_mat_init(&D_mid[node], U_ncol, U_ncol);
-                    copy_matrix_block(sizeof(DTYPE), U_ncol, U_ncol, tmpD11, U_nrow, D_mid[node]->data, U_ncol);
+                    copy_matrix(sizeof(DTYPE), U_ncol, U_ncol, tmpD11, U_nrow, D_mid[node]->data, U_ncol, 0);
                     if (U_diff > 0)
                     {
                         CBLAS_GEMM(
@@ -306,7 +306,7 @@ void H2P_HSS_ULV_LU_factorize(H2Pack_p h2pack, const DTYPE shift)
                     ULV_Ls[node] = 0;
                     // [tmpLL, tmpLU, Lp{node}] = lu(tmpD, 'vector');
                     // L{node} = tmpLL + tmpLU - eye(size(tmpD));
-                    copy_matrix_block(sizeof(DTYPE), U_nrow, U_nrow, tmpD->data, U_nrow, ULV_L[node]->data, U_nrow);
+                    copy_matrix(sizeof(DTYPE), U_nrow, U_nrow, tmpD->data, U_nrow, ULV_L[node]->data, U_nrow, 0);
                     H2P_int_vec_init(&ULV_p[node], U_nrow * 2);
                     ULV_p[node]->length = U_nrow;
                     int *perm = ULV_p[node]->data;
@@ -680,7 +680,7 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_p h2pack, const DTYPE shift)
                 {
                     // Leaf node, use the original U and D
                     H2P_dense_mat_resize(tmpU, U[node]->nrow, U[node]->ncol);
-                    copy_matrix_block(sizeof(DTYPE), U[node]->nrow, U[node]->ncol, U[node]->data, U[node]->ld, tmpU->data, tmpU->ld);
+                    copy_matrix(sizeof(DTYPE), U[node]->nrow, U[node]->ncol, U[node]->data, U[node]->ld, tmpU->data, tmpU->ld, 0);
                     H2P_get_Dij_block(h2pack, node, node, tmpD);
                     for (int k = 0; k < tmpD->nrow; k++)
                         tmpD->data[k * tmpD->ld + k] += shift;
@@ -709,9 +709,9 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_p h2pack, const DTYPE shift)
                         int idx_k_len = offset[k + 1] - idx_k_s;
                         // Diagonal blocks
                         // tmpD(idx_k, idx_k) = D_mid{child_k};
-                        copy_matrix_block(
+                        copy_matrix(
                             sizeof(DTYPE), D_mid[child_k]->nrow, D_mid[child_k]->ncol, D_mid[child_k]->data, 
-                            D_mid[child_k]->ld, tmpD->data + idx_k_s * (tmpD->ld + 1), tmpD->ld
+                            D_mid[child_k]->ld, tmpD->data + idx_k_s * (tmpD->ld + 1), tmpD->ld, 0
                         );
                         // Off-diagonal blocks
                         for (int l = k + 1; l < node_n_child; l++)
@@ -750,9 +750,9 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_p h2pack, const DTYPE shift)
                         int idx_k_s = offset[k];
                         // Diagonal blocks
                         // tmpU(idx_k, idx_k) = U_mid{child_k};
-                        copy_matrix_block(
+                        copy_matrix(
                             sizeof(DTYPE), U_mid[child_k]->nrow, U_mid[child_k]->ncol, U_mid[child_k]->data, 
-                            U_mid[child_k]->ld, tmpU->data + idx_k_s * (tmpU->ld + 1), tmpU->ld
+                            U_mid[child_k]->ld, tmpU->data + idx_k_s * (tmpU->ld + 1), tmpU->ld, 0
                         );
                     }  // End of k loop
                     // if (level > 1), tmpU = tmpU * U{node}; end
@@ -765,7 +765,7 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_p h2pack, const DTYPE shift)
                             1.0, tmpU->data, tmpU->ld, U[node]->data, U[node]->ld, 0.0, tmpB->data, tmpB->ld
                         );
                         H2P_dense_mat_resize(tmpU, tmpB->nrow, tmpB->ncol);
-                        copy_matrix_block(sizeof(DTYPE), tmpB->nrow, tmpB->ncol, tmpB->data, tmpB->ld, tmpU->data, tmpU->ld);
+                        copy_matrix(sizeof(DTYPE), tmpB->nrow, tmpB->ncol, tmpB->data, tmpB->ld, tmpU->data, tmpU->ld, 0);
                     }
                 }  // End of "if (node_n_child == 0)"
                 U_nrow = tmpU->nrow;
@@ -783,7 +783,7 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_p h2pack, const DTYPE shift)
                     H2P_dense_mat_init(&ULV_Q[node], U_nrow + 1, U_ncol);
                     H2P_dense_mat_init(&U_mid[node], U_ncol, U_ncol);
                     // [Q{node}, R] = qr(tmpU);
-                    copy_matrix_block(sizeof(DTYPE), U_nrow, U_ncol, tmpU->data, tmpU->ld, ULV_Q[node]->data, ULV_Q[node]->ld);
+                    copy_matrix(sizeof(DTYPE), U_nrow, U_ncol, tmpU->data, tmpU->ld, ULV_Q[node]->data, ULV_Q[node]->ld, 0);
                     DTYPE *A   = ULV_Q[node]->data;
                     DTYPE *tau = ULV_Q[node]->data + U_nrow * U_ncol;
                     info = LAPACK_GEQRF(LAPACK_ROW_MAJOR, U_nrow, U_ncol, A, U_ncol, tau);
@@ -849,11 +849,11 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_p h2pack, const DTYPE shift)
                         H2P_transpose_dmat(1, U_diff, U_ncol, tmpD21, U_nrow, L12, U_nrow);
                         for (int k = 0; k < U_diff; k++)
                             memset(L21 + k * U_nrow, 0, sizeof(DTYPE) * U_ncol);
-                        copy_matrix_block(sizeof(DTYPE), U_diff, U_diff, tmpD22, U_nrow, L22, U_nrow);
+                        copy_matrix(sizeof(DTYPE), U_diff, U_diff, tmpD22, U_nrow, L22, U_nrow, 0);
                     }
                     // D_mid{node} = tmpD11 - LD21' * LD21;
                     H2P_dense_mat_init(&D_mid[node], U_ncol, U_ncol);
-                    copy_matrix_block(sizeof(DTYPE), U_ncol, U_ncol, tmpD11, U_nrow, D_mid[node]->data, U_ncol);
+                    copy_matrix(sizeof(DTYPE), U_ncol, U_ncol, tmpD11, U_nrow, D_mid[node]->data, U_ncol, 0);
                     if (U_diff > 0)
                     {
                         CBLAS_GEMM(
@@ -868,7 +868,7 @@ void H2P_HSS_ULV_Cholesky_factorize(H2Pack_p h2pack, const DTYPE shift)
                     H2P_dense_mat_init(&ULV_L[node], U_nrow, U_nrow);
                     ULV_Ls[node] = 0;
                     // [L{node}, chol_flag] = chol(tmpD, 'lower');
-                    copy_matrix_block(sizeof(DTYPE), U_nrow, U_nrow, tmpD->data, U_nrow, ULV_L[node]->data, U_nrow);
+                    copy_matrix(sizeof(DTYPE), U_nrow, U_nrow, tmpD->data, U_nrow, ULV_L[node]->data, U_nrow, 0);
                     info = LAPACK_POTRF(LAPACK_ROW_MAJOR, 'L', U_nrow, ULV_L[node]->data, U_nrow);
                     for (int k = 0; k < U_nrow; k++)
                     {

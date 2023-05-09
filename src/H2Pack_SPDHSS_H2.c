@@ -67,7 +67,7 @@ void H2P_build_explicit_U(H2Pack_p h2pack, H2P_dense_mat_p **exU_)
                 {
                     H2P_dense_mat_init(&exU[node], U_node->nrow, U_node->ncol);
                     ASSERT_PRINTF(n_row == exU[node]->nrow, "Node %d exU got %d rows, expected %d rows\n", node, exU[node]->nrow, n_row);
-                    copy_matrix_block(sizeof(DTYPE), U_node->nrow, U_node->ncol, U_node->data, U_node->ld, exU[node]->data, exU[node]->ld);
+                    copy_matrix(sizeof(DTYPE), U_node->nrow, U_node->ncol, U_node->data, U_node->ld, exU[node]->data, exU[node]->ld, 0);
                 } else {
                     // Multiple each child nodes' exU with U{node} directly
                     int *node_children = children + node * max_child;
@@ -496,7 +496,7 @@ void H2P_SPDHSS_H2_acc_matvec(H2Pack_p h2mat, const int n_vec, H2P_dense_mat_p *
                 H2P_dense_mat_init(&Yk[Yk_idx], n_row, n_vec);
                 ASSERT_PRINTF(Yk[Yk_idx] != NULL, "Failed to allocate %d * %d Yk[idx] matrices\n", n_row, n_vec);
                 H2P_dense_mat_p Yk_ij = Yk[Yk_idx];
-                copy_matrix_block(sizeof(DTYPE), n_row, n_vec, Yk_mat_blk, Yk_mat_ld, Yk_ij->data, Yk_ij->ld);
+                copy_matrix(sizeof(DTYPE), n_row, n_vec, Yk_mat_blk, Yk_mat_ld, Yk_ij->data, Yk_ij->ld, 0);
             }
         }  // End of i loop
     }  // End of "#pragma omp parallel"
@@ -594,7 +594,7 @@ void H2P_SPDHSS_H2_gather_HSS_B(
             H2P_dense_mat_p HSS_Bij = HSS_B[B_idx_ij];
             nrow_i = HSS_Bij->nrow;
             ncol_j = HSS_Bij->ncol;
-            copy_matrix_block(sizeof(DTYPE), nrow_i, ncol_j, HSS_Bij->data, HSS_Bij->ld, tmpB_ij, tmpB->ld);
+            copy_matrix(sizeof(DTYPE), nrow_i, ncol_j, HSS_Bij->data, HSS_Bij->ld, tmpB_ij, tmpB->ld, 0);
             s_col += ncol_j;
         }  // End of j loop
         s_row += nrow_i;
@@ -1495,7 +1495,7 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
                 int Bi_nrow = HSS_Bi->nrow;
                 int Bi_ncol = HSS_Bi->ncol;
                 DTYPE *Bi = B_data + B_ptr[i];
-                copy_matrix_block(sizeof(DTYPE), Bi_nrow, Bi_ncol, HSS_Bi->data, HSS_Bi->ld, Bi, Bi_ncol);
+                copy_matrix(sizeof(DTYPE), Bi_nrow, Bi_ncol, HSS_Bi->data, HSS_Bi->ld, Bi, Bi_ncol, 0);
             }
         }  // End of i_blk loop
     }  // End of "#pragma omp parallel"
@@ -1587,7 +1587,7 @@ void H2P_SPDHSS_H2_wrap_new_HSS(
                 int Di_nrow = HSS_Di->nrow;
                 int Di_ncol = HSS_Di->ncol;
                 DTYPE *Di = D_data + D_ptr[i];
-                copy_matrix_block(sizeof(DTYPE), Di_nrow, Di_ncol, HSS_Di->data, HSS_Di->ld, Di, Di_ncol);
+                copy_matrix(sizeof(DTYPE), Di_nrow, Di_ncol, HSS_Di->data, HSS_Di->ld, Di, Di_ncol, 0);
             }
         }  // End of i_blk0 loop
     }  // End of "#pragma omp parallel"
@@ -1831,7 +1831,7 @@ void H2P_SPDHSS_H2_build(
                     H2P_dense_mat_p HSS_Dij = HSS_D[HSS_D_idx];
                     // [S{node}, chol_flag] = chol(HSS_D{HSS_D_idx}, 'lower');
                     H2P_dense_mat_init(&S[node], HSS_Dij->nrow, HSS_Dij->ncol);
-                    copy_matrix_block(sizeof(DTYPE), HSS_Dij->nrow, HSS_Dij->ncol, HSS_Dij->data, HSS_Dij->ld, S[node]->data, S[node]->ld);
+                    copy_matrix(sizeof(DTYPE), HSS_Dij->nrow, HSS_Dij->ncol, HSS_Dij->data, HSS_Dij->ld, S[node]->data, S[node]->ld, 0);
                     info = LAPACK_POTRF(LAPACK_ROW_MAJOR, 'L', S[node]->nrow, S[node]->data, S[node]->ld);
                     for (int k = 0; k < S[node]->nrow; k++)
                     {
@@ -1851,7 +1851,7 @@ void H2P_SPDHSS_H2_build(
                     H2P_dense_mat_resize(tmpY, node_Yk[0]->nrow + 1, node_Yk[0]->ncol);
                     DTYPE *tau = tmpY->data + node_Yk[0]->nrow * node_Yk[0]->ncol;
                     tmpY->nrow--;
-                    copy_matrix_block(sizeof(DTYPE), tmpY->nrow, tmpY->ncol, node_Yk[0]->data, node_Yk[0]->ld, tmpY->data, tmpY->ld);
+                    copy_matrix(sizeof(DTYPE), tmpY->nrow, tmpY->ncol, node_Yk[0]->data, node_Yk[0]->ld, tmpY->data, tmpY->ld, 0);
                     ASSERT_PRINTF(
                         tmpY->nrow == S[node]->nrow, 
                         "Node %d: tmpY->nrow (%d) mismatch S->nrow (%d)\n",
@@ -1884,7 +1884,7 @@ void H2P_SPDHSS_H2_build(
                     if (V_ncol1 > 0) V_ncol = V_ncol1;
                     LAPACK_ORGQR(LAPACK_ROW_MAJOR, tmpQ->nrow, tmpQ_ncol, tmpQ_ncol, tmpQ->data, tmpQ->ld, tau);
                     H2P_dense_mat_init(&V[node], tmpQ->nrow, V_ncol);
-                    copy_matrix_block(sizeof(DTYPE), tmpQ->nrow, V_ncol, tmpQ->data, tmpQ->ld, V[node]->data, V[node]->ld);
+                    copy_matrix(sizeof(DTYPE), tmpQ->nrow, V_ncol, tmpQ->data, tmpQ->ld, V[node]->data, V[node]->ld, 0);
                     // HSS_U{node} = S{node} * V{node};
                     H2P_dense_mat_init(&HSS_U[node], S[node]->nrow, V[node]->ncol);
                     CBLAS_GEMM(
@@ -1921,7 +1921,7 @@ void H2P_SPDHSS_H2_build(
                     {
                         H2P_dense_mat_p tmpM = tmpQ;
                         H2P_dense_mat_resize(tmpM, H2_U_node->nrow, H2_U_node->ncol);
-                        copy_matrix_block(sizeof(DTYPE), H2_U_node->nrow, H2_U_node->ncol, H2_U_node->data, H2_U_node->ld, tmpM->data, tmpM->ld);
+                        copy_matrix(sizeof(DTYPE), H2_U_node->nrow, H2_U_node->ncol, H2_U_node->data, H2_U_node->ld, tmpM->data, tmpM->ld, 0);
                         ASSERT_PRINTF(
                             tmpM->nrow == S[node]->nrow, 
                             "Node %d: H2_U->nrow (%d) mismatch S->nrow (%d)\n",
@@ -1969,7 +1969,7 @@ void H2P_SPDHSS_H2_build(
                             H2P_dense_mat_p HSS_B_kl = HSS_B[HSS_B_idx];
                             // tmpB(idx_k, idx_l) = HSS_B{B_idx};
                             DTYPE *tmpB_kl = tmpB->data + idx_k_s * tmpB->ld + idx_l_s;
-                            copy_matrix_block(sizeof(DTYPE), HSS_B_kl->nrow, HSS_B_kl->ncol, HSS_B_kl->data, HSS_B_kl->ld, tmpB_kl, tmpB->ld);
+                            copy_matrix(sizeof(DTYPE), HSS_B_kl->nrow, HSS_B_kl->ncol, HSS_B_kl->data, HSS_B_kl->ld, tmpB_kl, tmpB->ld, 0);
                             // tmpB(idx_l, idx_k) = HSS_B{B_idx}';
                             // LAPACK_SYEVD only need uppertriangle, no need to fill the lower triangle part
                             //DTYPE *tmpB_lk = tmpB->data + idx_l_s * tmpB->ld + idx_k_s;
@@ -2103,7 +2103,7 @@ void H2P_SPDHSS_H2_build(
                     if (V_ncol1 > 0) V_ncol = V_ncol1;
                     LAPACK_ORGQR(LAPACK_ROW_MAJOR, tmpQ->nrow, tmpQ_ncol, tmpQ_ncol, tmpQ->data, tmpQ->ld, tau);
                     H2P_dense_mat_init(&V[node], tmpQ->nrow, V_ncol);
-                    copy_matrix_block(sizeof(DTYPE), tmpQ->nrow, V_ncol, tmpQ->data, tmpQ->ld, V[node]->data, V[node]->ld);
+                    copy_matrix(sizeof(DTYPE), tmpQ->nrow, V_ncol, tmpQ->data, tmpQ->ld, V[node]->data, V[node]->ld, 0);
                     // HSS_U{node} = tmpM * V{node};
                     H2P_dense_mat_init(&HSS_U[node], tmpM->nrow, V[node]->ncol);
                     CBLAS_GEMM(

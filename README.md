@@ -85,11 +85,11 @@ Please cite the following two papers if you use H2Pack in your work:
 
 ```bibtex
 @article{xin2019,
-	title = {Interpolative decomposition via proxy points for kernel matrices},
-	journal = {SIAM Journal on Matrix Analysis and Applications},
-	author = {Xing, Xin and Chow, Edmond},
-	year = {2020},
-	volume = {41},
+    title = {Interpolative decomposition via proxy points for kernel matrices},
+    journal = {SIAM Journal on Matrix Analysis and Applications},
+    author = {Xing, Xin and Chow, Edmond},
+    year = {2020},
+    volume = {41},
     pages = {221--243},
 }
 ```

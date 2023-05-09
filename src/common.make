@@ -4,17 +4,16 @@ LIB_SO  = libH2Pack.so
 C_SRCS  = $(wildcard *.c)
 C_OBJS  = $(C_SRCS:.c=.c.o)
 
+AR      = ar rcs
 DEFS    = 
 INCS    = 
 CFLAGS  = $(INCS) -Wall -g -std=gnu11 -O3 -fPIC $(DEFS)
 
 ifeq ($(shell $(CC) --version 2>&1 | grep -c "icc"), 1)
-AR      = xiar rcs
 CFLAGS += -qopenmp -xHost
 endif
 
 ifeq ($(shell $(CC) --version 2>&1 | grep -c "gcc"), 1)
-AR      = ar rcs
 CFLAGS += -fopenmp -march=native -Wno-unused-result -Wno-unused-function
 endif
 
@@ -23,8 +22,9 @@ DEFS   += -DUSE_MKL
 CFLAGS += -mkl
 endif
 
-ifeq ($(strip $(USE_OPENBLAS)), 1)
+# If you use OpenBLAS, modify OPENBLAS_INSTALL_DIR here
 OPENBLAS_INSTALL_DIR = ../../OpenBLAS-git/install
+ifeq ($(strip $(USE_OPENBLAS)), 1)
 DEFS   += -DUSE_OPENBLAS
 INCS   += -I$(OPENBLAS_INSTALL_DIR)/include
 endif

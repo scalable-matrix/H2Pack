@@ -45,9 +45,9 @@ void H2P_build_periodic_block(H2Pack_p h2pack)
     DTYPE shift[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     H2P_dense_mat_resize(krnl_mat_blk, per_blk_size, per_blk_size);
     H2P_dense_mat_resize(root_J_coord_s, xpt_dim, n_point_root);
-    copy_matrix_block(
+    copy_matrix(
         sizeof(DTYPE), xpt_dim, n_point_root, root_J_coord->data, root_J_coord->ld, 
-        root_J_coord_s->data, root_J_coord_s->ld
+        root_J_coord_s->data, root_J_coord_s->ld, 0
     );
     for (int l = 0; l < n_lattice; l++)
     {

@@ -66,7 +66,7 @@ void H2P_build_H2_UJ_proxy(H2Pack_p h2pack)
             J[node]->data[k] = pt_s + k;
         J[node]->length = node_npt;
         H2P_dense_mat_init(&J_coord[node], xpt_dim, node_npt);
-        copy_matrix_block(sizeof(DTYPE), xpt_dim, node_npt, coord + pt_s, n_point, J_coord[node]->data, node_npt);
+        copy_matrix(sizeof(DTYPE), xpt_dim, node_npt, coord + pt_s, n_point, J_coord[node]->data, node_npt, 0);
     }
 
     // 3. Hierarchical construction level by level. min_adm_level is the 
@@ -143,7 +143,7 @@ void H2P_build_H2_UJ_proxy(H2Pack_p h2pack)
                         int dst_ld = node_skel_coord->ncol;
                         DTYPE *src_mat = J_coord[i_child_node]->data;
                         DTYPE *dst_mat = node_skel_coord->data + J_child_size; 
-                        copy_matrix_block(sizeof(DTYPE), xpt_dim, src_ld, src_mat, src_ld, dst_mat, dst_ld);
+                        copy_matrix(sizeof(DTYPE), xpt_dim, src_ld, src_mat, src_ld, dst_mat, dst_ld, 0);
                         J_child_size += J[i_child_node]->length;
                     }
                 }  // End of "if (level == 0)"

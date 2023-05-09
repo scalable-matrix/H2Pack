@@ -101,7 +101,7 @@ void H2P_matmul_periodic_intmd_mult(
                     int vec_s1    = mat_cluster[node1 * 2];
                     
                     H2P_dense_mat_resize(coord1_s, xpt_dim, node1_npt);
-                    copy_matrix_block(sizeof(DTYPE), xpt_dim, node1_npt, coord + pt_s1, n_point, coord1_s->data, coord1_s->ld);
+                    copy_matrix(sizeof(DTYPE), xpt_dim, node1_npt, coord + pt_s1, n_point, coord1_s->data, coord1_s->ld, 0);
                     H2P_shift_coord(coord1_s, shift, 1.0);
 
                     krnl_eval(
@@ -217,7 +217,7 @@ void H2P_matmul_periodic_dense_mult(
                 }
 
                 H2P_dense_mat_resize(coord1_s, xpt_dim, node1_npt);
-                copy_matrix_block(sizeof(DTYPE), xpt_dim, node1_npt, coord + pt_s1, n_point, coord1_s->data, coord1_s->ld);
+                copy_matrix(sizeof(DTYPE), xpt_dim, node1_npt, coord + pt_s1, n_point, coord1_s->data, coord1_s->ld, 0);
                 H2P_shift_coord(coord1_s, shift, 1.0);
                 krnl_eval(
                     coord + pt_s0,  n_point,      node0_npt,

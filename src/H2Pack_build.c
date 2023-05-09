@@ -106,7 +106,7 @@ void H2P_build_H2_UJ_proxy(H2Pack_p h2pack)
                     J[node]->data[k] = pt_s + k;
                 J[node]->length = node_npt;
                 H2P_dense_mat_init(&J_coord[node], xpt_dim, node_npt);
-                copy_matrix_block(sizeof(DTYPE), xpt_dim, node_npt, coord + pt_s, n_point, J_coord[node]->data, node_npt);
+                copy_matrix(sizeof(DTYPE), xpt_dim, node_npt, coord + pt_s, n_point, J_coord[node]->data, node_npt, 0);
             } else {
                 // Non-leaf nodes, gather row indices from children nodes
                 int n_child_node = n_child[node];
@@ -141,7 +141,7 @@ void H2P_build_H2_UJ_proxy(H2Pack_p h2pack)
                     int dst_ld = node_skel_coord->ncol;
                     DTYPE *src_mat = J_coord[i_child_node]->data;
                     DTYPE *dst_mat = node_skel_coord->data + J_child_size; 
-                    copy_matrix_block(sizeof(DTYPE), xpt_dim, src_ld, src_mat, src_ld, dst_mat, dst_ld);
+                    copy_matrix(sizeof(DTYPE), xpt_dim, src_ld, src_mat, src_ld, dst_mat, dst_ld, 0);
                     J_child_size += J[i_child_node]->length;
                 }
             }  // End of "if (level == 0)"
@@ -183,7 +183,7 @@ void H2P_build_H2_UJ_proxy(H2Pack_p h2pack)
                     0.0, A_block1->data,  A_block1->ld
                 );
                 H2P_dense_mat_resize(A_block, A_blk_nrow, A_blk_nrow);
-                copy_matrix_block(sizeof(DTYPE), A_blk_nrow, A_blk_nrow, A_block1->data, A_block1->ld, A_block->data, A_block->ld);
+                copy_matrix(sizeof(DTYPE), A_blk_nrow, A_blk_nrow, A_block1->data, A_block1->ld, A_block->data, A_block->ld, 0);
                 H2P_dense_mat_normalize_columns(A_block, A_block1);
             }
             #endif
@@ -339,7 +339,7 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_p h2pack)
             J[node]->data[k] = pt_s + k;
         J[node]->length = node_npt;
         H2P_dense_mat_init(&J_coord[node], xpt_dim, node_npt);
-        copy_matrix_block(sizeof(DTYPE), xpt_dim, node_npt, coord + pt_s, n_point, J_coord[node]->data, node_npt);
+        copy_matrix(sizeof(DTYPE), xpt_dim, node_npt, coord + pt_s, n_point, J_coord[node]->data, node_npt, 0);
     }
 
     // 3. Hierarchical construction level by level. min_adm_level is the 
@@ -439,7 +439,7 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_p h2pack)
                         int dst_ld = node_skel_coord->ncol;
                         DTYPE *src_mat = J_coord[i_child_node]->data;
                         DTYPE *dst_mat = node_skel_coord->data + J_child_size; 
-                        copy_matrix_block(sizeof(DTYPE), xpt_dim, src_ld, src_mat, src_ld, dst_mat, dst_ld);
+                        copy_matrix(sizeof(DTYPE), xpt_dim, src_ld, src_mat, src_ld, dst_mat, dst_ld, 0);
                         J_child_size += J[i_child_node]->length;
                     }
                 }
@@ -491,9 +491,9 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_p h2pack)
                 }
                 if (node_pp_npt > 0)
                 {
-                    copy_matrix_block( 
+                    copy_matrix( 
                         sizeof(DTYPE), xpt_dim, node_pp_npt, pp[level]->data, pp[level]->ld, 
-                        inadm_skel_coord->data + inadm_skel_npt, inadm_skel_coord->ld
+                        inadm_skel_coord->data + inadm_skel_npt, inadm_skel_coord->ld, 0
                     );
                 }
                 et = get_wtime_sec();
@@ -530,7 +530,7 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_p h2pack)
                         0.0, A_block1->data,  A_block1->ld
                     );
                     H2P_dense_mat_resize(A_block, A_blk_nrow, A_blk_nrow);
-                    copy_matrix_block(sizeof(DTYPE), A_blk_nrow, A_blk_nrow, A_block1->data, A_block1->ld, A_block->data, A_block->ld);
+                    copy_matrix(sizeof(DTYPE), A_blk_nrow, A_blk_nrow, A_block1->data, A_block1->ld, A_block->data, A_block->ld, 0);
                     et = get_wtime_sec();
                     gemm_t += et - st;
                 }

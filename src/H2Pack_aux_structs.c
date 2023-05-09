@@ -187,7 +187,7 @@ void H2P_dense_mat_reset(H2P_dense_mat_p mat)
 void H2P_dense_mat_copy(H2P_dense_mat_p src_mat, H2P_dense_mat_p dst_mat)
 {
     H2P_dense_mat_resize(dst_mat, src_mat->nrow, src_mat->ncol);
-    copy_matrix_block(sizeof(DTYPE), src_mat->nrow, src_mat->ncol, src_mat->data, src_mat->ld, dst_mat->data, dst_mat->ld);
+    copy_matrix(sizeof(DTYPE), src_mat->nrow, src_mat->ncol, src_mat->data, src_mat->ld, dst_mat->data, dst_mat->ld, 0);
 }
 
 // Permute rows in an H2P_dense_mat structure
@@ -336,7 +336,7 @@ void H2P_dense_mat_blkdiag(H2P_dense_mat_p *mats, H2P_int_vec_p idx, H2P_dense_m
         int nrow_i = mat_i->nrow;
         int ncol_i = mat_i->ncol;
         DTYPE *dst = new_mat->data + nrow * new_mat->ld + ncol;
-        copy_matrix_block(sizeof(DTYPE), nrow_i, ncol_i, mat_i->data, mat_i->ld, dst, new_mat->ld);
+        copy_matrix(sizeof(DTYPE), nrow_i, ncol_i, mat_i->data, mat_i->ld, dst, new_mat->ld, 0);
         nrow += nrow_i;
         ncol += ncol_i;
     }
@@ -364,7 +364,7 @@ void H2P_dense_mat_vertcat(H2P_dense_mat_p *mats, H2P_int_vec_p idx, H2P_dense_m
         int nrow_i = mat_i->nrow;
         int ncol_i = mat_i->ncol;
         DTYPE *dst = new_mat->data + nrow * new_mat->ld;
-        copy_matrix_block(sizeof(DTYPE), nrow_i, ncol_i, mat_i->data, mat_i->ld, dst, new_mat->ld);
+        copy_matrix(sizeof(DTYPE), nrow_i, ncol_i, mat_i->data, mat_i->ld, dst, new_mat->ld, 0);
         nrow += nrow_i;
     }
 }
@@ -392,7 +392,7 @@ void H2P_dense_mat_horzcat(H2P_dense_mat_p *mats, H2P_int_vec_p idx, H2P_dense_m
         int nrow_i = mat_i->nrow;
         int ncol_i = mat_i->ncol;
         DTYPE *dst = new_mat->data + ncol;
-        copy_matrix_block(sizeof(DTYPE), nrow_i, ncol_i, mat_i->data, mat_i->ld, dst, new_mat->ld);
+        copy_matrix(sizeof(DTYPE), nrow_i, ncol_i, mat_i->data, mat_i->ld, dst, new_mat->ld, 0);
         ncol += mat_i->ncol;
     }
 }

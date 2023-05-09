@@ -490,7 +490,7 @@ void H2P_select_sample_point(
                 int pt_e = pt_cluster[node * 2 + 1];
                 int node_npt = pt_e - pt_s + 1;
                 H2P_dense_mat_resize(clu_refine[node], xpt_dim, node_npt);
-                copy_matrix_block(sizeof(DTYPE), xpt_dim, node_npt, coord + pt_s, n_point, clu_refine[node]->data, node_npt);
+                copy_matrix(sizeof(DTYPE), xpt_dim, node_npt, coord + pt_s, n_point, clu_refine[node]->data, node_npt, 0);
             } else {
                 int *child_nodes = children + node * max_child;
                 int child_clu_sum = 0;
@@ -510,7 +510,7 @@ void H2P_select_sample_point(
                     int ldd = clu_refine[node]->ncol;
                     DTYPE *src = clu_refine[i_child_node]->data;
                     DTYPE *dst = clu_refine[node]->data + child_clu_sum;
-                    copy_matrix_block(sizeof(DTYPE), xpt_dim, i_child_npt, src, lds, dst, ldd);
+                    copy_matrix(sizeof(DTYPE), xpt_dim, i_child_npt, src, lds, dst, ldd, 0);
                     child_clu_sum += i_child_npt;
                 }
             }  // End of "if (n_child_node == 0)"
@@ -609,7 +609,7 @@ void H2P_select_sample_point(
                         int ldd = yFi->ncol;
                         DTYPE *src = clu_refine[pair_node]->data;
                         DTYPE *dst = yFi->data + yFi_size;
-                        copy_matrix_block(sizeof(DTYPE), xpt_dim, pair_node_npt, src, lds, dst, ldd);
+                        copy_matrix(sizeof(DTYPE), xpt_dim, pair_node_npt, src, lds, dst, ldd, 0);
                         yFi_size += pair_node_npt;
                     }
                 } else {
@@ -776,10 +776,10 @@ void H2P_select_sample_point(
                 int sample_npt0 = sample_pt[node]->ncol;
                 int init_sample_npt = sample_npt0 + yFi_size;
                 H2P_dense_mat_resize(workbuf_d, xpt_dim, sample_npt0);
-                copy_matrix_block(sizeof(DTYPE), xpt_dim, sample_npt0, sample_pt[node]->data, sample_npt0, workbuf_d->data, sample_npt0);
+                copy_matrix(sizeof(DTYPE), xpt_dim, sample_npt0, sample_pt[node]->data, sample_npt0, workbuf_d->data, sample_npt0, 0);
                 H2P_dense_mat_resize(sample_pt[node], xpt_dim, init_sample_npt);
-                copy_matrix_block(sizeof(DTYPE), xpt_dim, sample_npt0, workbuf_d->data, sample_npt0, sample_pt[node]->data, init_sample_npt);
-                copy_matrix_block(sizeof(DTYPE), xpt_dim, yFi_size, yFi->data, yFi->ld, sample_pt[node]->data + sample_npt0, init_sample_npt);
+                copy_matrix(sizeof(DTYPE), xpt_dim, sample_npt0, workbuf_d->data, sample_npt0, sample_pt[node]->data, init_sample_npt, 0);
+                copy_matrix(sizeof(DTYPE), xpt_dim, yFi_size, yFi->data, yFi->ld, sample_pt[node]->data + sample_npt0, init_sample_npt, 0);
 
                 // (2) Refine initial sample points
                 H2P_calc_enclosing_box_size(pt_dim, sample_pt[node]->ncol, sample_pt[node]->data, enbox_size);
@@ -798,7 +798,7 @@ void H2P_select_sample_point(
                 {
                     int i_child_node = child_nodes[i_child];
                     H2P_dense_mat_resize(sample_pt[i_child_node], xpt_dim, sample_pt[node]->ncol);
-                    copy_matrix_block(sizeof(DTYPE), xpt_dim, sample_npt, sample_pt[node]->data, sample_npt, sample_pt[i_child_node]->data, sample_npt);
+                    copy_matrix(sizeof(DTYPE), xpt_dim, sample_npt, sample_pt[node]->data, sample_npt, sample_pt[i_child_node]->data, sample_npt, 0);
                 }
             }  // End of j loop
             H2P_dense_mat_destroy(&workbuf_d);
@@ -910,7 +910,7 @@ void H2P_build_H2_UJ_sample(H2Pack_p h2pack, H2P_dense_mat_p *sample_pt)
                     J[node]->data[k] = pt_s + k;
                 J[node]->length = node_npt;
                 H2P_dense_mat_init(&J_coord[node], xpt_dim, node_npt);
-                copy_matrix_block(sizeof(DTYPE), xpt_dim, node_npt, coord + pt_s, n_point, J_coord[node]->data, node_npt);
+                copy_matrix(sizeof(DTYPE), xpt_dim, node_npt, coord + pt_s, n_point, J_coord[node]->data, node_npt, 0);
             } else {
                 // Non-leaf nodes, gather row indices from children nodes
                 int n_child_node = n_child[node];
@@ -945,7 +945,7 @@ void H2P_build_H2_UJ_sample(H2Pack_p h2pack, H2P_dense_mat_p *sample_pt)
                     int dst_ld = node_skel_coord->ncol;
                     DTYPE *src_mat = J_coord[i_child_node]->data;
                     DTYPE *dst_mat = node_skel_coord->data + J_child_size; 
-                    copy_matrix_block(sizeof(DTYPE), xpt_dim, src_ld, src_mat, src_ld, dst_mat, dst_ld);
+                    copy_matrix(sizeof(DTYPE), xpt_dim, src_ld, src_mat, src_ld, dst_mat, dst_ld, 0);
                     J_child_size += J[i_child_node]->length;
                 }
             }  // End of "if (level == 0)"

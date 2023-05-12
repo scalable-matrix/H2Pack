@@ -46,7 +46,8 @@ void H2P_gather_matrix_columns(
 // Evaluate a kernel matrix with OpenMP parallelization
 void H2P_eval_kernel_matrix_OMP(
     const void *krnl_param, kernel_eval_fptr krnl_eval, const int krnl_dim, 
-    H2P_dense_mat_p x_coord, H2P_dense_mat_p y_coord, H2P_dense_mat_p kernel_mat
+    H2P_dense_mat_p x_coord, H2P_dense_mat_p y_coord, H2P_dense_mat_p kernel_mat,
+    const int n_thread
 )
 {
     const int nx = x_coord->ncol;
@@ -54,12 +55,11 @@ void H2P_eval_kernel_matrix_OMP(
     const int nrow = nx * krnl_dim;
     const int ncol = ny * krnl_dim;
     H2P_dense_mat_resize(kernel_mat, nrow, ncol);
-    #pragma omp parallel
+    #pragma omp parallel if(n_thread > 1) num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
-        int nt  = omp_get_num_threads();
         int nx_blk_start, nx_blk_len;
-        calc_block_spos_len(nx, nt, tid, &nx_blk_start, &nx_blk_len);
+        calc_block_spos_len(nx, n_thread, tid, &nx_blk_start, &nx_blk_len);
         
         DTYPE *kernel_mat_srow = kernel_mat->data + nx_blk_start * krnl_dim * kernel_mat->ld;
         DTYPE *x_coord_spos = x_coord->data + nx_blk_start;
@@ -69,6 +69,34 @@ void H2P_eval_kernel_matrix_OMP(
             y_coord->data, y_coord->ncol, ny, 
             krnl_param, kernel_mat_srow, kernel_mat->ld
         );
+    }
+}
+
+// Compute the pairwise squared distance of two point sets
+void H2P_calc_pdist2_OMP(
+    const DTYPE *coord0, const int ld0, const int n0,
+    const DTYPE *coord1, const int ld1, const int n1,
+    const int pt_dim, DTYPE *dist2, const int ldd, const int n_thread
+)
+{
+    #pragma omp parallel for schedule(static) if(n_thread > 1) num_threads(n_thread)
+    for (int i = 0; i < n0; i++)
+    {
+        const DTYPE *coord0_i = coord0 + i;
+        DTYPE *dist2_i = dist2 + i * ldd;
+        // This implementation makes GCC auto-vectorization happy
+        memset(dist2_i, 0, sizeof(DTYPE) * n1);
+        for (int k = 0; k < pt_dim; k++)
+        {
+            const DTYPE coord0_k_i = coord0_i[k * ld0];
+            const DTYPE *coord1_k = coord1 + k * ld1;
+            #pragma omp simd
+            for (int j = 0; j < n1; j++)
+            {
+                DTYPE diff = coord0_k_i - coord1_k[j];
+                dist2_i[j] += diff * diff;
+            }
+        }
     }
 }
 

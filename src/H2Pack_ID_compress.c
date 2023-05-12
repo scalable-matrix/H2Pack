@@ -7,6 +7,7 @@
 
 #include "H2Pack_config.h"
 #include "H2Pack_aux_structs.h"
+#include "H2Pack_utils.h"
 #include "utils.h"
 
 static inline void swap_int(int *x, int *y, int len)
@@ -485,33 +486,6 @@ void H2P_ID_QR(
     A->nrow = r;
 }
 
-// Quick sort two array in ascending order 
-// Input parameters:
-//  key  : Key array
-//  val  : Value array
-//  l, r : Sort range [l : r]
-// Output parameters:
-//  key  : Sorted key array
-//  val  : Sorted value array
-static void H2P_qsort_key_value(int *key, int *val, const int l, const int r)
-{
-    int i = l, j = r, tmp;
-    int mid = key[(i + j) / 2];
-    while (i <= j)
-    {
-        while (key[i] < mid) i++;
-        while (key[j] > mid) j--;
-        if (i <= j)
-        {
-            tmp = key[i]; key[i] = key[j]; key[j] = tmp;
-            tmp = val[i]; val[i] = val[j]; val[j] = tmp;
-            i++; j--;
-        }
-    }
-    if (i < r) H2P_qsort_key_value(key, val, i, r);
-    if (j > l) H2P_qsort_key_value(key, val, l, j);
-}
-
 // Interpolative Decomposition (ID) using partial QR over rows of a target 
 // matrix. Partial pivoting QR may need to be upgraded to SRRQR later. 
 void H2P_ID_compress(
@@ -542,7 +516,7 @@ void H2P_ID_compress(
         p0[J->data[i]] = i;
         i0[i] = i;
     }
-    H2P_qsort_key_value(J->data, i0, 0, r - 1);
+    H2P_qsort_int_key_val(J->data, i0, 0, r - 1);
     for (int i = 0; i < nrow; i++) i1[i0[i]] = i;
     for (int i = 0; i < nrow; i++) p1[i] = i1[p0[i]];
     

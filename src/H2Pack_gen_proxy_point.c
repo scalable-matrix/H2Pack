@@ -102,7 +102,7 @@ void H2P_generate_proxy_point_nlayer(
     //    Use sparsity + randomize to reduce the ID cost
     // (1) Generate the kernel matrix
     st = get_wtime_sec();
-    H2P_eval_kernel_matrix_OMP(krnl_param, krnl_eval, krnl_dim, X0_coord, Y0_coord, tmpA);
+    H2P_eval_kernel_matrix_OMP(krnl_param, krnl_eval, krnl_dim, X0_coord, Y0_coord, tmpA, n_thread);
     et = get_wtime_sec();
     timers[GEN_PP_KRNL_TIMER_IDX] += et - st;
     // (2) Generate sparse random matrix and multiply with the kernel matrix to get a reduced matrix
@@ -153,7 +153,7 @@ void H2P_generate_proxy_point_nlayer(
         // (1) Generate the kernel matrix
         st = get_wtime_sec();
         // Be careful, Y0_coord should be placed before Xp_coord
-        H2P_eval_kernel_matrix_OMP(krnl_param, krnl_eval, krnl_dim, Y0_coord, Xp_coord, tmpA1);
+        H2P_eval_kernel_matrix_OMP(krnl_param, krnl_eval, krnl_dim, Y0_coord, Xp_coord, tmpA1, n_thread);
         et = get_wtime_sec();
         timers[GEN_PP_KRNL_TIMER_IDX] += et - st;
         // (2) Calculate ID approximation on the kernel matrix and select new proxy points in Y
@@ -207,7 +207,7 @@ void H2P_generate_proxy_point_nlayer(
             // (2) Generate kernel matrix for this layer 
             st = get_wtime_sec();
             // Be careful, tmp_coord should be placed before Xp_coord
-            H2P_eval_kernel_matrix_OMP(krnl_param, krnl_eval, krnl_dim, tmp_coord, Xp_coord, tmpA1);
+            H2P_eval_kernel_matrix_OMP(krnl_param, krnl_eval, krnl_dim, tmp_coord, Xp_coord, tmpA1, n_thread);
             et = get_wtime_sec();
 
             // (3) Calculate ID approximation on the new kernel matrix and select new proxy points in Y

@@ -77,41 +77,6 @@ int H2P_proportional_int_decompose(const int nelem, const int decomp_sum, DTYPE 
     return prod1;
 }
 
-// Compute the squared pairwise distance of two point sets
-// Input parameters:
-//   coord{0, 1} : Size pt_dim * ld{0, 1}, point set coordinates, each column is a coordinate
-//   ld{0, 1}    : Leading dimension of coord{0, 1}
-//   n{0, 1}     : Number of points in coord{0, 1}
-//   pt_dim      : Point dimension
-//   ldd         : Leading dimension of dist2
-// Output parameter:
-//   dist2 : Size n0 * ldd, squared distance
-void H2P_calc_pdist2(
-    const DTYPE *coord0, const int ld0, const int n0,
-    const DTYPE *coord1, const int ld1, const int n1,
-    const int pt_dim, DTYPE *dist2, const int ldd
-)
-{
-    for (int i = 0; i < n0; i++)
-    {
-        const DTYPE *coord0_i = coord0 + i;
-        DTYPE *dist2_i = dist2 + i * ldd;
-        // This implementation makes GCC auto-vectorization happy
-        memset(dist2_i, 0, sizeof(DTYPE) * n1);
-        for (int k = 0; k < pt_dim; k++)
-        {
-            const DTYPE coord0_k_i = coord0_i[k * ld0];
-            const DTYPE *coord1_k = coord1 + k * ld1;
-            #pragma omp simd
-            for (int j = 0; j < n1; j++)
-            {
-                DTYPE diff = coord0_k_i - coord1_k[j];
-                dist2_i[j] += diff * diff;
-            }
-        }
-    }
-}
-
 void H2P_select_anchor_grid(
     const int pt_dim, const DTYPE *coord_min, const DTYPE *coord_max, const DTYPE *enbox_size, 
     const int *grid_size, const int grid_algo, H2P_dense_mat_p anchor_coord_
@@ -243,10 +208,10 @@ void H2P_select_cluster_sample(
         #pragma omp for
         for (int i = 0; i < anchor_npt; i++)
         {
-            H2P_calc_pdist2(
+            H2P_calc_pdist2_OMP(
                 anchor_coord + i, anchor_npt, 1, 
                 coord->data, npt, npt, 
-                pt_dim, thread_dist2, npt
+                pt_dim, thread_dist2, npt, 1
             );
             DTYPE min_dist2 = thread_dist2[0];
             int min_idx = 0;
@@ -645,10 +610,10 @@ void H2P_select_sample_point(
                     int *iG = (int *) malloc(sizeof(int) * num_anchor);
                     int *center_group_cnt = (int *) malloc(sizeof(int) * num_far);
                     DTYPE *tmp_dist2 = (DTYPE *) malloc(sizeof(DTYPE) * num_anchor * num_far);
-                    H2P_calc_pdist2(
+                    H2P_calc_pdist2_OMP(
                         anchor_coord_->data, anchor_coord_->ld, num_anchor,
                         centers, num_far, num_far,
-                        pt_dim, tmp_dist2, num_far
+                        pt_dim, tmp_dist2, num_far, 1
                     );
                     memset(center_group_cnt, 0, sizeof(int) * num_far);
                     for (int k = 0; k < num_anchor; k++)
@@ -702,10 +667,10 @@ void H2P_select_sample_point(
                             memset(select_flag, 0, sizeof(int) * pair_node_npt);
                             DTYPE *tmp_dist2 = (DTYPE *) malloc(tmp_dist2_bytes);
 
-                            H2P_calc_pdist2(
+                            H2P_calc_pdist2_OMP(
                                 anchor_group + group_displs[k], num_anchor, group_k_cnt,
                                 clu_refine[pair_node]->data, pair_node_npt, pair_node_npt,
-                                pt_dim, tmp_dist2, pair_node_npt
+                                pt_dim, tmp_dist2, pair_node_npt, 1
                             );
                             
                             for (int ii = 0; ii < group_k_cnt; ii++)
@@ -737,10 +702,10 @@ void H2P_select_sample_point(
                             free(select_flag);
                         } else {
                             DTYPE *tmp_dist2 = (DTYPE *) malloc(sizeof(DTYPE) * pair_node_npt);
-                            H2P_calc_pdist2(
+                            H2P_calc_pdist2_OMP(
                                 centers + k, num_far, 1,
                                 clu_refine[pair_node]->data, pair_node_npt, pair_node_npt,
-                                pt_dim, tmp_dist2, pair_node_npt
+                                pt_dim, tmp_dist2, pair_node_npt, 1
                             );
                             DTYPE min_dist = tmp_dist2[0];
                             int min_idx = 0;

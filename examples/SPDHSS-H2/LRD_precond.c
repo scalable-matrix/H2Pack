@@ -11,7 +11,8 @@
 // Evaluate a kernel matrix with OpenMP parallelization
 extern void H2P_eval_kernel_matrix_OMP(
     const void *krnl_param, kernel_eval_fptr krnl_eval, const int krnl_dim, 
-    H2P_dense_mat_p x_coord, H2P_dense_mat_p y_coord, H2P_dense_mat_p kernel_mat
+    H2P_dense_mat_p x_coord, H2P_dense_mat_p y_coord, H2P_dense_mat_p kernel_mat,
+    const int n_thread
 );
 
 // Construct a LRD_precond from a H2Pack structure using Nystrom method with random sampling
@@ -62,8 +63,9 @@ void H2P_build_LRD_precond(H2Pack_p h2pack, const int rank, const DTYPE shift, L
     H2P_dense_mat_init(&tmp, nrow, mat_size);
     // L   = kernel({coord(idx, :), coord(idx, :)});
     // Ut  = kernel({coord(idx, :), coord});
-    H2P_eval_kernel_matrix_OMP(h2pack->krnl_param, h2pack->krnl_eval, krnl_dim, coord_skel, coord_skel, L);
-    H2P_eval_kernel_matrix_OMP(h2pack->krnl_param, h2pack->krnl_eval, krnl_dim, coord_skel, coord_all,  Ut);
+    int n_thread = omp_get_max_threads();
+    H2P_eval_kernel_matrix_OMP(h2pack->krnl_param, h2pack->krnl_eval, krnl_dim, coord_skel, coord_skel, L,  n_thread);
+    H2P_eval_kernel_matrix_OMP(h2pack->krnl_param, h2pack->krnl_eval, krnl_dim, coord_skel, coord_all,  Ut, n_thread);
     // [V, D] = eig(S);
     // Ut  = inv(D) * V' * Ut;
     info = LAPACK_SYEVD(LAPACK_ROW_MAJOR, 'V', 'L', nrow, L->data, L->ld, tmp->data);

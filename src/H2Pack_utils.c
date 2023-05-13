@@ -139,6 +139,24 @@ void H2P_gen_coord_in_ring(const int npt, const int pt_dim, const DTYPE L0, cons
     }
 }
 
+// Ramdonly sample k different integers in [0, n-1]
+void H2P_rand_sample(const int n, const int k, int *samples, void *workbuf)
+{
+    // TODO: replace this with a bitmap implementation
+    uint8_t *flag = NULL;
+    if (workbuf != NULL) flag = (uint8_t *) workbuf;
+    else flag = (uint8_t *) malloc(n);
+    memset(flag, 0, n);
+    for (int i = 0; i < k; i++)
+    {
+        int idx = rand() % n;
+        while (flag[idx] == 1) idx = rand() % n;
+        samples[i] = idx;
+        flag[idx] = 1;
+    }
+    if (workbuf == NULL) free(flag);
+}
+
 // Generate a random sparse matrix A for calculating y^T := A^T * x^T
 void H2P_gen_rand_sparse_mat_trans(
     const int max_nnz_col, const int k, const int n, 
@@ -148,7 +166,6 @@ void H2P_gen_rand_sparse_mat_trans(
     // Note: we calculate y^T := A^T * x^T. Since x/y is row-major, 
     // each of its row is a column of x^T/y^T. We can just use SpMV
     // to calculate y^T(:, i) := A^T * x^T(:, i). 
-
     int rand_nnz_col = (max_nnz_col <= k) ? max_nnz_col : k;
     int nnz = n * rand_nnz_col;
     H2P_dense_mat_resize(A_valbuf, 1, nnz);
@@ -160,25 +177,13 @@ void H2P_gen_rand_sparse_mat_trans(
     memset(flag, 0, sizeof(int) * k);
     for (int i = 0; i < nnz; i++) 
         val[i] = (DTYPE) (2.0 * (rand() & 1) - 1.0);
-    for (int i = 0; i <= n; i++) 
-        row_ptr[i] = i * rand_nnz_col;
     for (int i = 0; i < n; i++)
     {
-        int cnt = 0;
+        row_ptr[i] = i * rand_nnz_col;
         int *row_i_cols = col_idx + i * rand_nnz_col;
-        while (cnt < rand_nnz_col)
-        {
-            int col = rand() % k;
-            if (flag[col] == 0) 
-            {
-                flag[col] = 1;
-                row_i_cols[cnt] = col;
-                cnt++;
-            }
-        }
-        for (int j = 0; j < rand_nnz_col; j++)
-            flag[row_i_cols[j]] = 0;
+        H2P_rand_sample(k, rand_nnz_col, row_i_cols, flag);
     }
+    row_ptr[n] = nnz;
     A_idxbuf->length = (n + 1) + nnz;
 }
 

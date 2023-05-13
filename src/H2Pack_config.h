@@ -45,6 +45,7 @@
 #define LAPACK_SYEVD    LAPACKE_dsyevd  // LAPACK eigenvalue decomposition
 #define N_DTYPE_64B     8               // 8 double == 64 bytes, for alignment
 #define SIMD_LEN        SIMD_LEN_D      // SIMD vector length
+#define D_EPS           DBL_EPSILON     // Double precision machine epsilon
 #define ASTER_DTYPE_DOUBLE
 #endif
 
@@ -84,6 +85,7 @@
 #define LAPACK_SYEVD    LAPACKE_ssyevd
 #define N_DTYPE_64B     16
 #define SIMD_LEN        SIMD_LEN_S
+#define D_EPS           FLT_EPSILON
 #define ASTER_DTYPE_FLOAT
 #endif
 

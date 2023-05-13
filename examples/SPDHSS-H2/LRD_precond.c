@@ -15,6 +15,8 @@ extern void H2P_eval_kernel_matrix_OMP(
     const int n_thread
 );
 
+extern void H2P_rand_sample(const int n, const int k, int *samples, void *workbuf);
+
 // Construct a LRD_precond from a H2Pack structure using Nystrom method with random sampling
 void H2P_build_LRD_precond(H2Pack_p h2pack, const int rank, const DTYPE shift, LRD_precond_p *precond_)
 {
@@ -40,18 +42,8 @@ void H2P_build_LRD_precond(H2Pack_p h2pack, const int rank, const DTYPE shift, L
     H2P_dense_mat_init(&coord_skel, pt_dim, n_point);
     memcpy(coord_all->data,  h2pack->coord, sizeof(DTYPE) * pt_dim * n_point);
     memcpy(coord_skel->data, h2pack->coord, sizeof(DTYPE) * pt_dim * n_point);
-    // Not working?
-    int cnt = 0;
-    while (cnt < rank)
-    {
-        int idx = rand() % n_point;
-        if (flag[idx] == 0)
-        {
-            flag[idx] = 1;
-            skel_idx->data[cnt] = idx;
-            cnt++;
-        }
-    }
+    
+    H2P_rand_sample(n_point, rank, skel_idx->data, flag);
     //for (int i = 0; i < rank; i++) skel_idx->data[i] = i * n_point / rank;
     skel_idx->length = rank;
     H2P_dense_mat_select_columns(coord_skel, skel_idx);

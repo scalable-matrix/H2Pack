@@ -90,6 +90,14 @@ int H2P_point_in_box(const int pt_dim, DTYPE *coord, DTYPE L);
 //   coord : Size pt_dim-by-ldc, each column is a point coordinate
 void H2P_gen_coord_in_ring(const int npt, const int pt_dim, const DTYPE L0, const DTYPE L1, DTYPE *coord, const int ldc);
 
+// Ramdonly sample k different integers in [0, n-1]
+// Input parameters:
+//   n, k    : Sample k integers in [0, n-1]
+//   workbuf : Optional, size n bytes, work buffer, can be NULL
+// Output parameter:
+//   samples : Size k, sampled integers
+void H2P_rand_sample(const int n, const int k, int *samples, void *workbuf);
+
 // Generate a random sparse matrix A for calculating y^T := A^T * x^T,
 // where A is a random sparse matrix that has no more than max_nnz_col 
 // random +1/-1 nonzeros in each column with random position, x and y 

@@ -194,24 +194,19 @@ void gather_matrix_cols(
     const void *src, const int lds, void *dst, const int ldd
 );
 
-// Print a row-major int matrix block to standard output
+// Print a matrix to standard output
 // Input parameters:
-//   mat      : Size >= ldm * nrow, matrix to be printed 
-//   ldm      : Leading dimension of mat, >= ncol
-//   nrow     : Number of rows to be printed
-//   ncol     : Number of columns to be printed
-//   fmt      : Output format string
-//   mat_name : Name of the matrix, to be printed
-void print_int_mat_blk(
-    const int *mat, const int ldm, const int nrow, const int ncol, 
-    const char *fmt, const char *mat_name
-);
-
-// Print a row-major double matrix block to standard output
-// Input / output parameters are the same as copy_int_mat_blk()
-void print_dbl_mat_blk(
-    const double *mat, const int ldm, const int nrow, const int ncol, 
-    const char *fmt, const char *mat_name
+//   dtype : 0 -> int, 1 -> double
+//   stype : 0 -> row-major, 1 -> column-major
+//   mat   : Size >= ldm * nrow or ncol * ldm, matrix to print
+//   ldm   : Leading dimension of mat
+//   nrow  : Number of rows to print
+//   ncol  : Number of columns to print
+//   fmt   : Output format string
+//   name  : Name of the matrix
+void print_matrix(
+    const int dtype, const int stype, const void *mat, const int ldm, 
+    const int nrow, const int ncol, const char *fmt, const char *name
 );
 
 #ifdef __cplusplus

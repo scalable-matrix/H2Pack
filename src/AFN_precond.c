@@ -443,7 +443,10 @@ void AFNi_AFN_precond_build(
     AFN_precond->is_afn = 1;
     int n1 = AFN_precond->n1;
     int n2 = AFN_precond->n2;
+    double st, et;
+    double st0 = get_wtime_sec();
 
+    st = get_wtime_sec();
     // K11 = K11 + mu * eye(n1);
     for (int i = 0; i < n1; i++) K11[i * n1 + i] += mu;
     // invL = inv(chol(K11, 'lower'));
@@ -490,6 +493,8 @@ void AFNi_AFN_precond_build(
             invK11[i * n1 + j] = invK11[j * n1 + i];
     AFN_precond->afn_invK11 = invK11;
     AFN_precond->afn_K12    = K12_;
+    et = get_wtime_sec();
+    AFN_precond->t_afn_mat = et - st;
 
     // FSAI for S = K22 - K12' * (K11 \ K12)
     int n_thread = omp_get_max_threads();
@@ -502,7 +507,11 @@ void AFNi_AFN_precond_build(
     DTYPE *val    = (DTYPE *) malloc(sizeof(DTYPE) * n2 * fsai_npt);
     int   *displs = (int *)   malloc(sizeof(int)   * (n2 + 1));
     displs[0] = 0;
+    st = get_wtime_sec();
     AFNi_exact_KNN_search(coord2, ld2, n2, coord2, ld2, n2, pt_dim, fsai_npt, nn);
+    et = get_wtime_sec();
+    AFN_precond->t_afn_knn = et - st;
+    st = get_wtime_sec();
     BLAS_SET_NUM_THREADS(1);
     #pragma omp parallel if (n_thread > 1) num_threads(n_thread)
     {
@@ -567,8 +576,11 @@ void AFNi_AFN_precond_build(
     free(idxbuf);
     free(matbuf);
     free(V21);
+    et = get_wtime_sec();
+    AFN_precond->t_afn_fsai = et - st;
 
     // Build G and G^T CSR matrices
+    st = get_wtime_sec();
     for (int i = 1; i <= n2; i++) displs[i] += displs[i - 1];
     int nnz = displs[n2];
     int   *row1 = (int *)   malloc(sizeof(int)   * nnz);
@@ -599,10 +611,15 @@ void AFNi_AFN_precond_build(
     free(row1);
     free(col1);
     free(val1);
+    et = get_wtime_sec();
+    AFN_precond->t_afn_csr = et - st;
+
+    double et0 = get_wtime_sec();
+    AFN_precond->t_afn = et0 - st0;
 }
 
 // Construct an AFN preconditioner for a kernel matrix
-void AFN_precond_init(
+void AFN_precond_build(
     kernel_eval_fptr krnl_eval, void *krnl_param, const int npt, const int pt_dim, 
     const DTYPE *coord, const DTYPE mu, const int max_k, const int ss_npt,
     const int fsai_npt, AFN_precond_p *AFN_precond_
@@ -610,8 +627,11 @@ void AFN_precond_init(
 {
     AFN_precond_p AFN_precond = (AFN_precond_p) malloc(sizeof(AFN_precond_s));
     memset(AFN_precond, 0, sizeof(AFN_precond_s));
+    double st, et, st0, et0;
+    st0 = get_wtime_sec();
 
     // 1. Estimate the numerical low rank of the kernel matrix + diagonal shift
+    st = get_wtime_sec();
     int r = AFNi_rank_est(krnl_eval, krnl_param, npt, pt_dim, coord, mu, max_k, ss_npt, 1);
     int n  = npt;
     int n1 = (r < max_k) ? r : max_k;
@@ -623,8 +643,11 @@ void AFN_precond_init(
     AFN_precond->py = (DTYPE *) malloc(sizeof(DTYPE) * n);
     AFN_precond->t1 = (DTYPE *) malloc(sizeof(DTYPE) * n);
     AFN_precond->t2 = (DTYPE *) malloc(sizeof(DTYPE) * n);
+    et = get_wtime_sec();
+    AFN_precond->t_rankest = et - st;
 
     // 2. Use FPS to select n1 points, swap them to the front
+    st = get_wtime_sec();
     AFN_precond->perm = (int *) malloc(sizeof(int) * n);
     int *perm = AFN_precond->perm;
     AFNi_FPS(npt, pt_dim, coord, n1, perm);
@@ -636,8 +659,11 @@ void AFN_precond_init(
         if (flag[i] == 0) perm[idx++] = i;
     DTYPE *coord_perm = (DTYPE *) malloc(sizeof(DTYPE) * npt * pt_dim);
     H2P_gather_matrix_columns(coord, npt, coord_perm, npt, pt_dim, perm, npt);
+    et = get_wtime_sec();
+    AFN_precond->t_fps= et - st;
 
     // 3. Calculate K11 and K12 used for both Nystrom and AFN
+    st = get_wtime_sec();
     DTYPE *coord_n1 = coord_perm;
     DTYPE *coord_n2 = coord_perm + n1;
     DTYPE *K11 = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n1);
@@ -660,11 +686,16 @@ void AFN_precond_init(
             krnl_param, K12_srow, n2
         );
     }  // End of "#pragma omp parallel"
+    et = get_wtime_sec();
+    AFN_precond->t_K11K12= et - st;
 
     // 4. Build the Nystrom or AFN preconditioner
     if (r <= max_k)
     {
+        st = get_wtime_sec();
         AFNi_Nys_precond_build(AFN_precond, mu, K11, K12);
+        et = get_wtime_sec();
+        AFN_precond->t_nys = et - st;
     } else {
         AFNi_AFN_precond_build(
             AFN_precond, mu, K11, K12, coord_n2, n, pt_dim, 
@@ -676,6 +707,9 @@ void AFN_precond_init(
     free(coord_perm);
     free(K11);
     free(K12);
+
+    et0 = get_wtime_sec();
+    AFN_precond->t_build = et0 - st0;
     *AFN_precond_ = AFN_precond;
 }
 
@@ -715,6 +749,8 @@ void AFN_precond_apply(AFN_precond_p AFN_precond, const DTYPE *x, DTYPE *y)
     DTYPE *py   = AFN_precond->py;
     DTYPE *t1   = AFN_precond->t1;
     DTYPE *t2   = AFN_precond->t2;
+    double st = get_wtime_sec();
+
     // px = x(perm);
     #pragma omp parallel for schedule(static)
     for (int i = 0; i < n; i++) px[i] = x[perm[i]];
@@ -771,4 +807,28 @@ void AFN_precond_apply(AFN_precond_p AFN_precond, const DTYPE *x, DTYPE *y)
     for (int i = 0; i < n1; i++) y[perm[i]] = py[i];
     #pragma omp parallel for schedule(static)
     for (int i = n1; i < n; i++) y[perm[i]] = py[i];
+
+    double et = get_wtime_sec();
+    AFN_precond->t_apply += et - st;
+    AFN_precond->n_apply++;
+}
+
+void AFN_precond_print_stat(AFN_precond_p AFN_precond)
+{
+    if (AFN_precond == NULL) return;
+    printf("AFN preconditioner build time   = %.3f s\n", AFN_precond->t_build);
+    printf("  * Rank estimation             = %.3f s\n", AFN_precond->t_rankest);
+    printf("  * FPS select & permute        = %.3f s\n", AFN_precond->t_fps);
+    printf("  * Build K11 and K12 blocks    = %.3f s\n", AFN_precond->t_K11K12);
+    printf("  * Build Nystrom precond       = %.3f s\n", AFN_precond->t_nys);
+    printf("  * Build AFN precond           = %.3f s\n", AFN_precond->t_afn);
+    printf("    * Matrix operations         = %.3f s\n", AFN_precond->t_afn_mat);
+    printf("    * KNN search for FSAI       = %.3f s\n", AFN_precond->t_afn_knn);
+    printf("    * Build FSAI                = %.3f s\n", AFN_precond->t_afn_fsai);
+    printf("    * FASI matrix COO to CSR    = %.3f s\n", AFN_precond->t_afn_csr);
+    if (AFN_precond->n_apply > 0)
+    {
+        double t_apply_avg = AFN_precond->t_apply / (double) AFN_precond->n_apply;
+        printf("Apply preconditioner: %d times, per apply: %.3f s\n", AFN_precond->n_apply, t_apply_avg);
+    }
 }

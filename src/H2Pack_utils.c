@@ -30,13 +30,13 @@ int H2P_check_box_admissible(const DTYPE *box0, const DTYPE *box1, const int pt_
 
 // Gather some columns from a matrix to another matrix
 void H2P_gather_matrix_columns(
-    DTYPE *src_mat, const int src_ld, DTYPE *dst_mat, const int dst_ld, 
+    const DTYPE *src_mat, const int src_ld, DTYPE *dst_mat, const int dst_ld, 
     const int nrow, int *col_idx, const int ncol
 )
 {
     for (int irow = 0; irow < nrow; irow++)
     {
-        DTYPE *src_row = src_mat + src_ld * irow;
+        const DTYPE *src_row = src_mat + src_ld * irow;
         DTYPE *dst_row = dst_mat + dst_ld * irow;
         for (int icol = 0; icol < ncol; icol++)
             dst_row[icol] = src_row[col_idx[icol]];

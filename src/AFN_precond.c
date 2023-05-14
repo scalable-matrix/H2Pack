@@ -19,7 +19,7 @@
 //   k      : Number of points to select, <= npt
 // Output parameter:
 //   idx : Vector, size min(k, npt), indices of selected points
-void AFNi_FPS(const int npt, const int pt_dim, DTYPE *coord, const int k, int *idx)
+void AFNi_FPS(const int npt, const int pt_dim, const DTYPE *coord, const int k, int *idx)
 {
     DTYPE *workbuf = (DTYPE *) malloc(sizeof(DTYPE) * (2 * npt + pt_dim));
     DTYPE *center = workbuf;
@@ -29,7 +29,7 @@ void AFNi_FPS(const int npt, const int pt_dim, DTYPE *coord, const int k, int *i
     memset(center, 0, sizeof(DTYPE) * pt_dim);
     for (int i = 0; i < pt_dim; i++)
     {
-        DTYPE *coord_i = coord + i * npt;
+        const DTYPE *coord_i = coord + i * npt;
         #pragma omp simd
         for (int j = 0; j < npt; j++) center[i] += coord_i[j];
         center[i] /= (DTYPE) npt;
@@ -43,7 +43,7 @@ void AFNi_FPS(const int npt, const int pt_dim, DTYPE *coord, const int k, int *i
 
     for (int i = 1; i < k; i++)
     {
-        DTYPE *coord_ls = coord + idx[i - 1];
+        const DTYPE *coord_ls = coord + idx[i - 1];
         H2P_calc_pdist2_OMP(coord_ls, npt, 1, coord, npt, npt, pt_dim, tmp_d, npt, 1);
         for (int j = 0; j < npt; j++) min_d[j] = (tmp_d[j] < min_d[j]) ? tmp_d[j] : min_d[j];
         tmp = min_d[0];  idx[i] = 0;
@@ -202,4 +202,547 @@ int AFNi_rank_est(
         // use the original points to better estimate the rank
         return AFNi_Nys_rank_est(krnl_eval, krnl_param, npt, pt_dim, coord, mu, max_k, ss_npt, n_rep);
     }
+}
+
+// CSR SpMV for the G matrix in AFN
+void AFNi_CSR_SpMV(
+    const int nrow, const int *row_ptr, const int *col_idx, 
+    const DTYPE *val, const DTYPE *x, DTYPE *y
+)
+{
+    // In the first few n1 rows, each row has less than fsai_npt nonzeros;
+    // after that, each row has exactly fsai_npt nonzeros. Using a static
+    // partitioning scheme should be good enough.
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < nrow; i++)
+    {
+        DTYPE res = 0;
+        #pragma omp simd
+        for (int j = row_ptr[i]; j < row_ptr[i + 1]; j++)
+            res += val[j] * x[col_idx[j]];
+        y[i] = res;
+    }
+}
+
+// Build the Nystrom preconditioner
+// See AFN_precond_init() for input parameters
+void AFNi_Nys_precond_build(AFN_precond_p AFN_precond, const DTYPE mu, DTYPE *K11, DTYPE *K12)
+{
+    AFN_precond->is_nys = 1;
+    AFN_precond->is_afn = 0;
+    int n  = AFN_precond->n;
+    int n1 = AFN_precond->n1;
+    int n2 = AFN_precond->n2;
+    
+    // K1 = [K11, K12];
+    DTYPE *K1 = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n);
+    copy_matrix(sizeof(DTYPE), n1, n1, K11, n1, K1,      n, 1);
+    copy_matrix(sizeof(DTYPE), n1, n2, K12, n2, K1 + n1, n, 1);
+
+    // nu = sqrt(n) * norm(K1, 'fro') * eps;
+    DTYPE nu = 0;
+    #pragma omp parallel for schedule(static) reduction(+:nu)
+    for (int i = 0; i < n * n1; i++) nu += K1[i] * K1[i];
+    nu = DSQRT((DTYPE) n) * DSQRT(nu) * D_EPS;
+
+    // K11 = K11 + nu * eye(n1);
+    for (int i = 0; i < n1; i++) K11[i * n1 + i] += nu;
+    // invL = inv(chol(K11, 'lower'));
+    DTYPE *invL = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n1);
+    int info = 0;
+    info = LAPACK_POTRF(LAPACK_ROW_MAJOR, 'L', n1, K11, n1);
+    ASSERT_PRINTF(info == 0, "LAPACK_POTRF failed, info = %d\n", info);
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < n1 * n1; i++) invL[i] = 0;
+    for (int i = 0; i < n1; i++) invL[i * n1 + i] = 1.0;
+    CBLAS_TRSM(
+        CblasRowMajor, CblasLeft, CblasLower, CblasNoTrans, 
+        CblasNonUnit, n1, n1, 1.0, K11, n1, invL, n1
+    );
+    // M = K1' * invL';
+    DTYPE *M = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n);
+    CBLAS_GEMM(
+        CblasRowMajor, CblasTrans, CblasTrans, n, n1, n1, 
+        1.0, K1, n, invL, n1, 0.0, M, n1
+    );
+
+    // [U, S, ~] = svd(M, 0);
+    DTYPE *S = (DTYPE *) malloc(sizeof(DTYPE) * n1);
+    DTYPE *superb = (DTYPE *) malloc(sizeof(DTYPE) * n1);
+    info = LAPACK_GESVD(
+        LAPACK_ROW_MAJOR, 'O', 'N', n, n1, M, n1, 
+        S, NULL, n1, NULL, n1, superb
+    );
+    ASSERT_PRINTF(info == 0, "LAPACK_GESVD failed, info = %d\n", info);
+
+    // S = max(diag(S).^2 - nu, 0);
+    // eta = S(n1) + mu;
+    // M = eta ./ (S + mu);
+    DTYPE *nys_M = (DTYPE *) malloc(sizeof(DTYPE) * n1);
+    for (int i = 0; i < n1; i++)
+    {
+        S[i] = S[i] * S[i] - nu;
+        if (S[i] < 0) S[i] = 0;
+    }
+    DTYPE eta = S[n1 - 1] + mu;
+    for (int i = 0; i < n1; i++) nys_M[i] = eta / (S[i] + mu);
+
+    free(K1);
+    free(invL);
+    free(S);
+    free(superb);
+    AFN_precond->nys_U = M;
+    AFN_precond->nys_M = nys_M;
+}
+
+// Quick sort for (DTYPE, int) key-value pairs
+void AFNi_qsort_DTYPE_int_key_val(DTYPE *key, int *val, const int l, const int r)
+{
+    int i = l, j = r, tmp_val;
+    DTYPE tmp_key, mid_key = key[(l + r) / 2];
+    while (i <= j)
+    {
+        while (key[i] < mid_key) i++;
+        while (key[j] > mid_key) j--;
+        if (i <= j)
+        {
+            tmp_key = key[i]; key[i] = key[j]; key[j] = tmp_key;
+            tmp_val = val[i]; val[i] = val[j]; val[j] = tmp_val;
+            i++;  j--;
+        }
+    }
+    if (i < r) AFNi_qsort_DTYPE_int_key_val(key, val, i, r);
+    if (j > l) AFNi_qsort_DTYPE_int_key_val(key, val, l, j);
+}
+
+// Exact k-nearest neighbor search
+// Input parameters:
+//   coord1 : First point set coordinates, size pt_dim * ld1, row major, each column is a point
+//   ld1    : Leading dimension of coord1
+//   n1     : Number of points in coord1
+//   coord2 : Second point set coordinates, size pt_dim * ld2, row major, each column is a point
+//   ld2    : Leading dimension of coord2
+//   n2     : Number of points in coord2
+//   pt_dim : Point dimension
+//   k      : Number of nearest neighbors to search
+// Output parameter:
+//   nn_idx : Size n1 * k, row major, neatrest neighbor indices for each point in coord1
+void AFNi_exact_KNN_search(
+    const DTYPE *coord1, const int ld1, const int n1,
+    const DTYPE *coord2, const int ld2, const int n2,
+    const int pt_dim, const int k, int *nn_idx
+)
+{
+    // TODO: optimize this function using: (1) min-heap; (2) tree data structure; (3) blocking
+    int n_thread = omp_get_max_threads();
+    int *idx = (int *) malloc(sizeof(int) * n_thread * n2);
+    DTYPE *dist2 = (DTYPE *) malloc(sizeof(DTYPE) * n_thread * n2);
+    #pragma omp parallel num_threads(n_thread)
+    {
+        int tid = omp_get_thread_num();
+        int n1_start, n1_len;
+        calc_block_spos_len(n1, n_thread, tid, &n1_start, &n1_len);
+        int   *thread_idx   = idx   + tid * n2;
+        DTYPE *thread_dist2 = dist2 + tid * n2;
+        for (int i = n1_start; i < n1_start + n1_len; i++)
+        {
+            // This implementation makes GCC auto-vectorization happy
+            const DTYPE *coord1_i = coord1 + i;
+            memset(thread_dist2, 0, sizeof(DTYPE) * n2);
+            for (int k = 0; k < pt_dim; k++)
+            {
+                const DTYPE coord1_k_i = coord1_i[k * ld1];
+                const DTYPE *coord2_k = coord2 + k * ld2;
+                #pragma omp simd
+                for (int j = 0; j < n2; j++)
+                {
+                    DTYPE diff = coord1_k_i - coord2_k[j];
+                    thread_dist2[j] += diff * diff;
+                }
+            }
+            for (int j = 0; j < n2; j++) thread_idx[j] = j;
+            AFNi_qsort_DTYPE_int_key_val(thread_dist2, thread_idx, 0, n2 - 1);
+            memcpy(nn_idx + i * k, thread_idx, sizeof(int) * k);
+        }
+    }
+    free(dist2);
+    free(idx);
+}
+
+// Quick sort for (int, DTYPE) key-value pairs
+void AFNi_qsort_int_DTYPE_key_val(int *key, DTYPE *val, const int l, const int r)
+{
+    int i = l, j = r, tmp_key;
+    int mid_key = key[(l + r) / 2];
+    DTYPE tmp_val;
+    while (i <= j)
+    {
+        while (key[i] < mid_key) i++;
+        while (key[j] > mid_key) j--;
+        if (i <= j)
+        {
+            tmp_key = key[i]; key[i] = key[j]; key[j] = tmp_key;
+            tmp_val = val[i]; val[i] = val[j]; val[j] = tmp_val;
+            i++;  j--;
+        }
+    }
+    if (i < r) AFNi_qsort_int_DTYPE_key_val(key, val, i, r);
+    if (j > l) AFNi_qsort_int_DTYPE_key_val(key, val, l, j);
+}
+
+// Convert a COO matrix to a sorted CSR matrix
+void AFNi_COO2CSR(
+    const int nrow, const int ncol, const int nnz,
+    const int *row, const int *col, const DTYPE *val, 
+    int **row_ptr_, int **col_idx_, DTYPE **csr_val_
+)
+{
+    int *row_ptr = (int *) malloc(sizeof(int) * (nrow + 1));
+    int *col_idx = (int *) malloc(sizeof(int) * nnz);
+    DTYPE *csr_val = (DTYPE *) malloc(sizeof(DTYPE) * nnz);
+
+    // Get the number of non-zeros in each row
+    memset(row_ptr, 0, sizeof(int) * (nrow + 1));
+    for (int i = 0; i < nnz; i++) row_ptr[row[i] + 1]++;
+
+    // Calculate the displacement of 1st non-zero in each row
+    for (int i = 2; i <= nrow; i++) row_ptr[i] += row_ptr[i - 1];
+
+    // Use row_ptr to bucket sort col[] and val[]
+    for (int i = 0; i < nnz; i++)
+    {
+        int idx = row_ptr[row[i]];
+        col_idx[idx] = col[i];
+        csr_val[idx] = val[i];
+        row_ptr[row[i]]++;
+    }
+
+    // Reset row_ptr
+    for (int i = nrow; i >= 1; i--) row_ptr[i] = row_ptr[i - 1];
+    row_ptr[0] = 0;
+
+    // Sort the non-zeros in each row according to column indices
+    #pragma omp parallel for
+    for (int i = 0; i < nrow; i++)
+        AFNi_qsort_int_DTYPE_key_val(col_idx, csr_val, row_ptr[i], row_ptr[i + 1] - 1);
+
+    *row_ptr_ = row_ptr;
+    *col_idx_ = col_idx;
+    *csr_val_ = csr_val;
+}
+
+// Build the AFN preconditioner
+// See AFN_precond_init() for input parameters
+void AFNi_AFN_precond_build(
+    AFN_precond_p AFN_precond, const DTYPE mu, DTYPE *K11, DTYPE *K12, 
+    const DTYPE *coord2, const int ld2, const int pt_dim, 
+    kernel_eval_fptr krnl_eval, void *krnl_param, const int fsai_npt
+)
+{
+    AFN_precond->is_nys = 0;
+    AFN_precond->is_afn = 1;
+    int n1 = AFN_precond->n1;
+    int n2 = AFN_precond->n2;
+
+    // K11 = K11 + mu * eye(n1);
+    for (int i = 0; i < n1; i++) K11[i * n1 + i] += mu;
+    // invL = inv(chol(K11));
+    DTYPE *invL = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n1);
+    int info = 0;
+    info = LAPACK_POTRF(LAPACK_ROW_MAJOR, 'L', n1, K11, n1);
+    ASSERT_PRINTF(info == 0, "LAPACK_POTRF failed, info = %d\n", info);
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < n1 * n1; i++) invL[i] = 0;
+    for (int i = 0; i < n1; i++) invL[i * n1 + i] = 1.0;
+    CBLAS_TRSM(
+        CblasRowMajor, CblasLeft, CblasLower, CblasNoTrans, 
+        CblasNonUnit, n1, n1, 1.0, K11, n1, invL, n1
+    );
+    // V21 = K12' * invL';
+    AFN_precond->afn_K12 = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n2);
+    #pragma omp parallel for schedule(static) 
+    for (int i = 0; i < n1 * n2; i++) AFN_precond->afn_K12[i] = K12[i];
+    DTYPE *V21 = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n2);
+    CBLAS_GEMM(
+        CblasRowMajor, CblasTrans, CblasTrans, n2, n1, n1, 
+        1.0, invL, n1, K12, n2, 0.0, V21, n2
+    );
+    free(invL);
+
+    // FSAI for S = K22 - K12' * (K11 \ K12)
+    int n_thread = omp_get_max_threads();
+    int thread_mat_bufsize = fsai_npt * fsai_npt + fsai_npt * pt_dim + fsai_npt * n2;
+    int   *nn     = (int *)   malloc(sizeof(int)   * n2 * fsai_npt);
+    int   *idxbuf = (int *)   malloc(sizeof(int)   * n_thread * fsai_npt);
+    DTYPE *matbuf = (DTYPE *) malloc(sizeof(DTYPE) * n_thread * thread_mat_bufsize);
+    int   *row    = (int *)   malloc(sizeof(int)   * n2 * fsai_npt);
+    int   *col    = (int *)   malloc(sizeof(int)   * n2 * fsai_npt);
+    DTYPE *val    = (DTYPE *) malloc(sizeof(DTYPE) * n2 * fsai_npt);
+    int   *displs = (int *)   malloc(sizeof(int)   * (n2 + 1));
+    displs[0] = 0;
+    AFNi_exact_KNN_search(coord2, ld2, n2, coord2, ld2, n2, pt_dim, fsai_npt, nn);
+    #pragma omp parallel 
+    {
+        // In the first few fsai_npt rows, each row has less than fsai_npt nonzeros;
+        // after that, each row has exactly fsai_npt nonzeros. Using a static
+        // partitioning scheme should be good enough.
+        int tid = omp_get_thread_num();
+        int n2_start, n2_size;
+        calc_block_spos_len(n2, n_thread, tid, &n2_start, &n2_size);
+        int *nn_i = idxbuf + tid * fsai_npt;
+        DTYPE *thread_matbuf = matbuf + tid * thread_mat_bufsize;
+        DTYPE *nn_coord = thread_matbuf;
+        DTYPE *tmpK = nn_coord + fsai_npt * pt_dim;
+        DTYPE *Vnn = tmpK + fsai_npt * fsai_npt;
+        for (int i = n2_start; i < n2_start + n2_size; i++)
+        {
+            // nn = [neighbor(i, neighbor(i, :) < i), i];
+            int num_nn = 0;
+            int *nn_i0 = nn + i * fsai_npt;
+            for (int j = 0; j < fsai_npt; j++)
+                if (nn_i0[j] < i) nn_i[num_nn++] = nn_i0[j];
+            nn_i[num_nn++] = i;
+            displs[i + 1] = num_nn;
+            // row(idx + (1 : num_nn)) = i;
+            // col(idx + (1 : num_nn)) = nn;
+            // Vnn = V21(nn, :);
+            // Xnn = Xperm2(nn, :);
+            for (int j = i * fsai_npt; j < (i + 1) * fsai_npt; j++)
+            {
+                int j0 = j - i * fsai_npt;
+                row[j] = i;
+                col[j] = nn_i[j0];
+                memcpy(Vnn + j0 * n2, V21 + nn_i[j0] * n2, sizeof(DTYPE) * n2);
+            }
+            H2P_gather_matrix_columns(coord2, ld2, nn_coord, fsai_npt, pt_dim, nn_i, num_nn);
+            // tmpK = kernel(Xnn, Xnn) + mu * eye(num_nn);
+            // tmpK = tmpK - Vnn * Vnn';
+            krnl_eval(nn_coord, num_nn, num_nn, nn_coord, num_nn, num_nn, krnl_param, tmpK, num_nn);
+            for (int j = 0; j < num_nn; j++) tmpK[j * num_nn + j] += mu;
+            CBLAS_GEMM(
+                CblasRowMajor, CblasNoTrans, CblasTrans, num_nn, num_nn, n2,
+                -1.0, Vnn, num_nn, Vnn, num_nn, 1.0, tmpK, num_nn
+            );
+            // tmpU = [zeros(num_nn-1, 1); 1];
+            // tmpY = tmpK \ tmpU;
+            DTYPE *tmpU = val + i * fsai_npt;
+            memset(tmpU, 0, sizeof(DTYPE) * num_nn);
+            tmpU[num_nn - 1] = 1.0;
+            int info;  // TODO: Use LAPACK_COL_MAJOR for better performance? tmpK is symmetric. 
+            info = LAPACK_GETRF(LAPACK_ROW_MAJOR, num_nn, num_nn, tmpK, num_nn, nn_i);
+            ASSERT_PRINTF(info == 0, "LAPACK DGETRF return %d\n", info);
+            info = LAPACK_GETRS(LAPACK_ROW_MAJOR, 'N', num_nn, 1, tmpK, num_nn, nn_i, tmpU, 1);
+            // val(idx + (1 : num_nn)) = tmpY / sqrt(tmpY(num_nn));
+            DTYPE scale_factor = 1.0 / sqrt(tmpU[num_nn - 1]);
+            for (int j = 0; j < num_nn; j++) tmpU[j] *= scale_factor;
+        }  // End of i loop
+    }  // End of "#pragma omp parallel"
+    free(nn);
+    free(idxbuf);
+    free(matbuf);
+    free(V21);
+
+    // Build G and G^T CSR matrices
+    for (int i = 1; i <= n2; i++) displs[i] += displs[i - 1];
+    int nnz = displs[n2];
+    int   *row1 = (int *)   malloc(sizeof(int)   * nnz);
+    int   *col1 = (int *)   malloc(sizeof(int)   * nnz);
+    DTYPE *val1 = (DTYPE *) malloc(sizeof(DTYPE) * nnz);
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < n2; i++)
+    {
+        int nnz_i = displs[i + 1] - displs[i];
+        memcpy(row1 + displs[i], row + i * fsai_npt, sizeof(int) * nnz_i);
+        memcpy(col1 + displs[i], col + i * fsai_npt, sizeof(int) * nnz_i);
+        memcpy(val1 + displs[i], val + i * fsai_npt, sizeof(DTYPE) * nnz_i);
+    }
+    free(row);
+    free(col);
+    free(val);
+    free(displs);
+    int *G_rowptr = NULL, *G_colidx = NULL, *GT_rowptr = NULL, *GT_colidx = NULL;
+    DTYPE *G_val = NULL, *GT_val = NULL;
+    AFNi_COO2CSR(n2, n2, nnz, row1, col1, val1, &G_rowptr, &G_colidx, &G_val);
+    AFNi_COO2CSR(n2, n2, nnz, col1, row1, val1, &GT_rowptr, &GT_colidx, &GT_val);
+    AFN_precond->afn_G_rowptr  = G_rowptr;
+    AFN_precond->afn_G_colidx  = G_colidx;
+    AFN_precond->afn_G_val     = G_val;
+    AFN_precond->afn_GT_rowptr = GT_rowptr;
+    AFN_precond->afn_GT_colidx = GT_colidx;
+    AFN_precond->afn_GT_val    = GT_val;
+    free(row1);
+    free(col1);
+    free(val1);
+}
+
+// Construct an AFN preconditioner for a kernel matrix
+void AFN_precond_init(
+    kernel_eval_fptr krnl_eval, void *krnl_param, const int npt, const int pt_dim, 
+    const DTYPE *coord, const DTYPE mu, const int max_k, const int ss_npt,
+    const int fsai_npt, AFN_precond_p *AFN_precond_
+)
+{
+    AFN_precond_p AFN_precond = (AFN_precond_p) malloc(sizeof(AFN_precond_s));
+    memset(AFN_precond, 0, sizeof(AFN_precond_s));
+
+    // 1. Estimate the numerical low rank of the kernel matrix + diagonal shift
+    int r = AFNi_rank_est(krnl_eval, krnl_param, npt, pt_dim, coord, mu, max_k, ss_npt, 1);
+    int n  = npt;
+    int n1 = (r < max_k) ? r : max_k;
+    int n2 = n - n1;
+    AFN_precond->n  = n;
+    AFN_precond->n1 = n1;
+    AFN_precond->n2 = n2;
+    AFN_precond->px = (DTYPE *) malloc(sizeof(DTYPE) * n);
+    AFN_precond->py = (DTYPE *) malloc(sizeof(DTYPE) * n);
+    AFN_precond->t1 = (DTYPE *) malloc(sizeof(DTYPE) * n);
+    AFN_precond->t2 = (DTYPE *) malloc(sizeof(DTYPE) * n);
+
+    // 2. Use FPS to select n1 points, swap them to the front
+    AFN_precond->perm = (int *) malloc(sizeof(int) * n);
+    int *perm = AFN_precond->perm;
+    AFNi_FPS(npt, pt_dim, coord, n1, perm);
+    uint8_t *flag = (uint8_t *) malloc(sizeof(uint8_t) * n);
+    memset(flag, 0, sizeof(uint8_t) * n);
+    for (int i = 0; i < n1; i++) flag[perm[i]] = 1;
+    int idx = n1;
+    for (int i = 0; i < n; i++)
+        if (flag[i] == 0) perm[idx++] = i;
+    DTYPE *coord_perm = (DTYPE *) malloc(sizeof(DTYPE) * npt * pt_dim);
+    H2P_gather_matrix_columns(coord, npt, coord_perm, npt, pt_dim, perm, npt);
+
+    // 3. Calculate K11 and K12 used for both Nystrom and AFN
+    DTYPE *coord_n1 = coord_perm;
+    DTYPE *coord_n2 = coord_perm + n1;
+    DTYPE *K11 = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n1);
+    DTYPE *K12 = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n2);
+    #pragma omp parallel
+    {
+        int n_thread = omp_get_num_threads();
+        int tid = omp_get_thread_num();
+        int n1_blk_start, n1_blk_len;
+        calc_block_spos_len(n1, n_thread, tid, &n1_blk_start, &n1_blk_len);
+        DTYPE *K11_srow = K11 + n1_blk_start * n1;
+        DTYPE *K12_srow = K12 + n1_blk_start * n2;    
+        DTYPE *coord_n1_spos = coord_n1 + n1_blk_start;
+        krnl_eval(
+            coord_n1_spos, n, n1_blk_len, coord_n1, n, n1, 
+            krnl_param, K11_srow, n1
+        );
+        krnl_eval(
+            coord_n1_spos, n, n1_blk_len, coord_n2, n, n2, 
+            krnl_param, K12_srow, n2
+        );
+    }  // End of "#pragma omp parallel"
+
+    // 4. Build the Nystrom or AFN preconditioner
+    if (r <= max_k)
+    {
+        AFNi_Nys_precond_build(AFN_precond, mu, K11, K12);
+    } else {
+        AFNi_AFN_precond_build(
+            AFN_precond, mu, K11, K12, coord_n2, n, pt_dim, 
+            krnl_eval, krnl_param, fsai_npt
+        );
+    }
+
+    free(flag);
+    free(coord_perm);
+    free(K11);
+    free(K12);
+    *AFN_precond_ = AFN_precond;
+}
+
+// Destroy an initialized AFN_precond struct
+void AFN_precond_destroy(AFN_precond_p *AFN_precond_)
+{
+    AFN_precond_p AFN_precond = *AFN_precond_;
+    if (AFN_precond == NULL) return;
+    free(AFN_precond->perm);
+    free(AFN_precond->px);
+    free(AFN_precond->py);
+    free(AFN_precond->t1);
+    free(AFN_precond->t2);
+    free(AFN_precond->nys_U);
+    free(AFN_precond->nys_M);
+    free(AFN_precond->afn_G_rowptr);
+    free(AFN_precond->afn_GT_rowptr);
+    free(AFN_precond->afn_G_colidx);
+    free(AFN_precond->afn_GT_colidx);
+    free(AFN_precond->afn_G_val);
+    free(AFN_precond->afn_GT_val);
+    free(AFN_precond->afn_invK11);
+    free(AFN_precond->afn_K12);
+    free(AFN_precond);
+    *AFN_precond_ = NULL;
+}
+
+// Apply an AFN preconditioner to a vector
+void AFN_precond_apply(AFN_precond_p AFN_precond, const DTYPE *x, DTYPE *y)
+{
+    if (AFN_precond == NULL) return;
+    int   n     = AFN_precond->n;
+    int   n1    = AFN_precond->n1;
+    int   n2    = AFN_precond->n2;
+    int   *perm = AFN_precond->perm;
+    DTYPE *px   = AFN_precond->px;
+    DTYPE *py   = AFN_precond->py;
+    DTYPE *t1   = AFN_precond->t1;
+    DTYPE *t2   = AFN_precond->t2;
+    // px = x(perm);
+    //#pragma omp parallel for schedule(static)
+    for (int i = 0; i < n; i++) px[i] = x[perm[i]];
+    if (AFN_precond->is_nys)
+    {
+        DTYPE *nys_U = AFN_precond->nys_U;
+        DTYPE *nys_M = AFN_precond->nys_M;
+        // t1 = U' * px;
+        CBLAS_GEMV(CblasRowMajor, CblasTrans, n, n1, 1.0, nys_U, n1, px, 1, 0.0, t1, 1);
+        // py = px - U * t1;
+        #pragma omp parallel for schedule(static)
+        for (int i = 0; i < n; i++) py[i] = px[i];
+        CBLAS_GEMV(CblasRowMajor, CblasNoTrans, n, n1, -1.0, nys_U, n1, t1, 1, 1.0, py, 1);
+        // t1 = M .* t1;
+        for (int i = 0; i < n1; i++) t1[i] *= nys_M[i];
+        // py = py + U * t1;
+        CBLAS_GEMV(CblasRowMajor, CblasNoTrans, n, n1, 1.0, nys_U, n1, t1, 1, 1.0, py, 1);
+    }
+    if (AFN_precond->is_afn)
+    {
+        int   *afn_G_rowptr  = AFN_precond->afn_G_rowptr;
+        int   *afn_GT_rowptr = AFN_precond->afn_GT_rowptr;
+        int   *afn_G_colidx  = AFN_precond->afn_G_colidx;
+        int   *afn_GT_colidx = AFN_precond->afn_GT_colidx;
+        DTYPE *afn_G_val     = AFN_precond->afn_G_val;
+        DTYPE *afn_GT_val    = AFN_precond->afn_GT_val;
+        DTYPE *afn_invK11    = AFN_precond->afn_invK11;
+        DTYPE *afn_K12       = AFN_precond->afn_K12;
+        // x1 = px(1 : n1, :);
+        // x2 = px(n1+1 : n, :);
+        // t11 = iK11 * x1;  % Size n1
+        DTYPE *x1 = px, *x2 = px + n1;
+        DTYPE *t11 = t1, *t12 = t1 + n1;
+        CBLAS_GEMV(CblasRowMajor, CblasNoTrans, n1, n1, 1.0, afn_invK11, n1, x1, 1, 0.0, t11, 1);
+        // t12 = x2 - K12' * t11;  % Size n2
+        #pragma omp parallel for schedule(static)
+        for (int i = 0; i < n2; i++) t12[i] = x2[i];
+        CBLAS_GEMV(CblasRowMajor, CblasTrans, n1, n2, -1.0, afn_K12, n2, t11, 1, 1.0, t12, 1);
+        // t22 = G * t12;  % Size n2
+        DTYPE *y1 = py, *y2 = py + n1;
+        DTYPE *t21 = t2, *t22 = t2 + n1;
+        AFNi_CSR_SpMV(n2, afn_G_rowptr, afn_G_colidx, afn_G_val, t12, t22);
+        // y2 = G' * t22;
+        AFNi_CSR_SpMV(n2, afn_GT_rowptr, afn_GT_colidx, afn_GT_val, t22, y2);
+        // t21 = x1 - K12 * y2;  % Size n1
+        for (int i = 0; i < n1; i++) t21[i] = x1[i];
+        CBLAS_GEMV(CblasRowMajor, CblasNoTrans, n1, n2, -1.0, afn_K12, n2, y2, 1, 1.0, t21, 1);
+        // y1 = iK11 * t21;
+        CBLAS_GEMV(CblasRowMajor, CblasNoTrans, n1, n1, 1.0, afn_invK11, n1, t21, 1, 0.0, y1, 1);
+        // py = [y1; y2];
+    }
+    // y(perm) = py;
+    // Parallelizing the first loop may have severe false sharing issue
+    for (int i = 0; i < n1; i++) y[perm[i]] = py[i];
+    //#pragma omp parallel for schedule(static)
+    for (int i = n1; i < n; i++) y[perm[i]] = py[i];
 }

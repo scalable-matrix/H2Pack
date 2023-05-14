@@ -43,6 +43,7 @@
 #define LAPACK_ORGQR    LAPACKE_dorgqr  // LAPACK QR Q matrix explicitly construction
 #define LAPACK_ORMQR    LAPACKE_dormqr  // LAPACK QR Q matrix multiples another matrix
 #define LAPACK_SYEVD    LAPACKE_dsyevd  // LAPACK eigenvalue decomposition
+#define LAPACK_GESVD    LAPACKE_dgesvd  // LAPACK singular value decomposition
 #define N_DTYPE_64B     8               // 8 double == 64 bytes, for alignment
 #define SIMD_LEN        SIMD_LEN_D      // SIMD vector length
 #define D_EPS           DBL_EPSILON     // Double precision machine epsilon
@@ -83,6 +84,7 @@
 #define LAPACK_ORGQR    LAPACKE_sorgqr
 #define LAPACK_ORMQR    LAPACKE_sormqr
 #define LAPACK_SYEVD    LAPACKE_ssyevd
+#define LAPACK_GESVD    LAPACKE_sgesvd
 #define N_DTYPE_64B     16
 #define SIMD_LEN        SIMD_LEN_S
 #define D_EPS           FLT_EPSILON

@@ -34,7 +34,7 @@ int H2P_check_box_admissible(const DTYPE *box0, const DTYPE *box1, const int pt_
 // Output parameter:
 //   dst_mat : Destination matrix with required columns only
 void H2P_gather_matrix_columns(
-    DTYPE *src_mat, const int src_ld, DTYPE *dst_mat, const int dst_ld, 
+    const DTYPE *src_mat, const int src_ld, DTYPE *dst_mat, const int dst_ld, 
     const int nrow, int *col_idx, const int ncol
 );
 

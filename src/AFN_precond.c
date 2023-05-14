@@ -260,7 +260,7 @@ void AFNi_Nys_precond_build(AFN_precond_p AFN_precond, const DTYPE mu, DTYPE *K1
         CblasNonUnit, n1, n1, 1.0, K11, n1, invL, n1
     );
     // M = K1' * invL';
-    DTYPE *M = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n);
+    DTYPE *M = (DTYPE *) malloc(sizeof(DTYPE) * n * n1);
     CBLAS_GEMM(
         CblasRowMajor, CblasTrans, CblasTrans, n, n1, n1, 
         1.0, K1, n, invL, n1, 0.0, M, n1
@@ -446,7 +446,7 @@ void AFNi_AFN_precond_build(
 
     // K11 = K11 + mu * eye(n1);
     for (int i = 0; i < n1; i++) K11[i * n1 + i] += mu;
-    // invL = inv(chol(K11));
+    // invL = inv(chol(K11, 'lower'));
     DTYPE *invL = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n1);
     int info = 0;
     info = LAPACK_POTRF(LAPACK_ROW_MAJOR, 'L', n1, K11, n1);
@@ -462,16 +462,38 @@ void AFNi_AFN_precond_build(
     AFN_precond->afn_K12 = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n2);
     #pragma omp parallel for schedule(static) 
     for (int i = 0; i < n1 * n2; i++) AFN_precond->afn_K12[i] = K12[i];
-    DTYPE *V21 = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n2);
+    DTYPE *V21 = (DTYPE *) malloc(sizeof(DTYPE) * n2 * n1);
     CBLAS_GEMM(
         CblasRowMajor, CblasTrans, CblasTrans, n2, n1, n1, 
-        1.0, invL, n1, K12, n2, 0.0, V21, n2
+        1.0, K12, n2, invL, n1, 0.0, V21, n1
     );
     free(invL);
 
+    // Copy K12 and invert K11, currently K11 is overwritten by its Cholesky factor
+    DTYPE *invK11  = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n1);
+    DTYPE *K12_    = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n2);
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < n1; i++)
+    {
+        DTYPE *K11_i     = K11     + i * n1;
+        DTYPE *invK11_i  = invK11  + i * n1;
+        DTYPE *K12_i     = K12     + i * n2;
+        DTYPE *K12_i_    = K12_    + i * n2;
+        memcpy(invK11_i, K11_i, sizeof(DTYPE) * n1);
+        memcpy(K12_i_,   K12_i, sizeof(DTYPE) * n2);
+    }
+    info = LAPACK_POTRI(LAPACK_ROW_MAJOR, 'L', n1, invK11, n1);
+    ASSERT_PRINTF(info == 0, "LAPACK_POTRI failed, info = %d\n", info);
+    // POTRI only returns the lower/upper triangular part, remember to symmetrize
+    for (int i = 0; i < n1 - 1; i++)
+        for (int j = i + 1; j < n1; j++)
+            invK11[i * n1 + j] = invK11[j * n1 + i];
+    AFN_precond->afn_invK11 = invK11;
+    AFN_precond->afn_K12    = K12_;
+
     // FSAI for S = K22 - K12' * (K11 \ K12)
     int n_thread = omp_get_max_threads();
-    int thread_mat_bufsize = fsai_npt * fsai_npt + fsai_npt * pt_dim + fsai_npt * n2;
+    int thread_mat_bufsize = fsai_npt * (pt_dim + fsai_npt + n2);
     int   *nn     = (int *)   malloc(sizeof(int)   * n2 * fsai_npt);
     int   *idxbuf = (int *)   malloc(sizeof(int)   * n_thread * fsai_npt);
     DTYPE *matbuf = (DTYPE *) malloc(sizeof(DTYPE) * n_thread * thread_mat_bufsize);
@@ -481,7 +503,8 @@ void AFNi_AFN_precond_build(
     int   *displs = (int *)   malloc(sizeof(int)   * (n2 + 1));
     displs[0] = 0;
     AFNi_exact_KNN_search(coord2, ld2, n2, coord2, ld2, n2, pt_dim, fsai_npt, nn);
-    #pragma omp parallel 
+    BLAS_SET_NUM_THREADS(1);
+    #pragma omp parallel if (n_thread > 1) num_threads(n_thread)
     {
         // In the first few fsai_npt rows, each row has less than fsai_npt nonzeros;
         // after that, each row has exactly fsai_npt nonzeros. Using a static
@@ -507,36 +530,39 @@ void AFNi_AFN_precond_build(
             // col(idx + (1 : num_nn)) = nn;
             // Vnn = V21(nn, :);
             // Xnn = Xperm2(nn, :);
-            for (int j = i * fsai_npt; j < (i + 1) * fsai_npt; j++)
+            for (int j = i * fsai_npt; j < i * fsai_npt + num_nn; j++)
             {
                 int j0 = j - i * fsai_npt;
                 row[j] = i;
                 col[j] = nn_i[j0];
-                memcpy(Vnn + j0 * n2, V21 + nn_i[j0] * n2, sizeof(DTYPE) * n2);
+                memcpy(Vnn + j0 * n1, V21 + nn_i[j0] * n1, sizeof(DTYPE) * n1);
             }
-            H2P_gather_matrix_columns(coord2, ld2, nn_coord, fsai_npt, pt_dim, nn_i, num_nn);
+            H2P_gather_matrix_columns(coord2, ld2, nn_coord, num_nn, pt_dim, nn_i, num_nn);
             // tmpK = kernel(Xnn, Xnn) + mu * eye(num_nn);
             // tmpK = tmpK - Vnn * Vnn';
             krnl_eval(nn_coord, num_nn, num_nn, nn_coord, num_nn, num_nn, krnl_param, tmpK, num_nn);
             for (int j = 0; j < num_nn; j++) tmpK[j * num_nn + j] += mu;
             CBLAS_GEMM(
-                CblasRowMajor, CblasNoTrans, CblasTrans, num_nn, num_nn, n2,
-                -1.0, Vnn, num_nn, Vnn, num_nn, 1.0, tmpK, num_nn
+                CblasRowMajor, CblasNoTrans, CblasTrans, num_nn, num_nn, n1,
+                -1.0, Vnn, n1, Vnn, n1, 1.0, tmpK, num_nn
             );
             // tmpU = [zeros(num_nn-1, 1); 1];
             // tmpY = tmpK \ tmpU;
             DTYPE *tmpU = val + i * fsai_npt;
             memset(tmpU, 0, sizeof(DTYPE) * num_nn);
             tmpU[num_nn - 1] = 1.0;
-            int info;  // TODO: Use LAPACK_COL_MAJOR for better performance? tmpK is symmetric. 
-            info = LAPACK_GETRF(LAPACK_ROW_MAJOR, num_nn, num_nn, tmpK, num_nn, nn_i);
-            ASSERT_PRINTF(info == 0, "LAPACK DGETRF return %d\n", info);
-            info = LAPACK_GETRS(LAPACK_ROW_MAJOR, 'N', num_nn, 1, tmpK, num_nn, nn_i, tmpU, 1);
+            // The standard way is using LAPACK_ROW_MAJOR here, but since tmpK is 
+            // symmetric, we use LAPACK_COL_MAJOR to avoid internal transpose
+            info = LAPACK_GETRF(LAPACK_COL_MAJOR, num_nn, num_nn, tmpK, num_nn, nn_i);
+            ASSERT_PRINTF(info == 0, "LAPACK_GETRF return %d\n", info);
+            info = LAPACK_GETRS(LAPACK_COL_MAJOR, 'N', num_nn, 1, tmpK, num_nn, nn_i, tmpU, num_nn);
+            ASSERT_PRINTF(info == 0, "LAPACK_GETRS return %d\n", info);
             // val(idx + (1 : num_nn)) = tmpY / sqrt(tmpY(num_nn));
-            DTYPE scale_factor = 1.0 / sqrt(tmpU[num_nn - 1]);
+            DTYPE scale_factor = 1.0 / DSQRT(tmpU[num_nn - 1]);
             for (int j = 0; j < num_nn; j++) tmpU[j] *= scale_factor;
         }  // End of i loop
     }  // End of "#pragma omp parallel"
+    BLAS_SET_NUM_THREADS(n_thread);
     free(nn);
     free(idxbuf);
     free(matbuf);
@@ -690,7 +716,7 @@ void AFN_precond_apply(AFN_precond_p AFN_precond, const DTYPE *x, DTYPE *y)
     DTYPE *t1   = AFN_precond->t1;
     DTYPE *t2   = AFN_precond->t2;
     // px = x(perm);
-    //#pragma omp parallel for schedule(static)
+    #pragma omp parallel for schedule(static)
     for (int i = 0; i < n; i++) px[i] = x[perm[i]];
     if (AFN_precond->is_nys)
     {
@@ -743,6 +769,6 @@ void AFN_precond_apply(AFN_precond_p AFN_precond, const DTYPE *x, DTYPE *y)
     // y(perm) = py;
     // Parallelizing the first loop may have severe false sharing issue
     for (int i = 0; i < n1; i++) y[perm[i]] = py[i];
-    //#pragma omp parallel for schedule(static)
+    #pragma omp parallel for schedule(static)
     for (int i = n1; i < n; i++) y[perm[i]] = py[i];
 }

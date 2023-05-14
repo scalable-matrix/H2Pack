@@ -38,6 +38,7 @@
 #define LAPACK_GETRI    LAPACKE_dgetri  // LAPACK LU inverse matrix
 #define LAPACK_POTRF    LAPACKE_dpotrf  // LAPACK Cholesky factorization
 #define LAPACK_POTRS    LAPACKE_dpotrs  // LAPACK linear system solve using Cholesky factorization
+#define LAPACK_POTRI    LAPACKE_dpotri  // LAPACK Cholesky inverse matrix
 #define LAPACK_GEQRF    LAPACKE_dgeqrf  // LAPACK QR factorization
 #define LAPACK_GEQPF    LAPACKE_dgeqpf  // LAPACK QR factorization with column pivoting
 #define LAPACK_ORGQR    LAPACKE_dorgqr  // LAPACK QR Q matrix explicitly construction
@@ -79,6 +80,7 @@
 #define LAPACK_GETRI    LAPACKE_sgetri
 #define LAPACK_POTRF    LAPACKE_spotrf
 #define LAPACK_POTRS    LAPACKE_spotrs
+#define LAPACK_POTRI    LAPACKE_spotri
 #define LAPACK_GEQRF    LAPACKE_sgeqrf
 #define LAPACK_GEQPF    LAPACKE_sgeqpf
 #define LAPACK_ORGQR    LAPACKE_sorgqr

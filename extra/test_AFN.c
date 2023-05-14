@@ -57,7 +57,10 @@ int main(int argc, char **argv)
     DTYPE *x = (DTYPE *) malloc(sizeof(DTYPE) * npt);
     DTYPE *y = (DTYPE *) malloc(sizeof(DTYPE) * npt);
     for (int i = 0; i < npt; i++) x[i] = (i + 1) % 13 - 7.0;
+    st = get_wtime_sec();
     AFN_precond_apply(AFN_precond, x, y);
+    et = get_wtime_sec();
+    printf("AFN_precond_apply used time = %.2f s\n", et - st);
 
     FILE *ouf = fopen("AFN_y.bin", "wb");
     fwrite(y, sizeof(DTYPE), npt, ouf);

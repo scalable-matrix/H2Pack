@@ -345,60 +345,6 @@ void AFNi_qsort_DTYPE_int_key_val(DTYPE *key, int *val, const int l, const int r
     if (j > l) AFNi_qsort_DTYPE_int_key_val(key, val, l, j);
 }
 
-// Exact k-nearest neighbor search
-// Input parameters:
-//   coord1 : First point set coordinates, size pt_dim * ld1, row major, each column is a point
-//   ld1    : Leading dimension of coord1
-//   n1     : Number of points in coord1
-//   coord2 : Second point set coordinates, size pt_dim * ld2, row major, each column is a point
-//   ld2    : Leading dimension of coord2
-//   n2     : Number of points in coord2
-//   pt_dim : Point dimension
-//   k      : Number of nearest neighbors to search
-// Output parameter:
-//   nn_idx : Size n1 * k, row major, neatrest neighbor indices for each point in coord1
-void AFNi_exact_KNN_search(
-    const DTYPE *coord1, const int ld1, const int n1,
-    const DTYPE *coord2, const int ld2, const int n2,
-    const int pt_dim, const int k, int *nn_idx
-)
-{
-    // TODO: optimize this function using: (1) min-heap; (2) tree data structure; (3) blocking
-    int n_thread = omp_get_max_threads();
-    int *idx = (int *) malloc(sizeof(int) * n_thread * n2);
-    DTYPE *dist2 = (DTYPE *) malloc(sizeof(DTYPE) * n_thread * n2);
-    #pragma omp parallel num_threads(n_thread)
-    {
-        int tid = omp_get_thread_num();
-        int n1_start, n1_len;
-        calc_block_spos_len(n1, n_thread, tid, &n1_start, &n1_len);
-        int   *thread_idx   = idx   + tid * n2;
-        DTYPE *thread_dist2 = dist2 + tid * n2;
-        for (int i = n1_start; i < n1_start + n1_len; i++)
-        {
-            // This implementation makes GCC auto-vectorization happy
-            const DTYPE *coord1_i = coord1 + i;
-            memset(thread_dist2, 0, sizeof(DTYPE) * n2);
-            for (int k = 0; k < pt_dim; k++)
-            {
-                const DTYPE coord1_k_i = coord1_i[k * ld1];
-                const DTYPE *coord2_k = coord2 + k * ld2;
-                #pragma omp simd
-                for (int j = 0; j < n2; j++)
-                {
-                    DTYPE diff = coord1_k_i - coord2_k[j];
-                    thread_dist2[j] += diff * diff;
-                }
-            }
-            for (int j = 0; j < n2; j++) thread_idx[j] = j;
-            AFNi_qsort_DTYPE_int_key_val(thread_dist2, thread_idx, 0, n2 - 1);
-            memcpy(nn_idx + i * k, thread_idx, sizeof(int) * k);
-        }
-    }
-    free(dist2);
-    free(idx);
-}
-
 // Quick sort for (int, DTYPE) key-value pairs
 void AFNi_qsort_int_DTYPE_key_val(int *key, DTYPE *val, const int l, const int r)
 {
@@ -530,17 +476,13 @@ void AFNi_AFN_precond_build(
     int n_thread = omp_get_max_threads();
     int thread_mat_bufsize = fsai_npt * (pt_dim + fsai_npt + n2);
     int   *nn     = (int *)   malloc(sizeof(int)   * n2 * fsai_npt);
-    int   *idxbuf = (int *)   malloc(sizeof(int)   * n_thread * fsai_npt);
+    int   *idxbuf = (int *)   malloc(sizeof(int)   * n_thread * n2);
     DTYPE *matbuf = (DTYPE *) malloc(sizeof(DTYPE) * n_thread * thread_mat_bufsize);
     int   *row    = (int *)   malloc(sizeof(int)   * n2 * fsai_npt);
     int   *col    = (int *)   malloc(sizeof(int)   * n2 * fsai_npt);
     DTYPE *val    = (DTYPE *) malloc(sizeof(DTYPE) * n2 * fsai_npt);
     int   *displs = (int *)   malloc(sizeof(int)   * (n2 + 1));
     displs[0] = 0;
-    st = get_wtime_sec();
-    AFNi_exact_KNN_search(coord2, ld2, n2, coord2, ld2, n2, pt_dim, fsai_npt, nn);
-    et = get_wtime_sec();
-    AFN_precond->t_afn_knn = et - st;
     st = get_wtime_sec();
     BLAS_SET_NUM_THREADS(1);
     #pragma omp parallel if (n_thread > 1) num_threads(n_thread)
@@ -551,19 +493,31 @@ void AFNi_AFN_precond_build(
         int tid = omp_get_thread_num();
         int n2_start, n2_size;
         calc_block_spos_len(n2, n_thread, tid, &n2_start, &n2_size);
-        int *nn_i = idxbuf + tid * fsai_npt;
+        int *nn_i = idxbuf + tid * n2;
         DTYPE *thread_matbuf = matbuf + tid * thread_mat_bufsize;
         DTYPE *nn_coord = thread_matbuf;
-        DTYPE *tmpK = nn_coord + fsai_npt * pt_dim;
-        DTYPE *Vnn = tmpK + fsai_npt * fsai_npt;
-        for (int i = n2_start; i < n2_start + n2_size; i++)
+        DTYPE *tmpK     = nn_coord + fsai_npt * pt_dim;
+        DTYPE *Vnn      = tmpK     + fsai_npt * fsai_npt;
+        DTYPE *dist2_i  = Vnn;   // Vnn is not used at the beginning and size >= n2, reuse it
+        // Do the large chunk of work first
+        #pragma omp for schedule(dynamic, 256)
+        for (int i = n2 - 1; i >= 0; i--)
         {
-            // nn = [neighbor(i, neighbor(i, :) < i), i];
             int num_nn = 0;
-            int *nn_i0 = nn + i * fsai_npt;
-            for (int j = 0; j < fsai_npt; j++)
-                if (nn_i0[j] < i) nn_i[num_nn++] = nn_i0[j];
-            nn_i[num_nn++] = i;
+            if (i < fsai_npt)
+            {
+                num_nn = i + 1;
+                for (int j = 0; j < num_nn; j++) nn_i[j] = j;
+            } else {
+                num_nn = fsai_npt;
+                // pdist2_i = pdist2(Xperm2(i, :), Xperm2(1 : i-1, :));
+                H2P_calc_pdist2_OMP(coord2 + i, ld2, 1, coord2, ld2, i, pt_dim, dist2_i, n2, 1);
+                // [~, idx_i] = sort(pdist2_i);
+                // nn = [idx_i(1 : num_nn-1), i];
+                for (int j = 0; j < i; j++) nn_i[j] = j;
+                AFNi_qsort_DTYPE_int_key_val(dist2_i, nn_i, 0, i - 1);
+                nn_i[num_nn - 1] = i;
+            }
             displs[i + 1] = num_nn;
             // row(idx + (1 : num_nn)) = i;
             // col(idx + (1 : num_nn)) = nn;
@@ -854,7 +808,6 @@ void AFN_precond_print_stat(AFN_precond_p AFN_precond)
     printf("  * Build Nystrom precond       = %.3f s\n", AFN_precond->t_nys);
     printf("  * Build AFN precond           = %.3f s\n", AFN_precond->t_afn);
     printf("    * Matrix operations         = %.3f s\n", AFN_precond->t_afn_mat);
-    printf("    * KNN search for FSAI       = %.3f s\n", AFN_precond->t_afn_knn);
     printf("    * Build FSAI                = %.3f s\n", AFN_precond->t_afn_fsai);
     printf("    * FASI matrix COO to CSR    = %.3f s\n", AFN_precond->t_afn_csr);
     if (AFN_precond->n_apply > 0)

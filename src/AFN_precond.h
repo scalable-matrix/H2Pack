@@ -29,7 +29,7 @@ struct AFN_precond
     // Timers for profiling
     int n_apply;
     double t_build, t_apply, t_rankest, t_fps, t_K11K12, t_nys;
-    double t_afn, t_afn_mat, t_afn_knn, t_afn_fsai, t_afn_csr;
+    double t_afn, t_afn_mat, t_afn_fsai, t_afn_csr;
 };
 typedef struct AFN_precond  AFN_precond_s;
 typedef struct AFN_precond *AFN_precond_p;

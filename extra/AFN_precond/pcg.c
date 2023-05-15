@@ -25,15 +25,7 @@ void pcg(
     Ax(Ax_param, x, r);
     #pragma omp simd
     for (int i = 0; i < n; i++) r[i] = b[i] - r[i];
-    // z = M \ r;
-    if (invMx != NULL) invMx(invMx_param, r, z);
-    else memcpy(z, r, vec_msize);
-    // p = z;
-    memcpy(p, z, vec_msize);
-    // rho = r' * z;
-    DTYPE rho = 0.0;
-    #pragma omp simd
-    for (int i = 0; i < n; i++) rho += r[i] * z[i];
+    
     // b_2norm = norm(b, 2);
     // r_2norm = norm(r, 2);
     // rn_stop = b_2norm * tol;
@@ -49,9 +41,30 @@ void pcg(
     rn_stop = b_2norm * tol;
 
     int iter = 0;
-    DTYPE alpha, beta, rho0, tmp;
+    DTYPE alpha, beta, rho0, tmp, rho = 1.0;
     while (iter < max_iter && r_2norm > rn_stop)
     {
+        // z = M \ r;
+        if (invMx != NULL) invMx(invMx_param, r, z);
+        else memcpy(z, r, vec_msize);
+
+        // rho0 = rho;
+        // rho  = r' * z;
+        // beta = rho / rho0;
+        rho0 = rho;
+        rho  = 0.0;
+        #pragma omp simd
+        for (int i = 0; i < n; i++) rho += r[i] * z[i];
+        beta = rho / rho0;
+
+        // p = z + beta * p; or p = z;
+        if (iter == 0) memcpy(p, z, vec_msize);
+        else
+        {
+            #pragma omp simd
+            for (int i = 0; i < n; i++) p[i] = z[i] + beta * p[i];
+        }
+
         // s = A * p;
         Ax(Ax_param, p, s);
         // alpha = rho / (p' * s);
@@ -68,22 +81,6 @@ void pcg(
             x[i] += alpha * p[i];
             r[i] -= alpha * s[i];
         }
-
-        // z = M \ r;
-        if (invMx != NULL) invMx(invMx_param, r, z);
-        else memcpy(z, r, vec_msize);
-        // rho0 = rho;
-        // rho  = r' * z;
-        rho0 = rho;
-        rho  = 0.0;
-        #pragma omp simd
-        for (int i = 0; i < n; i++) rho += r[i] * z[i];
-
-        // beta = rho / rho0;
-        // p = z + beta * p;
-        beta = rho / rho0;
-        #pragma omp simd
-        for (int i = 0; i < n; i++) p[i] = z[i] + beta * p[i];
 
         // r_2norm = norm(r, 2);
         // resvec(iter) = r_2norm;

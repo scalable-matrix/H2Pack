@@ -265,33 +265,63 @@ void AFNi_Nys_precond_build(AFN_precond_p AFN_precond, const DTYPE mu, DTYPE *K1
         CblasRowMajor, CblasTrans, CblasTrans, n, n1, n1, 
         1.0, K1, n, invL, n1, 0.0, M, n1
     );
+    free(K1);
+    free(invL);
 
     // [U, S, ~] = svd(M, 0);
     DTYPE *S = (DTYPE *) malloc(sizeof(DTYPE) * n1);
+    //#define NYSTROM_SVD_DIRECT
+    #ifdef NYSTROM_SVD_DIRECT
     DTYPE *superb = (DTYPE *) malloc(sizeof(DTYPE) * n1);
     info = LAPACK_GESVD(
         LAPACK_ROW_MAJOR, 'O', 'N', n, n1, M, n1, 
         S, NULL, n1, NULL, n1, superb
     );
     ASSERT_PRINTF(info == 0, "LAPACK_GESVD failed, info = %d\n", info);
+    free(superb);
+    AFN_precond->nys_U = M;
+    int min_eigval_idx = n1 - 1;
+    #else
+    // Use EVD is usually faster but may be less accurate
+    // MKL with ICC 19.1.3 has a bug in LAPACK_GESVD so we have to use EVD instead
+    // MTM = M' * M;
+    DTYPE *MTM = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n1);
+    CBLAS_GEMM(
+        CblasRowMajor, CblasTrans, CblasNoTrans, n1, n1, n, 
+        1.0, M, n1, M, n1, 0.0, MTM, n1
+    );
+    // [V, S] = eig(MTM);
+    // S = sqrt(S);
+    // V = V * inv(S);
+    info = LAPACK_SYEVD(LAPACK_ROW_MAJOR, 'V', 'U', n1, MTM, n1, S);
+    for (int i = 0; i < n1; i++) S[i] = DSQRT(S[i]);
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < n1; i++)
+        for (int j = 0; j < n1; j++) MTM[i * n1 + j] /= S[j];
+    // U = M * V;
+    DTYPE *U = (DTYPE *) malloc(sizeof(DTYPE) * n * n1);
+    CBLAS_GEMM(
+        CblasRowMajor, CblasNoTrans, CblasNoTrans, n, n1, n1, 
+        1.0, M, n1, MTM, n1, 0.0, U, n1
+    );
+    AFN_precond->nys_U = U;
+    free(M);
+    free(MTM);
+    int min_eigval_idx = 0;
+    #endif
 
     // S = max(diag(S).^2 - nu, 0);
     // eta = S(n1) + mu;
-    // M = eta ./ (S + mu);
+    // nys_M = eta ./ (S + mu);
     DTYPE *nys_M = (DTYPE *) malloc(sizeof(DTYPE) * n1);
     for (int i = 0; i < n1; i++)
     {
         S[i] = S[i] * S[i] - nu;
         if (S[i] < 0) S[i] = 0;
     }
-    DTYPE eta = S[n1 - 1] + mu;
+    DTYPE eta = S[min_eigval_idx] + mu;
     for (int i = 0; i < n1; i++) nys_M[i] = eta / (S[i] + mu);
-
-    free(K1);
-    free(invL);
     free(S);
-    free(superb);
-    AFN_precond->nys_U = M;
     AFN_precond->nys_M = nys_M;
 }
 

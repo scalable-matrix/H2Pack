@@ -12,6 +12,7 @@
 #include "pcg.h"
 
 static DTYPE shift_ = 0.0;
+static int n_ = 0;
 
 void H2Pack_matvec(const void *h2pack_, const DTYPE *b, DTYPE *x)
 {
@@ -27,13 +28,19 @@ void AFN_precond_apply_(const void *precond_, const DTYPE *b, DTYPE *x)
     AFN_precond_apply(AFN_precond, b, x);
 }
 
+void dense_matvec(const void *A_, const DTYPE *b, DTYPE *x)
+{
+    DTYPE *A = (DTYPE*) A_;
+    CBLAS_GEMV(CblasRowMajor, CblasNoTrans, n_, n_, 1.0, A, n_, b, 1, 0.0, x, 1);
+}
+
 int main(int argc, char **argv)
 {
     int npt, pt_dim, max_k, ss_npt, fsai_npt;
     DTYPE mu, l, *coord = NULL;
-    if (argc < 9)
+    if (argc < 8)
     {
-        printf("Usage: %s npt pt_dim l mu max_k ss_npt fsai_npt coord_bin\n", argv[0]);
+        printf("Usage: %s npt pt_dim l mu max_k ss_npt fsai_npt coord_bin (optional)\n", argv[0]);
         printf("  - npt       [int]    : Number of points\n");
         printf("  - pt_dim    [int]    : Point dimension\n");
         printf("  - l         [double] : Gaussian kernel parameter\n");
@@ -53,24 +60,54 @@ int main(int argc, char **argv)
         ss_npt   = atoi(argv[6]);
         fsai_npt = atoi(argv[7]);
         coord    = (DTYPE*) malloc(sizeof(DTYPE) * npt * pt_dim);
-        FILE *inf = fopen(argv[8], "rb");
-        fread(coord, sizeof(DTYPE), npt * pt_dim, inf);
-        fclose(inf);
+        if (argc >= 9)
+        {
+            FILE *inf = fopen(argv[8], "rb");
+            fread(coord, sizeof(DTYPE), npt * pt_dim, inf);
+            fclose(inf);
+        } else {
+            srand(814);
+            DTYPE scale = DPOW((DTYPE) npt, 1.0 / (DTYPE) pt_dim);
+            for (int i = 0; i < npt * pt_dim; i++) coord[i] = scale * (rand() / (DTYPE)(RAND_MAX));
+        }
     }
-    printf("Test kernel: k(x, y) = exp(- %.2f * ||x-y||_2^2), diagonal shift = %.4e\n", l, mu);
+    printf("Test kernel: k(x, y) = exp(- %.4f * ||x-y||_2^2), diagonal shift = %.4e\n", l, mu);
     printf("%d points in %d-D, sample set size = %d\n", npt, pt_dim, ss_npt);
     printf("Maximum global low-rank approximation rank = %d\n", max_k);
     printf("Maximum number of nonzeros in each row of the FSAI matrix = %d\n", fsai_npt);
     printf("\n");
     shift_ = mu;
+    n_ = npt;
 
     kernel_eval_fptr krnl_eval = Gaussian_3D_eval_intrin_t;
     kernel_bimv_fptr krnl_bimv = Gaussian_3D_krnl_bimv_intrin_t;
     int krnl_bimv_flops = Gaussian_3D_krnl_bimv_flop;
     void *krnl_param = &l;
 
-    // Build H2 representation
+    
     double st, et;
+    #define USE_DENSE_KMAT
+    #ifdef USE_DENSE_KMAT
+    // Full dense kernel matrix
+    st = get_wtime_sec();
+    DTYPE *A = (DTYPE*) malloc(sizeof(DTYPE) * npt * npt);
+    #pragma omp parallel
+    {
+        int tid = omp_get_thread_num();
+        int n_thread = omp_get_num_threads();
+        int srow, nrow;
+        calc_block_spos_len(npt, n_thread, tid, &srow, &nrow);
+        krnl_eval(coord + srow, npt, nrow, coord, npt, npt, krnl_param, A + srow * npt, npt);
+    }
+    for (int i = 0; i < npt; i++)
+    {
+        size_t idx_ii = (size_t) i * (size_t) npt + (size_t) i;
+        A[idx_ii] += mu;
+    }
+    et = get_wtime_sec();
+    printf("Full kernel matrix build time: %.3f s\n", et - st);
+    #else
+    // Build H2 representation
     st = get_wtime_sec();
     H2Pack_p h2mat = NULL;
     int krnl_dim = 1, BD_JIT = 1;
@@ -83,6 +120,7 @@ int main(int argc, char **argv)
     H2P_build(h2mat, pp, BD_JIT, krnl_param, krnl_eval, krnl_bimv, krnl_bimv_flops);
     et = get_wtime_sec();
     printf("H2Pack proxy point selection and build time: %.3f s\n", et - st);
+    #endif
 
     // Build AFN preconditioner
     st = get_wtime_sec();
@@ -90,34 +128,48 @@ int main(int argc, char **argv)
     AFN_precond_build(krnl_eval, krnl_param, npt, pt_dim, coord, mu, max_k, ss_npt, fsai_npt, &AFN_precond);
     et = get_wtime_sec();
     printf("AFN_precond build time: %.3lf s\n", et - st);
+    printf("AFN estimated kernel matrix rank = %d, ", AFN_precond->est_rank);
+    printf("will use %s\n", (AFN_precond->est_rank > max_k) ? "AFN" : "Nystrom");
 
     // PCG test
     DTYPE CG_reltol = 1e-4, relres;
     int max_iter = 400, flag, iter;
     DTYPE *x = malloc(sizeof(DTYPE) * npt);
     DTYPE *b = malloc(sizeof(DTYPE) * npt);
+    srand(126);
     for (int i = 0; i < npt; i++)
     {
-        b[i] = drand48() - 0.5;
+        b[i] = (rand() / (DTYPE) RAND_MAX) - 0.5;
         x[i] = 0.0;
     }
     printf("\nStarting PCG solve with AFN preconditioner...\n");
     st = get_wtime_sec();
+    #ifdef USE_DENSE_KMAT
+    pcg(
+        npt, CG_reltol, max_iter, 
+        dense_matvec, A, b, AFN_precond_apply_, AFN_precond, x,
+        &flag, &relres, &iter, NULL
+    );
+    #else
     pcg(
         npt, CG_reltol, max_iter, 
         H2Pack_matvec, h2mat, b, AFN_precond_apply_, AFN_precond, x,
         &flag, &relres, &iter, NULL
     );
+    #endif
     et = get_wtime_sec();
     printf("PCG stopped after %d iterations, relres = %e, used time = %.2lf s\n\n", iter, relres, et - st);
 
     // Print AFN preconditioner statistics and clean up
     AFN_precond_print_stat(AFN_precond);
     AFN_precond_destroy(&AFN_precond);
-    H2P_destroy(&h2mat);
-
     free(coord);
     free(x);
     free(b);
+    #ifdef USE_DENSE_KMAT
+    free(A);
+    #else
+    H2P_destroy(&h2mat);
+    #endif
     return 0;
 }

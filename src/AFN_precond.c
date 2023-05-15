@@ -645,6 +645,7 @@ void AFN_precond_build(
     AFN_precond->t2 = (DTYPE *) malloc(sizeof(DTYPE) * n);
     et = get_wtime_sec();
     AFN_precond->t_rankest = et - st;
+    AFN_precond->est_rank = r;
 
     // 2. Use FPS to select n1 points, swap them to the front
     st = get_wtime_sec();

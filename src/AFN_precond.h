@@ -11,6 +11,7 @@ struct AFN_precond
     int   n;                // Size of the kernel matrix, == number of points (does not support krnl_dim > 1 yet)
     int   n1;               // Size of K11 block (== global low-rank approximation rank)
     int   n2;               // == n - n1
+    int   est_rank;         // Estimated rank
     int   *perm;            // Permutation array, size n
     DTYPE *px, *py;         // Size n, permuted x and y in AFN_precond_apply
     DTYPE *t1, *t2;         // Size n, intermediate vectors in AFN_precond_apply

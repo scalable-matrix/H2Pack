@@ -334,40 +334,24 @@ void AFNi_Nys_precond_build(AFN_precond_p AFN_precond, const DTYPE mu, DTYPE *K1
     AFN_precond->nys_M = nys_M;
 }
 
-// Quick sort for (DTYPE, int) key-value pairs
-void AFNi_qsort_DTYPE_int_key_val(DTYPE *key, int *val, const int l, const int r)
+static inline void swap_int_DTYPE_pair(int *int_arr, DTYPE *d_arr, int i, int j)
 {
-    int i = l, j = r, tmp_val;
-    DTYPE tmp_key, mid_key = key[(l + r) / 2];
-    while (i <= j)
-    {
-        while (key[i] < mid_key) i++;
-        while (key[j] > mid_key) j--;
-        if (i <= j)
-        {
-            tmp_key = key[i]; key[i] = key[j]; key[j] = tmp_key;
-            tmp_val = val[i]; val[i] = val[j]; val[j] = tmp_val;
-            i++;  j--;
-        }
-    }
-    if (i < r) AFNi_qsort_DTYPE_int_key_val(key, val, i, r);
-    if (j > l) AFNi_qsort_DTYPE_int_key_val(key, val, l, j);
+    int tmp_i = int_arr[i]; int_arr[i] = int_arr[j]; int_arr[j] = tmp_i;
+    DTYPE tmp_d = d_arr[i]; d_arr[i] = d_arr[j]; d_arr[j] = tmp_d;
 }
 
 // Quick sort for (int, DTYPE) key-value pairs
 void AFNi_qsort_int_DTYPE_key_val(int *key, DTYPE *val, const int l, const int r)
 {
-    int i = l, j = r, tmp_key;
+    int i = l, j = r;
     int mid_key = key[(l + r) / 2];
-    DTYPE tmp_val;
     while (i <= j)
     {
         while (key[i] < mid_key) i++;
         while (key[j] > mid_key) j--;
         if (i <= j)
         {
-            tmp_key = key[i]; key[i] = key[j]; key[j] = tmp_key;
-            tmp_val = val[i]; val[i] = val[j]; val[j] = tmp_val;
+            swap_int_DTYPE_pair(key, val, i, j);
             i++;  j--;
         }
     }
@@ -414,6 +398,25 @@ void AFNi_COO2CSR(
     *row_ptr_ = row_ptr;
     *col_idx_ = col_idx;
     *csr_val_ = csr_val;
+}
+
+// Quick partitioning for (DTYPE, int) key-value pairs and get the first k smallest elements
+void AFNi_qpart_DTYPE_int_key_val(DTYPE *key, int *val, const int l, const int r, const int k)
+{
+    int i = l, j = r;
+    DTYPE mid_key = key[(l + r) / 2];
+    while (i <= j)
+    {
+        while (key[i] < mid_key) i++;
+        while (key[j] > mid_key) j--;
+        if (i <= j)
+        {
+            swap_int_DTYPE_pair(val, key, i, j);
+            i++;  j--;
+        }
+    }
+    if (j > l) AFNi_qpart_DTYPE_int_key_val(key, val, l, j, k);
+    if ((i < r) && (i < k)) AFNi_qpart_DTYPE_int_key_val(key, val, i, r, k);
 }
 
 // Build the AFN preconditioner
@@ -524,7 +527,7 @@ void AFNi_AFN_precond_build(
                 // [~, idx_i] = sort(pdist2_i);
                 // nn = [idx_i(1 : num_nn-1), i];
                 for (int j = 0; j < i; j++) nn_i[j] = j;
-                AFNi_qsort_DTYPE_int_key_val(dist2_i, nn_i, 0, i - 1);
+                AFNi_qpart_DTYPE_int_key_val(dist2_i, nn_i, 0, i - 1, fsai_npt);
                 nn_i[num_nn - 1] = i;
             }
             displs[i + 1] = num_nn;

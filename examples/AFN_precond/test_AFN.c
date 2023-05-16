@@ -157,8 +157,8 @@ int main(int argc, char **argv)
     printf("Point set: %d points in %d-D\n", npt, pt_dim);
     printf("Linear system to solve: (K(X, X) + %.4f * I) * x = b\n", mu);
     printf("\nAFN preconditioner parameters:\n");
-    printf("- Maximum Rank estimation sampled points = %d\n", ss_npt);
     printf("- Maximum Nystrom approximation rank     = %d\n", max_k);
+    printf("- Maximum Rank estimation sampled points = %d\n", ss_npt);
     printf("- Maximum FSAI matrix nonzeros per row   = %d\n", fsai_npt);
     printf("\n");
     shift_ = mu;
@@ -206,6 +206,7 @@ int main(int argc, char **argv)
     et = get_wtime_sec();
     printf("H2Pack build time = %.3f s\n", et - st);
     H2P_print_statistic(h2mat);
+    printf("\n");
     #endif
 
     // Build AFN preconditioner

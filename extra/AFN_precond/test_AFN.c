@@ -28,10 +28,16 @@ void AFN_precond_apply_(const void *precond_, const DTYPE *b, DTYPE *x)
     AFN_precond_apply(AFN_precond, b, x);
 }
 
-void dense_matvec(const void *A_, const DTYPE *b, DTYPE *x)
+#if DTYPE_SIZE == DOUBLE_SIZE
+#define CBLAS_SYMV cblas_dsymv
+#endif
+#if DTYPE_SIZE == FLOAT_SIZE
+#define CBLAS_SYMV cblas_ssymv
+#endif
+void dense_symv(const void *A_, const DTYPE *b, DTYPE *x)
 {
     DTYPE *A = (DTYPE*) A_;
-    CBLAS_GEMV(CblasRowMajor, CblasNoTrans, n_, n_, 1.0, A, n_, b, 1, 0.0, x, 1);
+    CBLAS_SYMV(CblasRowMajor, CblasUpper, n_, 1.0, A, n_, b, 1, 0.0, x, 1);
 }
 
 int main(int argc, char **argv)
@@ -66,7 +72,7 @@ int main(int argc, char **argv)
             fread(coord, sizeof(DTYPE), npt * pt_dim, inf);
             fclose(inf);
         } else {
-            srand(814);
+            srand(814);  // Match with Tianshi's code
             DTYPE scale = DPOW((DTYPE) npt, 1.0 / (DTYPE) pt_dim);
             for (int i = 0; i < npt * pt_dim; i++) coord[i] = scale * (rand() / (DTYPE)(RAND_MAX));
         }
@@ -89,6 +95,7 @@ int main(int argc, char **argv)
     #define USE_DENSE_KMAT
     #ifdef USE_DENSE_KMAT
     // Full dense kernel matrix
+    printf("Building full kernel matrix...\n");
     st = get_wtime_sec();
     DTYPE *A = (DTYPE*) malloc(sizeof(DTYPE) * npt * npt);
     #pragma omp parallel
@@ -108,6 +115,7 @@ int main(int argc, char **argv)
     printf("Full kernel matrix build time: %.3f s\n", et - st);
     #else
     // Build H2 representation
+    printf("Building H2 representation for kernel matrix...\n");
     st = get_wtime_sec();
     H2Pack_p h2mat = NULL;
     int krnl_dim = 1, BD_JIT = 1;
@@ -123,42 +131,40 @@ int main(int argc, char **argv)
     #endif
 
     // Build AFN preconditioner
+    printf("Building AFN preconditioner...\n");
     st = get_wtime_sec();
     AFN_precond_p AFN_precond = NULL;
     AFN_precond_build(krnl_eval, krnl_param, npt, pt_dim, coord, mu, max_k, ss_npt, fsai_npt, &AFN_precond);
     et = get_wtime_sec();
     printf("AFN_precond build time: %.3lf s\n", et - st);
     printf("AFN estimated kernel matrix rank = %d, ", AFN_precond->est_rank);
-    printf("will use %s\n", (AFN_precond->est_rank > max_k) ? "AFN" : "Nystrom");
+    printf("will use %s\n", (AFN_precond->est_rank >= max_k) ? "AFN" : "Nystrom");
 
     // PCG test
     DTYPE CG_reltol = 1e-4, relres;
     int max_iter = 400, flag, iter;
     DTYPE *x = malloc(sizeof(DTYPE) * npt);
     DTYPE *b = malloc(sizeof(DTYPE) * npt);
-    srand(126);
+    srand(126);  // Match with Tianshi's code
     for (int i = 0; i < npt; i++)
     {
         b[i] = (rand() / (DTYPE) RAND_MAX) - 0.5;
         x[i] = 0.0;
     }
-    printf("\nStarting PCG solve with AFN preconditioner...\n");
-    st = get_wtime_sec();
+    int pcg_print_level = 1;
     #ifdef USE_DENSE_KMAT
     pcg(
         npt, CG_reltol, max_iter, 
-        dense_matvec, A, b, AFN_precond_apply_, AFN_precond, x,
-        &flag, &relres, &iter, NULL
+        dense_symv, A, b, AFN_precond_apply_, AFN_precond, x,
+        &flag, &relres, &iter, NULL, pcg_print_level
     );
     #else
     pcg(
         npt, CG_reltol, max_iter, 
         H2Pack_matvec, h2mat, b, AFN_precond_apply_, AFN_precond, x,
-        &flag, &relres, &iter, NULL
+        &flag, &relres, &iter, NULL, pcg_print_level
     );
     #endif
-    et = get_wtime_sec();
-    printf("PCG stopped after %d iterations, relres = %e, used time = %.2lf s\n\n", iter, relres, et - st);
 
     // Print AFN preconditioner statistics and clean up
     AFN_precond_print_stat(AFN_precond);

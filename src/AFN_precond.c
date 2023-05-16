@@ -11,6 +11,13 @@
 #include "H2Pack_utils.h"
 #include "AFN_precond.h"
 
+#if DTYPE_SIZE == DOUBLE_SIZE
+#define NEXTAFTER nextafter
+#endif
+#if DTYPE_SIZE == FLOAT_SIZE
+#define NEXTAFTER nextafterf
+#endif
+
 // Select k points from X using Farthest Point Sampling (FPS)
 // Input parameters:
 //   npt    : Number of points in coord
@@ -71,7 +78,6 @@ int AFNi_rank_est_scaled(
     DTYPE *K11  = Ks  + ss_npt * ss_npt;
     DTYPE *K1   = K11 + ss_npt * ss_npt;
     DTYPE *Knys = K1  + ss_npt * ss_npt;
-    DTYPE Ks_fnorm, err_fnorm, relerr;
     for (int i_rep = 0; i_rep < n_rep; i_rep++)
     {
         // Randomly sample and scale ss_npt points
@@ -89,7 +95,8 @@ int AFNi_rank_est_scaled(
         memcpy(Xs, Ks, sizeof(DTYPE) * ss_npt * pt_dim);
         // Shift the Ks matrix to make Nystrom stable
         krnl_eval(Xs, ss_npt, ss_npt, Xs, ss_npt, ss_npt, krnl_param, Ks, ss_npt);
-        DTYPE nu = DSQRT((DTYPE) ss_npt) * calc_2norm(ss_npt * ss_npt, Ks) * D_EPS;
+        DTYPE Ks_fnorm = calc_2norm(ss_npt * ss_npt, Ks);
+        DTYPE nu = DSQRT((DTYPE) ss_npt) * (NEXTAFTER(Ks_fnorm, Ks_fnorm + 1.0) - Ks_fnorm);
         for (int i = 0; i < ss_npt; i++) Ks[i * ss_npt + i] += nu;
         // Binary search to find the minimal rank
         int rs = 1, re = ss_npt, rc;
@@ -110,6 +117,7 @@ int AFNi_rank_est_scaled(
                 CblasRowMajor, CblasNoTrans, CblasNoTrans, ss_npt, ss_npt, rc,
                 1.0, Ks, ss_npt, K1, ss_npt, 0.0, Knys, ss_npt
             );
+            DTYPE err_fnorm, relerr;
             calc_err_2norm(ss_npt * ss_npt, Ks, Knys, &Ks_fnorm, &err_fnorm);
             relerr = err_fnorm / Ks_fnorm;
             if (relerr < 0.1) re = rc; 
@@ -200,7 +208,8 @@ int AFNi_rank_est(
     } else {
         // Estimated rank is small, will use Nystrom instead of AFN, 
         // use the original points to better estimate the rank
-        return AFNi_Nys_rank_est(krnl_eval, krnl_param, npt, pt_dim, coord, mu, max_k, ss_npt, n_rep);
+        int r_unscaled = AFNi_Nys_rank_est(krnl_eval, krnl_param, npt, pt_dim, coord, mu, max_k, ss_npt, n_rep);
+        return r_unscaled;
     }
 }
 
@@ -616,9 +625,9 @@ void AFN_precond_build(
 
     // 1. Estimate the numerical low rank of the kernel matrix + diagonal shift
     st = get_wtime_sec();
-    int r = AFNi_rank_est(krnl_eval, krnl_param, npt, pt_dim, coord, mu, max_k, ss_npt, 1);
+    int est_rank = AFNi_rank_est(krnl_eval, krnl_param, npt, pt_dim, coord, mu, max_k, ss_npt, 1);
     int n  = npt;
-    int n1 = (r < max_k) ? r : max_k;
+    int n1 = (est_rank < max_k) ? est_rank : max_k;
     int n2 = n - n1;
     AFN_precond->n  = n;
     AFN_precond->n1 = n1;
@@ -629,7 +638,7 @@ void AFN_precond_build(
     AFN_precond->t2 = (DTYPE *) malloc(sizeof(DTYPE) * n);
     et = get_wtime_sec();
     AFN_precond->t_rankest = et - st;
-    AFN_precond->est_rank = r;
+    AFN_precond->est_rank = est_rank;
 
     // 2. Use FPS to select n1 points, swap them to the front
     st = get_wtime_sec();
@@ -675,7 +684,7 @@ void AFN_precond_build(
     AFN_precond->t_K11K12= et - st;
 
     // 4. Build the Nystrom or AFN preconditioner
-    if (r <= max_k)
+    if (est_rank < max_k)
     {
         st = get_wtime_sec();
         AFNi_Nys_precond_build(AFN_precond, mu, K11, K12);

@@ -3,6 +3,7 @@
 #include <string.h>
 #include <assert.h>
 #include <math.h>
+#include <omp.h>
 
 #include "pcg.h"
 
@@ -11,7 +12,7 @@ void pcg(
     const int n, const DTYPE tol, const int max_iter, 
     const matvec_fptr Ax,    const void *Ax_param,    const DTYPE *b, 
     const matvec_fptr invMx, const void *invMx_param, DTYPE *x, 
-    int *flag_, DTYPE *relres_, int *iter_, DTYPE *res_vec
+    int *flag_, DTYPE *relres_, int *iter_, DTYPE *res_vec, int print_level
 )
 {
     size_t vec_msize = sizeof(DTYPE) * n;
@@ -20,6 +21,8 @@ void pcg(
     DTYPE *p = (DTYPE*) malloc(vec_msize);
     DTYPE *s = (DTYPE*) malloc(vec_msize);
     assert(r != NULL && z != NULL && p != NULL && s != NULL);
+
+    double st = omp_get_wtime();
 
     // r = b - A * x;
     Ax(Ax_param, x, r);
@@ -39,6 +42,13 @@ void pcg(
     b_2norm = DSQRT(b_2norm);
     r_2norm = DSQRT(r_2norm);
     rn_stop = b_2norm * tol;
+
+    if (print_level > 0)
+    {        
+        printf("\nPCG: ||b||_2 = %e, initial ||r||_2 = %e, stopping ||r||_2 = %e\n", b_2norm, r_2norm, rn_stop);
+        printf("PCG: Max number of iterations: %d\n", max_iter);
+        printf("Iter      Residual norm   Relative res.     \n");
+    }
 
     int iter = 0;
     DTYPE alpha, beta, rho0, tmp, rho = 1.0;
@@ -66,8 +76,8 @@ void pcg(
         }
 
         // s = A * p;
-        Ax(Ax_param, p, s);
         // alpha = rho / (p' * s);
+        Ax(Ax_param, p, s);
         tmp = 0.0;
         #pragma omp simd
         for (int i = 0; i < n; i++) tmp += p[i] * s[i];
@@ -75,28 +85,30 @@ void pcg(
 
         // x = x + alpha * p;
         // r = r - alpha * s;
+        r_2norm = 0.0;
         #pragma omp simd
         for (int i = 0; i < n; i++) 
         {
             x[i] += alpha * p[i];
             r[i] -= alpha * s[i];
+            r_2norm += r[i] * r[i];
         }
-
-        // r_2norm = norm(r, 2);
-        // resvec(iter) = r_2norm;
-        // iter = iter + 1;
-        r_2norm = 0.0;
-        #pragma omp simd
-        for (int i = 0; i < n; i++) r_2norm += r[i] * r[i];
         r_2norm = DSQRT(r_2norm);
         if (res_vec != NULL) res_vec[iter] = r_2norm;
         iter++;
 
-        //printf("%e\n", r_2norm / b_2norm);
+        if (print_level > 0) printf("%4d      %5.4e      %5.4e\n", iter, r_2norm, r_2norm / b_2norm);
     }  // End of while
     *flag_   = (r_2norm <= rn_stop) ? 0 : 1;
     *relres_ = r_2norm / b_2norm;
     *iter_   = iter;
+
+    double et = omp_get_wtime();
+    if (print_level > 0)
+    {
+        if (*flag_ == 0) printf("PCG: Converged in %d iterations, %.2f seconds\n\n", iter, et - st);
+        else printf("PCG: Reached maximum number of iterations, %.2f seconds\n\n", et - st);
+    }
 
     free(r);
     free(z);

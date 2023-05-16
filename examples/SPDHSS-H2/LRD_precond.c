@@ -55,7 +55,6 @@ void H2P_build_LRD_precond(H2Pack_p h2pack, const int rank, const DTYPE shift, L
     H2P_dense_mat_init(&tmp, nrow, mat_size);
     // L   = kernel({coord(idx, :), coord(idx, :)});
     // Ut  = kernel({coord(idx, :), coord});
-    int n_thread = omp_get_max_threads();
     H2P_eval_kernel_matrix_OMP(h2pack->krnl_param, h2pack->krnl_eval, krnl_dim, coord_skel, coord_skel, L,  n_thread);
     H2P_eval_kernel_matrix_OMP(h2pack->krnl_param, h2pack->krnl_eval, krnl_dim, coord_skel, coord_all,  Ut, n_thread);
     // [V, D] = eig(S);

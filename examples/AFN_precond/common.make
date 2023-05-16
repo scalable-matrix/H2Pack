@@ -2,9 +2,9 @@ H2PACK_DIR = ../..
 
 DEFS    = 
 INCS    = -I$(H2PACK_DIR)/include
-CFLAGS  = $(INCS) -Wall -g -std=gnu11 -O0 -fPIC $(DEFS)
+CFLAGS  = $(INCS) -Wall -g -std=gnu11 -O3 -fPIC $(DEFS)
 LDFLAGS = -g -O3 -fopenmp
-LIBS    = $(H2PACK_DIR)/lib/libH2Pack.a
+LIBS    = 
 
 ifeq ($(shell $(CC) --version 2>&1 | grep -c "icc"), 1)
 CFLAGS  += -fopenmp -xHost
@@ -31,12 +31,12 @@ endif
 C_SRCS 	= $(wildcard *.c)
 C_OBJS  = $(C_SRCS:.c=.c.o)
 EXES    = test_AFN.exe
-SHARED_OBJS = pcg.c.o 
+SHARED_OBJS = ../PCG/pcg.c.o 
 
 # Delete the default old-fashion double-suffix rules
 .SUFFIXES:
 
-.SECONDARY: $(C_OBJS)
+.SECONDARY: $(C_OBJS) $(SHARED_OBJS)
 
 all: $(EXES)
 

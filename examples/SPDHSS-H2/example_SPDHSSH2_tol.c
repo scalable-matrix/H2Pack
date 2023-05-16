@@ -42,7 +42,7 @@ int main(int argc, char **argv)
         single_krnl_param[0] = (DTYPE)atof(argv[7]);
         shift = (DTYPE)atof(argv[8]);
         test_params.krnl_param = (void*) &single_krnl_param;
-        printf("single parameter set to %f\n", single_krnl_param[0]);
+        printf("Kernel function parameter is reset to %f\n", single_krnl_param[0]);
     }
     if (argc == 10) //  parameters for a double-parametered kernel function
     {
@@ -50,7 +50,7 @@ int main(int argc, char **argv)
         double_krnl_param[1] = (DTYPE)atof(argv[8]);
         shift = (DTYPE)atof(argv[9]);
         test_params.krnl_param = (void*) &double_krnl_param;
-        printf("double parameters set to %f and %f\n", double_krnl_param[0], double_krnl_param[1]);
+        printf("Kernel function parameters are reset to %f and %f\n", double_krnl_param[0], double_krnl_param[1]);
     }
 
     H2Pack_p h2mat, hssmat;

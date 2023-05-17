@@ -178,7 +178,8 @@ int main(int argc, char **argv)
         int n_thread = omp_get_num_threads();
         int srow, nrow;
         calc_block_spos_len(npt, n_thread, tid, &srow, &nrow);
-        krnl_eval(coord + srow, npt, nrow, coord, npt, npt, krnl_param, A + srow * npt, npt);
+        size_t A_offset = (size_t) srow * (size_t) npt;
+        krnl_eval(coord + srow, npt, nrow, coord, npt, npt, krnl_param, A + A_offset, npt);
     }
     for (int i = 0; i < npt; i++)
     {

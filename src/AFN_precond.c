@@ -32,6 +32,7 @@ void AFNi_FPS(const int npt, const int pt_dim, const DTYPE *coord, const int k, 
     DTYPE *center = workbuf;
     DTYPE *tmp_d  = center + pt_dim;
     DTYPE *min_d  = tmp_d  + npt;
+    ASSERT_PRINTF(workbuf != NULL, "Failed to allocate work buffer for AFNi_FPS()\n");
 
     memset(center, 0, sizeof(DTYPE) * pt_dim);
     for (int i = 0; i < pt_dim; i++)
@@ -73,6 +74,10 @@ int AFNi_rank_est_scaled(
     DTYPE *workbuf = (DTYPE *) malloc(sizeof(DTYPE) * (ss_npt * (pt_dim + 4 * ss_npt)));
     int *FPS_perm = (int *) malloc(sizeof(int) * ss_npt);
     int *sample_idx = (int *) malloc(sizeof(int) * ss_npt);
+    ASSERT_PRINTF(
+        workbuf != NULL && FPS_perm != NULL && sample_idx != NULL,
+        "Failed to allocate work buffer for AFNi_rank_est_scaled()\n"
+    );
     DTYPE *Xs   = workbuf;
     DTYPE *Ks   = Xs  + ss_npt * pt_dim;
     DTYPE *K11  = Ks  + ss_npt * ss_npt;
@@ -142,6 +147,7 @@ int AFNi_Nys_rank_est(
     if (max_k_ < ss_npt) max_k_ = ss_npt;
     DTYPE *workbuf = (DTYPE *) malloc(sizeof(DTYPE) * (max_k_ * pt_dim + max_k_ * max_k_ + max_k));
     int *sample_idx = (int *) malloc(sizeof(int) * max_k_);
+    ASSERT_PRINTF(workbuf != NULL && sample_idx != NULL, "Failed to allocate work buffer in AFNi_Nys_rank_est()\n");
     DTYPE *Xs = workbuf;
     DTYPE *Ks = Xs + max_k_ * pt_dim;
     DTYPE *ev = Ks + max_k_ * max_k_;
@@ -245,6 +251,7 @@ void AFNi_Nys_precond_build(AFN_precond_p AFN_precond, const DTYPE mu, DTYPE *K1
     
     // K1 = [K11, K12];
     DTYPE *K1 = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n);
+    ASSERT_PRINTF(K1 != NULL, "Failed to allocate K1 of size %d x %d\n", n1, n);
     copy_matrix(sizeof(DTYPE), n1, n1, K11, n1, K1,      n, 1);
     copy_matrix(sizeof(DTYPE), n1, n2, K12, n2, K1 + n1, n, 1);
 
@@ -258,6 +265,7 @@ void AFNi_Nys_precond_build(AFN_precond_p AFN_precond, const DTYPE mu, DTYPE *K1
     for (int i = 0; i < n1; i++) K11[i * n1 + i] += nu;
     // invL = inv(chol(K11, 'lower'));
     DTYPE *invL = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n1);
+    ASSERT_PRINTF(invL != NULL, "Failed to allocate invL of size %d x %d\n", n1, n1);
     int info = 0;
     info = LAPACK_POTRF(LAPACK_ROW_MAJOR, 'L', n1, K11, n1);
     ASSERT_PRINTF(info == 0, "LAPACK_POTRF failed, info = %d\n", info);
@@ -270,6 +278,7 @@ void AFNi_Nys_precond_build(AFN_precond_p AFN_precond, const DTYPE mu, DTYPE *K1
     );
     // M = K1' * invL';
     DTYPE *M = (DTYPE *) malloc(sizeof(DTYPE) * n * n1);
+    ASSERT_PRINTF(M != NULL, "Failed to allocate M of size %d x %d\n", n, n1);
     CBLAS_GEMM(
         CblasRowMajor, CblasTrans, CblasTrans, n, n1, n1, 
         1.0, K1, n, invL, n1, 0.0, M, n1
@@ -279,6 +288,7 @@ void AFNi_Nys_precond_build(AFN_precond_p AFN_precond, const DTYPE mu, DTYPE *K1
 
     // [U, S, ~] = svd(M, 0);
     DTYPE *S = (DTYPE *) malloc(sizeof(DTYPE) * n1);
+    ASSERT_PRINTF(S != NULL, "Failed to allocate S of size %d\n", n1);
     //#define NYSTROM_SVD_DIRECT
     #ifdef NYSTROM_SVD_DIRECT
     DTYPE *superb = (DTYPE *) malloc(sizeof(DTYPE) * n1);
@@ -295,6 +305,7 @@ void AFNi_Nys_precond_build(AFN_precond_p AFN_precond, const DTYPE mu, DTYPE *K1
     // MKL with ICC 19.1.3 has a bug in LAPACK_GESVD so we have to use EVD instead
     // MTM = M' * M;
     DTYPE *MTM = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n1);
+    ASSERT_PRINTF(MTM != NULL, "Failed to allocate MTM of size %d x %d\n", n1, n1);
     CBLAS_GEMM(
         CblasRowMajor, CblasTrans, CblasNoTrans, n1, n1, n, 
         1.0, M, n1, M, n1, 0.0, MTM, n1
@@ -309,6 +320,7 @@ void AFNi_Nys_precond_build(AFN_precond_p AFN_precond, const DTYPE mu, DTYPE *K1
         for (int j = 0; j < n1; j++) MTM[i * n1 + j] /= S[j];
     // U = M * V;
     DTYPE *U = (DTYPE *) malloc(sizeof(DTYPE) * n * n1);
+    ASSERT_PRINTF(U != NULL, "Failed to allocate U of size %d x %d\n", n, n1);
     CBLAS_GEMM(
         CblasRowMajor, CblasNoTrans, CblasNoTrans, n, n1, n1, 
         1.0, M, n1, MTM, n1, 0.0, U, n1
@@ -323,6 +335,7 @@ void AFNi_Nys_precond_build(AFN_precond_p AFN_precond, const DTYPE mu, DTYPE *K1
     // eta = S(n1) + mu;
     // nys_M = eta ./ (S + mu);
     DTYPE *nys_M = (DTYPE *) malloc(sizeof(DTYPE) * n1);
+    ASSERT_PRINTF(nys_M != NULL, "Failed to allocate nys_M of size %d\n", n1);
     for (int i = 0; i < n1; i++)
     {
         S[i] = S[i] * S[i] - nu;
@@ -369,6 +382,11 @@ void AFNi_COO2CSR(
     int *row_ptr = (int *) malloc(sizeof(int) * (nrow + 1));
     int *col_idx = (int *) malloc(sizeof(int) * nnz);
     DTYPE *csr_val = (DTYPE *) malloc(sizeof(DTYPE) * nnz);
+    ASSERT_PRINTF(
+        row_ptr != NULL && col_idx != NULL && csr_val != NULL, 
+        "Failed to allocate CSR arrays for matrix of size %d * %d, %d nnz\n",
+        nrow, ncol, nnz
+    );
 
     // Get the number of non-zeros in each row
     memset(row_ptr, 0, sizeof(int) * (nrow + 1));
@@ -439,6 +457,7 @@ void AFNi_AFN_precond_build(
     for (int i = 0; i < n1; i++) K11[i * n1 + i] += mu;
     // invL = inv(chol(K11, 'lower'));
     DTYPE *invL = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n1);
+    ASSERT_PRINTF(invL != NULL, "Failed to allocate invL of size %d x %d\n", n1, n1);
     int info = 0;
     info = LAPACK_POTRF(LAPACK_ROW_MAJOR, 'L', n1, K11, n1);
     ASSERT_PRINTF(info == 0, "LAPACK_POTRF failed, info = %d\n", info);
@@ -451,9 +470,11 @@ void AFNi_AFN_precond_build(
     );
     // V21 = K12' * invL';
     AFN_precond->afn_K12 = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n2);
+    ASSERT_PRINTF(AFN_precond->afn_K12 != NULL, "Failed to allocate afn_K12 of size %d x %d\n", n1, n2);
     #pragma omp parallel for schedule(static) 
     for (int i = 0; i < n1 * n2; i++) AFN_precond->afn_K12[i] = K12[i];
     DTYPE *V21 = (DTYPE *) malloc(sizeof(DTYPE) * n2 * n1);
+    ASSERT_PRINTF(V21 != NULL, "Failed to allocate V21 of size %d x %d\n", n2, n1);
     CBLAS_GEMM(
         CblasRowMajor, CblasTrans, CblasTrans, n2, n1, n1, 
         1.0, K12, n2, invL, n1, 0.0, V21, n1
@@ -461,15 +482,17 @@ void AFNi_AFN_precond_build(
     free(invL);
 
     // Copy K12 and invert K11, currently K11 is overwritten by its Cholesky factor
-    DTYPE *invK11  = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n1);
-    DTYPE *K12_    = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n2);
+    DTYPE *invK11 = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n1);
+    DTYPE *K12_   = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n2);
+    ASSERT_PRINTF(invK11 != NULL, "Failed to allocate invK11 of size %d x %d\n", n1, n1);
+    ASSERT_PRINTF(K12_   != NULL, "Failed to allocate K12_ of size %d x %d\n", n1, n2);
     #pragma omp parallel for schedule(static)
     for (int i = 0; i < n1; i++)
     {
-        DTYPE *K11_i     = K11     + i * n1;
-        DTYPE *invK11_i  = invK11  + i * n1;
-        DTYPE *K12_i     = K12     + i * n2;
-        DTYPE *K12_i_    = K12_    + i * n2;
+        DTYPE *K11_i    = K11    + i * n1;
+        DTYPE *invK11_i = invK11 + i * n1;
+        DTYPE *K12_i    = K12    + i * n2;
+        DTYPE *K12_i_   = K12_   + i * n2;
         memcpy(invK11_i, K11_i, sizeof(DTYPE) * n1);
         memcpy(K12_i_,   K12_i, sizeof(DTYPE) * n2);
     }
@@ -494,6 +517,11 @@ void AFNi_AFN_precond_build(
     int   *col    = (int *)   malloc(sizeof(int)   * n2 * fsai_npt);
     DTYPE *val    = (DTYPE *) malloc(sizeof(DTYPE) * n2 * fsai_npt);
     int   *displs = (int *)   malloc(sizeof(int)   * (n2 + 1));
+    ASSERT_PRINTF(
+        nn != NULL && idxbuf != NULL && matbuf != NULL && 
+        row != NULL && col != NULL && val != NULL && displs != NULL,
+        "Failed to allocate work buffers for AFN FSAI construction\n"
+    );
     displs[0] = 0;
     st = get_wtime_sec();
     BLAS_SET_NUM_THREADS(1);
@@ -582,6 +610,7 @@ void AFNi_AFN_precond_build(
     int   *row1 = (int *)   malloc(sizeof(int)   * nnz);
     int   *col1 = (int *)   malloc(sizeof(int)   * nnz);
     DTYPE *val1 = (DTYPE *) malloc(sizeof(DTYPE) * nnz);
+    ASSERT_PRINTF(row1 != NULL && col1 != NULL && val1 != NULL, "Failed to allocate CSR matrix build buffer\n");
     #pragma omp parallel for schedule(static)
     for (int i = 0; i < n2; i++)
     {
@@ -628,7 +657,8 @@ void AFN_precond_build(
 
     // 1. Estimate the numerical low rank of the kernel matrix + diagonal shift
     st = get_wtime_sec();
-    int est_rank = AFNi_rank_est(krnl_eval, krnl_param, npt, pt_dim, coord, mu, max_k, ss_npt, 1);
+    int n_rep = 3;
+    int est_rank = AFNi_rank_est(krnl_eval, krnl_param, npt, pt_dim, coord, mu, max_k, ss_npt, n_rep);
     int n  = npt;
     int n1 = (est_rank < max_k) ? est_rank : max_k;
     int n2 = n - n1;
@@ -639,6 +669,11 @@ void AFN_precond_build(
     AFN_precond->py = (DTYPE *) malloc(sizeof(DTYPE) * n);
     AFN_precond->t1 = (DTYPE *) malloc(sizeof(DTYPE) * n);
     AFN_precond->t2 = (DTYPE *) malloc(sizeof(DTYPE) * n);
+    ASSERT_PRINTF(
+        AFN_precond->px != NULL && AFN_precond->py != NULL && 
+        AFN_precond->t1 != NULL && AFN_precond->t2 != NULL,
+        "Failed to allocate AFN preconditioner matvec buffers\n"
+    );
     et = get_wtime_sec();
     AFN_precond->t_rankest = et - st;
     AFN_precond->est_rank = est_rank;
@@ -646,15 +681,19 @@ void AFN_precond_build(
     // 2. Use FPS to select n1 points, swap them to the front
     st = get_wtime_sec();
     AFN_precond->perm = (int *) malloc(sizeof(int) * n);
+    uint8_t *flag = (uint8_t *) malloc(sizeof(uint8_t) * n);
+    DTYPE *coord_perm = (DTYPE *) malloc(sizeof(DTYPE) * npt * pt_dim);
+    ASSERT_PRINTF(
+        AFN_precond->perm != NULL && flag != NULL && coord_perm != NULL,
+        "Failed to allocate AFN preconditioner FPS buffers\n"
+    );
     int *perm = AFN_precond->perm;
     AFNi_FPS(npt, pt_dim, coord, n1, perm);
-    uint8_t *flag = (uint8_t *) malloc(sizeof(uint8_t) * n);
     memset(flag, 0, sizeof(uint8_t) * n);
     for (int i = 0; i < n1; i++) flag[perm[i]] = 1;
     int idx = n1;
     for (int i = 0; i < n; i++)
         if (flag[i] == 0) perm[idx++] = i;
-    DTYPE *coord_perm = (DTYPE *) malloc(sizeof(DTYPE) * npt * pt_dim);
     H2P_gather_matrix_columns(coord, npt, coord_perm, npt, pt_dim, perm, npt);
     et = get_wtime_sec();
     AFN_precond->t_fps= et - st;
@@ -665,6 +704,10 @@ void AFN_precond_build(
     DTYPE *coord_n2 = coord_perm + n1;
     DTYPE *K11 = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n1);
     DTYPE *K12 = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n2);
+    ASSERT_PRINTF(
+        K11 != NULL && K12 != NULL,
+        "Failed to allocate AFN preconditioner K11/K12 buffers\n"
+    );
     #pragma omp parallel
     {
         int n_thread = omp_get_num_threads();
@@ -749,7 +792,6 @@ void AFN_precond_apply(AFN_precond_p AFN_precond, const DTYPE *x, DTYPE *y)
     double st = get_wtime_sec();
 
     // px = x(perm);
-    #pragma omp parallel for schedule(static)
     for (int i = 0; i < n; i++) px[i] = x[perm[i]];
     if (AFN_precond->is_nys)
     {
@@ -800,10 +842,7 @@ void AFN_precond_apply(AFN_precond_p AFN_precond, const DTYPE *x, DTYPE *y)
         // py = [y1; y2];
     }
     // y(perm) = py;
-    // Parallelizing the first loop may have severe false sharing issue
-    for (int i = 0; i < n1; i++) y[perm[i]] = py[i];
-    #pragma omp parallel for schedule(static)
-    for (int i = n1; i < n; i++) y[perm[i]] = py[i];
+    for (int i = 0; i < n; i++) y[perm[i]] = py[i];
 
     double et = get_wtime_sec();
     AFN_precond->t_apply += et - st;

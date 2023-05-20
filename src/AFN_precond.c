@@ -32,7 +32,7 @@
 // Output parameters:
 //   *nys_M_ : Size n1
 //   *nys_U_ : Size n1 * n, row major
-void Nystrom_precond_build(
+void Nys_precond_build_(
     const DTYPE mu, const int n1, const int n2, DTYPE *K11, 
     DTYPE *K12, DTYPE **nys_M_, DTYPE **nys_U_
 )
@@ -46,10 +46,10 @@ void Nystrom_precond_build(
 
     // Slightly shift the diagonal to make Nystrom stable
     // TODO: sqrt(n) or sqrt(n1)?
-    DTYPE nu = 0, K11_fnorm = 0;
-    #pragma omp parallel for schedule(static) reduction(+:nu)
-    for (int i = 0; i < n * n1; i++) K11_fnorm += K1[i] * K1[i];
-    nu = DSQRT((DTYPE) n) * (NEXTAFTER(K11_fnorm, K11_fnorm + 1.0) - K11_fnorm);
+    DTYPE nu = 0, K1_fnorm = 0;
+    #pragma omp parallel for schedule(static) reduction(+:K1_fnorm)
+    for (int i = 0; i < n * n1; i++) K1_fnorm += K1[i] * K1[i];
+    nu = DSQRT((DTYPE) n) * (NEXTAFTER(K1_fnorm, K1_fnorm + 1.0) - K1_fnorm);
 
     // K11 = K11 + nu * eye(n1);
     for (int i = 0; i < n1; i++) K11[i * n1 + i] += nu;
@@ -141,13 +141,13 @@ void Nystrom_precond_build(
 // Input parameters:
 //   n1      : Number of rows in nys_M and nys_U
 //   n       : Number of columns in nys_U, and size of x
-//   nys_M   : Size n1, output of Nystrom_precond_build()
-//   nys_U   : Size n1 * n, row major, output of Nystrom_precond_build()
+//   nys_M   : Size n1, output of Nys_precond_build_()
+//   nys_U   : Size n1 * n, row major, output of Nys_precond_build_()
 //   x       : Size n, input vector
 //   t       : Size n, work buffer
 // Output parameter:
 //   y : Size n, output vector
-void Nystrom_precond_apply(
+void Nys_precond_apply_(
     const int n1, const int n, const DTYPE *nys_M, const DTYPE *nys_U, 
     const DTYPE *x, DTYPE *y, DTYPE *t
 )
@@ -213,9 +213,8 @@ static void Qpart_DTYPE_int_key_val(DTYPE *key, int *val, const int l, const int
     if ((i < r) && (i < k)) Qpart_DTYPE_int_key_val(key, val, i, r, k);
 }
 
-
 // Convert a COO matrix to a sorted CSR matrix
-void COO2CSR(
+static void COO2CSR(
     const int nrow, const int ncol, const int nnz,
     const int *row, const int *col, const DTYPE *val, 
     int **row_ptr_, int **col_idx_, DTYPE **csr_val_
@@ -270,7 +269,7 @@ void COO2CSR(
 // Output parameters:
 //   nn_idx : Size n * fsai_npt, row major, indices of the nearest neighbors
 //   nn_cnt : Size n, number of selected nearest neighbors for each point
-void FSAI_exact_KNN(
+static void FSAI_exact_KNN(
     const int fsai_npt, const int n, const int pt_dim, 
     const DTYPE *coord, const int ldc, int *nn_idx, int *nn_cnt
 )
@@ -332,7 +331,7 @@ static inline int is_neighbor_segments(const DTYPE s1, const DTYPE l1, const DTY
 // Output parameters:
 //   nn_idx : Size n * fsai_npt, row major, indices of the nearest neighbors
 //   nn_cnt : Size n, number of selected nearest neighbors for each point
-void FSAI_approx_KNN_with_H2P(
+static void FSAI_approx_KNN_with_H2P(
     const int fsai_npt, const int n, const int pt_dim, 
     const DTYPE *coord, const int ldc, const int *coord0_idx,
     H2Pack_p h2mat, int *nn_idx, int *nn_cnt
@@ -536,7 +535,7 @@ void FSAI_approx_KNN_with_H2P(
 //   *t_knn_          : Time spent on KNN search, if not NULL
 //   *t_fsai_         : Time spent on FSAI matrix construction, if not NULL
 //   *t_csr_          : Time spent on CSR matrix construction, if not NULL
-void FSAI_precond_build(
+void FSAI_precond_build_(
     kernel_eval_fptr krnl_eval, void *krnl_param, const int fsai_npt,
     const int n, const int pt_dim, const DTYPE *coord, const int ldc, 
     const int *coord0_idx, const int n1, const DTYPE *P, const DTYPE mu, void *h2mat, 
@@ -558,7 +557,7 @@ void FSAI_precond_build(
     ASSERT_PRINTF(
         nn_idx != NULL && matbuf != NULL && row != NULL && 
         col != NULL && val != NULL && displs != NULL,
-        "Failed to allocate work buffers for FSAI_precond_build()\n"
+        "Failed to allocate work buffers for FSAI_precond_build_()\n"
     );
 
     // 1. Find fsai_npt nearest neighbors of each point
@@ -673,7 +672,7 @@ void FSAI_precond_build(
 }
 
 // CSR SpMV for the G matrix in FSAI
-void FSAI_CSR_SpMV(
+static void FSAI_CSR_SpMV(
     const int nrow, const int *row_ptr, const int *col_idx, 
     const DTYPE *val, const DTYPE *x, DTYPE *y
 )
@@ -701,7 +700,7 @@ void FSAI_CSR_SpMV(
 //                    input vector x and work buffer t
 // Output parameter:
 //   y : Size n, output vector
-void FSAI_precond_apply(
+void FSAI_precond_apply_(
     const int *G_rowptr, const int *G_colidx, const DTYPE *G_val,
     const int *GT_rowptr, const int *GT_colidx, const DTYPE *GT_val,
     const int n, const DTYPE *x, DTYPE *y, DTYPE *t
@@ -759,7 +758,7 @@ void AFNi_FPS(const int npt, const int pt_dim, const DTYPE *coord, const int k, 
 
 // Sample and scale ss_npt points, then use them to estimate the rank
 // Input and output parameters are the same as AFNi_rank_est()
-int AFNi_rank_est_scaled(
+static int AFNi_rank_est_scaled(
     kernel_eval_fptr krnl_eval, void *krnl_param, const int npt, const int pt_dim, 
     const DTYPE *coord, const int ss_npt, const int n_rep
 )
@@ -833,7 +832,7 @@ int AFNi_rank_est_scaled(
 
 // Use the original points to estimate the rank for Nystrom
 // Input and output parameters are the same as AFNi_rank_est()
-int AFNi_Nys_rank_est(
+static int AFNi_Nys_rank_est(
     kernel_eval_fptr krnl_eval, void *krnl_param, const int npt, const int pt_dim, 
     const DTYPE *coord, const DTYPE mu, const int max_k, const int ss_npt, const int n_rep
 )
@@ -896,7 +895,7 @@ int AFNi_Nys_rank_est(
 //   n_rep      : Number of repetitions for rank estimation
 // Output parameter:
 //   <ret> : Return the estimated rank
-int AFNi_rank_est(
+static int AFNi_rank_est(
     kernel_eval_fptr krnl_eval, void *krnl_param, const int npt, const int pt_dim, 
     const DTYPE *coord, const DTYPE mu, const int max_k, const int ss_npt, const int n_rep
 )
@@ -916,7 +915,7 @@ int AFNi_rank_est(
 
 // Build the AFN preconditioner
 // See AFN_precond_build() for input parameters
-void AFNi_AFN_precond_build(
+static void AFNi_AFN_precond_build(
     AFN_precond_p AFN_precond, const DTYPE mu, DTYPE *K11, DTYPE *K12, 
     const DTYPE *coord2, const int ld2, const int pt_dim, 
     kernel_eval_fptr krnl_eval, void *krnl_param, const int fsai_npt, void *h2mat
@@ -989,7 +988,7 @@ void AFNi_AFN_precond_build(
     int *G_rowptr = NULL, *G_colidx = NULL, *GT_rowptr = NULL, *GT_colidx = NULL;
     DTYPE *G_val = NULL, *GT_val = NULL;
     int *coord0_idx = AFN_precond->perm + n1;
-    FSAI_precond_build(
+    FSAI_precond_build_(
         krnl_eval, krnl_param, fsai_npt, 
         n2, pt_dim, coord2, n1 + n2, 
         coord0_idx, n1, V21, mu, h2mat, 
@@ -1070,30 +1069,23 @@ void AFN_precond_build(
     DTYPE *coord_n2 = coord_perm + n1;
     DTYPE *K11 = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n1);
     DTYPE *K12 = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n2);
+    int n_thread = omp_get_max_threads();
     ASSERT_PRINTF(
         K11 != NULL && K12 != NULL,
         "Failed to allocate AFN preconditioner K11/K12 buffers\n"
     );
-    #pragma omp parallel
-    {
-        int n_thread = omp_get_num_threads();
-        int tid = omp_get_thread_num();
-        int n1_blk_start, n1_blk_len;
-        calc_block_spos_len(n1, n_thread, tid, &n1_blk_start, &n1_blk_len);
-        DTYPE *K11_srow = K11 + n1_blk_start * n1;
-        DTYPE *K12_srow = K12 + n1_blk_start * n2;    
-        DTYPE *coord_n1_spos = coord_n1 + n1_blk_start;
-        krnl_eval(
-            coord_n1_spos, n, n1_blk_len, coord_n1, n, n1, 
-            krnl_param, K11_srow, n1
-        );
-        krnl_eval(
-            coord_n1_spos, n, n1_blk_len, coord_n2, n, n2, 
-            krnl_param, K12_srow, n2
-        );
-    }  // End of "#pragma omp parallel"
+    H2P_eval_kernel_matrix_OMP(
+        krnl_eval, krnl_param, 
+        coord_n1, n, n1, coord_n1, n, n1, 
+        K11, n1, n_thread
+    );
+    H2P_eval_kernel_matrix_OMP(
+        krnl_eval, krnl_param, 
+        coord_n1, n, n1, coord_n2, n, n2, 
+        K12, n2, n_thread
+    );
     et = get_wtime_sec();
-    AFN_precond->t_K11K12= et - st;
+    AFN_precond->t_K11K12 = et - st;
 
     // 4. Build the Nystrom or AFN preconditioner
     if (est_rank < max_k)
@@ -1101,7 +1093,7 @@ void AFN_precond_build(
         st = get_wtime_sec();
         AFN_precond->is_afn = 0;
         AFN_precond->is_nys = 1;
-        Nystrom_precond_build(mu, n1, n2, K11, K12, &AFN_precond->nys_M, &AFN_precond->nys_U);
+        Nys_precond_build_(mu, n1, n2, K11, K12, &AFN_precond->nys_M, &AFN_precond->nys_U);
         et = get_wtime_sec();
         AFN_precond->t_nys = et - st;
     } else {
@@ -1162,7 +1154,7 @@ void AFN_precond_apply(AFN_precond_p AFN_precond, const DTYPE *x, DTYPE *y)
     // px = x(perm);
     for (int i = 0; i < n; i++) px[i] = x[perm[i]];
     if (AFN_precond->is_nys)
-        Nystrom_precond_apply(n1, n, AFN_precond->nys_M, AFN_precond->nys_U, px, py, t1);
+        Nys_precond_apply_(n1, n, AFN_precond->nys_M, AFN_precond->nys_U, px, py, t1);
     if (AFN_precond->is_afn)
     {
         DTYPE *afn_invK11 = AFN_precond->afn_invK11;
@@ -1181,7 +1173,7 @@ void AFN_precond_apply(AFN_precond_p AFN_precond, const DTYPE *x, DTYPE *y)
         // y2  = G' * t22;
         DTYPE *y1 = py, *y2 = py + n1;
         DTYPE *t21 = t2, *t22 = t2 + n1;
-        FSAI_precond_apply(
+        FSAI_precond_apply_(
             AFN_precond->afn_G_rowptr,  AFN_precond->afn_G_colidx,  AFN_precond->afn_G_val,
             AFN_precond->afn_GT_rowptr, AFN_precond->afn_GT_colidx, AFN_precond->afn_GT_val,
             n2, t12, y2, t22
@@ -1213,7 +1205,7 @@ void AFN_precond_print_stat(AFN_precond_p AFN_precond)
     printf("    * Matrix operations         = %.3f s\n", AFN_precond->t_afn_mat);
     printf("    * FSAI KNN search           = %.3f s\n", AFN_precond->t_afn_knn);
     printf("    * FSAI COO matrix build     = %.3f s\n", AFN_precond->t_afn_fsai);
-    printf("    * FASI matrix COO to CSR    = %.3f s\n", AFN_precond->t_afn_csr);
+    printf("    * FASI COO matrix to CSR    = %.3f s\n", AFN_precond->t_afn_csr);
     if (AFN_precond->n_apply > 0)
     {
         double t_apply_avg = AFN_precond->t_apply / (double) AFN_precond->n_apply;

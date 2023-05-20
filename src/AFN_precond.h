@@ -38,7 +38,7 @@ typedef struct AFN_precond *AFN_precond_p;
 extern "C" {
 #endif
 
-// Construct an AFN preconditioner for a kernel matrix
+// Build an AFN preconditioner for a kernel matrix
 // Input parameters:
 //   krnl_eval  : Pointer to kernel matrix evaluation function
 //   krnl_param : Pointer to kernel function parameter array

@@ -7,51 +7,22 @@
 #include <omp.h>
 
 #include "H2Pack.h"
-#include "H2Pack_kernels.h"
+#include "precond_test_utils.h"
 #include "AFN_precond.h"
 #include "../PCG/pcg.h"
-
-static DTYPE shift_ = 0.0;
-static int n_ = 0;
-
-void H2Pack_matvec(const void *h2pack_, const DTYPE *b, DTYPE *x)
-{
-    H2Pack_p h2pack = (H2Pack_p) h2pack_;
-    H2P_matvec(h2pack, b, x);
-    #pragma omp simd
-    for (int i = 0; i < h2pack->krnl_mat_size; i++) x[i] += shift_ * b[i];
-}
-
-void AFN_precond_apply_(const void *precond_, const DTYPE *b, DTYPE *x)
-{
-    AFN_precond_p AFN_precond = (AFN_precond_p) precond_;
-    AFN_precond_apply(AFN_precond, b, x);
-}
-
-#if DTYPE_SIZE == DOUBLE_SIZE
-#define CBLAS_SYMV cblas_dsymv
-#endif
-#if DTYPE_SIZE == FLOAT_SIZE
-#define CBLAS_SYMV cblas_ssymv
-#endif
-void dense_symv(const void *A_, const DTYPE *b, DTYPE *x)
-{
-    DTYPE *A = (DTYPE*) A_;
-    CBLAS_SYMV(CblasRowMajor, CblasUpper, n_, 1.0, A, n_, b, 1, 0.0, x, 1);
-}
 
 int main(int argc, char **argv)
 {
     // Parse command line arguments
-    int kid, npt, pt_dim, max_k, ss_npt, fsai_npt;
+    int kid, npt, pt_dim, max_k, ss_npt, fsai_npt, fast_knn;
     DTYPE mu, kp, *coord = NULL;
     void *krnl_param = &kp;
     kernel_eval_fptr krnl_eval = NULL;
     kernel_bimv_fptr krnl_bimv = NULL;
     int krnl_bimv_flops = 0;
-    if (argc < 9)
+    if (argc < 10)
     {
-        printf("Usage: %s kid kp mu npt pt_dim max_k ss_npt fsai_npt coord_bin\n", argv[0]);
+        printf("Usage: %s kid kp mu npt pt_dim max_k ss_npt fsai_npt fast_knn coord_bin\n", argv[0]);
         printf("  - kid       [int]    : Kernel function ID\n");
         printf("                         1 - Gaussian    k(x, y) = exp(-l * |x-y|^2)\n");
         printf("                         2 - Exponential k(x, y) = exp(-l * |x-y|)\n");
@@ -64,6 +35,7 @@ int main(int argc, char **argv)
         printf("  - max_k     [int]    : Maximum global low-rank approximation rank\n");
         printf("  - ss_npt    [int]    : Number of points in the sample set\n");
         printf("  - fsai_npt  [int]    : Maximum number of nonzeros in each row of the AFN FSAI matrix\n");
+        printf("  - fast_knn  [0 or 1] : If AFN FSAI should use fast approximated KNN instead of exact KNN\n");
         printf("  - coord_bin [str]    : (Optional) Binary file containing the coordinates, size pt_dim * npt,\n");
         printf("                         row major, each column is a point coordinate\n");
         return 255;
@@ -76,12 +48,13 @@ int main(int argc, char **argv)
     max_k    = atoi(argv[6]);
     ss_npt   = atoi(argv[7]);
     fsai_npt = atoi(argv[8]);
+    fast_knn = atoi(argv[9]);
     coord    = (DTYPE*) malloc(sizeof(DTYPE) * npt * pt_dim);
     if (kid < 1 || kid > 4) kid = 1;
     if (pt_dim < 2 || pt_dim > 3) pt_dim = 3;
-    if (argc >= 10)
+    if (argc >= 11)
     {
-        FILE *inf = fopen(argv[9], "rb");
+        FILE *inf = fopen(argv[10], "rb");
         fread(coord, sizeof(DTYPE), npt * pt_dim, inf);
         fclose(inf);
     } else {
@@ -89,108 +62,19 @@ int main(int argc, char **argv)
         DTYPE scale = DPOW((DTYPE) npt, 1.0 / (DTYPE) pt_dim);
         for (int i = 0; i < npt * pt_dim; i++) coord[i] = scale * (rand() / (DTYPE)(RAND_MAX));
     }
-
-    // Select the kernel function
-    switch (kid)
-    {
-        case 1:
-        {
-            if (pt_dim == 3)
-            {
-                krnl_eval = Gaussian_3D_eval_intrin_t;
-                krnl_bimv = Gaussian_3D_krnl_bimv_intrin_t;
-                krnl_bimv_flops = Gaussian_3D_krnl_bimv_flop;
-            } else {
-                krnl_eval = Gaussian_2D_eval_intrin_t;
-                krnl_bimv = Gaussian_2D_krnl_bimv_intrin_t;
-                krnl_bimv_flops = Gaussian_2D_krnl_bimv_flop;
-            }
-            printf("Test kernel: Gaussian    k(x, y) = exp(-l * |x-y|^2), l = %.4f\n", kp);
-            break;
-        }
-        case 2:
-        {
-            if (pt_dim == 3)
-            {
-                krnl_eval = Expon_3D_eval_intrin_t;
-                krnl_bimv = Expon_3D_krnl_bimv_intrin_t;
-                krnl_bimv_flops = Expon_3D_krnl_bimv_flop;
-            } else {
-                krnl_eval = Expon_2D_eval_intrin_t;
-                krnl_bimv = Expon_2D_krnl_bimv_intrin_t;
-                krnl_bimv_flops = Expon_2D_krnl_bimv_flop;
-            }
-            printf("Test kernel: Exponential k(x, y) = exp(-l * |x-y|), l = %.4f\n", kp);
-            break;
-        }
-        case 3:
-        {
-            if (pt_dim == 3)
-            {
-                krnl_eval = Matern32_3D_eval_intrin_t;
-                krnl_bimv = Matern32_3D_krnl_bimv_intrin_t;
-                krnl_bimv_flops = Matern32_3D_krnl_bimv_flop;
-            } else {
-                krnl_eval = Matern32_2D_eval_intrin_t;
-                krnl_bimv = Matern32_2D_krnl_bimv_intrin_t;
-                krnl_bimv_flops = Matern32_2D_krnl_bimv_flop;
-            }
-            printf("Test kernel: 3/2 Matern  k(x, y) = (1 + l*k) * exp(-l*k), k = sqrt(3) * |x-y|, l = %.4f\n", kp);
-            break;
-        }
-        case 4:
-        {
-            if (pt_dim == 3)
-            {
-                krnl_eval = Matern52_3D_eval_intrin_t;
-                krnl_bimv = Matern52_3D_krnl_bimv_intrin_t;
-                krnl_bimv_flops = Matern32_3D_krnl_bimv_flop;
-            } else {
-                krnl_eval = Matern52_2D_eval_intrin_t;
-                krnl_bimv = Matern52_2D_krnl_bimv_intrin_t;
-                krnl_bimv_flops = Matern32_2D_krnl_bimv_flop;
-            }
-            printf("Test kernel: 5/2 Matern  k(x, y) = (1 + l*k + l^2*k^2/3) * exp(-l*k), l = %.4f\n", kp);
-            break;
-        }
-    }  // End of switch (kid)
+    select_kernel(kid, pt_dim, kp, mu, npt, &krnl_eval, &krnl_bimv, &krnl_bimv_flops);
     printf("Point set: %d points in %d-D\n", npt, pt_dim);
     printf("Linear system to solve: (K(X, X) + %.4f * I) * x = b\n", mu);
     printf("\nAFN preconditioner parameters:\n");
     printf("- Maximum Nystrom approximation rank     = %d\n", max_k);
     printf("- Maximum Rank estimation sampled points = %d\n", ss_npt);
     printf("- Maximum FSAI matrix nonzeros per row   = %d\n", fsai_npt);
+    printf("- Fast KNN for FSAI sparsity pattern     = %s\n", fast_knn ? "Yes" : "No");
     printf("\n");
-    shift_ = mu;
-    n_ = npt;
     
-    // Build H2 or dense kernel matrix
+    // Build H2 matrix
     double st, et;
     H2Pack_p h2mat = NULL;
-    //#define USE_DENSE_KMAT
-    #ifdef USE_DENSE_KMAT
-    // Full dense kernel matrix
-    printf("Building full kernel matrix...\n");
-    st = get_wtime_sec();
-    DTYPE *A = (DTYPE*) malloc(sizeof(DTYPE) * npt * npt);
-    #pragma omp parallel
-    {
-        int tid = omp_get_thread_num();
-        int n_thread = omp_get_num_threads();
-        int srow, nrow;
-        calc_block_spos_len(npt, n_thread, tid, &srow, &nrow);
-        size_t A_offset = (size_t) srow * (size_t) npt;
-        krnl_eval(coord + srow, npt, nrow, coord, npt, npt, krnl_param, A + A_offset, npt);
-    }
-    for (int i = 0; i < npt; i++)
-    {
-        size_t idx_ii = (size_t) i * (size_t) npt + (size_t) i;
-        A[idx_ii] += mu;
-    }
-    et = get_wtime_sec();
-    printf("Full kernel matrix build time: %.3f s\n", et - st);
-    #else
-    // Build H2 representation
     int krnl_dim = 1, BD_JIT = 1;
     DTYPE reltol = 1e-8;
     H2P_dense_mat_p *pp = NULL;
@@ -208,13 +92,13 @@ int main(int argc, char **argv)
     printf("H2Pack build time = %.3f s\n", et - st);
     H2P_print_statistic(h2mat);
     printf("\n");
-    #endif
 
     // Build AFN preconditioner
     printf("Building AFN preconditioner...\n");
     st = get_wtime_sec();
     AFN_precond_p AFN_precond = NULL;
-    AFN_precond_build(krnl_eval, krnl_param, npt, pt_dim, coord, mu, max_k, ss_npt, fsai_npt, h2mat, &AFN_precond);
+    void *h2mat_ = (fast_knn) ? (void *) h2mat : NULL;
+    AFN_precond_build(krnl_eval, krnl_param, npt, pt_dim, coord, mu, max_k, ss_npt, fsai_npt, h2mat_, &AFN_precond);
     et = get_wtime_sec();
     printf("AFN_precond build time = %.3lf s\n", et - st);
     printf("AFN estimated kernel matrix rank = %d, ", AFN_precond->est_rank);
@@ -232,31 +116,19 @@ int main(int argc, char **argv)
         x[i] = 0.0;
     }
     int pcg_print_level = 1;
-    #ifdef USE_DENSE_KMAT
     pcg(
         npt, CG_reltol, max_iter, 
-        dense_symv, A, b, AFN_precond_apply_, AFN_precond, x,
+        H2Pack_matvec, h2mat, b, (matvec_fptr) AFN_precond_apply, AFN_precond, x,
         &flag, &relres, &iter, NULL, pcg_print_level
     );
-    #else
-    pcg(
-        npt, CG_reltol, max_iter, 
-        H2Pack_matvec, h2mat, b, AFN_precond_apply_, AFN_precond, x,
-        &flag, &relres, &iter, NULL, pcg_print_level
-    );
-    #endif
 
     // Print AFN preconditioner statistics and clean up
     AFN_precond_print_stat(AFN_precond);
     printf("\n");
-    AFN_precond_destroy(&AFN_precond);
     free(coord);
     free(x);
     free(b);
-    #ifdef USE_DENSE_KMAT
-    free(A);
-    #else
     H2P_destroy(&h2mat);
-    #endif
+    AFN_precond_destroy(&AFN_precond);
     return 0;
 }

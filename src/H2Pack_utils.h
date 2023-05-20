@@ -40,18 +40,20 @@ void H2P_gather_matrix_columns(
 
 // Evaluate a kernel matrix with OpenMP parallelization
 // Input parameters:
-//   krnl_param : Pointer to kernel function parameter array
-//   krnl_eval  : Kernel matrix evaluation function
-//   krnl_dim   : Dimension of tensor kernel's return
-//   x_coord    : X point set coordinates, size nx-by-pt_dim
-//   y_coord    : Y point set coordinates, size ny-by-pt_dim
-//   n_thread   : Number of OpenMP threads
+//   krnl_param  : Pointer to kernel function parameter array
+//   krnl_eval   : Kernel matrix evaluation function
+//   coord{0, 1} : Size pt_dim * ld{0, 1}, point set coordinates, each column is a coordinate
+//   ld{0, 1}    : Leading dimension of coord{0, 1}
+//   n{0, 1}     : Number of points in coord{0, 1}
+//   ldk         : Leading dimension of kmat, >= n1
+//   n_thread    : Number of OpenMP threads
 // Output parameter:
-//   kernel_mat : Kernel matrix, row major, size nx-by-ny
+//   kmat : Size n0 * ldk, row major, kernel matrix
 void H2P_eval_kernel_matrix_OMP(
-    const void *krnl_param, kernel_eval_fptr krnl_eval, const int krnl_dim, 
-    H2P_dense_mat_p x_coord, H2P_dense_mat_p y_coord, H2P_dense_mat_p kernel_mat, 
-    const int n_thread
+    kernel_eval_fptr krnl_eval, const void *krnl_param, 
+    const DTYPE *coord0, const int ld0, const int n0,
+    const DTYPE *coord1, const int ld1, const int n1,
+    DTYPE *kmat, const int ldk, const int n_thread
 );
 
 // Compute the pairwise squared distance of two point sets

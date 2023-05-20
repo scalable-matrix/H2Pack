@@ -45,29 +45,22 @@ void H2P_gather_matrix_columns(
 
 // Evaluate a kernel matrix with OpenMP parallelization
 void H2P_eval_kernel_matrix_OMP(
-    const void *krnl_param, kernel_eval_fptr krnl_eval, const int krnl_dim, 
-    H2P_dense_mat_p x_coord, H2P_dense_mat_p y_coord, H2P_dense_mat_p kernel_mat,
-    const int n_thread
+    kernel_eval_fptr krnl_eval, const void *krnl_param, 
+    const DTYPE *coord0, const int ld0, const int n0,
+    const DTYPE *coord1, const int ld1, const int n1,
+    DTYPE *kmat, const int ldk, const int n_thread
 )
 {
-    const int nx = x_coord->ncol;
-    const int ny = y_coord->ncol;
-    const int nrow = nx * krnl_dim;
-    const int ncol = ny * krnl_dim;
-    H2P_dense_mat_resize(kernel_mat, nrow, ncol);
     #pragma omp parallel if(n_thread > 1) num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
-        int nx_blk_start, nx_blk_len;
-        calc_block_spos_len(nx, n_thread, tid, &nx_blk_start, &nx_blk_len);
-        
-        DTYPE *kernel_mat_srow = kernel_mat->data + nx_blk_start * krnl_dim * kernel_mat->ld;
-        DTYPE *x_coord_spos = x_coord->data + nx_blk_start;
-        
+        int n0_blk_start, n0_blk_len;
+        calc_block_spos_len(n0, n_thread, tid, &n0_blk_start, &n0_blk_len);
+        DTYPE *kmat_srow = kmat + n0_blk_start * ldk;
+        const DTYPE *coord0_spos = coord0 + n0_blk_start;
         krnl_eval(
-            x_coord_spos,  x_coord->ncol, nx_blk_len, 
-            y_coord->data, y_coord->ncol, ny, 
-            krnl_param, kernel_mat_srow, kernel_mat->ld
+            coord0_spos, ld0, n0_blk_len, coord1, ld1, n1, 
+            krnl_param, kmat_srow, ldk
         );
     }
 }

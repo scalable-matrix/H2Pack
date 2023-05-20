@@ -49,12 +49,13 @@ extern "C" {
 //   max_k      : Maximum global low-rank approximation rank 
 //   ss_npt     : Number of points in the sampling set
 //   fsai_npt   : Maximum number of nonzeros in each row of the FSAI matrix
+//   h2mat      : Optional, pointer to an initialized H2Pack struct, used for FSAI KNN search
 // Output parameter:
 //   AFN_precond_ : Pointer to an initialized AFN_precond struct
 void AFN_precond_build(
     kernel_eval_fptr krnl_eval, void *krnl_param, const int npt, const int pt_dim, 
     const DTYPE *coord, const DTYPE mu, const int max_k, const int ss_npt,
-    const int fsai_npt, AFN_precond_p *AFN_precond_
+    const int fsai_npt, void *h2mat, AFN_precond_p *AFN_precond_
 );
 
 // Destroy an initialized AFN_precond struct

@@ -7,6 +7,7 @@
 
 #include "omp.h"
 #include "linalg_lib_wrapper.h"
+#include "H2Pack.h"
 #include "H2Pack_config.h"
 #include "H2Pack_utils.h"
 #include "AFN_precond.h"
@@ -262,7 +263,7 @@ void COO2CSR(
 // Select k exact nearest neighbors for each point s.t. the indices of 
 // neighbors are smaller than the index of the point
 // Input parameters:
-//   fsai_npt  : Maximum number of nonzeros in each row of the FSAI matrix
+//   fsai_npt  : Maximum number of nonzeros in each row of the FSAI matrix (number of nearest neighbors)
 //   n, pt_dim : Number of points and point dimension
 //   coord     : Size pt_dim * ldc, row major, each column is a point coordinate
 //   ldc       : Leading dimension of coord, >= n
@@ -278,6 +279,7 @@ void FSAI_exact_KNN(
     memset(nn_cnt, 0, sizeof(int) * n);
     int *idx_buf = (int *) malloc(sizeof(int) * n_thread * n);
     DTYPE *dist2_buf = (DTYPE *) malloc(sizeof(DTYPE) * n_thread * n);
+    ASSERT_PRINTF(idx_buf != NULL && dist2_buf != NULL, "Failed to allocate work arrays for FSAI_exact_KNN()\n");
     #pragma omp parallel
     {
         int tid = omp_get_thread_num();
@@ -308,6 +310,211 @@ void FSAI_exact_KNN(
     free(dist2_buf);
 }
 
+// Check if segments [s1, s1+l1] and [s2, s2+l2] are neighbors
+static inline int is_neighbor_segments(const DTYPE s1, const DTYPE l1, const DTYPE s2, const DTYPE l2)
+{
+    int is_neighbor = 0;
+    DTYPE diff_s = DABS(s2 - s1);
+    if (s1 <= s2) is_neighbor = (diff_s / l1 < 1.00001);
+    else is_neighbor = (diff_s / l2 < 1.00001);
+    return is_neighbor;
+}
+
+// Select k approximate nearest neighbors for each point using the tree structure 
+// in H2Pack s.t. the indices of neighbors are smaller than the index of the point 
+// Input parameters:
+//   fsai_npt   : Maximum number of nonzeros in each row of the FSAI matrix (number of nearest neighbors)
+//   n, pt_dim  : Number of points and point dimension
+//   coord      : Size pt_dim * ldc, row major, each column is a point coordinate
+//   ldc        : Leading dimension of coord, >= n
+//   coord0_idx : Size n, for each point in coord, its index in the original input point set
+//   h2mat      : H2Pack structure of the point set
+// Output parameters:
+//   nn_idx : Size n * fsai_npt, row major, indices of the nearest neighbors
+//   nn_cnt : Size n, number of selected nearest neighbors for each point
+void FSAI_approx_KNN_with_H2P(
+    const int fsai_npt, const int n, const int pt_dim, 
+    const DTYPE *coord, const int ldc, const int *coord0_idx,
+    H2Pack_p h2mat, int *nn_idx, int *nn_cnt
+)
+{
+    int n_thread = omp_get_max_threads();
+    memset(nn_cnt, 0, sizeof(int) * n);
+
+    // 1. Find the highest level of H2 tree leaf nodes, set it as search level,
+    //    and find the maximum number of points in a node at search level
+    int search_lvl = h2mat->max_level;
+    int *n_child = h2mat->n_child;
+    for (int i = 0; i < h2mat->n_node; i++)
+    {
+        if (n_child[i] > 0) continue;
+        int node_lvl = h2mat->node_level[i];
+        if (node_lvl < search_lvl) search_lvl = node_lvl;
+    }
+    int max_sl_node_npt = 0;
+    int search_lvl_nnode = h2mat->level_n_node[search_lvl];
+    int *search_lvl_nodes = h2mat->level_nodes + search_lvl * h2mat->n_leaf_node;
+    int *pt_cluster = h2mat->pt_cluster;  // Notice: each pair in pt_cluster is [start, end] not [start, end)
+    for (int i = 0; i < search_lvl_nnode; i++)
+    {
+        int node = search_lvl_nodes[i];
+        int node_npt = pt_cluster[2 * node + 1] - pt_cluster[2 * node] + 1;
+        if (node_npt > max_sl_node_npt) max_sl_node_npt = node_npt;
+    }
+
+    // 2. Create a mapping for points in the H2 tree to the coord array
+    //    OIPS in the comments == "original input point set"
+    int n0 = h2mat->n_point;  // Number of points in the OIPS
+    int *h2_coord_idx = h2mat->coord_idx;                   // For each point in the H2 tree, its index in the OIPS
+    int *idx0_to_idx  = (int *) malloc(sizeof(int) * n0);   // For each point in the OIPS, its index in coord
+    int *h2_to_idx    = (int *) malloc(sizeof(int) * n0);   // For each point in the H2 tree, its index in coord
+    ASSERT_PRINTF(
+        idx0_to_idx != NULL && h2_to_idx != NULL, 
+        "Failed to allocate work arrays for FSAI_approx_KNN_with_H2P()"
+    );
+    for (int i = 0; i < n0; i++) idx0_to_idx[i] = -1;
+    for (int i = 0; i < n;  i++) idx0_to_idx[coord0_idx[i]] = i;
+    for (int i = 0; i < n0; i++) h2_to_idx[i] = idx0_to_idx[h2_coord_idx[i]];
+
+    // 3. Find all neighbor nodes (including self) for each node at search level.
+    //    Each node has at most 3^pt_dim neighbors.
+    int max_neighbor = h2mat->max_neighbor;
+    int *sl_node_neighbors = (int *) malloc(sizeof(int) * search_lvl_nnode * max_neighbor);
+    int *sl_node_neighbor_cnt = (int *) malloc(sizeof(int) * search_lvl_nnode);
+    ASSERT_PRINTF(
+        sl_node_neighbors != NULL && sl_node_neighbor_cnt != NULL, 
+        "Failed to allocate work arrays for FSAI_approx_KNN_with_H2P()"
+    );
+    DTYPE *enbox = h2mat->enbox;
+    memset(sl_node_neighbor_cnt, 0, sizeof(int) * search_lvl_nnode);
+    for (int i = 0; i < search_lvl_nnode; i++)
+    {
+        int node_i = search_lvl_nodes[i];
+        sl_node_neighbors[i * max_neighbor] = node_i;
+        sl_node_neighbor_cnt[i] = 1;
+    }
+    for (int i = 0; i < search_lvl_nnode; i++)
+    {
+        int node_i = search_lvl_nodes[i];
+        DTYPE *enbox_i = enbox + (2 * pt_dim) * node_i;
+        for (int j = i + 1; j < search_lvl_nnode; j++)
+        {
+            int node_j = search_lvl_nodes[j];
+            DTYPE *enbox_j = enbox + (2 * pt_dim) * node_j;
+            int is_neighbor = 1;
+            for (int d = 0; d < pt_dim; d++)
+            {
+                DTYPE sid = enbox_i[d];
+                DTYPE lid = enbox_i[d + pt_dim];
+                DTYPE sjd = enbox_j[d];
+                DTYPE ljd = enbox_j[d + pt_dim];
+                int is_neighbor_d = is_neighbor_segments(sid, lid, sjd, ljd);
+                is_neighbor = is_neighbor && is_neighbor_d;
+            }
+            if (is_neighbor)
+            {
+                int cnt_i = sl_node_neighbor_cnt[i];
+                int cnt_j = sl_node_neighbor_cnt[j];
+                ASSERT_PRINTF(cnt_i < max_neighbor, "Node %d has more than %d neighbors\n", node_i, max_neighbor);
+                ASSERT_PRINTF(cnt_j < max_neighbor, "Node %d has more than %d neighbors\n", node_j, max_neighbor);
+                sl_node_neighbors[i * max_neighbor + cnt_i] = node_j;
+                sl_node_neighbors[j * max_neighbor + cnt_j] = node_i;
+                sl_node_neighbor_cnt[i]++;
+                sl_node_neighbor_cnt[j]++;
+            }
+        }  // End of j loop
+    }  // End of i loop
+
+    // 4. Find the nearest neighbors from sl_node_neighbors for each point.
+    //    The nearest neighbor candidates of each point should <= max_neighbor * max_sl_node_npt
+    int max_nn_points = max_neighbor * max_sl_node_npt;
+    int *idx_buf        = (int *)   malloc(sizeof(int)   * n_thread * max_nn_points * 2);
+    char *flag_buf      = (char *)  malloc(sizeof(char)  * n_thread * n);
+    DTYPE *dist2_buf    = (DTYPE *) malloc(sizeof(DTYPE) * n_thread * max_nn_points);
+    DTYPE *nn_coord_buf = (DTYPE *) malloc(sizeof(DTYPE) * n_thread * max_nn_points * pt_dim);
+    ASSERT_PRINTF(
+        idx_buf != NULL && dist2_buf != NULL && nn_coord_buf != NULL,
+        "Failed to allocate work arrays for FSAI_approx_KNN_with_H2P()"
+    );
+    #pragma omp parallel
+    {
+        int tid = omp_get_thread_num();
+        DTYPE *dist2 = dist2_buf + tid * max_nn_points;
+        DTYPE *nn_coord = nn_coord_buf + tid * pt_dim * max_nn_points;
+        int *nn_idx0 = idx_buf + tid * max_nn_points * 2;
+        int *nn_idx1 = nn_idx0 + max_nn_points;
+        char *flag = flag_buf + tid * n;
+        #pragma omp for schedule(dynamic)
+        for (int i = 0; i < search_lvl_nnode; i++)
+        {
+            int node_i = search_lvl_nodes[i];
+            int nn_cnt0 = 0;
+            // (1) Put all points in node_s's neighbor nodes into a large candidate set
+            for (int j = 0; j < sl_node_neighbor_cnt[i]; j++)
+            {
+                int node_j = sl_node_neighbors[i * max_neighbor + j];
+                int node_j_pt_s = pt_cluster[2 * node_j];
+                int node_j_pt_e = pt_cluster[2 * node_j + 1];
+                for (int k = node_j_pt_s; k <= node_j_pt_e; k++)
+                {
+                    int idx_k = h2_to_idx[k];   // The k-th point in H2 tree, its index in coord
+                    if (idx_k == -1) continue;
+                    nn_idx0[nn_cnt0++] = idx_k;
+                }
+            }
+            // (2) For each point in this node, find its KNN in the refined candidate set
+            int node_i_pt_s = pt_cluster[2 * node_i];
+            int node_i_pt_e = pt_cluster[2 * node_i + 1];
+            for (int pt_j = node_i_pt_s; pt_j <= node_i_pt_e; pt_j++)
+            {
+                int idx_j = h2_to_idx[pt_j];   // The pt_j-th point in H2 tree, its index in coord
+                if (idx_j == -1) continue;
+                // All point indices in nn_idx0 are in coord, no need to translate index again
+                // FSAI requires the NN points have indices < current point
+                int nn_cnt1 = 0;
+                for (int k = 0; k < nn_cnt0; k++)
+                    if (nn_idx0[k] < idx_j) nn_idx1[nn_cnt1++] = nn_idx0[k];
+                // If the number of NN candidates < fsai_npt, expand the candidate set with the first
+                // (max_nn_points - nn_cnt1) points (this is the simplest way, but may miss some exact NNs)
+                if ((nn_cnt1 < fsai_npt) && (idx_j > fsai_npt))
+                {
+                    memset(flag, 0, sizeof(char) * n);
+                    for (int k = 0; k < nn_cnt1; k++) flag[nn_idx1[k]] = 1;
+                    for (int k = 0; k < idx_j; k++)
+                    {
+                        if (flag[k] == 1) continue;
+                        nn_idx1[nn_cnt1++] = k;
+                        if (nn_cnt1 == max_nn_points - 1) break;
+                    }
+                }
+                int *nn_idx_j = nn_idx + idx_j * fsai_npt;
+                if (idx_j < fsai_npt)
+                {
+                    nn_cnt[idx_j] = idx_j + 1;
+                    for (int j = 0; j <= idx_j; j++) nn_idx_j[j] = j;
+                } else {
+                    int nn_cnt_j = (fsai_npt < nn_cnt1) ? fsai_npt : nn_cnt1;
+                    nn_cnt[idx_j] = nn_cnt_j;
+                    H2P_gather_matrix_columns(coord, ldc, nn_coord, nn_cnt1, pt_dim, nn_idx1, nn_cnt1);
+                    H2P_calc_pdist2_OMP(coord + idx_j, ldc, 1, nn_coord, nn_cnt1, nn_cnt1, pt_dim, dist2, nn_cnt1, 1);
+                    Qpart_DTYPE_int_key_val(dist2, nn_idx1, 0, nn_cnt1 - 1, nn_cnt_j);
+                    memcpy(nn_idx_j, nn_idx1, sizeof(int) * nn_cnt_j);
+                    nn_idx_j[nn_cnt_j - 1] = idx_j;
+                }
+            }  // End of pt_j loop
+        }  // End of i loop
+    }  // End of "#pragma omp parallel"
+
+    free(sl_node_neighbors);
+    free(sl_node_neighbor_cnt);
+    free(idx0_to_idx);
+    free(h2_to_idx);
+    free(dist2_buf);
+    free(flag_buf);
+    free(nn_coord_buf);
+    free(idx_buf);
+}
+
 // Build a Factoized Sparse Approximate Inverse (FSAI) preconditioner 
 // for a kernel matrix K(X, X) + mu * I - P * P^T, where P is a low rank matrix
 // Input parameters:
@@ -317,7 +524,11 @@ void FSAI_exact_KNN(
 //   n, pt_dim  : Number of points and point dimension
 //   coord      : Size pt_dim * ldc, row major, each column is a point coordinate
 //   ldc        : Leading dimension of coord, >= n
+//   coord0_idx : Size n, for each point in coord, its index in the original input point set
 //   n1         : Number of columns in P
+//   P          : Size n * n1, row major, each column is a low rank basis
+//   mu         : Diagonal shift
+//   h2mat      : Optional, pointer to an initialized H2Pack struct, used for FSAI KNN search
 // Output parameters:
 //   *{G, GT}_rowptr_ : CSR row pointer arrays of G and G^T
 //   *{G, GT}_colidx_ : CSR column index arrays of G and G^T
@@ -328,7 +539,7 @@ void FSAI_exact_KNN(
 void FSAI_precond_build(
     kernel_eval_fptr krnl_eval, void *krnl_param, const int fsai_npt,
     const int n, const int pt_dim, const DTYPE *coord, const int ldc, 
-    const int n1, const DTYPE *P, const DTYPE mu, 
+    const int *coord0_idx, const int n1, const DTYPE *P, const DTYPE mu, void *h2mat, 
     int **G_rowptr_,  int **G_colidx_,  DTYPE **G_val_, 
     int **GT_rowptr_, int **GT_colidx_, DTYPE **GT_val_,
     double *t_knn_, double *t_fsai_, double *t_csr_
@@ -347,13 +558,19 @@ void FSAI_precond_build(
     ASSERT_PRINTF(
         nn_idx != NULL && matbuf != NULL && row != NULL && 
         col != NULL && val != NULL && displs != NULL,
-        "Failed to allocate work buffers for AFN FSAI construction\n"
+        "Failed to allocate work buffers for FSAI_precond_build()\n"
     );
 
     // 1. Find fsai_npt nearest neighbors of each point
     st = get_wtime_sec();
     displs[0] = 0;
-    FSAI_exact_KNN(fsai_npt, n, pt_dim, coord, ldc, nn_idx, displs + 1);
+    if (h2mat != NULL)
+    {
+        H2Pack_p h2mat_ = (H2Pack_p) h2mat;
+        FSAI_approx_KNN_with_H2P(fsai_npt, n, pt_dim, coord, ldc, coord0_idx, h2mat_, nn_idx, displs + 1);
+    } else {
+        FSAI_exact_KNN(fsai_npt, n, pt_dim, coord, ldc, nn_idx, displs + 1);
+    }
     et = get_wtime_sec();
     if (t_knn_ != NULL) *t_knn_ = et - st;
 
@@ -510,7 +727,7 @@ void AFNi_FPS(const int npt, const int pt_dim, const DTYPE *coord, const int k, 
     DTYPE *center = workbuf;
     DTYPE *tmp_d  = center + pt_dim;
     DTYPE *min_d  = tmp_d  + npt;
-    ASSERT_PRINTF(workbuf != NULL, "Failed to allocate work buffer for AFNi_FPS()\n");
+    ASSERT_PRINTF(workbuf != NULL, "Failed to allocate work arrays for AFNi_FPS()\n");
 
     memset(center, 0, sizeof(DTYPE) * pt_dim);
     for (int i = 0; i < pt_dim; i++)
@@ -554,7 +771,7 @@ int AFNi_rank_est_scaled(
     int *sample_idx = (int *) malloc(sizeof(int) * ss_npt);
     ASSERT_PRINTF(
         workbuf != NULL && FPS_perm != NULL && sample_idx != NULL,
-        "Failed to allocate work buffer for AFNi_rank_est_scaled()\n"
+        "Failed to allocate work arrays for AFNi_rank_est_scaled()\n"
     );
     DTYPE *Xs   = workbuf;
     DTYPE *Ks   = Xs  + ss_npt * pt_dim;
@@ -625,7 +842,7 @@ int AFNi_Nys_rank_est(
     if (max_k_ < ss_npt) max_k_ = ss_npt;
     DTYPE *workbuf = (DTYPE *) malloc(sizeof(DTYPE) * (max_k_ * pt_dim + max_k_ * max_k_ + max_k));
     int *sample_idx = (int *) malloc(sizeof(int) * max_k_);
-    ASSERT_PRINTF(workbuf != NULL && sample_idx != NULL, "Failed to allocate work buffer in AFNi_Nys_rank_est()\n");
+    ASSERT_PRINTF(workbuf != NULL && sample_idx != NULL, "Failed to allocate work arrays in AFNi_Nys_rank_est()\n");
     DTYPE *Xs = workbuf;
     DTYPE *Ks = Xs + max_k_ * pt_dim;
     DTYPE *ev = Ks + max_k_ * max_k_;
@@ -698,11 +915,11 @@ int AFNi_rank_est(
 }
 
 // Build the AFN preconditioner
-// See AFN_precond_init() for input parameters
+// See AFN_precond_build() for input parameters
 void AFNi_AFN_precond_build(
     AFN_precond_p AFN_precond, const DTYPE mu, DTYPE *K11, DTYPE *K12, 
     const DTYPE *coord2, const int ld2, const int pt_dim, 
-    kernel_eval_fptr krnl_eval, void *krnl_param, const int fsai_npt
+    kernel_eval_fptr krnl_eval, void *krnl_param, const int fsai_npt, void *h2mat
 )
 {
     AFN_precond->is_nys = 0;
@@ -771,9 +988,11 @@ void AFNi_AFN_precond_build(
     // FSAI for S = K22 - V21 * V21'
     int *G_rowptr = NULL, *G_colidx = NULL, *GT_rowptr = NULL, *GT_colidx = NULL;
     DTYPE *G_val = NULL, *GT_val = NULL;
+    int *coord0_idx = AFN_precond->perm + n1;
     FSAI_precond_build(
         krnl_eval, krnl_param, fsai_npt, 
-        n2, pt_dim, coord2, n1 + n2, n1, V21, mu,
+        n2, pt_dim, coord2, n1 + n2, 
+        coord0_idx, n1, V21, mu, h2mat, 
         &G_rowptr, &G_colidx, &G_val, 
         &GT_rowptr, &GT_colidx, &GT_val, 
         &AFN_precond->t_afn_knn, &AFN_precond->t_afn_fsai, &AFN_precond->t_afn_csr
@@ -794,7 +1013,7 @@ void AFNi_AFN_precond_build(
 void AFN_precond_build(
     kernel_eval_fptr krnl_eval, void *krnl_param, const int npt, const int pt_dim, 
     const DTYPE *coord, const DTYPE mu, const int max_k, const int ss_npt,
-    const int fsai_npt, AFN_precond_p *AFN_precond_
+    const int fsai_npt, void *h2mat, AFN_precond_p *AFN_precond_
 )
 {
     AFN_precond_p AFN_precond = (AFN_precond_p) malloc(sizeof(AFN_precond_s));
@@ -888,7 +1107,7 @@ void AFN_precond_build(
     } else {
         AFNi_AFN_precond_build(
             AFN_precond, mu, K11, K12, coord_n2, n, pt_dim, 
-            krnl_eval, krnl_param, fsai_npt
+            krnl_eval, krnl_param, fsai_npt, h2mat
         );
     }
 

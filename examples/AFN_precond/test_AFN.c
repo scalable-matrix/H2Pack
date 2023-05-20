@@ -166,6 +166,7 @@ int main(int argc, char **argv)
     
     // Build H2 or dense kernel matrix
     double st, et;
+    H2Pack_p h2mat = NULL;
     //#define USE_DENSE_KMAT
     #ifdef USE_DENSE_KMAT
     // Full dense kernel matrix
@@ -190,7 +191,6 @@ int main(int argc, char **argv)
     printf("Full kernel matrix build time: %.3f s\n", et - st);
     #else
     // Build H2 representation
-    H2Pack_p h2mat = NULL;
     int krnl_dim = 1, BD_JIT = 1;
     DTYPE reltol = 1e-8;
     H2P_dense_mat_p *pp = NULL;
@@ -214,7 +214,7 @@ int main(int argc, char **argv)
     printf("Building AFN preconditioner...\n");
     st = get_wtime_sec();
     AFN_precond_p AFN_precond = NULL;
-    AFN_precond_build(krnl_eval, krnl_param, npt, pt_dim, coord, mu, max_k, ss_npt, fsai_npt, &AFN_precond);
+    AFN_precond_build(krnl_eval, krnl_param, npt, pt_dim, coord, mu, max_k, ss_npt, fsai_npt, h2mat, &AFN_precond);
     et = get_wtime_sec();
     printf("AFN_precond build time = %.3lf s\n", et - st);
     printf("AFN estimated kernel matrix rank = %d, ", AFN_precond->est_rank);

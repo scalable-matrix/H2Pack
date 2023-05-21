@@ -82,6 +82,11 @@ void H2P_generate_proxy_point_nlayer(
     H2P_int_vec_init(&ID_buff,  4 * Y0_size);
     et = get_wtime_sec();
     timers[GEN_PP_MISC_TIMER_IDX] += et - st;
+
+    // If srand48() is not called before here, the generated proxy points may be too 
+    // few (I see this with ICC but not GCC). I will just do a dirty hack here.
+    srand(1924);
+    srand48(1112);
     
     // 2. Generate initial candidate points in X and Y
     //    For Y0, we generate it layer by layer. Each layer has the same number of candidate 

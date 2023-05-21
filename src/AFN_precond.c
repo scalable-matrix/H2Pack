@@ -475,7 +475,7 @@ static void FSAI_approx_KNN_with_H2P(
                     if (nn_idx0[k] < idx_j) nn_idx1[nn_cnt1++] = nn_idx0[k];
                 // If the number of NN candidates < fsai_npt, expand the candidate set with the first
                 // (max_nn_points - nn_cnt1) points (this is the simplest way, but may miss some exact NNs)
-                if ((nn_cnt1 < fsai_npt) && (idx_j > fsai_npt))
+                if ((nn_cnt1 < fsai_npt) && (idx_j >= fsai_npt))
                 {
                     memset(flag, 0, sizeof(char) * n);
                     for (int k = 0; k < nn_cnt1; k++) flag[nn_idx1[k]] = 1;
@@ -503,6 +503,12 @@ static void FSAI_approx_KNN_with_H2P(
             }  // End of pt_j loop
         }  // End of i loop
     }  // End of "#pragma omp parallel"
+
+    // Sanity check
+    int invalid_cnt = 0;
+    for (int i = 0; i < n; i++)
+        if (nn_cnt[i] < 1 || nn_cnt[i] > fsai_npt) invalid_cnt++;
+    ASSERT_PRINTF(invalid_cnt == 0, "%d points have invalid NN count\n", invalid_cnt);
 
     free(sl_node_neighbors);
     free(sl_node_neighbor_cnt);

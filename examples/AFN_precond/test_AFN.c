@@ -75,23 +75,7 @@ int main(int argc, char **argv)
     // Build H2 matrix
     double st, et;
     H2Pack_p h2mat = NULL;
-    int krnl_dim = 1, BD_JIT = 1;
-    DTYPE reltol = 1e-8;
-    H2P_dense_mat_p *pp = NULL;
-    printf("Building H2 representation with reltol = %.4e for kernel matrix...\n", reltol);
-    H2P_init(&h2mat, pt_dim, krnl_dim, QR_REL_NRM, &reltol);
-    H2P_calc_enclosing_box(pt_dim, npt, coord, NULL, &h2mat->root_enbox);
-    H2P_partition_points(h2mat, npt, coord, 0, 0);
-    st = get_wtime_sec();
-    H2P_generate_proxy_point_ID_file(h2mat, krnl_param, krnl_eval, NULL, &pp);
-    et = get_wtime_sec();
-    printf("H2Pack proxy point selection time = %.3f s\n", et - st);
-    st = get_wtime_sec();
-    H2P_build(h2mat, pp, BD_JIT, krnl_param, krnl_eval, krnl_bimv, krnl_bimv_flops);
-    et = get_wtime_sec();
-    printf("H2Pack build time = %.3f s\n", et - st);
-    H2P_print_statistic(h2mat);
-    printf("\n");
+    H2mat_build(npt, pt_dim, coord, krnl_eval, krnl_bimv, krnl_bimv_flops, krnl_param, &h2mat);
 
     // Build AFN preconditioner
     printf("Building AFN preconditioner...\n");
@@ -105,29 +89,18 @@ int main(int argc, char **argv)
     printf("will use %s\n", (AFN_precond->est_rank >= max_k) ? "AFN" : "Nystrom");
 
     // PCG test
-    DTYPE CG_reltol = 1e-4, relres;
-    int max_iter = 400, flag, iter;
-    DTYPE *x = malloc(sizeof(DTYPE) * npt);
-    DTYPE *b = malloc(sizeof(DTYPE) * npt);
-    srand(126);  // Match with Tianshi's code
-    for (int i = 0; i < npt; i++)
-    {
-        b[i] = (rand() / (DTYPE) RAND_MAX) - 0.5;
-        x[i] = 0.0;
-    }
-    int pcg_print_level = 1;
-    pcg(
-        npt, CG_reltol, max_iter, 
-        H2Pack_matvec, h2mat, b, (matvec_fptr) AFN_precond_apply, AFN_precond, x,
-        &flag, &relres, &iter, NULL, pcg_print_level
+    DTYPE CG_reltol = 1e-4;
+    int max_iter = 400;
+    test_PCG(
+        H2Pack_matvec, (void *) h2mat, 
+        (matvec_fptr) AFN_precond_apply, (void *) AFN_precond, 
+        npt, max_iter, CG_reltol
     );
 
     // Print AFN preconditioner statistics and clean up
     AFN_precond_print_stat(AFN_precond);
     printf("\n");
     free(coord);
-    free(x);
-    free(b);
     H2P_destroy(&h2mat);
     AFN_precond_destroy(&AFN_precond);
     return 0;

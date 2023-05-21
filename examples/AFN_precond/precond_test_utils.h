@@ -5,6 +5,7 @@
 #include "H2Pack_typedef.h"
 #include "H2Pack_kernels.h"
 #include "H2Pack.h"
+#include "../PCG/pcg.h"
 
 static DTYPE shift_ = 0.0;
 static int n_ = 0;
@@ -93,6 +94,58 @@ static void select_kernel(
     *krnl_eval_ = krnl_eval;
     *krnl_bimv_ = krnl_bimv;
     *krnl_bimv_flops_ = krnl_bimv_flops;
+}
+
+static void H2mat_build(
+    const int npt, const int pt_dim, DTYPE *coord, kernel_eval_fptr krnl_eval, 
+    kernel_bimv_fptr krnl_bimv, int krnl_bimv_flops, void *krnl_param, H2Pack_p *h2mat_
+)
+{
+    double st, et;
+    H2Pack_p h2mat = NULL;
+    int krnl_dim = 1, BD_JIT = 1;
+    DTYPE reltol = 1e-8;
+    H2P_dense_mat_p *pp = NULL;
+    printf("Building H2 representation with reltol = %.4e for kernel matrix...\n", reltol);
+    H2P_init(&h2mat, pt_dim, krnl_dim, QR_REL_NRM, &reltol);
+    H2P_calc_enclosing_box(pt_dim, npt, coord, NULL, &h2mat->root_enbox);
+    H2P_partition_points(h2mat, npt, coord, 0, 0);
+    st = get_wtime_sec();
+    H2P_generate_proxy_point_ID_file(h2mat, krnl_param, krnl_eval, NULL, &pp);
+    et = get_wtime_sec();
+    printf("H2Pack proxy point selection time = %.3f s\n", et - st);
+    st = get_wtime_sec();
+    H2P_build(h2mat, pp, BD_JIT, krnl_param, krnl_eval, krnl_bimv, krnl_bimv_flops);
+    et = get_wtime_sec();
+    printf("H2Pack build time = %.3f s\n", et - st);
+    H2P_print_statistic(h2mat);
+    H2P_dense_mat_destroy(pp);
+    *h2mat_ = h2mat;
+    printf("\n");
+}
+
+static void test_PCG(
+    matvec_fptr Ax, void *Ax_param, matvec_fptr invMx, void *invMx_param,
+    const int n, const int max_iter, const DTYPE CG_reltol
+)
+{
+    DTYPE relres;
+    int flag, iter, pcg_print_level = 1;
+    DTYPE *x = malloc(sizeof(DTYPE) * n);
+    DTYPE *b = malloc(sizeof(DTYPE) * n);
+    srand(126);  // Match with Tianshi's code
+    for (int i = 0; i < n; i++)
+    {
+        b[i] = (rand() / (DTYPE) RAND_MAX) - 0.5;
+        x[i] = 0.0;
+    }
+    pcg(
+        n, CG_reltol, max_iter, 
+        H2Pack_matvec, Ax_param, b, invMx, invMx_param, x,
+        &flag, &relres, &iter, NULL, pcg_print_level
+    );
+    free(x);
+    free(b);
 }
 
 #endif

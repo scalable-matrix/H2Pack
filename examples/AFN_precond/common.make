@@ -47,4 +47,4 @@ all: $(EXES)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 clean:
-	rm -f $(EXES) $(C_OBJS)
+	rm -f $(EXES) $(C_OBJS) $(SHARED_OBJS)

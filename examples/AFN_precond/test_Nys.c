@@ -27,15 +27,15 @@ typedef struct Nys_precond  Nys_precond_s;
 typedef struct Nys_precond* Nys_precond_p;
 
 // In Nys_precond.c
-extern void Nys_precond_build_(
+void Nys_precond_build_(
     const DTYPE mu, const int n1, const int n2, DTYPE *K11, 
     DTYPE *K12, DTYPE **nys_M_, DTYPE **nys_U_
 );
-extern void Nys_precond_apply_(
+void Nys_precond_apply_(
     const int n1, const int n, const DTYPE *nys_M, const DTYPE *nys_U, 
     const DTYPE *x, DTYPE *y, DTYPE *t
 );
-extern void AFNi_FPS(const int npt, const int pt_dim, const DTYPE *coord, const int k, int *idx);
+void AFNi_FPS(const int npt, const int pt_dim, const DTYPE *coord, const int k, int *idx);
 
 // Build a randomize Nystrom preconditioner for a kernel matrix
 // Input parameters:
@@ -133,7 +133,7 @@ void Nys_precond_destroy(Nys_precond_p *Nys_precond_)
 int main(int argc, char **argv)
 {
     // Parse command line arguments
-    int kid, npt, pt_dim, nys_k, ss_npt, fsai_npt;
+    int kid, npt, pt_dim, nys_k;
     DTYPE mu, kp, *coord = NULL;
     void *krnl_param = &kp;
     kernel_eval_fptr krnl_eval = NULL;

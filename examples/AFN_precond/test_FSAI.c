@@ -30,7 +30,7 @@ typedef struct FSAI_precond  FSAI_precond_s;
 typedef struct FSAI_precond* FSAI_precond_p;
 
 // In Nys_precond.c
-extern void FSAI_precond_build_(
+void FSAI_precond_build_(
     kernel_eval_fptr krnl_eval, void *krnl_param, const int fsai_npt,
     const int n, const int pt_dim, const DTYPE *coord, const int ldc, 
     const int *coord0_idx, const int n1, const DTYPE *P, const DTYPE mu, void *h2mat, 
@@ -38,7 +38,7 @@ extern void FSAI_precond_build_(
     int **GT_rowptr_, int **GT_colidx_, DTYPE **GT_val_,
     double *t_knn_, double *t_fsai_, double *t_csr_
 );
-extern void FSAI_precond_apply_(
+void FSAI_precond_apply_(
     const int *G_rowptr, const int *G_colidx, const DTYPE *G_val,
     const int *GT_rowptr, const int *GT_colidx, const DTYPE *GT_val,
     const int n, const DTYPE *x, DTYPE *y, DTYPE *t

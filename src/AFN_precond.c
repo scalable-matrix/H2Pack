@@ -595,15 +595,16 @@ void FSAI_precond_build_(
         #pragma omp for schedule(static)
         for (int i = 0; i < n; i++)
         {
-            int nn_cnt_i = displs[i + 1];
-            int *nn_idx_i = nn_idx + i * fsai_npt;
+            int nn_cnt_i  = displs[i + 1];
+            int j_start   = i * fsai_npt;
+            int *nn_idx_i = nn_idx + j_start;
             // row(idx + (1 : nn_cnt_i)) = i;
             // col(idx + (1 : nn_cnt_i)) = nn;
             // Xnn = X(nn, :);
-            for (int j = i * fsai_npt; j < i * fsai_npt + nn_cnt_i; j++)
+            for (int j = j_start; j < j_start + nn_cnt_i; j++)
             {
                 row[j] = i;
-                col[j] = nn_idx_i[j - i * fsai_npt];
+                col[j] = nn_idx_i[j - j_start];
             }
             H2P_gather_matrix_columns(coord, ldc, nn_coord, nn_cnt_i, pt_dim, nn_idx_i, nn_cnt_i);
             // tmpK = kernel(Xnn, Xnn) + mu * eye(nn_cnt_i);
@@ -612,27 +613,36 @@ void FSAI_precond_build_(
             for (int j = 0; j < nn_cnt_i; j++) tmpK[j * nn_cnt_i + j] += mu;
             if (n1 > 0)
             {
-                for (int j = i * fsai_npt; j < i * fsai_npt + nn_cnt_i; j++)
+                for (int j = j_start; j < j_start + nn_cnt_i; j++)
                 {
-                    int j0 = j - i * fsai_npt;
+                    int j0 = j - j_start;
                     memcpy(Pnn + j0 * n1, P + nn_idx_i[j0] * n1, sizeof(DTYPE) * n1);
                 }
-                CBLAS_GEMM(
-                    CblasRowMajor, CblasNoTrans, CblasTrans, nn_cnt_i, nn_cnt_i, n1,
-                    -1.0, Pnn, n1, Pnn, n1, 1.0, tmpK, nn_cnt_i
-                );
+                CBLAS_SYRK(CblasRowMajor, CblasLower, CblasNoTrans, nn_cnt_i, n1, -1.0, Pnn, n1, 1.0, tmpK, nn_cnt_i);
             }
             // tmpU = [zeros(nn_cnt_i-1, 1); 1];
             // tmpY = tmpK \ tmpU;
-            DTYPE *tmpU = val + i * fsai_npt;
+            DTYPE *tmpU = val + j_start;
             memset(tmpU, 0, sizeof(DTYPE) * nn_cnt_i);
             tmpU[nn_cnt_i - 1] = 1.0;
             // The standard way is using LAPACK_ROW_MAJOR here, but since tmpK is 
             // symmetric, we use LAPACK_COL_MAJOR to avoid internal transpose
+            #define FSAI_USE_CHOL
+            #ifdef  FSAI_USE_CHOL
+            // CblasRowMajor + CblasLower in SYRK, == LAPACK_COL_MAJOR + 'U'
+            int info = LAPACK_POTRF(LAPACK_COL_MAJOR, 'U', nn_cnt_i, tmpK, nn_cnt_i);
+            ASSERT_PRINTF(info == 0, "LAPACK_POTRF return %d\n", info);
+            info = LAPACK_POTRS(LAPACK_COL_MAJOR, 'U', nn_cnt_i, 1, tmpK, nn_cnt_i, tmpU, nn_cnt_i);
+            ASSERT_PRINTF(info == 0, "LAPACK_POTRS return %d\n", info);
+            #else
+            for (int ii = 0; ii < nn_cnt_i; ii++)
+                for (int jj = ii + 1; jj < nn_cnt_i; jj++)
+                    tmpK[ii * nn_cnt_i + jj] = tmpK[jj * nn_cnt_i + ii];
             int info = LAPACK_GETRF(LAPACK_COL_MAJOR, nn_cnt_i, nn_cnt_i, tmpK, nn_cnt_i, nn_idx_i);
             ASSERT_PRINTF(info == 0, "LAPACK_GETRF return %d\n", info);
             info = LAPACK_GETRS(LAPACK_COL_MAJOR, 'N', nn_cnt_i, 1, tmpK, nn_cnt_i, nn_idx_i, tmpU, nn_cnt_i);
             ASSERT_PRINTF(info == 0, "LAPACK_GETRS return %d\n", info);
+            #endif
             // val(idx + (1 : nn_cnt_i)) = tmpY / sqrt(tmpY(nn_cnt_i));
             DTYPE scale_factor = 1.0 / DSQRT(tmpU[nn_cnt_i - 1]);
             for (int j = 0; j < nn_cnt_i; j++) tmpU[j] *= scale_factor;
@@ -743,22 +753,96 @@ void AFNi_FPS(const int npt, const int pt_dim, const DTYPE *coord, const int k, 
         center[i] /= (DTYPE) npt;
     }
 
-    H2P_calc_pdist2_OMP(center, 1, 1, coord, npt, npt, pt_dim, tmp_d, npt, 1);
-    for (int j = 0; j < npt; j++) min_d[j] = DBL_MAX;
-    DTYPE tmp = tmp_d[0];  idx[0] = 0;
-    for (int j = 1; j < npt; j++)
-        if (tmp_d[j] < tmp) { tmp = tmp_d[j]; idx[0] = j; }
-
-    for (int i = 1; i < k; i++)
+    int n_thread = omp_get_max_threads();
+    volatile int   *min_d_idx = (volatile int *)   malloc(sizeof(int)   * n_thread);
+    volatile DTYPE *min_d_val = (volatile DTYPE *) malloc(sizeof(DTYPE) * n_thread);
+    int min_d_idx0;
+    #pragma omp parallel num_threads(n_thread) shared(min_d_idx0)
     {
-        const DTYPE *coord_ls = coord + idx[i - 1];
-        H2P_calc_pdist2_OMP(coord_ls, npt, 1, coord, npt, npt, pt_dim, tmp_d, npt, 1);
-        for (int j = 0; j < npt; j++) min_d[j] = (tmp_d[j] < min_d[j]) ? tmp_d[j] : min_d[j];
-        tmp = min_d[0];  idx[i] = 0;
-        for (int j = 1; j < npt; j++)
-            if (min_d[j] > tmp) { tmp = min_d[j]; idx[i] = j; }
+        int tid = omp_get_thread_num();
+        int spos, len, epos;
+        calc_block_spos_len(npt, n_thread, tid, &spos, &len);
+        epos = spos + len;
+
+        // (1) Calculate the distance of all points to the center
+        for (int j = spos; j < epos; j++)
+        {
+            tmp_d[j] = 0.0;
+            min_d[j] = DBL_MAX;
+        }
+        for (int d = 0; d < pt_dim; d++)
+        {
+            DTYPE center_d = center[d];
+            const DTYPE *coord_d = coord + d * npt;
+            #pragma omp simd
+            for (int j = spos; j < epos; j++)
+            {
+                DTYPE diff = coord_d[j] - center_d;
+                tmp_d[j] += diff * diff;
+            }
+        }
+        // (2) Each thread find its local minimum
+        int tmp_idx = spos;
+        DTYPE tmp_val = tmp_d[spos];
+        for (int j = spos + 1; j < epos; j++)
+            if (tmp_d[j] < tmp_val) { tmp_val = tmp_d[j]; tmp_idx = j; }
+        min_d_idx[tid] = tmp_idx;
+        min_d_val[tid] = tmp_val;
+        // (3) Find the global minimum distance to center
+        #pragma omp barrier
+        #pragma omp master
+        {
+            int tmp_idx2 = 0;
+            DTYPE tmp_val2 = min_d_val[0];
+            for (int t = 1; t < n_thread; t++)
+                if (min_d_val[t] < tmp_val2) { tmp_val2 = min_d_val[t]; tmp_idx2 = t; }
+            idx[0] = min_d_idx[tmp_idx2];
+            min_d_idx0 = idx[0];
+        }
+        #pragma omp flush(min_d_idx0)
+
+        // Find the rest k - 1 points
+        for (int i = 1; i < k; i++)
+        {
+            #pragma omp barrier
+            // (1) Calculate the distance of all points to the last selected point and update min_d
+            memset(tmp_d + spos, 0, sizeof(DTYPE) * len);
+            for (int d = 0; d < pt_dim; d++)
+            {
+                DTYPE last_d = coord[d * npt + min_d_idx0];
+                const DTYPE *coord_d = coord + d * npt;
+                #pragma omp simd
+                for (int j = spos; j < epos; j++)
+                {
+                    DTYPE diff = coord_d[j] - last_d;
+                    tmp_d[j] += diff * diff;
+                }
+            }
+            for (int j = spos; j < epos; j++) min_d[j] = (tmp_d[j] < min_d[j]) ? tmp_d[j] : min_d[j];
+            // (2) Each thread find its local maximum in min_d
+            tmp_idx = spos;
+            tmp_val = min_d[spos];
+            for (int j = spos + 1; j < epos; j++)
+                if (min_d[j] > tmp_val) { tmp_val = min_d[j]; tmp_idx = j; }
+            min_d_idx[tid] = tmp_idx;
+            min_d_val[tid] = tmp_val;
+            // (3) Find the global maximum distance to the last selected point
+            #pragma omp barrier
+            #pragma omp master
+            {
+                int tmp_idx2 = 0;
+                DTYPE tmp_val2 = min_d_val[0];
+                for (int t = 1; t < n_thread; t++)
+                    if (min_d_val[t] > tmp_val2) { tmp_val2 = min_d_val[t]; tmp_idx2 = t; }
+                idx[i] = min_d_idx[tmp_idx2];
+                min_d_idx0 = idx[i];
+            }
+            #pragma omp flush(min_d_idx0)
+        }
     }
 
+    free((void *) min_d_idx);
+    free((void *) min_d_val);
     free(workbuf);
 }
 

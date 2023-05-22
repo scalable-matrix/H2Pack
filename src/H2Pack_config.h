@@ -31,7 +31,7 @@
 #define CBLAS_DOT       cblas_ddot      // CBLAS vector dot product
 #define CBLAS_GEMV      cblas_dgemv     // CBLAS matrix-vector multiplication
 #define CBLAS_GEMM      cblas_dgemm     // CBLAS matrix-matrix multiplication
-#define CBLAS_GER       cblas_dger      // CBLAS matrix rank-1 update
+#define CBLAS_SYRK      cblas_dsyrk     // CBLAS symmetric rank-k update
 #define CBLAS_TRSM      cblas_dtrsm     // CBLAS triangle solve
 #define LAPACK_GETRF    LAPACKE_dgetrf  // LAPACK LU factorization
 #define LAPACK_GETRS    LAPACKE_dgetrs  // LAPACK linear system solve using LU factorization
@@ -73,7 +73,7 @@
 #define CBLAS_DOT       cblas_sdot
 #define CBLAS_GEMV      cblas_sgemv
 #define CBLAS_GEMM      cblas_sgemm
-#define CBLAS_GER       cblas_sger
+#define CBLAS_SYRK      cblas_ssyrk
 #define CBLAS_TRSM      cblas_strsm
 #define LAPACK_GETRF    LAPACKE_sgetrf
 #define LAPACK_GETRS    LAPACKE_sgetrs

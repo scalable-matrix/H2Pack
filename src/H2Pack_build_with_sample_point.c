@@ -249,7 +249,7 @@ int H2P_select_sample_point_r(
 {
     ASSERT_PRINTF(h2pack->pt_dim == h2pack->xpt_dim, "Sample point algorithm does not support RPY with different radii yet\n");
 
-    int k        = h2pack->max_leaf_points * 2;
+    int k        = h2pack->max_leaf_points * 2 + 300;   // +300 is from Difeng's MATLAB code
     int pt_dim   = h2pack->pt_dim;
     int krnl_dim = h2pack->krnl_dim;
     int n_thread = h2pack->n_thread;
@@ -257,7 +257,7 @@ int H2P_select_sample_point_r(
     DTYPE L = root_enbox[pt_dim];
     for (int i = 1; i < pt_dim; i++) 
         L = (L > root_enbox[pt_dim + i]) ? root_enbox[pt_dim + i] : L;
-    L /= 6.0;  // Don't know why we need this, just copy from the MATLAB code
+    L /= 6.0;  // Don't know why we need this, just copy from Difeng's MATLAB code
 
     DTYPE *c1_enbox_size = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim * 2);
     int *r_list = (int *) malloc(sizeof(int) * pt_dim);
@@ -276,9 +276,10 @@ int H2P_select_sample_point_r(
     sub_idx = sample_idx;
 
     int stop_type = QR_REL_NRM;
-    DTYPE stop_tol = reltol * 1e-4;
-    if (stop_tol < 1e-15) stop_tol = 1e-15;
+    DTYPE stop_tol = reltol * 1e-3;
+    if (stop_tol < 1e-14) stop_tol = 1e-14;
     void *stop_param = (void *) &stop_tol;
+    srand48(19241112);
 
     // Create two sets of points in unit boxes
     DTYPE coord1_shift = L / tau;
@@ -305,6 +306,9 @@ int H2P_select_sample_point_r(
     for (int i = 0; i < A0->nrow * A0->ncol; i++)
         A0_fnorm += A0->data[i] * A0->data[i];
     A0_fnorm = DSQRT(A0_fnorm);
+    int last_sub_size = 1;
+    DTYPE stop_err = reltol * 1e-4;
+    if (stop_err < 1e-13) stop_err = 1e-13;
     while (flag == 0)
     {
         H2P_calc_enclosing_box_size(pt_dim, k, coord1->data, c1_enbox_size);
@@ -351,6 +355,7 @@ int H2P_select_sample_point_r(
                 memcpy(A1->data + A1_irow * A1->ld, A0->data + A0_irow * A0->ld, sizeof(DTYPE) * k * krnl_dim);
             }
         }
+        int curr_sub_size = sub_idx->length;
 
         // UA = U * A(subidx, :);
         H2P_dense_mat_resize(UA, U->nrow, A0->ncol);
@@ -369,9 +374,12 @@ int H2P_select_sample_point_r(
         }
         err_fnorm = DSQRT(err_fnorm);
         relerr = err_fnorm / A0_fnorm;
-        if ( (relerr < reltol * 0.1) || ((k - n_sample) < (k / 10)) ) flag = 1;
-        else r++;
+
+        if (curr_sub_size - last_sub_size < 2) flag = 1; 
+        if (relerr < stop_err) flag = 1; else r++;
+        last_sub_size = curr_sub_size;
     }  // End "while (flag == 0)"
+    if (h2pack->print_dbginfo) DEBUG_PRINTF("Selected r = %d\n", r);
 
     free(c1_enbox_size);
     free(r_list);
@@ -421,8 +429,8 @@ void H2P_select_sample_point(
     for (int i = 0; i < n_node; i++)
     {
         H2P_int_vec_init(adm_list + i, n_node);
-        H2P_dense_mat_init(clu_refine + i, 300, xpt_dim);
-        H2P_dense_mat_init(sample_pt + i, 300, xpt_dim);
+        H2P_dense_mat_init(clu_refine + i, xpt_dim, 0);
+        H2P_dense_mat_init(sample_pt + i, xpt_dim, 0);
     }
 
     // 2. Convert the reduced admissible pairs to reduced admissible list of each node
@@ -562,7 +570,8 @@ void H2P_select_sample_point(
 
                 // If select_sp_alg == 0, use the old algorithm
                 int yFi_size = 0;
-                if ((sample_pt[node]->ncol > nFp) || (select_sp_alg == 0))
+                int ri_npt0 = H2P_proportional_int_decompose(pt_dim, r_down, enbox_size, ri_list);
+                if ((ri_npt0 > nFp) || (select_sp_alg == 0))
                 {
                     // Put all refined points in far-field nodes into yFi
                     H2P_dense_mat_resize(yFi, xpt_dim, nFp);
@@ -578,10 +587,8 @@ void H2P_select_sample_point(
                         yFi_size += pair_node_npt;
                     }
                 } else {
-                    int ri_npt0 = H2P_proportional_int_decompose(pt_dim, r_down, enbox_size, ri_list);
-                    int num_far = adm_list[node]->length;
-
                     // (1) Find the center of each far-field node's refined points
+                    int num_far = adm_list[node]->length;
                     DTYPE *centers = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim * num_far);
                     for (int k = 0; k < num_far; k++)
                     {
@@ -732,7 +739,7 @@ void H2P_select_sample_point(
                     free(group_displs);
                     free(anchor_group);
                     H2P_dense_mat_destroy(&anchor_coord_);
-                }  // End of "if (sample_pt[node]->ncol > nFp)"
+                }  // End of "if ((ri_npt0 > nFp) || (select_sp_alg == 0))"
 
                 // Stage 2 in Difeng's code
 
@@ -756,7 +763,7 @@ void H2P_select_sample_point(
                 }
 
                 // (3) Pass refined sample points to children
-                int sample_npt   = sample_idx->length;
+                int sample_npt   = sample_pt[node]->ncol;  // sample_idx is not always initialized
                 int n_child_node = n_child[node];
                 int *child_nodes = children + node * max_child;
                 for (int i_child = 0; i_child < n_child_node; i_child++)

@@ -103,14 +103,19 @@ void Nys_precond_build_(
     // V = V * inv(S);
     info = LAPACK_SYEVD(LAPACK_ROW_MAJOR, 'V', 'U', n1, MTM, n1, S);
     DTYPE max_S = S[n1 - 1];
+    DTYPE S_min_tol = DSQRT(S[n1 - 1]) * D_EPS * 10;
+    DTYPE *invS = (DTYPE *) malloc(sizeof(DTYPE) * n1);
     for (int i = 0; i < n1; i++)
     {
         if (S[i] < 0) S[i] = max_S * D_EPS * D_EPS;  // Safeguard
         S[i] = DSQRT(S[i]);
+        invS[i] = 1.0 / S[i];
+        // Truncate extremely small eigenvalues?
+        if (S[i] < S_min_tol) invS[i] = 0.0;
     }
     #pragma omp parallel for schedule(static)
     for (int i = 0; i < n1; i++)
-        for (int j = 0; j < n1; j++) MTM[i * n1 + j] /= S[j];
+        for (int j = 0; j < n1; j++) MTM[i * n1 + j] *= invS[j];
     // U = M * V;
     DTYPE *U = (DTYPE *) malloc(sizeof(DTYPE) * n * n1);
     ASSERT_PRINTF(U != NULL, "Failed to allocate U of size %d x %d\n", n, n1);
@@ -121,6 +126,7 @@ void Nys_precond_build_(
     *nys_U_ = U;
     free(M);
     free(MTM);
+    free(invS);
     int min_eigval_idx = 0;
     #endif
 

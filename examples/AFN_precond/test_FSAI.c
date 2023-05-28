@@ -147,7 +147,7 @@ int main(int argc, char **argv)
     coord    = (DTYPE*) malloc(sizeof(DTYPE) * npt * pt_dim);
     if (kid < 1 || kid > 4) kid = 1;
     if (pt_dim < 2 || pt_dim > 3) pt_dim = 3;
-    if (argc >= 11)
+    if (argc >= 9)
     {
         FILE *inf = fopen(argv[8], "rb");
         fread(coord, sizeof(DTYPE), npt * pt_dim, inf);

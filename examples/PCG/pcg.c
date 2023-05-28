@@ -103,9 +103,21 @@ void pcg(
     *relres_ = r_2norm / b_2norm;
     *iter_   = iter;
 
+    // Sanity check
+    Ax(Ax_param, x, r);
+    r_2norm = 0.0;
+    #pragma omp simd
+    for (int i = 0; i < n; i++)
+    {
+        r[i] = b[i] - r[i];
+        r_2norm += r[i] * r[i];
+    }
+    r_2norm = DSQRT(r_2norm);
+
     double et = omp_get_wtime();
     if (print_level > 0)
     {
+        printf("PCG: Final relres = %e\n", r_2norm / b_2norm);
         if (*flag_ == 0) printf("PCG: Converged in %d iterations, %.2f seconds\n\n", iter, et - st);
         else printf("PCG: Reached maximum number of iterations, %.2f seconds\n\n", et - st);
     }

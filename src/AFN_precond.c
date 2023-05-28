@@ -96,15 +96,18 @@ void Nys_precond_build_(
     // MTM = M' * M;
     DTYPE *MTM = (DTYPE *) malloc(sizeof(DTYPE) * n1 * n1);
     ASSERT_PRINTF(MTM != NULL, "Failed to allocate MTM of size %d x %d\n", n1, n1);
-    CBLAS_GEMM(
-        CblasRowMajor, CblasTrans, CblasNoTrans, n1, n1, n, 
-        1.0, M, n1, M, n1, 0.0, MTM, n1
-    );
+    // GEMM might make MTM not SPD, use SYRK seems to be better
+    CBLAS_SYRK(CblasRowMajor, CblasUpper, CblasTrans, n1, n, 1.0, M, n1, 0.0, MTM, n1);
     // [V, S] = eig(MTM);
     // S = sqrt(S);
     // V = V * inv(S);
     info = LAPACK_SYEVD(LAPACK_ROW_MAJOR, 'V', 'U', n1, MTM, n1, S);
-    for (int i = 0; i < n1; i++) S[i] = DSQRT(S[i]);
+    DTYPE max_S = S[n1 - 1];
+    for (int i = 0; i < n1; i++)
+    {
+        if (S[i] < 0) S[i] = max_S * D_EPS * D_EPS;  // Safeguard
+        S[i] = DSQRT(S[i]);
+    }
     #pragma omp parallel for schedule(static)
     for (int i = 0; i < n1; i++)
         for (int j = 0; j < n1; j++) MTM[i * n1 + j] /= S[j];

@@ -46,9 +46,9 @@ static void Laplace_2D_eval_intrin_t(KRNL_EVAL_PARAM)
     const int n1_vec = (n1 / SIMD_LEN) * SIMD_LEN;
     const DTYPE *param_ = (DTYPE*) param;
     const DTYPE diag_val = (param_ == NULL) ? 0.0 : param_[0];
-    const vec_t v_0  = vec_zero_t();
-    const vec_t v_05 = vec_set1_t(0.5);
-    const vec_t v_dv = vec_set1_t(diag_val);
+    const vec_t v_0   = vec_zero_t();
+    const vec_t v_n05 = vec_set1_t(-0.5);
+    const vec_t v_dv  = vec_set1_t(diag_val);
     for (int i = 0; i < n0; i++)
     {
         DTYPE *mat_irow = mat + i * ldm;
@@ -64,7 +64,7 @@ static void Laplace_2D_eval_intrin_t(KRNL_EVAL_PARAM)
             r2 = vec_fmadd_t(dy, dy, r2);
             
             vec_cmp_t r2_eq_0 = vec_cmp_eq_t(r2, v_0);
-            vec_t logr = vec_mul_t(v_05, vec_log_t(r2));
+            vec_t logr = vec_mul_t(v_n05, vec_log_t(r2));
             logr = vec_blend_t(logr, v_dv, r2_eq_0);
             vec_storeu_t(mat_irow + j, logr);
         }
@@ -76,7 +76,7 @@ static void Laplace_2D_eval_intrin_t(KRNL_EVAL_PARAM)
             DTYPE dx = x0_i - x1[j];
             DTYPE dy = y0_i - y1[j];
             DTYPE r2 = dx * dx + dy * dy;
-            mat_irow[j] = (r2 == 0.0) ? diag_val : DLOG(r2);
+            mat_irow[j] = (r2 == 0.0) ? diag_val : (-0.5 * DLOG(r2));
         }
     }
 }
@@ -86,9 +86,9 @@ static void Laplace_2D_krnl_bimv_intrin_t(KRNL_BIMV_PARAM)
     EXTRACT_2D_COORD();
     const DTYPE *param_ = (DTYPE*) param;
     const DTYPE diag_val = (param_ == NULL) ? 0.0 : param_[0];
-    const vec_t v_0  = vec_zero_t();
-    const vec_t v_05 = vec_set1_t(0.5);
-    const vec_t v_dv = vec_set1_t(diag_val);
+    const vec_t v_0   = vec_zero_t();
+    const vec_t v_n05 = vec_set1_t(-0.5);
+    const vec_t v_dv  = vec_set1_t(diag_val);
     for (int i = 0; i < n0; i += 2)
     {
         vec_t sum_v0 = vec_zero_t();
@@ -121,8 +121,8 @@ static void Laplace_2D_krnl_bimv_intrin_t(KRNL_BIMV_PARAM)
             
             r20_eq_0 = vec_cmp_eq_t(r20, v_0);
             r21_eq_0 = vec_cmp_eq_t(r21, v_0);
-            r20 = vec_mul_t(v_05, vec_log_t(r20));
-            r21 = vec_mul_t(v_05, vec_log_t(r21));
+            r20 = vec_mul_t(v_n05, vec_log_t(r20));
+            r21 = vec_mul_t(v_n05, vec_log_t(r21));
             r20 = vec_blend_t(r20, v_dv, r20_eq_0);
             r21 = vec_blend_t(r21, v_dv, r21_eq_0);
             

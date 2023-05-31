@@ -68,8 +68,8 @@ int main(int argc, char **argv)
         krnl_eval = Laplace_2D_eval_intrin_t;
         krnl_bimv = Laplace_2D_krnl_bimv_intrin_t;
         krnl_bimv_flops = Laplace_2D_krnl_bimv_flop;
-        // Laplace_2D computes log(|x - y|), so the scaling factor is -1 / (2 * pi)
-        k_scale = -1.0 / (2.0 * M_PI);
+        // Laplace_2D computes -log(|x - y|), so the scaling factor is 1 / (2 * pi)
+        k_scale = 1.0 / (2.0 * M_PI);
         dv = diag_quad_2d[dim_n - 1];
         printf("-1 / (2 * pi) * log(|x - y|), K(x, x) = %e\n", dv);
     } else {

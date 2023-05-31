@@ -31,7 +31,7 @@ int main(int argc, char **argv)
         printf("  - mu        [double] : Kernel matrix diagonal shift\n");
         printf("  - npt       [int]    : Number of points\n");
         printf("  - pt_dim    [int]    : Point dimension\n");
-        printf("  - nys_k     [int]    : Nystrom approximation rank\n");
+        printf("  - nys_k     [int]    : Randomized Nystrom approximation rank\n");
         printf("  - coord_bin [str]    : (Optional) Binary file containing the coordinates, size pt_dim * npt,\n");
         printf("                         row major, each column is a point coordinate\n");
         return 255;
@@ -63,9 +63,10 @@ int main(int argc, char **argv)
     // Build H2 matrix
     double st, et;
     H2Pack_p h2mat = NULL;
-    H2mat_build(npt, pt_dim, coord, krnl_eval, krnl_bimv, krnl_bimv_flops, krnl_param, &h2mat);
+    DTYPE h2_reltol = 1e-8;
+    H2mat_build(npt, pt_dim, coord, h2_reltol, krnl_eval, krnl_bimv, krnl_bimv_flops, krnl_param, &h2mat);
 
-    // Build Nystrom preconditioner
+    // Build Randomized Nystrom preconditioner
     printf("Building randomize Nystrom preconditioner...\n");
     st = get_wtime_sec();
     Nys_precond_p Nys_precond = NULL;
@@ -77,7 +78,7 @@ int main(int argc, char **argv)
     DTYPE CG_reltol = 1e-4;
     int max_iter = 400;
     test_PCG(
-        H2Pack_matvec, (void *) h2mat, 
+        H2Pack_matvec_diagshift, (void *) h2mat, 
         (matvec_fptr) Nys_precond_apply, (void *) Nys_precond, 
         npt, max_iter, CG_reltol
     );

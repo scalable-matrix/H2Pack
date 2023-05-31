@@ -54,6 +54,10 @@ static void Coulomb_3D_eval_intrin_t(KRNL_EVAL_PARAM)
     EXTRACT_3D_COORD();
     const int n1_vec = (n1 / SIMD_LEN) * SIMD_LEN;
     const vec_t frsqrt_pf = vec_frsqrt_pf_t();
+    const DTYPE *param_ = (DTYPE*) param;
+    const DTYPE diag_val = (param_ == NULL) ? 0.0 : param_[0];
+    const vec_t v_0  = vec_zero_t();
+    const vec_t v_dv = vec_set1_t(diag_val);
     for (int i = 0; i < n0; i++)
     {
         DTYPE *mat_irow = mat + i * ldm;
@@ -71,7 +75,9 @@ static void Coulomb_3D_eval_intrin_t(KRNL_EVAL_PARAM)
             r2 = vec_fmadd_t(dy, dy, r2);
             r2 = vec_fmadd_t(dz, dz, r2);
             
+            vec_cmp_t r2_eq_0 = vec_cmp_eq_t(r2, v_0);
             vec_t rinv = vec_mul_t(frsqrt_pf, vec_frsqrt_t(r2));
+            rinv = vec_blend_t(rinv, v_dv, r2_eq_0);
             vec_storeu_t(mat_irow + j, rinv);
         }
         
@@ -84,7 +90,7 @@ static void Coulomb_3D_eval_intrin_t(KRNL_EVAL_PARAM)
             DTYPE dy = y0_i - y1[j];
             DTYPE dz = z0_i - z1[j];
             DTYPE r2 = dx * dx + dy * dy + dz * dz;
-            mat_irow[j] = (r2 == 0.0) ? 0.0 : (1.0 / DSQRT(r2));
+            mat_irow[j] = (r2 == 0.0) ? diag_val : (1.0 / DSQRT(r2));
         }
     }
 }
@@ -93,6 +99,10 @@ static void Coulomb_3D_krnl_bimv_intrin_t(KRNL_BIMV_PARAM)
 {
     EXTRACT_3D_COORD();
     const vec_t frsqrt_pf = vec_frsqrt_pf_t();
+    const DTYPE *param_ = (DTYPE*) param;
+    const DTYPE diag_val = (param_ == NULL) ? 0.0 : param_[0];
+    const vec_t v_0  = vec_zero_t();
+    const vec_t v_dv = vec_set1_t(diag_val);
     for (int i = 0; i < n0; i += 2)
     {
         vec_t sum_v0 = vec_zero_t();
@@ -108,6 +118,7 @@ static void Coulomb_3D_krnl_bimv_intrin_t(KRNL_BIMV_PARAM)
         for (int j = 0; j < n1; j += SIMD_LEN)
         {
             vec_t d0, d1, jv, r20, r21;
+            vec_cmp_t r20_eq_0, r21_eq_0;
             
             jv  = vec_load_t(x1 + j);
             d0  = vec_sub_t(x0_i0v, jv);
@@ -129,9 +140,13 @@ static void Coulomb_3D_krnl_bimv_intrin_t(KRNL_BIMV_PARAM)
             
             d0 = vec_load_t(x_in_0 + j);
             d1 = vec_load_t(x_out_1 + j);
-            
+
+            r20_eq_0 = vec_cmp_eq_t(r20, v_0);
+            r21_eq_0 = vec_cmp_eq_t(r21, v_0);
             r20 = vec_mul_t(frsqrt_pf, vec_frsqrt_t(r20));
             r21 = vec_mul_t(frsqrt_pf, vec_frsqrt_t(r21));
+            r20 = vec_blend_t(r20, v_dv, r20_eq_0);
+            r21 = vec_blend_t(r21, v_dv, r21_eq_0);
             
             sum_v0 = vec_fmadd_t(d0, r20, sum_v0);
             sum_v1 = vec_fmadd_t(d0, r21, sum_v1);

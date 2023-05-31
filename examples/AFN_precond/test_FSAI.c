@@ -68,9 +68,10 @@ int main(int argc, char **argv)
     // Build H2 matrix
     double st, et;
     H2Pack_p h2mat = NULL;
-    H2mat_build(npt, pt_dim, coord, krnl_eval, krnl_bimv, krnl_bimv_flops, krnl_param, &h2mat);
+    DTYPE h2_reltol = 1e-8;
+    H2mat_build(npt, pt_dim, coord, h2_reltol, krnl_eval, krnl_bimv, krnl_bimv_flops, krnl_param, &h2mat);
 
-    // Build AFN preconditioner
+    // Build FSAI preconditioner
     printf("Building FSAI preconditioner...\n");
     st = get_wtime_sec();
     FSAI_precond_p FSAI_precond = NULL;
@@ -91,7 +92,7 @@ int main(int argc, char **argv)
     DTYPE CG_reltol = 1e-4;
     int max_iter = 400;
     test_PCG(
-        H2Pack_matvec, (void *) h2mat, 
+        H2Pack_matvec_diagshift, (void *) h2mat, 
         (matvec_fptr) FSAI_precond_apply, (void *) FSAI_precond, 
         npt, max_iter, CG_reltol
     );

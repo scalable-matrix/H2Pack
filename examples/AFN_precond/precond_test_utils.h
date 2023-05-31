@@ -10,7 +10,7 @@
 static DTYPE shift_ = 0.0;
 static int n_ = 0;
 
-static void H2Pack_matvec(const void *h2pack_, const DTYPE *b, DTYPE *x)
+static void H2Pack_matvec_diagshift(const void *h2pack_, const DTYPE *b, DTYPE *x)
 {
     H2Pack_p h2pack = (H2Pack_p) h2pack_;
     H2P_matvec(h2pack, b, x);
@@ -97,14 +97,13 @@ static void select_kernel(
 }
 
 static void H2mat_build(
-    const int npt, const int pt_dim, DTYPE *coord, kernel_eval_fptr krnl_eval, 
+    const int npt, const int pt_dim, DTYPE *coord, DTYPE reltol, kernel_eval_fptr krnl_eval, 
     kernel_bimv_fptr krnl_bimv, int krnl_bimv_flops, void *krnl_param, H2Pack_p *h2mat_
 )
 {
     double st, et;
     H2Pack_p h2mat = NULL;
     int krnl_dim = 1, BD_JIT = 1;
-    DTYPE reltol = 1e-8;
     H2P_dense_mat_p *pp = NULL;
     printf("Building H2 representation with reltol = %.4e for kernel matrix...\n", reltol);
     H2P_init(&h2mat, pt_dim, krnl_dim, QR_REL_NRM, &reltol);
@@ -141,7 +140,7 @@ static void test_PCG(
     }
     pcg(
         n, CG_reltol, max_iter, 
-        H2Pack_matvec, Ax_param, b, invMx, invMx_param, x,
+        Ax, Ax_param, b, invMx, invMx_param, x,
         &flag, &relres, &iter, NULL, pcg_print_level
     );
     free(x);

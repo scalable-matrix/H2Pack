@@ -22,10 +22,17 @@ void pcg(
     DTYPE *s = (DTYPE*) malloc(vec_msize);
     assert(r != NULL && z != NULL && p != NULL && s != NULL);
 
-    double st = omp_get_wtime();
+    double st, st0, et, et0;
+    double t_Ax = 0, t_invMx = 0, t_vec = 0;
+    st0 = omp_get_wtime();
 
     // r = b - A * x;
+    st = omp_get_wtime();
     Ax(Ax_param, x, r);
+    et = omp_get_wtime();
+    t_Ax += et - st;
+
+    st = omp_get_wtime();
     #pragma omp simd
     for (int i = 0; i < n; i++) r[i] = b[i] - r[i];
     
@@ -42,6 +49,8 @@ void pcg(
     b_2norm = DSQRT(b_2norm);
     r_2norm = DSQRT(r_2norm);
     rn_stop = b_2norm * tol;
+    et = omp_get_wtime();
+    t_vec += et - st;
 
     if (print_level > 0)
     {        
@@ -55,12 +64,16 @@ void pcg(
     while (iter < max_iter && r_2norm > rn_stop)
     {
         // z = M \ r;
+        st = omp_get_wtime();
         if (invMx != NULL) invMx(invMx_param, r, z);
         else memcpy(z, r, vec_msize);
+        et = omp_get_wtime();
+        t_invMx += et - st;
 
         // rho0 = rho;
         // rho  = r' * z;
         // beta = rho / rho0;
+        st = omp_get_wtime();
         rho0 = rho;
         rho  = 0.0;
         #pragma omp simd
@@ -74,10 +87,17 @@ void pcg(
             #pragma omp simd
             for (int i = 0; i < n; i++) p[i] = z[i] + beta * p[i];
         }
+        et = omp_get_wtime();
+        t_vec += et - st;
 
         // s = A * p;
         // alpha = rho / (p' * s);
+        st = omp_get_wtime();
         Ax(Ax_param, p, s);
+        et = omp_get_wtime();
+        t_Ax += et - st;
+
+        st = omp_get_wtime();
         tmp = 0.0;
         #pragma omp simd
         for (int i = 0; i < n; i++) tmp += p[i] * s[i];
@@ -96,12 +116,15 @@ void pcg(
         r_2norm = DSQRT(r_2norm);
         if (res_vec != NULL) res_vec[iter] = r_2norm;
         iter++;
+        et = omp_get_wtime();
+        t_vec += et - st;
 
         if (print_level > 0) printf("%4d      %5.4e      %5.4e\n", iter, r_2norm, r_2norm / b_2norm);
     }  // End of while
     *flag_   = (r_2norm <= rn_stop) ? 0 : 1;
     *relres_ = r_2norm / b_2norm;
     *iter_   = iter;
+    et0 = omp_get_wtime();
 
     // Sanity check
     Ax(Ax_param, x, r);
@@ -114,12 +137,12 @@ void pcg(
     }
     r_2norm = DSQRT(r_2norm);
 
-    double et = omp_get_wtime();
     if (print_level > 0)
     {
         printf("PCG: Final relres = %e\n", r_2norm / b_2norm);
-        if (*flag_ == 0) printf("PCG: Converged in %d iterations, %.2f seconds\n\n", iter, et - st);
-        else printf("PCG: Reached maximum number of iterations, %.2f seconds\n\n", et - st);
+        if (*flag_ == 0) printf("PCG: Converged in %d iterations, %.2f seconds\n", iter, et0 - st0);
+        else printf("PCG: Reached maximum number of iterations, %.2f seconds\n", et0 - st0);
+        printf("PCG: time for Ax, invMx, vector operations: %.2f, %.2f, %.2f seconds\n\n", t_Ax, t_invMx, t_vec);
     }
 
     free(r);

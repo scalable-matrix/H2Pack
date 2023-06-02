@@ -33,6 +33,7 @@
 #define CBLAS_GEMM      cblas_dgemm     // CBLAS matrix-matrix multiplication
 #define CBLAS_SYRK      cblas_dsyrk     // CBLAS symmetric rank-k update
 #define CBLAS_TRSM      cblas_dtrsm     // CBLAS triangle solve
+#define CBLAS_TRMM      cblas_dtrmm     // CBLAS triangle matrix multiplication
 #define LAPACK_GETRF    LAPACKE_dgetrf  // LAPACK LU factorization
 #define LAPACK_GETRS    LAPACKE_dgetrs  // LAPACK linear system solve using LU factorization
 #define LAPACK_GETRI    LAPACKE_dgetri  // LAPACK LU inverse matrix
@@ -75,6 +76,7 @@
 #define CBLAS_GEMM      cblas_sgemm
 #define CBLAS_SYRK      cblas_ssyrk
 #define CBLAS_TRSM      cblas_strsm
+#define CBLAS_TRMM      cblas_strmm
 #define LAPACK_GETRF    LAPACKE_sgetrf
 #define LAPACK_GETRS    LAPACKE_sgetrs
 #define LAPACK_GETRI    LAPACKE_sgetri

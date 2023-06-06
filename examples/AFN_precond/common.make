@@ -30,8 +30,8 @@ endif
 
 C_SRCS 	= $(wildcard *.c)
 C_OBJS  = $(C_SRCS:.c=.c.o)
-EXES    = test_AFN.exe test_Nys.exe test_FSAI.exe test_AFN_IE.exe
-SHARED_OBJS = FSAI_precond.c.o Nys_precond.c.o ../PCG/pcg.c.o 
+EXES    = test_AFN.exe test_Nys.exe test_AFN_IE.exe
+SHARED_OBJS = Nys_precond.c.o ../PCG/pcg.c.o 
 
 # Delete the default old-fashion double-suffix rules
 .SUFFIXES:

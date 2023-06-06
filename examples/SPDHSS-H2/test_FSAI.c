@@ -7,7 +7,7 @@
 #include <omp.h>
 
 #include "FSAI_precond.h"
-#include "precond_test_utils.h"
+#include "../AFN_precond/precond_test_utils.h"
 #include "../PCG/pcg.h"
 
 int main(int argc, char **argv)
@@ -73,20 +73,10 @@ int main(int argc, char **argv)
 
     // Build FSAI preconditioner
     printf("Building FSAI preconditioner...\n");
-    st = get_wtime_sec();
     FSAI_precond_p FSAI_precond = NULL;
-    void *h2mat_ = (fast_knn) ? (void *) h2mat : NULL;
-    FSAI_precond_build(
-        krnl_eval, krnl_param, fsai_npt, 
-        npt, pt_dim, coord, npt, 
-        mu, h2mat_, &FSAI_precond
-    );
-    et = get_wtime_sec();
-    printf("FSAI preconditioner build time = %.3f s\n", et - st);
-    printf("  * KNN search                 = %.3f s\n", FSAI_precond->t_knn);
-    printf("  * FSAI COO matrix build      = %.3f s\n", FSAI_precond->t_fsai);
-    printf("  * FSAI COO matrix to CSR     = %.3f s\n", FSAI_precond->t_csr);
-    printf("\n");
+    H2P_build_FSAI_precond(h2mat, fsai_npt, mu, &FSAI_precond);
+    int nnz_upper = fsai_npt * (fsai_npt + 1) / 2 + fsai_npt * (npt - fsai_npt);
+    DEBUG_PRINTF("FSAI G matrix nnz = %d, nnz upper bound = %d\n", FSAI_precond->G->nnz, nnz_upper);
 
     // PCG test
     DTYPE CG_reltol = 1e-4;
@@ -96,6 +86,7 @@ int main(int argc, char **argv)
         (matvec_fptr) FSAI_precond_apply, (void *) FSAI_precond, 
         npt, max_iter, CG_reltol
     );
+    FSAI_precond_print_stat(FSAI_precond);
 
     // Clean up
     printf("\n");

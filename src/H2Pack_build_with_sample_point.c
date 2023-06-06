@@ -905,7 +905,10 @@ void H2P_build_H2_UJ_sample(H2Pack_p h2pack, H2P_dense_mat_p *sample_pt)
             H2P_dense_mat_resize(node_skel_coord, xpt_dim, J[node]->length);
             if (height == 0)
             {
-                node_skel_coord = J_coord[node];
+                copy_matrix(
+                    sizeof(DTYPE), xpt_dim, J[node]->length, J_coord[node]->data, 
+                    J_coord[node]->ld, node_skel_coord->data, node_skel_coord->ld, 0
+                );
             } else {
                 int n_child_node = n_child[node];
                 int *child_nodes = children + node * max_child;
@@ -953,7 +956,8 @@ void H2P_build_H2_UJ_sample(H2Pack_p h2pack, H2P_dense_mat_p *sample_pt)
             for (int k = 0; k < sub_idx->length; k++)
                 J[node]->data[k] = J[node]->data[sub_idx->data[k]];
             J[node]->length = sub_idx->length;
-            H2P_dense_mat_init(&J_coord[node], xpt_dim, sub_idx->length);
+            if (J_coord[node] == NULL) H2P_dense_mat_init(&J_coord[node], xpt_dim, sub_idx->length);
+            else H2P_dense_mat_resize(J_coord[node], xpt_dim, sub_idx->length);
             H2P_gather_matrix_columns(
                 coord, n_point, J_coord[node]->data, J[node]->length, 
                 xpt_dim, J[node]->data, J[node]->length

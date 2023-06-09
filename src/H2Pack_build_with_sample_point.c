@@ -15,13 +15,15 @@
 #include "utils.h"
 
 // Calculate the size of the minimal enclosing box for a point cluster
+// Note: H2P_calc_enclosing_box() calculates the centroid of the point cluster first,
+//       then calculate the size of the enclosing box. The obtained enbox may not be the minimal.
 // Input parameters:
 //   pt_dim : Point dimensions
 //   npt    : Number of points in the cluster
 //   coord  : Size pt_dim * npt, each column is a point coordinate
 // Output parameter:
-//   enbox_size : Size pt_dim, size of the minimal enclosing box for the given point cluster
-void H2P_calc_enclosing_box_size(const int pt_dim, const int npt, DTYPE *coord, DTYPE *enbox_size)
+//   enbox : Size 2 * pt_dim, minimal enclosing box of the point cluster
+void H2P_calc_min_enbox(const int pt_dim, const int npt, DTYPE *coord, DTYPE *enbox)
 {
     for (int i = 0; i < pt_dim; i++)
     {
@@ -32,7 +34,8 @@ void H2P_calc_enclosing_box_size(const int pt_dim, const int npt, DTYPE *coord, 
             if (coord_i[j] > max_c) max_c = coord_i[j];
             if (coord_i[j] < min_c) min_c = coord_i[j];
         }
-        enbox_size[i] = max_c - min_c;
+        enbox[i] = min_c;
+        enbox[pt_dim + i] = max_c - min_c;
     }
 }
 
@@ -41,13 +44,13 @@ void H2P_calc_enclosing_box_size(const int pt_dim, const int npt, DTYPE *coord, 
 // Input parameters:
 //   nelem      : Number of integers after decomposition
 //   decomp_sum : The target number to be decomposed
-//   prop       : Size 2 * nelem, the first nelem values are the proportions
+//   prop       : Size nelem, proportions
 // Output parameter:
 //   decomp : Decomposed values, decomp[i] ~= prop[i] / sum(prop[0:nelem-1]) * decomp_sum
 int H2P_proportional_int_decompose(const int nelem, const int decomp_sum, DTYPE *prop, int *decomp)
 {
     DTYPE sum_prop = 0.0;
-    DTYPE *decomp_prop = prop + nelem;
+    DTYPE decomp_prop[16];
     for (int i = 0; i < nelem; i++) sum_prop += prop[i];
     int decomp_sum0 = 0;
     for (int i = 0; i < nelem; i++)
@@ -77,9 +80,17 @@ int H2P_proportional_int_decompose(const int nelem, const int decomp_sum, DTYPE 
     return prod1;
 }
 
+// Select anchor grid points in a given enclosing box
+// Input parameters:
+//   pt_dim    : Point dimension
+//   enbox     : Size 2 * pt_dim, enclosing box of coord
+//   grid_size : Size pt_dim, anchor grid size
+//   grid_algo : Anchor grid generation algorithm
+// Output parameter:
+//   anchor_coord_ : Size pt_dim * anchor_npt, anchor points
 void H2P_select_anchor_grid(
-    const int pt_dim, const DTYPE *coord_min, const DTYPE *coord_max, const DTYPE *enbox_size, 
-    const int *grid_size, const int grid_algo, H2P_dense_mat_p anchor_coord_
+    const int pt_dim, const DTYPE *enbox, const int *grid_size, 
+    const int grid_algo, H2P_dense_mat_p anchor_coord_
 )
 {
     int max_grid_size = 0;
@@ -99,7 +110,7 @@ void H2P_select_anchor_grid(
     for (int i = 0; i < pt_dim; i++)
     {
         DTYPE *anchor_dim_i = anchor_dim + i * max_grid_size;
-        if (grid_size[i] == 0) anchor_dim_i[0] = (coord_min[i] + coord_max[i]) * 0.5;
+        if (grid_size[i] == 0) anchor_dim_i[0] = enbox[i] + 0.5 * enbox[pt_dim + i];
     }
     if (grid_algo == 2)  // Chebyshev anchor points
     {
@@ -107,8 +118,8 @@ void H2P_select_anchor_grid(
         {
             if (grid_size[i] == 0) continue;
             DTYPE *anchor_dim_i = anchor_dim + i * max_grid_size;
-            DTYPE s0 = 0.5 * (coord_max[i] + coord_min[i]);
-            DTYPE s1 = 0.5 * (coord_max[i] - coord_min[i]);
+            DTYPE s0 = enbox[i] + 0.5 * enbox[pt_dim + i];
+            DTYPE s1 = 0.5 * enbox[pt_dim + i];
             DTYPE s2 = M_PI / (2.0 * (DTYPE) grid_size[i] + 2);
             for (int j = 0; j <= grid_size[i]; j++)
             {
@@ -129,15 +140,15 @@ void H2P_select_anchor_grid(
     {
         for (int i = 0; i < pt_dim; i++)
         {
-            DTYPE size_i = c0 * enbox_size[i] / ((DTYPE) grid_size[i] + c1);
+            DTYPE size_i = c0 * enbox[pt_dim + i] / ((DTYPE) grid_size[i] + c1);
             DTYPE *anchor_dim_i = anchor_dim + i * max_grid_size;
             for (int j = 0; j <= grid_size[i]; j++)
-                anchor_dim_i[j] = coord_min[i] + c2 * size_i + size_i * (DTYPE) j;
+                anchor_dim_i[j] = enbox[i] + c2 * size_i + size_i * (DTYPE) j;
         }
     }
 
     // 2. Do a tensor product to get all anchor points
-    int *stride = (int *) malloc(sizeof(int) * (pt_dim + 1));
+    int stride[16];
     stride[0] = 1;
     for (int i = 0; i < pt_dim; i++) stride[i + 1] = stride[i] * (grid_size[i] + 1);
     for (int i = 0; i < anchor_npt; i++)
@@ -149,7 +160,6 @@ void H2P_select_anchor_grid(
         }
     }
 
-    free(stride);
     free(anchor_dim);
 }
 
@@ -158,46 +168,26 @@ void H2P_select_anchor_grid(
 // Input parameters:
 //   pt_dim    : Point dimension
 //   coord     : Size pt_dim * npt, each column is a point coordinate
+//   enbox     : Size 2 * pt_dim, enclosing box of coord
 //   grid_size : Size pt_dim, anchor grid size
 //   grid_algo : Anchor grid generation algorithm
 //   n_thread  : Number of threads to use
 // Output parameters:
 //   sample_idx : Indices of the chosen sample points
 void H2P_select_cluster_sample(
-    const int pt_dim, H2P_dense_mat_p coord, const int *grid_size, const int grid_algo, 
-    const int n_thread, H2P_int_vec_p sample_idx
+    const int pt_dim, H2P_dense_mat_p coord, DTYPE *enbox,
+    const int *grid_size, const int grid_algo, const int n_thread, H2P_int_vec_p sample_idx
 )
 {
-    int npt = coord->ncol;
     H2P_dense_mat_p anchor_coord_;
     H2P_dense_mat_init(&anchor_coord_, pt_dim, 1024);
-    DTYPE *coord_min  = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim);
-    DTYPE *coord_max  = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim);
-    DTYPE *enbox_size = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim);
-    for (int i = 0; i < pt_dim; i++)
-    {
-        DTYPE *coord_i = coord->data + i * npt;
-        DTYPE max_c = coord_i[0], min_c = coord_i[0];
-        for (int j = 1; j < npt; j++)
-        {
-            if (coord_i[j] > max_c) max_c = coord_i[j];
-            if (coord_i[j] < min_c) min_c = coord_i[j];
-        }
-        coord_min[i]  = min_c;
-        coord_max[i]  = max_c;
-        enbox_size[i] = max_c - min_c;
-    }
-    H2P_select_anchor_grid(
-        pt_dim, coord_min, coord_max, enbox_size, 
-        grid_size, grid_algo, anchor_coord_
-    );
-    free(coord_min);
-    free(coord_max);
-    free(enbox_size);
-    DTYPE *anchor_coord = anchor_coord_->data;
+    H2P_select_anchor_grid(pt_dim, enbox, grid_size, grid_algo, anchor_coord_);
+    
     
     // Choose nearest points in the given point cluster
+    int npt = coord->ncol;
     int anchor_npt = anchor_coord_->ncol;
+    DTYPE *anchor_coord = anchor_coord_->data;
     DTYPE *dist2_buf = (DTYPE *) malloc(sizeof(DTYPE) * n_thread * npt);
     int *sample_idx_flag = (int *) malloc(sizeof(int) * npt);
     for (int i = 0; i < npt; i++) sample_idx_flag[i] = -1;
@@ -259,8 +249,6 @@ int H2P_select_sample_point_r(
         L = (L > root_enbox[pt_dim + i]) ? root_enbox[pt_dim + i] : L;
     L /= 6.0;  // Don't know why we need this, just copy from Difeng's MATLAB code
 
-    DTYPE *c1_enbox_size = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim * 2);
-    int *r_list = (int *) malloc(sizeof(int) * pt_dim);
     H2P_dense_mat_p coord0, coord1, coord1s, A0, A1, U, UA, QR_buff;
     H2P_int_vec_p sample_idx, sub_idx, ID_buff;
     H2P_dense_mat_init(&coord0,  pt_dim, k);
@@ -275,10 +263,9 @@ int H2P_select_sample_point_r(
     H2P_int_vec_init(&ID_buff, 1024);
     sub_idx = sample_idx;
 
-    int stop_type = QR_REL_NRM;
-    DTYPE stop_tol = reltol * 1e-3;
-    if (stop_tol < 1e-14) stop_tol = 1e-14;
-    void *stop_param = (void *) &stop_tol;
+    int ID_stop_type = QR_REL_NRM;
+    DTYPE ID_stop_tol = 1e-14;
+    void *ID_stop_param = (void *) &ID_stop_tol;
     srand48(19241112);
 
     // Create two sets of points in unit boxes
@@ -291,9 +278,11 @@ int H2P_select_sample_point_r(
 
     // Find an r value by checking approximation error to A
     // The r initial guess formula is provided by Difeng
-    int r1 = floor(-1.25 * log10(stop_tol) - 0.25);
+    DTYPE c1_enbox[32];
+    int r_list[16];
+    int r1 = floor(-1.25 * log10(reltol) - 0.25);
     if (r1 < 1) r1 = 1;
-    int r2 = ceil(sqrt(floor(2.0 * log10(stop_tol) / log10(0.7))));
+    int r2 = ceil(sqrt(floor(2.0 * log10(reltol) / log10(0.7))));
     int r = (r1 < r2) ? r1 : r2;
     int flag = 0;
     DTYPE A0_fnorm = 0.0;
@@ -306,17 +295,15 @@ int H2P_select_sample_point_r(
     for (int i = 0; i < A0->nrow * A0->ncol; i++)
         A0_fnorm += A0->data[i] * A0->data[i];
     A0_fnorm = DSQRT(A0_fnorm);
-    int last_sub_size = 1;
-    DTYPE stop_err = reltol * 1e-4;
-    if (stop_err < 1e-13) stop_err = 1e-13;
+    DTYPE UA_stop_err = reltol * 1e-4;
+    if (UA_stop_err < 1e-12) UA_stop_err = 1e-12;
     while (flag == 0)
     {
-        H2P_calc_enclosing_box_size(pt_dim, k, coord1->data, c1_enbox_size);
-        H2P_proportional_int_decompose(pt_dim, r, c1_enbox_size, r_list);
-
         // sample_idx = H2_select_cluster_sample(pt_dim, coord2, r_list, 6);
         // coord2_samples = coord2(sample_idx, :);
-        H2P_select_cluster_sample(pt_dim, coord1, r_list, 6, n_thread, sample_idx);
+        H2P_calc_min_enbox(pt_dim, k, coord1->data, c1_enbox);
+        H2P_proportional_int_decompose(pt_dim, r, &c1_enbox[pt_dim], r_list);
+        H2P_select_cluster_sample(pt_dim, coord1, c1_enbox, r_list, 6, n_thread, sample_idx);
         H2P_dense_mat_copy(coord1, coord1s);
         H2P_dense_mat_select_columns(coord1s, sample_idx);
 
@@ -339,7 +326,7 @@ int H2P_select_sample_point_r(
         }
         H2P_int_vec_set_capacity(ID_buff, 4 * A1->nrow);
         H2P_ID_compress(
-            A1, stop_type, stop_param, &U, sub_idx, 
+            A1, ID_stop_type, ID_stop_param, &U, sub_idx, 
             n_thread, QR_buff->data, ID_buff->data, krnl_dim
         );
 
@@ -355,7 +342,6 @@ int H2P_select_sample_point_r(
                 memcpy(A1->data + A1_irow * A1->ld, A0->data + A0_irow * A0->ld, sizeof(DTYPE) * k * krnl_dim);
             }
         }
-        int curr_sub_size = sub_idx->length;
 
         // UA = U * A(subidx, :);
         H2P_dense_mat_resize(UA, U->nrow, A0->ncol);
@@ -364,7 +350,7 @@ int H2P_select_sample_point_r(
             1.0, U->data, U->ld, A1->data, A1->ld, 0, UA->data, UA->ld
         );
 
-        // err = norm(UA - A, 'fro') / norm(A, 'fro');
+        // relerr = norm(UA - A, 'fro') / norm(A, 'fro');
         DTYPE err_fnorm = 0.0, relerr;
         #pragma omp parallel for reduction(+: err_fnorm)
         for (int i = 0; i < A0->nrow * A0->ncol; i++)
@@ -375,14 +361,10 @@ int H2P_select_sample_point_r(
         err_fnorm = DSQRT(err_fnorm);
         relerr = err_fnorm / A0_fnorm;
 
-        if (curr_sub_size - last_sub_size < 2) flag = 1; 
-        if (relerr < stop_err) flag = 1; else r++;
-        last_sub_size = curr_sub_size;
+        if (relerr < UA_stop_err) flag = 1; else r++;
     }  // End "while (flag == 0)"
     if (h2pack->print_dbginfo) DEBUG_PRINTF("Selected r = %d\n", r);
 
-    free(c1_enbox_size);
-    free(r_list);
     H2P_dense_mat_destroy(&coord0);
     H2P_dense_mat_destroy(&coord1);
     H2P_dense_mat_destroy(&coord1s);
@@ -421,6 +403,7 @@ void H2P_select_sample_point(
 
     int select_sp_alg = 0;
     GET_ENV_INT_VAR(select_sp_alg, "H2P_SELECT_SP_ALG", "select_sp_alg", 1, 0, 1);
+    double t_ri, t_up, t_down, st, et;
 
     // 1. Allocate temporary arrays and output arrays
     H2P_int_vec_p   *adm_list   = (H2P_int_vec_p *)   malloc(sizeof(H2P_int_vec_p)   * n_node);
@@ -442,9 +425,14 @@ void H2P_select_sample_point(
         H2P_int_vec_push_back(adm_list[c1], c0);
     }
 
+    // 3. Select the ri parameter
+    st = get_wtime_sec();
     int ri = H2P_select_sample_point_r(h2pack, krnl_param, krnl_eval, tau, h2pack->QR_stop_tol);
+    et = get_wtime_sec();
+    t_ri = et - st;
 
-    // 3. Bottom-up sweep
+    // 4. Bottom-up sweep
+    st = get_wtime_sec();
     int r_up = ri;
     for (int i = max_level; i >= min_adm_level; i--)
     {
@@ -492,31 +480,32 @@ void H2P_select_sample_point(
         // (2) Select refined points for all nodes at i-th level
         #pragma omp parallel
         {
-            int *ri_list = (int *) malloc(sizeof(int) * pt_dim);
+            int ri_list[16];
+            DTYPE enbox[32];
             H2P_int_vec_p sample_idx;
             H2P_int_vec_init(&sample_idx, 1024);
-            DTYPE *enbox_size = (DTYPE *) malloc(sizeof(DTYPE) * 2 * pt_dim);
             #pragma omp for schedule(dynamic)
             for (int j = 0; j < level_i_n_node; j++)
             {
                 int node = level_i_nodes[j];
                 int node_npt_refine = clu_refine[node]->ncol;
                 if (node_npt_refine <= 5) continue;
-                H2P_calc_enclosing_box_size(pt_dim, clu_refine[node]->ncol, clu_refine[node]->data, enbox_size);
-                int ri_npt = H2P_proportional_int_decompose(pt_dim, r_up, enbox_size, ri_list);
+                H2P_calc_min_enbox(pt_dim, clu_refine[node]->ncol, clu_refine[node]->data, enbox);
+                int ri_npt = H2P_proportional_int_decompose(pt_dim, r_up, &enbox[pt_dim], ri_list);
                 if (ri_npt < node_npt_refine)
                 {
-                    H2P_select_cluster_sample(pt_dim, clu_refine[node], ri_list, 6,  1, sample_idx);
+                    H2P_select_cluster_sample(pt_dim, clu_refine[node], enbox, ri_list, 6,  1, sample_idx);
                     H2P_dense_mat_select_columns(clu_refine[node], sample_idx);
                 }
             }  // End of j loop
             H2P_int_vec_destroy(&sample_idx);
-            free(ri_list);
-            free(enbox_size);
         }
     }  // End of i loop
-    
-    // 4. Top-down sweep
+    et = get_wtime_sec();
+    t_up = et - st;
+
+    // 5. Top-down sweep
+    st = get_wtime_sec();
     int r_down;
     if (ri > 3) r_down = (ri + 3 > 10) ? (ri + 3) : 10;
     else r_down = ri + 3;
@@ -527,10 +516,9 @@ void H2P_select_sample_point(
 
         #pragma omp parallel
         {
-            int *ri_list = (int *) malloc(sizeof(int) * pt_dim);
-            DTYPE *enbox_size = (DTYPE *) malloc(sizeof(DTYPE) * 2 * pt_dim);
-            DTYPE *coord_max  = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim);
-            DTYPE *coord_min  = (DTYPE *) malloc(sizeof(DTYPE) * pt_dim);
+            int ri_list[16];
+            DTYPE enbox[32];
+            DTYPE *coord_min = enbox, *coord_max = enbox + pt_dim;
             H2P_int_vec_p sample_idx;
             H2P_dense_mat_p workbuf_d, yFi;
             H2P_int_vec_init(&sample_idx, 1024);
@@ -564,13 +552,13 @@ void H2P_select_sample_point(
                             coord_min[ii] = (coord_min[ii] < pair_coord_ii[jj]) ? coord_min[ii] : pair_coord_ii[jj];
                             coord_max[ii] = (coord_max[ii] > pair_coord_ii[jj]) ? coord_max[ii] : pair_coord_ii[jj];
                         }
-                        enbox_size[ii] = coord_max[ii] - coord_min[ii];
                     }
                 }
+                for (int ii = 0; ii < pt_dim; ii++) enbox[pt_dim + ii] -= enbox[ii];
 
                 // If select_sp_alg == 0, use the old algorithm
                 int yFi_size = 0;
-                int ri_npt0 = H2P_proportional_int_decompose(pt_dim, r_down, enbox_size, ri_list);
+                int ri_npt0 = H2P_proportional_int_decompose(pt_dim, r_down, &enbox[pt_dim], ri_list);
                 if ((ri_npt0 > nFp) || (select_sp_alg == 0))
                 {
                     // Put all refined points in far-field nodes into yFi
@@ -607,10 +595,7 @@ void H2P_select_sample_point(
                     // (2) For each anchor point, assign it to the closest center
                     H2P_dense_mat_p anchor_coord_;
                     H2P_dense_mat_init(&anchor_coord_, 1, 1024);
-                    H2P_select_anchor_grid(
-                        pt_dim, coord_min, coord_max, enbox_size,
-                        ri_list, 2, anchor_coord_
-                    );
+                    H2P_select_anchor_grid(pt_dim, enbox, ri_list, 2, anchor_coord_);
                     int num_anchor = ri_npt0;
                     DTYPE *anchor_coord = anchor_coord_->data;
                     
@@ -754,11 +739,11 @@ void H2P_select_sample_point(
                 copy_matrix(sizeof(DTYPE), xpt_dim, yFi_size, yFi->data, yFi->ld, sample_pt[node]->data + sample_npt0, init_sample_npt, 0);
 
                 // (2) Refine initial sample points
-                H2P_calc_enclosing_box_size(pt_dim, sample_pt[node]->ncol, sample_pt[node]->data, enbox_size);
-                int ri_npt = H2P_proportional_int_decompose(pt_dim, r_down, enbox_size, ri_list);
+                H2P_calc_min_enbox(pt_dim, sample_pt[node]->ncol, sample_pt[node]->data, enbox);
+                int ri_npt = H2P_proportional_int_decompose(pt_dim, r_down, &enbox[pt_dim], ri_list);
                 if (ri_npt < init_sample_npt)
                 {
-                    H2P_select_cluster_sample(pt_dim, sample_pt[node], ri_list, 2, 1, sample_idx);
+                    H2P_select_cluster_sample(pt_dim, sample_pt[node], enbox, ri_list, 2, 1, sample_idx);
                     H2P_dense_mat_select_columns(sample_pt[node], sample_idx);
                 }
 
@@ -776,10 +761,12 @@ void H2P_select_sample_point(
             H2P_dense_mat_destroy(&workbuf_d);
             H2P_dense_mat_destroy(&yFi);
             H2P_int_vec_destroy(&sample_idx);
-            free(ri_list);
-            free(enbox_size);
         }
     }  // End of i loop
+    et = get_wtime_sec();
+    t_down = et - st;
+
+    if (h2pack->print_dbginfo) DEBUG_PRINTF("Select ri, bottom-up, top-down time = %.2f, %.2f, %.2f\n", t_ri, t_up, t_down);
 
     // Free temporary arrays and return sample points
     for (int i = 0; i < n_node; i++)
@@ -827,8 +814,7 @@ void H2P_build_H2_UJ_sample(H2Pack_p h2pack, H2P_dense_mat_p *sample_pt)
     kernel_eval_fptr krnl_eval   = h2pack->krnl_eval;
     DAG_task_queue_p upward_tq   = h2pack->upward_tq;
 
-    // 1e-4 is suggested by Difeng
-    DTYPE QR_stop_tol = h2pack->QR_stop_tol * 1e-4;  
+    DTYPE QR_stop_tol = h2pack->QR_stop_tol * 1e-2;
     
     void *stop_param = NULL;
     if (stop_type == QR_RANK) 

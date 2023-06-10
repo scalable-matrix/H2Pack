@@ -34,8 +34,11 @@ void H2P_calc_min_enbox(const int pt_dim, const int npt, DTYPE *coord, DTYPE *en
             if (coord_i[j] > max_c) max_c = coord_i[j];
             if (coord_i[j] < min_c) min_c = coord_i[j];
         }
-        enbox[i] = min_c;
-        enbox[pt_dim + i] = max_c - min_c;
+        // Slightly enlarge the enclosing box to avoid numerical error
+        DTYPE width = max_c - min_c;
+        DTYPE ext_w = width * 1e-6;
+        enbox[i] = min_c - ext_w;
+        enbox[pt_dim + i] = width + 2.0 * ext_w;
     }
 }
 
@@ -163,6 +166,247 @@ void H2P_select_anchor_grid(
     free(anchor_dim);
 }
 
+// For each point in src_coord, find the nearest point in trg_coord
+// Input parameters:
+//   pt_dim     : Point dimension
+//   src_coord_ : Size pt_dim * n_src, each column is a source point coordinate
+//   trg_coord_ : Size pt_dim * n_trg, each column is a target point coordinate
+//   n_thread   : Number of threads to use
+// Output parameter:
+//   trg_idx : Size <= n_src, indices of the union of selected nearest neighbors
+void H2P_naive_nn(
+    const int pt_dim, H2P_dense_mat_p src_coord_, H2P_dense_mat_p trg_coord_,
+    const int n_thread, H2P_int_vec_p trg_idx
+)
+{
+    int n_src = src_coord_->ncol;
+    int n_trg = trg_coord_->ncol;
+    DTYPE *src_coord = src_coord_->data;
+    DTYPE *trg_coord = trg_coord_->data;
+    DTYPE *dist2_buf = (DTYPE *) malloc(sizeof(DTYPE) * n_thread * n_trg);
+    int *trg_flag = (int *) malloc(sizeof(int) * n_trg);
+    for (int i = 0; i < n_trg; i++) trg_flag[i] = -1;
+    #pragma omp parallel num_threads(n_thread)
+    {
+        int tid = omp_get_thread_num();
+        DTYPE *dist2 = dist2_buf + tid * n_trg;
+        #pragma omp for
+        for (int i = 0; i < n_src; i++)
+        {
+            H2P_calc_pdist2_OMP(
+                src_coord + i, n_src, 1, 
+                trg_coord,     n_trg, n_trg, 
+                pt_dim, dist2, n_trg, 1
+            );
+            DTYPE min_dist2 = dist2[0];
+            int min_idx = 0;
+            for (int j = 1; j < n_trg; j++)
+            {
+                if (min_dist2 > dist2[j])
+                {
+                    min_dist2 = dist2[j];
+                    min_idx = j;
+                }
+            }
+            trg_flag[min_idx] = 1;
+        }
+    }
+    H2P_int_vec_set_capacity(trg_idx, n_src);
+    int cnt = 0;
+    for (int i = 0; i < n_trg; i++)
+    {
+        if (trg_flag[i] != -1)
+        {
+            trg_idx->data[cnt] = i;
+            cnt++;
+        }
+    }
+    trg_idx->length = cnt;
+    free(trg_flag);
+    free(dist2_buf);
+}
+
+// For each point in src_coord, find the (approximated) nearest point in trg_coord
+// Input parameters:
+//   pt_dim     : Point dimension
+//   src_coord_ : Size pt_dim * n_src, each column is a source point coordinate
+//   trg_coord_ : Size pt_dim * n_trg, each column is a target point coordinate
+//   enbox      : Size 2 * pt_dim, enclosing box of trg_coord_
+//   cell_size  : Cell size for cell-based search
+//   n_thread   : Number of threads to use
+// Output parameter:
+//   trg_idx : Size <= n_src, indices of the union of selected nearest neighbors
+void H2P_cell_nn(
+    const int pt_dim, H2P_dense_mat_p src_coord_, H2P_dense_mat_p trg_coord_,
+    const DTYPE *enbox, const DTYPE cell_size, const int n_thread, H2P_int_vec_p trg_idx
+)
+{
+    int n_src = src_coord_->ncol;
+    int n_trg = trg_coord_->ncol;
+    DTYPE *src_coord = src_coord_->data;
+
+    // 1. Calculate total number of cells and the stride for each dimension
+    int n_cell = 1, max_radius = 1;
+    int *stride = (int *) malloc(sizeof(int) * pt_dim);
+    int *cell_grid_size = (int *) malloc(sizeof(int) * pt_dim);
+    stride[0] = 1;
+    for (int i = 0; i < pt_dim; i++)
+    {
+        cell_grid_size[i] = (int) DCEIL(enbox[pt_dim + i] / cell_size);
+        if (cell_grid_size[i] > max_radius) max_radius = cell_grid_size[i];
+        stride[i + 1] = stride[i] * cell_grid_size[i];
+        n_cell *= cell_grid_size[i];
+    }
+
+    // 2. Put target points into cells
+    int *cell_trg_cnt   = (int *) malloc(sizeof(int) * n_cell);
+    int *cell_first_idx = (int *) malloc(sizeof(int) * n_cell);
+    int *cell_next_idx  = (int *) malloc(sizeof(int) * n_trg);
+    for (int i = 0; i < n_cell; i++)
+    {
+        cell_trg_cnt[i] = 0;
+        cell_first_idx[i] = -1;
+    }
+    for (int i = 0; i < n_trg; i++)
+    {
+        int cell_idx = 0;
+        for (int j = 0; j < pt_dim; j++)
+        {
+            int cell_idx_j = (int) DFLOOR((trg_coord_->data[j * n_trg + i] - enbox[j]) / cell_size);
+            cell_idx += cell_idx_j * stride[j];
+        }
+        cell_next_idx[i] = cell_first_idx[cell_idx];
+        cell_first_idx[cell_idx] = i;
+        cell_trg_cnt[cell_idx]++;
+    }
+
+    // 3. For each source point, find the nearest target point
+    DTYPE *dist2_buf      = (DTYPE *) malloc(sizeof(DTYPE) * n_thread * n_trg);
+    DTYPE *trg_coord_buf  = (DTYPE *) malloc(sizeof(DTYPE) * n_thread * n_trg * pt_dim);
+    int   *trg_flag       = (int *)   malloc(sizeof(int)   * n_trg);
+    int   *src_cc_buf     = (int *)   malloc(sizeof(int)   * n_thread * pt_dim * 2);
+    int   *trg_pt_idx_buf = (int *)   malloc(sizeof(int)   * n_thread * n_trg);
+    for (int i = 0; i < n_trg; i++) trg_flag[i] = -1;
+    #pragma omp parallel if(n_thread > 1) num_threads(n_thread)
+    {
+        int tid = omp_get_thread_num();
+        DTYPE *dist2 = dist2_buf + tid * n_trg;
+        DTYPE *trg_coord = trg_coord_buf + tid * n_trg * pt_dim;
+        int *src_cell_coord = src_cc_buf + tid * pt_dim * 2;
+        int *trg_cell_coord = src_cell_coord + pt_dim;
+        int *trg_pt_idx = trg_pt_idx_buf + tid * n_trg;
+        #pragma omp for
+        for (int i = 0; i < n_src; i++)
+        {
+            // (1) Find the cell index of the source point
+            int src_cell_idx = 0;
+            for (int j = 0; j < pt_dim; j++)
+            {
+                src_cell_coord[j] = (int) DFLOOR((src_coord_->data[j * n_src + i] - enbox[j]) / cell_size);
+                src_cell_idx += src_cell_coord[j] * stride[j];
+            }
+
+            // (2) Find the minimal radius s.t. there is at least one target point
+            //     in the cell within this radius
+            int r = 0;
+            for (; r < max_radius; r++)
+            {
+                int n_cell_dim = 2 * r + 1;
+                int n_cell_trg = 1;
+                for (int j = 0; j < pt_dim; j++) n_cell_trg *= n_cell_dim;
+                int npt_in_trg_cells = 0;
+                for (int trg_i = 0; trg_i < n_cell_trg; trg_i++)
+                {
+                    int trg_i_tmp = trg_i;
+                    int trg_cell_valid = 1;
+                    for (int j = 0; j < pt_dim; j++)
+                    {
+                        trg_cell_coord[j] = trg_i_tmp % n_cell_dim - r + src_cell_coord[j];
+                        if (trg_cell_coord[j] < 0 || trg_cell_coord[j] >= cell_grid_size[j]) trg_cell_valid = 0;
+                        trg_i_tmp /= n_cell_dim;
+                    }
+                    if (trg_cell_valid == 0) continue;
+                    int trg_cell_idx = 0;
+                    for (int j = 0; j < pt_dim; j++) trg_cell_idx += trg_cell_coord[j] * stride[j];
+                    npt_in_trg_cells += cell_trg_cnt[trg_cell_idx];
+                }
+                if (npt_in_trg_cells > 0) break;
+            }  // End of r loop
+            r++;  // Increase r by 1 for safety
+
+            // (3) Gather all target points in the cells within radius r
+            int n_trg_pt = 0;
+            int n_cell_dim = 2 * r + 1;
+            int n_cell_trg = 1;
+            for (int j = 0; j < pt_dim; j++) n_cell_trg *= n_cell_dim;
+            for (int trg_i = 0; trg_i < n_cell_trg; trg_i++)
+            {
+                int trg_i_tmp = trg_i;
+                int trg_cell_valid = 1;
+                for (int j = 0; j < pt_dim; j++)
+                {
+                    trg_cell_coord[j] = trg_i_tmp % n_cell_dim - r + src_cell_coord[j];
+                    if (trg_cell_coord[j] < 0 || trg_cell_coord[j] >= cell_grid_size[j]) trg_cell_valid = 0;
+                    trg_i_tmp /= n_cell_dim;
+                }
+                if (trg_cell_valid == 0) continue;
+                int trg_cell_idx = 0;
+                for (int j = 0; j < pt_dim; j++) trg_cell_idx += trg_cell_coord[j] * stride[j];
+                int trg_i = cell_first_idx[trg_cell_idx];
+                while (trg_i != -1)
+                {
+                    trg_pt_idx[n_trg_pt] = trg_i;
+                    n_trg_pt++;
+                    trg_i = cell_next_idx[trg_i];
+                }
+            }
+            H2P_gather_matrix_columns(trg_coord_->data, trg_coord_->ld, trg_coord, n_trg_pt, pt_dim, trg_pt_idx, n_trg_pt);
+
+            // (4) Find the nearest target point
+            H2P_calc_pdist2_OMP(
+                src_coord + i, n_src, 1, 
+                trg_coord,     n_trg_pt, n_trg_pt, 
+                pt_dim, dist2, n_trg_pt, 1
+            );
+            DTYPE min_dist2 = dist2[0];
+            int min_idx = 0;
+            for (int j = 1; j < n_trg_pt; j++)
+            {
+                if (min_dist2 > dist2[j])
+                {
+                    min_dist2 = dist2[j];
+                    min_idx = trg_pt_idx[j];
+                }
+            }
+            trg_flag[min_idx] = 1;
+        }  // End of i loop
+    }  // End of "#pragma omp parallel"
+
+    // 4. Gather results
+    H2P_int_vec_set_capacity(trg_idx, n_src);
+    int cnt = 0;
+    for (int i = 0; i < n_trg; i++)
+    {
+        if (trg_flag[i] != -1)
+        {
+            trg_idx->data[cnt] = i;
+            cnt++;
+        }
+    }
+    trg_idx->length = cnt;
+
+    // 5. Clean up work arrays
+    free(stride);
+    free(cell_trg_cnt);
+    free(cell_first_idx);
+    free(cell_next_idx);
+    free(dist2_buf);
+    free(trg_coord_buf);
+    free(trg_flag);
+    free(src_cc_buf);
+    free(trg_pt_idx_buf);
+}
+
 // For each point in the generated anchor grid, choose O(1) nearest points
 // in the given point cluster as sample points
 // Input parameters:
@@ -179,57 +423,37 @@ void H2P_select_cluster_sample(
     const int *grid_size, const int grid_algo, const int n_thread, H2P_int_vec_p sample_idx
 )
 {
-    H2P_dense_mat_p anchor_coord_;
-    H2P_dense_mat_init(&anchor_coord_, pt_dim, 1024);
-    H2P_select_anchor_grid(pt_dim, enbox, grid_size, grid_algo, anchor_coord_);
+    // 1. Select anchor grid points
+    H2P_dense_mat_p anchor_coord;
+    H2P_dense_mat_init(&anchor_coord, pt_dim, 1024);
+    H2P_select_anchor_grid(pt_dim, enbox, grid_size, grid_algo, anchor_coord);
+    int npt = coord->ncol;
+    int anchor_npt = anchor_coord->ncol;
     
+    // 2. Calculate the cell size and the number of cells
+    DTYPE cell_size = enbox[pt_dim] / (DTYPE) grid_size[0];
+    for (int i = 1; i < pt_dim; i++)
+    {
+        DTYPE size_i = enbox[pt_dim + i] / (DTYPE) grid_size[i];
+        cell_size = (size_i < cell_size) ? size_i : cell_size;
+    }
+    int n_cell = 1;
+    for (int i = 0; i < pt_dim; i++)
+        n_cell *= (int) DCEIL(enbox[pt_dim + i] / cell_size);
+    int naive_search_cost = npt * anchor_npt;
+    int cell_search_cost = anchor_npt;    // Put source points into cells
+    cell_search_cost += npt;              // Put target points into cells
+    cell_search_cost += anchor_npt * (npt / n_cell) * 10;  // Estimated number of pairwise distance
     
     // Choose nearest points in the given point cluster
-    int npt = coord->ncol;
-    int anchor_npt = anchor_coord_->ncol;
-    DTYPE *anchor_coord = anchor_coord_->data;
-    DTYPE *dist2_buf = (DTYPE *) malloc(sizeof(DTYPE) * n_thread * npt);
-    int *sample_idx_flag = (int *) malloc(sizeof(int) * npt);
-    for (int i = 0; i < npt; i++) sample_idx_flag[i] = -1;
-    #pragma omp parallel num_threads(n_thread)
+    if (naive_search_cost < cell_search_cost)
     {
-        int tid = omp_get_thread_num();
-        DTYPE *thread_dist2 = dist2_buf + tid * npt;
-        #pragma omp for
-        for (int i = 0; i < anchor_npt; i++)
-        {
-            H2P_calc_pdist2_OMP(
-                anchor_coord + i, anchor_npt, 1, 
-                coord->data, npt, npt, 
-                pt_dim, thread_dist2, npt, 1
-            );
-            DTYPE min_dist2 = thread_dist2[0];
-            int min_idx = 0;
-            for (int j = 1; j < npt; j++)
-            {
-                if (min_dist2 > thread_dist2[j])
-                {
-                    min_dist2 = thread_dist2[j];
-                    min_idx = j;
-                }
-            }
-            sample_idx_flag[min_idx] = 1;
-        }
+        H2P_naive_nn(pt_dim, anchor_coord, coord, n_thread, sample_idx);
+    } else {
+        H2P_cell_nn(pt_dim, anchor_coord, coord, enbox, cell_size, n_thread, sample_idx);
     }
-    H2P_int_vec_set_capacity(sample_idx, npt);
-    int sample_idx_cnt = 0;
-    for (int i = 0; i < npt; i++)
-    {
-        if (sample_idx_flag[i] != -1)
-        {
-            sample_idx->data[sample_idx_cnt] = i;
-            sample_idx_cnt++;
-        }
-    }
-    sample_idx->length = sample_idx_cnt;
-    free(sample_idx_flag);
-    free(dist2_buf);
-    H2P_dense_mat_destroy(&anchor_coord_);
+    
+    H2P_dense_mat_destroy(&anchor_coord);
 }
 
 int H2P_select_sample_point_r(
@@ -297,6 +521,7 @@ int H2P_select_sample_point_r(
     A0_fnorm = DSQRT(A0_fnorm);
     DTYPE UA_stop_err = reltol * 1e-4;
     if (UA_stop_err < 1e-12) UA_stop_err = 1e-12;
+    int max_coord1_npt = (int) (0.95 * (DTYPE) k);
     while (flag == 0)
     {
         // sample_idx = H2_select_cluster_sample(pt_dim, coord2, r_list, 6);
@@ -360,8 +585,9 @@ int H2P_select_sample_point_r(
         }
         err_fnorm = DSQRT(err_fnorm);
         relerr = err_fnorm / A0_fnorm;
+        if (h2pack->print_dbginfo) DEBUG_PRINTF("r = %d, relerr = %e\n", r, relerr);
 
-        if (relerr < UA_stop_err) flag = 1; else r++;
+        if ((relerr < UA_stop_err) || (n_sample >= max_coord1_npt)) flag = 1; else r++;
     }  // End "while (flag == 0)"
     if (h2pack->print_dbginfo) DEBUG_PRINTF("Selected r = %d\n", r);
 
@@ -766,7 +992,20 @@ void H2P_select_sample_point(
     et = get_wtime_sec();
     t_down = et - st;
 
-    if (h2pack->print_dbginfo) DEBUG_PRINTF("Select ri, bottom-up, top-down time = %.2f, %.2f, %.2f\n", t_ri, t_up, t_down);
+    int max_sample_npt = 0, avg_sample_npt = 0, n_node_with_sample = 0;
+    for (int i = 0; i < n_node; i++)
+    {
+        max_sample_npt = (max_sample_npt > sample_pt[i]->ncol) ? max_sample_npt : sample_pt[i]->ncol;
+        avg_sample_npt += sample_pt[i]->ncol;
+        if (sample_pt[i]->ncol > 0) n_node_with_sample++;
+    }
+    avg_sample_npt /= n_node_with_sample;
+
+    if (h2pack->print_dbginfo)
+    {
+        DEBUG_PRINTF("Select ri, bottom-up, top-down time = %.2f, %.2f, %.2f\n", t_ri, t_up, t_down);
+        DEBUG_PRINTF("Max / average sample points per node = %d, %d\n", max_sample_npt, avg_sample_npt);
+    }
 
     // Free temporary arrays and return sample points
     for (int i = 0; i < n_node; i++)

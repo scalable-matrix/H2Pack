@@ -609,6 +609,7 @@ void H2P_generate_proxy_point_ID_file(
         int level = (n_level - 1) - (i - pt_idx_s);
         H2P_dense_mat_resize(pp[level], pp0[i]->nrow, pp0[i]->ncol);
         copy_matrix(sizeof(DTYPE), pp0[i]->nrow, pp0[i]->ncol, pp0[i]->data, pp0[i]->ld, pp[level]->data, pp[level]->ld, 1);
+        if (h2pack->print_dbginfo) DEBUG_PRINTF("Level %d proxy point size = %d\n", level, pp[level]->ncol);
     }
     for (int i = 0; i < curr_num_pp; i++) H2P_dense_mat_destroy(&pp0[i]);
     free(pp0);

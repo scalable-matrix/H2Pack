@@ -34,22 +34,42 @@ int H2P_check_box_admissible(const DTYPE *box0, const DTYPE *box1, const int pt_
 // Output parameter:
 //   dst_mat : Destination matrix with required columns only
 void H2P_gather_matrix_columns(
-    DTYPE *src_mat, const int src_ld, DTYPE *dst_mat, const int dst_ld, 
+    const DTYPE *src_mat, const int src_ld, DTYPE *dst_mat, const int dst_ld, 
     const int nrow, int *col_idx, const int ncol
 );
 
 // Evaluate a kernel matrix with OpenMP parallelization
 // Input parameters:
-//   krnl_param : Pointer to kernel function parameter array
-//   krnl_eval  : Kernel matrix evaluation function
-//   krnl_dim   : Dimension of tensor kernel's return
-//   x_coord    : X point set coordinates, size nx-by-pt_dim
-//   y_coord    : Y point set coordinates, size ny-by-pt_dim
+//   krnl_param  : Pointer to kernel function parameter array
+//   krnl_eval   : Kernel matrix evaluation function
+//   coord{0, 1} : Size pt_dim * ld{0, 1}, point set coordinates, each column is a coordinate
+//   ld{0, 1}    : Leading dimension of coord{0, 1}
+//   n{0, 1}     : Number of points in coord{0, 1}
+//   ldk         : Leading dimension of kmat, >= n1
+//   n_thread    : Number of OpenMP threads
 // Output parameter:
-//   kernel_mat : Obtained kernel matrix, nx-by-ny
+//   kmat : Size n0 * ldk, row major, kernel matrix
 void H2P_eval_kernel_matrix_OMP(
-    const void *krnl_param, kernel_eval_fptr krnl_eval, const int krnl_dim, 
-    H2P_dense_mat_p x_coord, H2P_dense_mat_p y_coord, H2P_dense_mat_p kernel_mat
+    kernel_eval_fptr krnl_eval, const void *krnl_param, 
+    const DTYPE *coord0, const int ld0, const int n0,
+    const DTYPE *coord1, const int ld1, const int n1,
+    DTYPE *kmat, const int ldk, const int n_thread
+);
+
+// Compute the pairwise squared distance of two point sets
+// Input parameters:
+//   coord{0, 1} : Size pt_dim * ld{0, 1}, point set coordinates, each column is a coordinate
+//   ld{0, 1}    : Leading dimension of coord{0, 1}
+//   n{0, 1}     : Number of points in coord{0, 1}
+//   pt_dim      : Point dimension
+//   ldd         : Leading dimension of dist2, >= n1
+//   n_thread    : Number of OpenMP threads
+// Output parameter:
+//   dist2 : Size n0 * ldd, row major, pairwise squared distance
+void H2P_calc_pdist2_OMP(
+    const DTYPE *coord0, const int ld0, const int n0,
+    const DTYPE *coord1, const int ld1, const int n1,
+    const int pt_dim, DTYPE *dist2, const int ldd, const int n_thread
 );
 
 // Check if a coordinate is in box [-L/2, L/2]^pt_dim
@@ -71,6 +91,14 @@ int H2P_point_in_box(const int pt_dim, DTYPE *coord, DTYPE L);
 // Output parameter:
 //   coord : Size pt_dim-by-ldc, each column is a point coordinate
 void H2P_gen_coord_in_ring(const int npt, const int pt_dim, const DTYPE L0, const DTYPE L1, DTYPE *coord, const int ldc);
+
+// Ramdonly sample k different integers in [0, n-1]
+// Input parameters:
+//   n, k    : Sample k integers in [0, n-1]
+//   workbuf : Optional, size n bytes, work buffer, can be NULL
+// Output parameter:
+//   samples : Size k, sampled integers
+void H2P_rand_sample(const int n, const int k, int *samples, void *workbuf);
 
 // Generate a random sparse matrix A for calculating y^T := A^T * x^T,
 // where A is a random sparse matrix that has no more than max_nnz_col 
@@ -167,7 +195,6 @@ void H2P_set_int_CSR_elem(
 // Output parameter:
 //   Bij : Target B{node0, node1} block
 void H2P_get_Bij_block(H2Pack_p h2pack, const int node0, const int node1, H2P_dense_mat_p Bij);
-
 
 // Get D{node0, node1} from a H2Pack structure
 // Input parameters:

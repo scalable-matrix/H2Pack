@@ -26,6 +26,7 @@ typedef void (*matvec_fptr) (const void *param, const DTYPE *x, DTYPE *b);
 //                 NULL pointer means no preconditioning
 //   invMx_param : Pointer to invMx function parameters
 //   x           : Size n, initial guess vector
+//   print_level : Positive integer, higher value means more output
 // Output parameters:
 //   x        : Size n, solution vector
 //   *flag_   : 0 == converged, 1 == not converged
@@ -37,7 +38,7 @@ void pcg(
     const int n, const DTYPE tol, const int max_iter, 
     const matvec_fptr Ax,    const void *Ax_param,    const DTYPE *b, 
     const matvec_fptr invMx, const void *invMx_param, DTYPE *x, 
-    int *flag_, DTYPE *relres_, int *iter_, DTYPE *res_vec
+    int *flag_, DTYPE *relres_, int *iter_, DTYPE *res_vec, int print_level
 );
 
 #ifdef __cplusplus

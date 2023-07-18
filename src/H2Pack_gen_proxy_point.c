@@ -82,6 +82,11 @@ void H2P_generate_proxy_point_nlayer(
     H2P_int_vec_init(&ID_buff,  4 * Y0_size);
     et = get_wtime_sec();
     timers[GEN_PP_MISC_TIMER_IDX] += et - st;
+
+    // If srand48() is not called before here, the generated proxy points may be too 
+    // few (I see this with ICC but not GCC). I will just do a dirty hack here.
+    srand(1924);
+    srand48(1112);
     
     // 2. Generate initial candidate points in X and Y
     //    For Y0, we generate it layer by layer. Each layer has the same number of candidate 
@@ -102,7 +107,13 @@ void H2P_generate_proxy_point_nlayer(
     //    Use sparsity + randomize to reduce the ID cost
     // (1) Generate the kernel matrix
     st = get_wtime_sec();
-    H2P_eval_kernel_matrix_OMP(krnl_param, krnl_eval, krnl_dim, X0_coord, Y0_coord, tmpA);
+    H2P_dense_mat_resize(tmpA, X0_coord->ncol * krnl_dim, Y0_coord->ncol * krnl_dim);
+    H2P_eval_kernel_matrix_OMP(
+        krnl_eval, krnl_param, 
+        X0_coord->data, X0_coord->ld, X0_coord->ncol,  
+        Y0_coord->data, Y0_coord->ld, Y0_coord->ncol, 
+        tmpA->data, tmpA->ld, n_thread
+    );
     et = get_wtime_sec();
     timers[GEN_PP_KRNL_TIMER_IDX] += et - st;
     // (2) Generate sparse random matrix and multiply with the kernel matrix to get a reduced matrix
@@ -153,7 +164,13 @@ void H2P_generate_proxy_point_nlayer(
         // (1) Generate the kernel matrix
         st = get_wtime_sec();
         // Be careful, Y0_coord should be placed before Xp_coord
-        H2P_eval_kernel_matrix_OMP(krnl_param, krnl_eval, krnl_dim, Y0_coord, Xp_coord, tmpA1);
+        H2P_dense_mat_resize(tmpA1, Y0_coord->ncol * krnl_dim, Xp_coord->ncol * krnl_dim);
+        H2P_eval_kernel_matrix_OMP(
+            krnl_eval, krnl_param, 
+            Y0_coord->data, Y0_coord->ld, Y0_coord->ncol,
+            Xp_coord->data, Xp_coord->ld, Xp_coord->ncol,
+            tmpA1->data, tmpA1->ld, n_thread
+        );
         et = get_wtime_sec();
         timers[GEN_PP_KRNL_TIMER_IDX] += et - st;
         // (2) Calculate ID approximation on the kernel matrix and select new proxy points in Y
@@ -207,7 +224,13 @@ void H2P_generate_proxy_point_nlayer(
             // (2) Generate kernel matrix for this layer 
             st = get_wtime_sec();
             // Be careful, tmp_coord should be placed before Xp_coord
-            H2P_eval_kernel_matrix_OMP(krnl_param, krnl_eval, krnl_dim, tmp_coord, Xp_coord, tmpA1);
+            H2P_dense_mat_resize(tmpA1, tmp_coord->ncol * krnl_dim, Xp_coord->ncol * krnl_dim);
+            H2P_eval_kernel_matrix_OMP(
+                krnl_eval, krnl_param, 
+                tmp_coord->data, tmp_coord->ld, tmp_coord->ncol, 
+                Xp_coord->data,  Xp_coord->ld,  Xp_coord->ncol,
+                tmpA1->data, tmpA1->ld, n_thread
+            );
             et = get_wtime_sec();
 
             // (3) Calculate ID approximation on the new kernel matrix and select new proxy points in Y

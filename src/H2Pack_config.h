@@ -31,20 +31,24 @@
 #define CBLAS_DOT       cblas_ddot      // CBLAS vector dot product
 #define CBLAS_GEMV      cblas_dgemv     // CBLAS matrix-vector multiplication
 #define CBLAS_GEMM      cblas_dgemm     // CBLAS matrix-matrix multiplication
-#define CBLAS_GER       cblas_dger      // CBLAS matrix rank-1 update
+#define CBLAS_SYRK      cblas_dsyrk     // CBLAS symmetric rank-k update
 #define CBLAS_TRSM      cblas_dtrsm     // CBLAS triangle solve
+#define CBLAS_TRMM      cblas_dtrmm     // CBLAS triangle matrix multiplication
 #define LAPACK_GETRF    LAPACKE_dgetrf  // LAPACK LU factorization
 #define LAPACK_GETRS    LAPACKE_dgetrs  // LAPACK linear system solve using LU factorization
 #define LAPACK_GETRI    LAPACKE_dgetri  // LAPACK LU inverse matrix
 #define LAPACK_POTRF    LAPACKE_dpotrf  // LAPACK Cholesky factorization
 #define LAPACK_POTRS    LAPACKE_dpotrs  // LAPACK linear system solve using Cholesky factorization
+#define LAPACK_POTRI    LAPACKE_dpotri  // LAPACK Cholesky inverse matrix
 #define LAPACK_GEQRF    LAPACKE_dgeqrf  // LAPACK QR factorization
 #define LAPACK_GEQPF    LAPACKE_dgeqpf  // LAPACK QR factorization with column pivoting
 #define LAPACK_ORGQR    LAPACKE_dorgqr  // LAPACK QR Q matrix explicitly construction
 #define LAPACK_ORMQR    LAPACKE_dormqr  // LAPACK QR Q matrix multiples another matrix
 #define LAPACK_SYEVD    LAPACKE_dsyevd  // LAPACK eigenvalue decomposition
+#define LAPACK_GESVD    LAPACKE_dgesvd  // LAPACK singular value decomposition
 #define N_DTYPE_64B     8               // 8 double == 64 bytes, for alignment
 #define SIMD_LEN        SIMD_LEN_D      // SIMD vector length
+#define D_EPS           DBL_EPSILON     // Double precision machine epsilon
 #define ASTER_DTYPE_DOUBLE
 #endif
 
@@ -70,20 +74,24 @@
 #define CBLAS_DOT       cblas_sdot
 #define CBLAS_GEMV      cblas_sgemv
 #define CBLAS_GEMM      cblas_sgemm
-#define CBLAS_GER       cblas_sger
+#define CBLAS_SYRK      cblas_ssyrk
 #define CBLAS_TRSM      cblas_strsm
+#define CBLAS_TRMM      cblas_strmm
 #define LAPACK_GETRF    LAPACKE_sgetrf
 #define LAPACK_GETRS    LAPACKE_sgetrs
 #define LAPACK_GETRI    LAPACKE_sgetri
 #define LAPACK_POTRF    LAPACKE_spotrf
 #define LAPACK_POTRS    LAPACKE_spotrs
+#define LAPACK_POTRI    LAPACKE_spotri
 #define LAPACK_GEQRF    LAPACKE_sgeqrf
 #define LAPACK_GEQPF    LAPACKE_sgeqpf
 #define LAPACK_ORGQR    LAPACKE_sorgqr
 #define LAPACK_ORMQR    LAPACKE_sormqr
 #define LAPACK_SYEVD    LAPACKE_ssyevd
+#define LAPACK_GESVD    LAPACKE_sgesvd
 #define N_DTYPE_64B     16
 #define SIMD_LEN        SIMD_LEN_S
+#define D_EPS           FLT_EPSILON
 #define ASTER_DTYPE_FLOAT
 #endif
 

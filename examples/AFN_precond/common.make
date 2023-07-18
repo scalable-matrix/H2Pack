@@ -30,8 +30,8 @@ endif
 
 C_SRCS 	= $(wildcard *.c)
 C_OBJS  = $(C_SRCS:.c=.c.o)
-EXES    = example_regularHSS.exe example_SPDHSSH2.exe example_SPDHSSH2_tol.exe test_FSAI.exe test_FSAI_IE.exe
-SHARED_OBJS = ../PCG/pcg.c.o block_jacobi_precond.c.o LRD_precond.c.o FSAI_precond.c.o CSRPlus.c.o pcg_tests.c.o
+EXES    = test_AFN.exe test_Nys.exe test_AFN_IE.exe
+SHARED_OBJS = Nys_precond.c.o ../PCG/pcg.c.o 
 
 # Delete the default old-fashion double-suffix rules
 .SUFFIXES:
@@ -47,4 +47,4 @@ all: $(EXES)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 clean:
-	rm -f $(EXES) $(C_OBJS)
+	rm -f $(EXES) $(C_OBJS) $(SHARED_OBJS)

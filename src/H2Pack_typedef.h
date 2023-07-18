@@ -102,7 +102,7 @@ struct H2Pack
     int    root_idx;                // Index of the root node (== n_node - 1, save it for convenience)
     int    n_leaf_node;             // Number of leaf nodes in this H2 tree
     int    max_child;               // Maximum number of children per node, == 2^pt_dim
-    int    max_neighbor;            // Maximum number of neighbor nodes per node, == 2^pt_dim
+    int    max_neighbor;            // Maximum number of neighbor nodes per node, == 3^pt_dim
     int    max_level;               // Maximum level of this H2 tree, (root = 0, total max_level + 1 levels)
     int    min_adm_level;           // Minimum level of reduced admissible pair
     int    HSS_min_adm_level;       // Minimum level of reduced admissible pair in HSS mode

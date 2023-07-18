@@ -30,13 +30,13 @@ int H2P_check_box_admissible(const DTYPE *box0, const DTYPE *box1, const int pt_
 
 // Gather some columns from a matrix to another matrix
 void H2P_gather_matrix_columns(
-    DTYPE *src_mat, const int src_ld, DTYPE *dst_mat, const int dst_ld, 
+    const DTYPE *src_mat, const int src_ld, DTYPE *dst_mat, const int dst_ld, 
     const int nrow, int *col_idx, const int ncol
 )
 {
     for (int irow = 0; irow < nrow; irow++)
     {
-        DTYPE *src_row = src_mat + src_ld * irow;
+        const DTYPE *src_row = src_mat + src_ld * irow;
         DTYPE *dst_row = dst_mat + dst_ld * irow;
         for (int icol = 0; icol < ncol; icol++)
             dst_row[icol] = src_row[col_idx[icol]];
@@ -45,30 +45,51 @@ void H2P_gather_matrix_columns(
 
 // Evaluate a kernel matrix with OpenMP parallelization
 void H2P_eval_kernel_matrix_OMP(
-    const void *krnl_param, kernel_eval_fptr krnl_eval, const int krnl_dim, 
-    H2P_dense_mat_p x_coord, H2P_dense_mat_p y_coord, H2P_dense_mat_p kernel_mat
+    kernel_eval_fptr krnl_eval, const void *krnl_param, 
+    const DTYPE *coord0, const int ld0, const int n0,
+    const DTYPE *coord1, const int ld1, const int n1,
+    DTYPE *kmat, const int ldk, const int n_thread
 )
 {
-    const int nx = x_coord->ncol;
-    const int ny = y_coord->ncol;
-    const int nrow = nx * krnl_dim;
-    const int ncol = ny * krnl_dim;
-    H2P_dense_mat_resize(kernel_mat, nrow, ncol);
-    #pragma omp parallel
+    #pragma omp parallel if(n_thread > 1) num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
-        int nt  = omp_get_num_threads();
-        int nx_blk_start, nx_blk_len;
-        calc_block_spos_len(nx, nt, tid, &nx_blk_start, &nx_blk_len);
-        
-        DTYPE *kernel_mat_srow = kernel_mat->data + nx_blk_start * krnl_dim * kernel_mat->ld;
-        DTYPE *x_coord_spos = x_coord->data + nx_blk_start;
-        
+        int n0_blk_start, n0_blk_len;
+        calc_block_spos_len(n0, n_thread, tid, &n0_blk_start, &n0_blk_len);
+        DTYPE *kmat_srow = kmat + n0_blk_start * ldk;
+        const DTYPE *coord0_spos = coord0 + n0_blk_start;
         krnl_eval(
-            x_coord_spos,  x_coord->ncol, nx_blk_len, 
-            y_coord->data, y_coord->ncol, ny, 
-            krnl_param, kernel_mat_srow, kernel_mat->ld
+            coord0_spos, ld0, n0_blk_len, coord1, ld1, n1, 
+            krnl_param, kmat_srow, ldk
         );
+    }
+}
+
+// Compute the pairwise squared distance of two point sets
+void H2P_calc_pdist2_OMP(
+    const DTYPE *coord0, const int ld0, const int n0,
+    const DTYPE *coord1, const int ld1, const int n1,
+    const int pt_dim, DTYPE *dist2, const int ldd, const int n_thread
+)
+{
+    #pragma omp parallel for schedule(static) if(n_thread > 1) num_threads(n_thread)
+    for (int i = 0; i < n0; i++)
+    {
+        const DTYPE *coord0_i = coord0 + i;
+        DTYPE *dist2_i = dist2 + i * ldd;
+        // This implementation makes GCC auto-vectorization happy
+        memset(dist2_i, 0, sizeof(DTYPE) * n1);
+        for (int k = 0; k < pt_dim; k++)
+        {
+            const DTYPE coord0_k_i = coord0_i[k * ld0];
+            const DTYPE *coord1_k = coord1 + k * ld1;
+            #pragma omp simd
+            for (int j = 0; j < n1; j++)
+            {
+                DTYPE diff = coord0_k_i - coord1_k[j];
+                dist2_i[j] += diff * diff;
+            }
+        }
     }
 }
 
@@ -111,6 +132,24 @@ void H2P_gen_coord_in_ring(const int npt, const int pt_dim, const DTYPE L0, cons
     }
 }
 
+// Ramdonly sample k different integers in [0, n-1]
+void H2P_rand_sample(const int n, const int k, int *samples, void *workbuf)
+{
+    // TODO: replace this with a bitmap implementation
+    uint8_t *flag = NULL;
+    if (workbuf != NULL) flag = (uint8_t *) workbuf;
+    else flag = (uint8_t *) malloc(n);
+    memset(flag, 0, n);
+    for (int i = 0; i < k; i++)
+    {
+        int idx = rand() % n;
+        while (flag[idx] == 1) idx = rand() % n;
+        samples[i] = idx;
+        flag[idx] = 1;
+    }
+    if (workbuf == NULL) free(flag);
+}
+
 // Generate a random sparse matrix A for calculating y^T := A^T * x^T
 void H2P_gen_rand_sparse_mat_trans(
     const int max_nnz_col, const int k, const int n, 
@@ -120,7 +159,6 @@ void H2P_gen_rand_sparse_mat_trans(
     // Note: we calculate y^T := A^T * x^T. Since x/y is row-major, 
     // each of its row is a column of x^T/y^T. We can just use SpMV
     // to calculate y^T(:, i) := A^T * x^T(:, i). 
-
     int rand_nnz_col = (max_nnz_col <= k) ? max_nnz_col : k;
     int nnz = n * rand_nnz_col;
     H2P_dense_mat_resize(A_valbuf, 1, nnz);
@@ -132,25 +170,13 @@ void H2P_gen_rand_sparse_mat_trans(
     memset(flag, 0, sizeof(int) * k);
     for (int i = 0; i < nnz; i++) 
         val[i] = (DTYPE) (2.0 * (rand() & 1) - 1.0);
-    for (int i = 0; i <= n; i++) 
-        row_ptr[i] = i * rand_nnz_col;
     for (int i = 0; i < n; i++)
     {
-        int cnt = 0;
+        row_ptr[i] = i * rand_nnz_col;
         int *row_i_cols = col_idx + i * rand_nnz_col;
-        while (cnt < rand_nnz_col)
-        {
-            int col = rand() % k;
-            if (flag[col] == 0) 
-            {
-                flag[col] = 1;
-                row_i_cols[cnt] = col;
-                cnt++;
-            }
-        }
-        for (int j = 0; j < rand_nnz_col; j++)
-            flag[row_i_cols[j]] = 0;
+        H2P_rand_sample(k, rand_nnz_col, row_i_cols, flag);
     }
+    row_ptr[n] = nnz;
     A_idxbuf->length = (n + 1) + nnz;
 }
 

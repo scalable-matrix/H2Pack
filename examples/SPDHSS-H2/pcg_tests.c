@@ -5,7 +5,7 @@
 
 #include "H2Pack.h"
 
-#include "pcg.h"
+#include "../PCG/pcg.h"
 #include "block_jacobi_precond.h"
 #include "LRD_precond.h"
 #include "FSAI_precond.h"
@@ -59,11 +59,11 @@ void pcg_tests(
     srand48(2);
     for (int i = 0; i < krnl_mat_size; i++) y[i] = 0.5 - drand48();
 
-    int flag, iter;
+    int flag, iter, pcg_print_level = 1;
     DTYPE relres;
     double st, et;
 
-    shift_ = shift;
+    shift_ = shift;    
 
     if (method == 0 || method == 1)
     {
@@ -73,7 +73,7 @@ void pcg_tests(
         pcg(
             krnl_mat_size, CG_tol, max_iter, 
             H2Pack_matvec, h2mat, y, NULL, NULL, x,
-            &flag, &relres, &iter, NULL
+            &flag, &relres, &iter, NULL, pcg_print_level
         );
         et = get_wtime_sec();
         printf("PCG stopped after %d iterations, relres = %e, used time = %.2lf sec\n", iter, relres, et - st);
@@ -90,7 +90,7 @@ void pcg_tests(
         pcg(
             krnl_mat_size, CG_tol, max_iter, 
             H2Pack_matvec, h2mat, y, block_jacobi_precond, bj_precond, x,
-            &flag, &relres, &iter, NULL
+            &flag, &relres, &iter, NULL, pcg_print_level
         );
         et = get_wtime_sec();
         printf("PCG stopped after %d iterations, relres = %e, used time = %.2lf sec\n", iter, relres, et - st);
@@ -109,7 +109,7 @@ void pcg_tests(
         pcg(
             krnl_mat_size, CG_tol, max_iter, 
             H2Pack_matvec, h2mat, y, LRD_precond, lrd_precond, x,
-            &flag, &relres, &iter, NULL
+            &flag, &relres, &iter, NULL, pcg_print_level
         );
         et = get_wtime_sec();
         printf("PCG stopped after %d iterations, relres = %e, used time = %.2lf sec\n", iter, relres, et - st);
@@ -128,7 +128,7 @@ void pcg_tests(
         pcg(
             krnl_mat_size, CG_tol, max_iter, 
             H2Pack_matvec, h2mat, y, FSAI_precond, fsai_precond, x,
-            &flag, &relres, &iter, NULL
+            &flag, &relres, &iter, NULL, pcg_print_level
         );
         et = get_wtime_sec();
         printf("PCG stopped after %d iterations, relres = %e, used time = %.2lf sec\n", iter, relres, et - st);
@@ -144,7 +144,7 @@ void pcg_tests(
         pcg(
             krnl_mat_size, CG_tol, max_iter, 
             H2Pack_matvec, h2mat, y, HSS_ULV_Chol_precond, hssmat, x,
-            &flag, &relres, &iter, NULL
+            &flag, &relres, &iter, NULL, pcg_print_level
         );
         et = get_wtime_sec();
         printf("PCG stopped after %d iterations, relres = %e, used time = %.2lf sec\n", iter, relres, et - st);

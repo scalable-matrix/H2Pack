@@ -1,14 +1,12 @@
 H2Pack is a library that provides linear-scaling storage and
 linear-scaling matrix-vector multiplication for dense kernel matrices.
-This is accomplished by storing the kernel matrices in the
-![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)
+This is accomplished by storing the kernel matrices in the $\mathcal{H}^2$
 hierarchical block low-rank representation.  It can be used for
 Gaussian processes, solving integral equations, Brownian dynamics,
 and other applications.
 
-The main strength of H2Pack is its ability to efficiently construct
-![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrices 
-in linear time for kernel functions used in Gaussian processes (up
+The main strength of H2Pack is its ability to efficiently construct $\mathcal{H}^2$ 
+matrices in linear time for kernel functions used in Gaussian processes (up
 to 3-D data) by using a new proxy point method.  Kernel functions from
 computational physics, e.g., Coulomb, Stokes, can also be used.  H2Pack is
 optimized for shared-memory multicore architectures, including the use
@@ -18,9 +16,8 @@ and Python interfaces.
 **Notes**
 
 * H2Pack is designed for general kernel functions, including the Gaussian,
-Matern, and other kernels used in statistics and machine learning. 
-For these kernels, H2Pack computes the
-![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) representation
+Matern, and other kernels used in statistics and machine learning.
+For these kernels, H2Pack computes the $\mathcal{H}^2$ representation
 much faster, and with linear complexity, compared to algebraic approaches
 that rely on rank-revealing matrix decompositions.
 
@@ -28,16 +25,14 @@ that rely on rank-revealing matrix decompositions.
 H2Pack using the proxy point method constructs a more efficient representation
 than approaches based on analytic expansions, like the fast multipole method (FMM),
 and thus has faster matrix-vector multiplication than FMM. Note that H2Pack requires
-a preprocessing step to construct the
-![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2)
+a preprocessing step to construct the $\mathcal{H}^2$
 representation, while FMM does not need a preprocessing step.
 However, FMM cannot handle general kernel functions.
 
 * The proxy points only need to be computed once for a given kernel function, domain,
 and requested accuracy. These proxy points can be reused for different sets
-of points or data.
-Constructing the ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix
-with these proxy points only requires linear time.
+of points or data. Constructing the $\mathcal{H}^2$ matrix with these proxy points 
+only requires linear time.
 Alternatively, the proxy points could be selected on a surface, which
 corresponds to the proxy surface method that can be useful
 for kernel functions from potential theory.
@@ -60,28 +55,13 @@ a single set of points (i.e., square, symmetric matrices)
 
 **Main Functions**
 
-* ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix representation construction for a kernel matrix with _O(N)_ complexity for an _N_-by-_N_ matrix
-* ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix-vector multiplication with _O(N)_ complexity
-* ![](https://latex.codecogs.com/svg.latex?\mathcal{H}^2) matrix-matrix  multiplication with _O(N)_ complexity
+* $\mathcal{H}^2$ matrix representation construction for a kernel matrix with $O(N)$ complexity for an $N \times N$ matrix
+* $\mathcal{H}^2$ matrix-vector multiplication with $O(N)$ complexity
+* $\mathcal{H}^2$ matrix-matrix multiplication with $O(N)$ complexity
 
 **References**
 
 Please cite the following two papers if you use H2Pack in your work:
-
-```bibtex
-@article{huang2020toms,
-    title = { {H2Pack}: High-performance \textit $^{\textrm{2}}$ Matrix Package for Kernel Matrices Using the Proxy Point Method },
-    journal = {ACM Transactions on Mathematical Software},
-    author = {Huang, Hua and Xing, Xin and Chow, Edmond},
-    year = {2020},
-    month = {Dec},
-    volume = {47},
-    pages = {1--29},
-    doi = {10.1145/3412850},
-    issn = {0098-3500, 1557-7295},
-    number = {1},
-}
-```
 
 ```bibtex
 @article{xin2019,
@@ -94,7 +74,68 @@ Please cite the following two papers if you use H2Pack in your work:
 }
 ```
 
-H2Pack also implements the hierarchical matrix construction algorithm in this paper: [Data-driven Construction of Hierarchical Matrices with Nested Bases](https://arxiv.org/pdf/2206.01885.pdf). This paper is accepted by SIAM Journal on Scientific Computing and will appear soon. Please cite this paper if you use the data-driven method in H2Pack.
+```bibtex
+@article{huang2020toms,
+    title = { {H2Pack}: High-performance \textit{{H}} $^{\textrm{2}}$ Matrix Package for Kernel Matrices Using the Proxy Point Method },
+    journal = {ACM Transactions on Mathematical Software},
+    author = {Huang, Hua and Xing, Xin and Chow, Edmond},
+    year = {2020},
+    month = {Dec},
+    volume = {47},
+    pages = {1--29},
+    doi = {10.1145/3412850},
+    issn = {0098-3500, 1557-7295},
+    number = {1},
+}
+```
+
+H2Pack also implements other $\mathcal{H}^2$-related algorithms.
+
+If you use the SPDHSS-H2 preconditioner (`H2P_SPDHSS_H2_build()`) in H2Pack, please cite the follow paper.
+
+```bibtex
+@article{xing2021,
+    author = {Xing, Xin and Huang, Hua and Chow, Edmond},
+    title = {Efficient Construction of an {HSS} Preconditioner for Symmetric Positive Definite \$\mathcal{H}^2\$ Matrices},
+    journal = {SIAM Journal on Matrix Analysis and Applications},
+    volume = {42},
+    number = {2},
+    pages = {683--707},
+    year = {2021},
+    doi = {10.1137/20M1365776},
+}
+```
+
+If you use the periodic RPY kernel in H2Pack, please cite the follow paper.
+
+```bibtex
+@article{xing2022,
+    title = {A Hierarchical Matrix Approach for Computing Hydrodynamic Interactions},
+    author = {Xing, Xin and Huang, Hua and Chow, Edmond},
+    journal = {Journal of Computational Physics},
+    volume = {448},
+    pages = {110761},
+    year = {2022},
+    issn = {0021--9991},
+    doi = {10.1016/j.jcp.2021.110761},
+    
+}
+```
+
+If you use the data-driven $\mathcal{H}^2$ matrix construction algorithm (`H2P_build_with_sample_point()`), please cite the follow paper.
+
+```bibtex
+@article{cai2023,
+    title = {Data-Driven Construction of Hierarchical Matrices With Nested Bases},
+    author = {Cai, Difeng and Huang, Hua and Chow, Edmond and Xi, Yuanzhe},
+    journal = {SIAM Journal on Scientific Computing},
+    volume = {0},
+    number = {0},
+    pages = {S24--S50},
+    year = {2023},
+    doi = {10.1137/22M1500848},
+}
+```
 
 
 ## Getting Started

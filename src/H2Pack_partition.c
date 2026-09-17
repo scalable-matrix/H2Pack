@@ -12,6 +12,257 @@
 #include "H2Pack_partition.h"
 #include "utils.h"
 
+// First pass over points [i_s, i_e) of a node: find the sub-box of each point and 
+// count the points falling in each sub-box
+static void H2P_bisect_count_chunk(
+    const int i_s, const int i_e, const int pt_dim, const int n_point, const DTYPE *enbox, 
+    const DTYPE *coord_s_ptr, int *child_idx, int *sub_cnt
+)
+{
+    for (int i = i_s; i < i_e; i++) child_idx[i] = 0;
+    for (int j = 0; j < pt_dim; j++)
+    {
+        const DTYPE enbox_corner_j = enbox[j];
+        const DTYPE enbox_width_j  = enbox[pt_dim + j];
+        const DTYPE *coord_dim_j_s = coord_s_ptr + j * n_point;
+        for (int i = i_s; i < i_e; i++)
+        {
+            DTYPE rel_coord = coord_dim_j_s[i] - enbox_corner_j;
+            int rel_idx = (2.0 * rel_coord >= enbox_width_j) ? 1 : 0;
+            child_idx[i] += rel_idx << j;
+        }
+    }
+    for (int i = i_s; i < i_e; i++) sub_cnt[child_idx[i]]++;
+}
+
+// Second pass over points [i_s, i_e) of a node: move each point to the next free slot 
+// of its sub-box. sub_pos[c] is where the first point of this chunk that falls in sub-box 
+// c goes, so that the chunks together perform one stable bucket sort.
+static void H2P_bisect_scatter_chunk(
+    const int i_s, const int i_e, const int xpt_dim, const int n_point, const int *child_idx, int *sub_pos, 
+    const DTYPE *src_coord, const int *src_idx, DTYPE *dst_coord, int *dst_idx
+)
+{
+    // Notice: we need to copy both coordinates and extended information
+    if (xpt_dim == 2)
+    {
+        const DTYPE *src_coord1 = src_coord + n_point;
+        DTYPE *dst_coord1 = dst_coord + n_point;
+        for (int i = i_s; i < i_e; i++)
+        {
+            int dst = sub_pos[child_idx[i]]++;
+            dst_coord[dst]  = src_coord[i];
+            dst_coord1[dst] = src_coord1[i];
+            dst_idx[dst]    = src_idx[i];
+        }
+        return;
+    }
+    for (int i = i_s; i < i_e; i++)
+    {
+        int dst = sub_pos[child_idx[i]]++;
+        for (int j = 0; j < xpt_dim; j++)
+            dst_coord[j * n_point + dst] = src_coord[j * n_point + i];
+        dst_idx[dst] = src_idx[i];
+    }
+}
+
+// Recursive part of H2P_bisection_partition_points(). It does not touch any shared 
+// counter (the post-order indices are assigned afterwards by H2P_tree_set_po_idx()), and 
+// a node only accesses its own range [coord_s, coord_e] of the point arrays, so sibling 
+// sub-trees can be partitioned concurrently.
+// The points of this node are in (src_coord, src_idx). Sorting them by sub-box moves 
+// them to (dst_coord, dst_idx), where the children find them: the two buffers swap roles 
+// on each level instead of being copied back, and a leaf that ends up in the temporary 
+// buffer copies its points to (coord, coord_idx). 
+// child_idx is a work array for the points of this node, n_thread == 1 disables tasking.
+static H2P_tree_node_p H2P_bisect_recursive(
+    const int level, const int coord_s, const int coord_e, const int pt_dim, const int xpt_dim, 
+    const int n_point, const DTYPE max_leaf_size, const int max_leaf_points, const DTYPE *enbox, 
+    DTYPE *coord, int *coord_idx, DTYPE *src_coord, int *src_idx, DTYPE *dst_coord, int *dst_idx, 
+    int *child_idx, const int n_thread
+)
+{
+    int node_npts = coord_e - coord_s + 1;
+    int max_child = 1 << pt_dim;
+    DTYPE box_size = enbox[pt_dim];
+    
+    H2P_tree_node_p node;
+    H2P_tree_node_init(&node, pt_dim);
+    node->pt_cluster[0] = coord_s;
+    node->pt_cluster[1] = coord_e;
+    node->po_idx = -1;
+    node->level  = level;
+    memcpy(node->enbox, enbox, sizeof(DTYPE) * pt_dim * 2);
+    
+    // 1. If the size of current box or the number of points in current box
+    //    is smaller than the threshold, set current box as a leaf node
+    if ((node_npts <= max_leaf_points) || (box_size <= max_leaf_size))
+    {
+        if (src_coord != coord)
+        {
+            for (int j = 0; j < xpt_dim; j++)
+            {
+                int dim_j_offset = j * n_point + coord_s;
+                memcpy(coord + dim_j_offset, src_coord + dim_j_offset, sizeof(DTYPE) * node_npts);
+            }
+            memcpy(coord_idx + coord_s, src_idx + coord_s, sizeof(int) * node_npts);
+        }
+        node->n_child = 0;
+        node->n_node  = 1;
+        node->height  = 0;
+        return node;
+    }
+    
+    // 2. Bisection partition points in current box: get the sub-box each point is in 
+    //    and the number of points in each sub-box
+    int n_chunk = 1;
+    if (n_thread > 1 && node_npts >= BISECT_PAR_NPTS)
+    {
+        n_chunk = node_npts / BISECT_CHUNK_NPTS;
+        if (n_chunk > n_thread) n_chunk = n_thread;
+    }
+    int *sub_cnt = (int*) malloc(sizeof(int) * (n_chunk + 1) * max_child);
+    int *sub_displs = (int*) malloc(sizeof(int) * (max_child + 1));
+    ASSERT_PRINTF(
+        sub_cnt != NULL && sub_displs != NULL,
+        "Failed to allocate working buffer of size %d for sub-nodes\n",
+        (n_chunk + 2) * max_child + 1
+    );
+    memset(sub_cnt, 0, sizeof(int) * (n_chunk + 1) * max_child);
+    const DTYPE *src_coord_s = src_coord + coord_s;
+    if (n_chunk == 1)
+    {
+        H2P_bisect_count_chunk(0, node_npts, pt_dim, n_point, enbox, src_coord_s, child_idx, sub_cnt);
+    } else {
+        for (int k = 0; k < n_chunk; k++)
+        {
+            int i_s = (int) ((long long) node_npts * k / n_chunk);
+            int i_e = (int) ((long long) node_npts * (k + 1) / n_chunk);
+            int *sub_cnt_k = sub_cnt + k * max_child;
+            #pragma omp task firstprivate(i_s, i_e, sub_cnt_k)
+            H2P_bisect_count_chunk(i_s, i_e, pt_dim, n_point, enbox, src_coord_s, child_idx, sub_cnt_k);
+        }
+        #pragma omp taskwait
+    }
+    
+    // 3. Bucket sort all points according to the sub-box a point in. 
+    //    Turn sub_cnt[k, c] into the position of the first point of chunk k in sub-box c.
+    int *sub_node_npts = sub_cnt + n_chunk * max_child;
+    sub_displs[0] = 0;
+    for (int c = 0; c < max_child; c++)
+    {
+        int pos = coord_s + sub_displs[c];
+        for (int k = 0; k < n_chunk; k++)
+        {
+            int cnt_kc = sub_cnt[k * max_child + c];
+            sub_cnt[k * max_child + c] = pos;
+            pos += cnt_kc;
+        }
+        sub_node_npts[c]  = pos - coord_s - sub_displs[c];
+        sub_displs[c + 1] = sub_displs[c] + sub_node_npts[c];
+    }
+    ASSERT_PRINTF(
+        sub_displs[max_child] == node_npts, 
+        "Error in children nodes partitioning, level = %d, point indices = [%d, %d]\n",
+        level, coord_s, coord_e
+    );
+    const int *src_idx_s = src_idx + coord_s;
+    if (n_chunk == 1)
+    {
+        H2P_bisect_scatter_chunk(
+            0, node_npts, xpt_dim, n_point, child_idx, sub_cnt, 
+            src_coord_s, src_idx_s, dst_coord, dst_idx
+        );
+    } else {
+        for (int k = 0; k < n_chunk; k++)
+        {
+            int i_s = (int) ((long long) node_npts * k / n_chunk);
+            int i_e = (int) ((long long) node_npts * (k + 1) / n_chunk);
+            int *sub_pos_k = sub_cnt + k * max_child;
+            #pragma omp task firstprivate(i_s, i_e, sub_pos_k)
+            H2P_bisect_scatter_chunk(
+                i_s, i_e, xpt_dim, n_point, child_idx, sub_pos_k, 
+                src_coord_s, src_idx_s, dst_coord, dst_idx
+            );
+        }
+        #pragma omp taskwait
+    }
+    
+    // 4. Prepare enclosing box data for each sub-box
+    int n_child = 0;
+    DTYPE *sub_box      = (DTYPE*) malloc(sizeof(DTYPE) * max_child * pt_dim * 2);
+    int   *sub_coord_se = (int*)   malloc(sizeof(int)   * max_child * 2);
+    ASSERT_PRINTF(
+        sub_box != NULL && sub_coord_se != NULL,
+        "Failed to allocate working buffer of size %d for sub-nodes\n",
+        max_child * (pt_dim + 1) * 2
+    );
+    for (int i = 0; i < max_child; i++)
+    {
+        if (sub_node_npts[i] == 0) continue;
+        DTYPE *sub_box_child = sub_box + n_child * pt_dim * 2;
+        for (int j = 0; j < pt_dim; j++)
+        {
+            // Bit j of a sub-box index tells which half of dimension j the sub-box is
+            int sub_rel_idx_ij = (i >> j) & 1;
+            sub_box_child[j] = enbox[j] + 0.5 * enbox[pt_dim + j] * sub_rel_idx_ij - 1e-12;
+            sub_box_child[pt_dim + j] = 0.5 * enbox[pt_dim + j] + 2e-12;
+        }
+        sub_coord_se[2 * n_child + 0] = coord_s + sub_displs[i];
+        sub_coord_se[2 * n_child + 1] = coord_s + sub_displs[i + 1] - 1;
+        n_child++;
+    }
+    
+    // 5. Recursively partition each sub-box, the sorted points are in the dst buffers now
+    for (int i = 0; i < n_child; i++)
+    {
+        int coord_s_i = sub_coord_se[2 * i + 0];
+        int coord_e_i = sub_coord_se[2 * i + 1];
+        DTYPE *sub_box_i = sub_box + i * pt_dim * 2;
+        int *child_idx_i = child_idx + (coord_s_i - coord_s);
+        #pragma omp task firstprivate(i, coord_s_i, coord_e_i, sub_box_i, child_idx_i) \
+                         if(n_thread > 1 && coord_e_i - coord_s_i + 1 >= BISECT_TASK_NPTS)
+        node->children[i] = H2P_bisect_recursive(
+            level + 1, coord_s_i, coord_e_i, pt_dim, xpt_dim, n_point, 
+            max_leaf_size, max_leaf_points, sub_box_i, 
+            coord, coord_idx, dst_coord, dst_idx, src_coord, src_idx, 
+            child_idx_i, n_thread
+        );
+    }
+    #pragma omp taskwait
+    
+    // 6. Store information of this node
+    int n_node = 1, max_child_height = 0;
+    for (int i = 0; i < n_child; i++)
+    {
+        H2P_tree_node_p child_node_i = (H2P_tree_node_p) node->children[i];
+        n_node += child_node_i->n_node;
+        max_child_height = MAX(max_child_height, child_node_i->height);
+    }
+    node->n_child = n_child;
+    node->n_node  = n_node;
+    node->height  = max_child_height + 1;
+
+    // 7. Free temporary arrays
+    free(sub_coord_se);
+    free(sub_box);
+    free(sub_displs);
+    free(sub_cnt);
+    
+    return node;
+}
+
+// Index the nodes of a sub-tree in post order and count its leaves and levels
+static void H2P_tree_set_po_idx(H2P_tree_node_p node, H2P_partition_vars_p part_vars)
+{
+    if (node->level > part_vars->max_level) part_vars->max_level = node->level;
+    for (int i = 0; i < node->n_child; i++)
+        H2P_tree_set_po_idx((H2P_tree_node_p) node->children[i], part_vars);
+    if (node->n_child == 0) part_vars->n_leaf_node++;
+    node->po_idx = part_vars->curr_po_idx;
+    part_vars->curr_po_idx++;
+}
+
 // Hierarchical partitioning of the given points.
 // Tree nodes are indexed in post order.
 // Input parameters:
@@ -32,19 +283,22 @@
 //   coord_idx       : Array, size n_point, original index of each point
 //   coord_idx_tmp   : Temporary array for sorting coord_idx
 //   part_vars       : Structure for storing working variables and arrays in point partitioning
+//   n_thread        : Number of threads to use in the partitioning
 // Output parameters:
 //   coord           : Sorted coordinates
 //   <return>        : Information of current node
+// The sub-trees are built concurrently with OpenMP tasks when n_thread > 1 and this 
+// function is called outside a parallel region. Sorting the points of a node is a stable 
+// bucket sort whatever the number of threads, and the nodes are indexed afterwards in one 
+// serial traversal, so the result does not depend on the number of threads.
 H2P_tree_node_p H2P_bisection_partition_points(
     int level, int coord_s, int coord_e, const int pt_dim, const int xpt_dim, const int n_point, 
     const DTYPE max_leaf_size, const int max_leaf_points, DTYPE *enbox, 
     DTYPE *coord, DTYPE *coord_tmp, int *coord_idx, int *coord_idx_tmp, 
-    H2P_partition_vars_p part_vars
+    H2P_partition_vars_p part_vars, const int n_thread
 )
 {
     int node_npts = coord_e - coord_s + 1;
-    int max_child = 1 << pt_dim;
-    if (level > part_vars->max_level) part_vars->max_level = level;
     
     // 1. Check the enclosing box
     int alloc_enbox = 0;
@@ -105,167 +359,32 @@ H2P_tree_node_p H2P_bisection_partition_points(
         }
         free(center);
     }  // End of "if (enbox == NULL)"
-    DTYPE box_size = enbox[pt_dim];
     
-    // 2. If the size of current box or the number of points in current box
-    //    is smaller than the threshold, set current box as a leaf node
-    if ((node_npts <= max_leaf_points) || (box_size <= max_leaf_size))
-    {
-        H2P_tree_node_p node;
-        H2P_tree_node_init(&node, pt_dim);
-        node->pt_cluster[0] = coord_s;
-        node->pt_cluster[1] = coord_e;
-        node->n_child = 0;
-        node->n_node  = 1;
-        node->po_idx  = part_vars->curr_po_idx;
-        node->level   = level;
-        node->height  = 0;
-        memcpy(node->enbox, enbox, sizeof(DTYPE) * pt_dim * 2);
-        part_vars->curr_po_idx++;
-        part_vars->n_leaf_node++;
-        if (alloc_enbox) free(enbox);
-        return node;
-    }
-    
-    // 3. Bisection partition points in current box
-    int *rel_idx   = (int*) malloc(sizeof(int) * node_npts * pt_dim);
+    // 2. Build the sub-tree of this node
     int *child_idx = (int*) malloc(sizeof(int) * node_npts);
-    ASSERT_PRINTF(
-        rel_idx != NULL && child_idx != NULL, 
-        "Failed to allocate index arrays of size %d for bisection partitioning\n", node_npts * (pt_dim + 1)
-    );
-    memset(child_idx, 0, sizeof(int) * node_npts);
-    int pow2 = 1;
-    for (int j = 0; j < pt_dim; j++)
+    ASSERT_PRINTF(child_idx != NULL, "Failed to allocate index array of size %d for bisection partitioning\n", node_npts);
+    int part_n_thread = n_thread;
+    if (part_n_thread < 1 || omp_in_parallel() || node_npts < BISECT_PAR_NPTS) part_n_thread = 1;
+    H2P_tree_node_p node = NULL;
+    if (part_n_thread > 1)
     {
-        DTYPE enbox_corner_j = enbox[j];
-        DTYPE enbox_width_j  = enbox[pt_dim + j];
-        DTYPE *coord_dim_j_s = coord   + j * n_point + coord_s;
-        int   *rel_idx_dim_j = rel_idx + j * node_npts;
-        for (int i = 0; i < node_npts; i++)
-        {
-            DTYPE rel_coord  = coord_dim_j_s[i] - enbox_corner_j;
-            rel_idx_dim_j[i] = (2.0 * rel_coord >= enbox_width_j) ? 1 : 0;
-            child_idx[i] += rel_idx_dim_j[i] * pow2;
-        }
-        pow2 *= 2;
-    }
-    
-    // 4. Get the number of points in each sub-box, then bucket sort all 
-    //    points according to the sub-box a point in
-    int *sub_rel_idx   = (int*) malloc(sizeof(int) * max_child * pt_dim);
-    int *sub_node_npts = (int*) malloc(sizeof(int) * max_child);
-    int *sub_displs    = (int*) malloc(sizeof(int) * (max_child + 1));
-    ASSERT_PRINTF(
-        sub_rel_idx != NULL && sub_node_npts != NULL && sub_displs != NULL,
-        "Failed to allocate working buffer of size %d for sub-nodes\n",
-        max_child * (pt_dim + 2)
-    );
-    memset(sub_node_npts, 0, sizeof(int) * max_child);
-    for (int i = 0; i < node_npts; i++)
-    {
-        int child_idx_i = child_idx[i];
-        sub_node_npts[child_idx_i]++;
-        for (int j = 0; j < pt_dim; j++)
-            sub_rel_idx[j * max_child + child_idx_i] = rel_idx[j * node_npts + i];
-    }
-    sub_displs[0] = 0;
-    for (int i = 1; i <= max_child; i++)
-        sub_displs[i] = sub_displs[i - 1] + sub_node_npts[i - 1];
-    // Notice: we need to copy both coordinates and extended information
-    for (int j = 0; j < xpt_dim; j++)
-    {
-        int dim_j_offset = j * n_point + coord_s;
-        DTYPE *src = coord     + dim_j_offset;
-        DTYPE *dst = coord_tmp + dim_j_offset;
-        memcpy(dst, src, sizeof(DTYPE) * node_npts);
-    }
-    memcpy(coord_idx_tmp + coord_s, coord_idx + coord_s, sizeof(int) * node_npts);
-    for (int i = 0; i < node_npts; i++)
-    {
-        int child_idx_i = child_idx[i];
-        int src_idx = coord_s + i;
-        int dst_idx = coord_s + sub_displs[child_idx_i];
-        DTYPE *coord_src = coord_tmp + src_idx;
-        DTYPE *coord_dst = coord     + dst_idx;
-        // Notice: we need to copy both coordinates and extended information
-        for (int j = 0; j < xpt_dim; j++)
-            coord_dst[j * n_point] = coord_src[j * n_point];
-        coord_idx[dst_idx] = coord_idx_tmp[src_idx];
-        sub_displs[child_idx_i]++;
-    }
-    
-    // 5. Prepare enclosing box data for each sub-box
-    int n_child = 0;
-    DTYPE *sub_box      = (DTYPE*) malloc(sizeof(DTYPE) * max_child * pt_dim * 2);
-    int   *sub_coord_se = (int*)   malloc(sizeof(int)   * max_child * 2);
-    ASSERT_PRINTF(
-        sub_box != NULL && sub_coord_se != NULL,
-        "Failed to allocate working buffer of size %d for sub-nodes\n",
-        max_child * (pt_dim + 1) * 2
-    );
-    sub_displs[0] = 0;
-    for (int i = 1; i <= max_child; i++)
-        sub_displs[i] = sub_displs[i - 1] + sub_node_npts[i - 1];
-    ASSERT_PRINTF(
-        sub_displs[max_child] == node_npts, 
-        "Error in children nodes partitioning, level = %d, point indices = [%d, %d]\n",
-        level, coord_s, coord_e
-    );
-    for (int i = 0; i < max_child; i++)
-    {
-        if (sub_node_npts[i] == 0) continue;
-        DTYPE *sub_box_child = sub_box + n_child * pt_dim * 2;
-        int *sub_rel_idx_i = sub_rel_idx + i;
-        for (int j = 0; j < pt_dim; j++)
-        {
-            sub_box_child[j] = enbox[j] + 0.5 * enbox[pt_dim + j] * sub_rel_idx_i[j * max_child] - 1e-12;
-            sub_box_child[pt_dim + j] = 0.5 * enbox[pt_dim + j] + 2e-12;
-        }
-        sub_coord_se[2 * n_child + 0] = coord_s + sub_displs[i];
-        sub_coord_se[2 * n_child + 1] = coord_s + sub_displs[i + 1] - 1;
-        n_child++;
-    }
-    
-    // 6. Recursively partition each sub-box
-    H2P_tree_node_p node;
-    H2P_tree_node_init(&node, pt_dim);
-    int n_node = 1, max_child_height = 0;
-    for (int i = 0; i < n_child; i++)
-    {
-        int coord_s_i = sub_coord_se[2 * i + 0];
-        int coord_e_i = sub_coord_se[2 * i + 1];
-        DTYPE *sub_box_i = sub_box + i * pt_dim * 2;
-        node->children[i] = H2P_bisection_partition_points(
-            level + 1, coord_s_i, coord_e_i, pt_dim, xpt_dim, n_point, 
-            max_leaf_size, max_leaf_points, sub_box_i, 
-            coord, coord_tmp, coord_idx, coord_idx_tmp, part_vars
+        #pragma omp parallel num_threads(part_n_thread)
+        #pragma omp single
+        node = H2P_bisect_recursive(
+            level, coord_s, coord_e, pt_dim, xpt_dim, n_point, max_leaf_size, max_leaf_points, enbox, 
+            coord, coord_idx, coord, coord_idx, coord_tmp, coord_idx_tmp, child_idx, part_n_thread
         );
-        H2P_tree_node_p child_node_i = (H2P_tree_node_p) node->children[i];
-        n_node += child_node_i->n_node;
-        max_child_height = MAX(max_child_height, child_node_i->height);
+    } else {
+        node = H2P_bisect_recursive(
+            level, coord_s, coord_e, pt_dim, xpt_dim, n_point, max_leaf_size, max_leaf_points, enbox, 
+            coord, coord_idx, coord, coord_idx, coord_tmp, coord_idx_tmp, child_idx, 1
+        );
     }
-    
-    // 7. Store information of this node
-    node->pt_cluster[0] = coord_s;
-    node->pt_cluster[1] = coord_e;
-    node->n_child = n_child;
-    node->n_node  = n_node;
-    node->po_idx  = part_vars->curr_po_idx;
-    node->level   = level;
-    node->height  = max_child_height + 1;
-    memcpy(node->enbox, enbox, sizeof(DTYPE) * pt_dim * 2);
-    part_vars->curr_po_idx++;
-
-    // 8. Free temporary arrays
-    free(sub_coord_se);
-    free(sub_box);
-    free(sub_displs);
-    free(sub_node_npts);
-    free(sub_rel_idx);
     free(child_idx);
-    free(rel_idx);
     if (alloc_enbox) free(enbox);
+    
+    // 3. Index the nodes in post order
+    H2P_tree_set_po_idx(node, part_vars);
     
     return node;
 }
@@ -586,7 +705,7 @@ void H2P_partition_points(
     H2P_tree_node_p root = H2P_bisection_partition_points(
         0, 0, n_point-1, pt_dim, xpt_dim, n_point, 
         max_leaf_size, max_leaf_points, h2pack->root_enbox, 
-        h2pack->coord, coord_tmp, h2pack->coord_idx, coord_idx_tmp, part_vars
+        h2pack->coord, coord_tmp, h2pack->coord_idx, coord_idx_tmp, part_vars, h2pack->n_thread
     );
     free(coord_tmp);
     free(coord_idx_tmp);

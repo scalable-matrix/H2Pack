@@ -105,6 +105,14 @@
 
 #define BD_NTASK_THREAD 10              // Average number of tasks each thread has in B & D build
 
+// Point partitioning: a node with at least BISECT_PAR_NPTS points splits its per-point
+// passes into chunks of BISECT_CHUNK_NPTS points that run as OpenMP tasks, and a child
+// with at least BISECT_TASK_NPTS points is partitioned in its own task. Smaller work is
+// done inline: a task costs more than it would save.
+#define BISECT_CHUNK_NPTS   8192                        // Number of points in a chunk of a node's per-point passes
+#define BISECT_PAR_NPTS     (4 * BISECT_CHUNK_NPTS)     // Minimum number of points for splitting those passes
+#define BISECT_TASK_NPTS    2048                        // Minimum number of points for partitioning a child in a task
+
 #include "linalg_lib_wrapper.h"
 #include "ASTER/include/aster.h"
 

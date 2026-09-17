@@ -255,7 +255,7 @@ H2P_tree_node_p H2P_bisection_partition_points(
     int level, int coord_s, int coord_e, const int pt_dim, const int xpt_dim, const int n_point, 
     const DTYPE max_leaf_size, const int max_leaf_points, DTYPE *enbox, 
     DTYPE *coord, DTYPE *coord_tmp, int *coord_idx, int *coord_idx_tmp, 
-    H2P_partition_vars_p part_vars
+    H2P_partition_vars_p part_vars, const int n_thread
 );
 
 // Convert a linked list H2 tree to arrays

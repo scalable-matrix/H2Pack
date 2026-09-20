@@ -856,6 +856,8 @@ void H2P_build_H2_UJ_sample(H2Pack_p h2pack, H2P_dense_mat_p *sample_pt)
     
     // 2. Construct U for nodes whose level is not smaller than min_adm_level.
     //    min_adm_level is the highest level that still has admissible blocks.
+    // The per-node ID runs single-threaded BLAS inside the parallel region below
+    BLAS_SET_NUM_THREADS(1);
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();

@@ -78,6 +78,8 @@ void H2P_build_H2_UJ_proxy(H2Pack_p h2pack)
     
     // 2. Construct U for nodes whose level is not smaller than min_adm_level.
     //    min_adm_level is the highest level that still has admissible blocks.
+    // The per-node ID runs single-threaded BLAS inside the parallel region below
+    BLAS_SET_NUM_THREADS(1);
     #pragma omp parallel num_threads(n_thread)
     {
         int tid = omp_get_thread_num();
@@ -348,6 +350,8 @@ void H2P_build_HSS_UJ_hybrid(H2Pack_p h2pack)
 
     // 3. Hierarchical construction level by level. min_adm_level is the 
     //    highest level that still has admissible blocks.
+    // The per-node ID runs single-threaded BLAS inside the parallel regions below
+    BLAS_SET_NUM_THREADS(1);
     for (int i = max_level; i >= min_adm_level; i--)
     {
         int *level_i_nodes = level_nodes + i * n_leaf_node;

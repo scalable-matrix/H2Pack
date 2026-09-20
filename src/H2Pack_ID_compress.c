@@ -32,6 +32,65 @@ static inline void swap_DTYPE(DTYPE *x, DTYPE *y, int len)
     }
 }
 
+
+// The matrices compressed here are tiny (~100 x 50) and one is handled per tree node, so
+// per-call overheads dominate: a BLAS-1 call on a length-100 vector costs more than the
+// arithmetic inside it, and openblas_set_num_threads() takes a mutex on every call -- from
+// every thread of the enclosing parallel region.
+static inline DTYPE H2P_vec_dot(const int n, const DTYPE *x, const DTYPE *y)
+{
+    if (n >= 256) return CBLAS_DOT(n, x, 1, y, 1);
+    DTYPE s = 0.0;
+    #pragma omp simd reduction(+:s)
+    for (int i = 0; i < n; i++) s += x[i] * y[i];
+    return s;
+}
+
+// Plain 2-norm; entries are kernel values, far from the overflow/underflow range
+static inline DTYPE H2P_vec_nrm2(const int n, const DTYPE *x)
+{
+    if (n >= 256) return CBLAS_NRM2(n, x, 1);
+    return DSQRT(H2P_vec_dot(n, x, x));
+}
+
+// Only touch the BLAS thread count when called with more than one thread: inside a
+// parallel region (n_thread == 1) the caller has already set it to 1
+static inline void H2P_QR_set_blas_threads(const int n_thread)
+{
+    if (n_thread > 1) BLAS_SET_NUM_THREADS(n_thread);
+}
+
+// Householder update of one column right to the pivot column in H2P_partial_pivot_QR()
+// and update of its 2-norm. h_vec is the Householder vector, h_len its length.
+static inline void H2P_ppqr_update_column(
+    const int h_len, const DTYPE *h_vec, DTYPE *R_block_j, DTYPE *col_norm_j, 
+    const DTYPE stop_norm, const DTYPE fast_norm_threshold_t
+)
+{
+    DTYPE h_Rj = 2.0 * H2P_vec_dot(h_len, h_vec, R_block_j);
+    
+    // 4. Orthogonalize columns right to the i-th column
+    #pragma omp simd
+    for (int k = 0; k < h_len; k++)
+        R_block_j[k] -= h_Rj * h_vec[k];
+    
+    // 5. Update i-th column's 2-norm
+    if (col_norm_j[0] < stop_norm)
+    {
+        col_norm_j[0] = 0.0;
+        return;
+    }
+    DTYPE tmp = R_block_j[0] * R_block_j[0];
+    tmp = col_norm_j[0] * col_norm_j[0] - tmp;
+    if (tmp <= fast_norm_threshold_t)
+    {
+        col_norm_j[0] = H2P_vec_nrm2(h_len - 1, R_block_j + 1);
+    } else {
+        // Fast update 2-norm when the new column norm is not so small
+        col_norm_j[0] = DSQRT(tmp);
+    }
+}
+
 // Partial pivoting QR decomposition, simplified output version
 // The partial pivoting QR decomposition is of form:
 //     A * P = Q * [R11, R12; 0, R22]
@@ -59,7 +118,7 @@ void H2P_partial_pivot_QR(
     int ldR  = A->ld;
     int max_iter = MIN(nrow, ncol);
     
-    BLAS_SET_NUM_THREADS(n_thread);
+    H2P_QR_set_blas_threads(n_thread);
     
     DTYPE *col_norm = QR_buff;
 
@@ -74,12 +133,23 @@ void H2P_partial_pivot_QR(
     }
     
     // Find a column with largest 2-norm
-    #pragma omp parallel for if (n_thread > 1) \
-    num_threads(n_thread) schedule(static)
-    for (int j = 0; j < ncol; j++)
+    // Notice: "omp parallel if(0)" still sets up and tears down a team of one thread, 
+    // which costs as much as a Householder update of these tiny matrices. This function 
+    // is called with n_thread == 1 from inside the parallel H2 build, once per tree node.
+    if (n_thread > 1)
     {
-        p[j] = j;
-        col_norm[j] = CBLAS_NRM2(nrow, R + j * ldR, 1);
+        #pragma omp parallel for num_threads(n_thread) schedule(static)
+        for (int j = 0; j < ncol; j++)
+        {
+            p[j] = j;
+            col_norm[j] = H2P_vec_nrm2(nrow, R + j * ldR);
+        }
+    } else {
+        for (int j = 0; j < ncol; j++)
+        {
+            p[j] = j;
+            col_norm[j] = H2P_vec_nrm2(nrow, R + j * ldR);
+        }
     }
     DTYPE norm_p = 0.0;
     int pivot = 0;
@@ -119,12 +189,11 @@ void H2P_partial_pivot_QR(
         
         // 3. Calculate Householder vector
         int h_len    = nrow - i;
-        int h_len_m1 = h_len - 1;
         DTYPE *h_vec = R + i * ldR + i;
         DTYPE sign   = (h_vec[0] > 0.0) ? 1.0 : -1.0;
-        DTYPE h_norm = CBLAS_NRM2(h_len, h_vec, 1);
+        DTYPE h_norm = H2P_vec_nrm2(h_len, h_vec);
         h_vec[0] = h_vec[0] + sign * h_norm;
-        DTYPE inv_h_norm = 1.0 / CBLAS_NRM2(h_len, h_vec, 1);
+        DTYPE inv_h_norm = 1.0 / H2P_vec_nrm2(h_len, h_vec);
         #pragma omp simd
         for (int j = 0; j < h_len; j++) h_vec[j] *= inv_h_norm;
         
@@ -132,34 +201,23 @@ void H2P_partial_pivot_QR(
         DTYPE *R_block = R + (i + 1) * ldR + i;
         int R_block_nrow = h_len;
         int R_block_ncol = ncol - i - 1;
-        #pragma omp parallel for if (n_thread > 1) \
-        num_threads(n_thread) schedule(guided)
-        for (int j = 0; j < R_block_ncol; j++)
+        if (n_thread > 1)
         {
-            int ji1 = j + i + 1;
-            
-            DTYPE *R_block_j = R_block + j * ldR;
-            DTYPE h_Rj = 2.0 * CBLAS_DOT(R_block_nrow, h_vec, 1, R_block_j, 1);
-            
-            // 4. Orthogonalize columns right to the i-th column
-            #pragma omp simd
-            for (int k = 0; k < R_block_nrow; k++)
-                R_block_j[k] -= h_Rj * h_vec[k];
-            
-            // 5. Update i-th column's 2-norm
-            if (col_norm[ji1] < stop_norm)
+            #pragma omp parallel for num_threads(n_thread) schedule(guided)
+            for (int j = 0; j < R_block_ncol; j++)
             {
-                col_norm[ji1] = 0.0;
-                continue;
+                H2P_ppqr_update_column(
+                    R_block_nrow, h_vec, R_block + j * ldR, col_norm + j + i + 1, 
+                    stop_norm, fast_norm_threshold_t
+                );
             }
-            DTYPE tmp = R_block_j[0] * R_block_j[0];
-            tmp = col_norm[ji1] * col_norm[ji1] - tmp;
-            if (tmp <= fast_norm_threshold_t)
+        } else {
+            for (int j = 0; j < R_block_ncol; j++)
             {
-                col_norm[ji1] = CBLAS_NRM2(h_len_m1, R_block_j + 1, 1);
-            } else {
-                // Fast update 2-norm when the new column norm is not so small
-                col_norm[ji1] = DSQRT(tmp);
+                H2P_ppqr_update_column(
+                    R_block_nrow, h_vec, R_block + j * ldR, col_norm + j + i + 1, 
+                    stop_norm, fast_norm_threshold_t
+                );
             }
         }
         
@@ -546,7 +604,7 @@ void H2P_ID_compress(
             int ncol_R12 = nrow - r;
             // (2) Solve E = inv(R11) * R12, stored in R12 in column major style
             //     --> equals to what we need: E^T stored in row major style
-            BLAS_SET_NUM_THREADS(n_thread);
+            H2P_QR_set_blas_threads(n_thread);
             CBLAS_TRSM(
                 CblasColMajor, CblasLeft, CblasUpper, CblasNoTrans, CblasNonUnit,
                 nrow_R12, ncol_R12, 1.0, R11, R->ld, R12, R->ld

@@ -271,8 +271,13 @@ void H2P_destroy(H2Pack_p *h2pack_)
     
     // Do not delete pp here since the same pp may be used by multiple H2Pack structures
     
+    // J, J_coord and U hold several small blocks per tree node. Releasing them one by one
+    // is a noticeable serial part for an application that rebuilds the H2 matrix many times.
+    const int par_free = (h2pack->n_UJ >= 1024) && !omp_in_parallel();
+    const int free_nt   = h2pack->n_thread;
     if (h2pack->J != NULL)
     {
+        #pragma omp parallel for schedule(static) num_threads(free_nt) if(par_free)
         for (int i = 0; i < h2pack->n_UJ; i++)
             H2P_int_vec_destroy(&h2pack->J[i]);
         free(h2pack->J);
@@ -294,6 +299,7 @@ void H2P_destroy(H2Pack_p *h2pack_)
 
     if (h2pack->J_coord != NULL)
     {
+        #pragma omp parallel for schedule(static) num_threads(free_nt) if(par_free)
         for (int i = 0; i < h2pack->n_UJ; i++)
             H2P_dense_mat_destroy(&h2pack->J_coord[i]);
         free(h2pack->J_coord);
@@ -302,6 +308,7 @@ void H2P_destroy(H2Pack_p *h2pack_)
     // If we don't run H2P_build, h2pack->U == NULL
     if (h2pack->U != NULL)
     {
+        #pragma omp parallel for schedule(static) num_threads(free_nt) if(par_free)
         for (int i = 0; i < h2pack->n_UJ; i++)
             H2P_dense_mat_destroy(&h2pack->U[i]);
         free(h2pack->U);

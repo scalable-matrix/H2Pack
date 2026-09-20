@@ -192,7 +192,7 @@ void H2P_partition_points_periodic(
     H2P_tree_node_p root = H2P_bisection_partition_points(
         0, 0, n_point-1, pt_dim, xpt_dim, n_point, 
         max_leaf_size, max_leaf_points, unit_cell, 
-        h2pack->coord, coord_tmp, h2pack->coord_idx, coord_idx_tmp, part_vars
+        h2pack->coord, coord_tmp, h2pack->coord_idx, coord_idx_tmp, part_vars, h2pack->n_thread
     );
     free(coord_tmp);
     free(coord_idx_tmp);
